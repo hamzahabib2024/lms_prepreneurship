@@ -338,6 +338,170 @@ async function main(): Promise<void> {
   }
   console.log(`  sessions: ${sessions} (3 past, 2 upcoming)`);
 
+  // -- course content (§5.6, §5.7) -----------------------------------------
+  // Without this a student logs in to an empty screen: the subject page has no
+  // lectures, and the video component of progress has nothing to measure.
+  //
+  // TST-003 boundary: the last module is left DRAFT on purpose, so BR-CNT-01
+  // can be exercised. A student must not see it in any list or count, and the
+  // draft lecture inside it must not appear in their progress denominator.
+  const gdModules = [
+    {
+      title: "Foundations of Design",
+      status: "PUBLISHED" as const,
+      lessons: [
+        { title: "What design is for", minutes: 25, lectureMinutes: 22 },
+        { title: "Colour theory", minutes: 40, lectureMinutes: 38 },
+        { title: "Typography", minutes: 35, lectureMinutes: 31 },
+      ],
+    },
+    {
+      title: "Composition",
+      status: "PUBLISHED" as const,
+      lessons: [
+        { title: "Grid systems", minutes: 30, lectureMinutes: 27 },
+        { title: "Balance and hierarchy", minutes: 30, lectureMinutes: 29 },
+      ],
+    },
+    {
+      // Next term's material, still being prepared. Invisible to students.
+      title: "Brand Identity",
+      status: "DRAFT" as const,
+      lessons: [{ title: "Logo construction", minutes: 45, lectureMinutes: 44 }],
+    },
+  ];
+
+  let moduleCount = 0;
+  let lectureCount = 0;
+
+  for (const [moduleIndex, m] of gdModules.entries()) {
+    const module = await upsertModule(gd!.id, m.title, moduleIndex + 1, m.status);
+    moduleCount += 1;
+
+    for (const [lessonIndex, l] of m.lessons.entries()) {
+      const lesson = await upsertLesson({
+        moduleId: module.id,
+        title: l.title,
+        displayOrder: lessonIndex + 1,
+        estimatedMinutes: l.minutes,
+        // A lesson is no more visible than the module containing it.
+        publicationStatus: m.status,
+      });
+
+      const created = await upsertLecture({
+        lessonId: lesson.id,
+        sectionSubjectId: gdFemaleGd.id,
+        title: l.title,
+        durationSeconds: l.lectureMinutes * 60,
+        teacherId: teacher.id,
+        publicationStatus: m.status,
+        recordedOn: at(-14 + lectureCount * 2, 9),
+      });
+      if (created) lectureCount += 1;
+    }
+  }
+
+  // English gets one published module so the student home page shows two
+  // subjects with genuinely different progress, not the same figure twice.
+  const engModule = await upsertModule(eng!.id, "Professional Communication", 1, "PUBLISHED");
+  const engLesson = await upsertLesson({
+    moduleId: engModule.id,
+    title: "Writing a brief",
+    displayOrder: 1,
+    estimatedMinutes: 20,
+    publicationStatus: "PUBLISHED",
+  });
+  if (
+    await upsertLecture({
+      lessonId: engLesson.id,
+      sectionSubjectId: gdFemaleEng.id,
+      title: "Writing a brief",
+      durationSeconds: 18 * 60,
+      teacherId: teacher.id,
+      publicationStatus: "PUBLISHED",
+      recordedOn: at(-10, 11),
+    })
+  ) {
+    lectureCount += 1;
+  }
+  console.log(`  content: ${moduleCount + 1} modules, ${lectureCount} lectures (1 module DRAFT)`);
+
+  // -- attendance for the sessions that have already happened ---------------
+  // Every ENDED session needs a marked register, or the attendance component
+  // of progress has an empty denominator and every student silently reports
+  // null. The pattern below is deterministic and deliberately uneven:
+  //
+  //   - roll 3 misses two of three classes, landing at 33 % — below the
+  //     CRITICAL threshold, so the teacher's at-risk list (FR-ATT-020) has a
+  //     genuine entry rather than being permanently empty
+  //   - roll 5 is LATE once, exercising the late weighting (CFG-ATT-03)
+  //   - roll 7 is EXCUSED once, which must leave the denominator entirely
+  //     rather than counting as an absence (BR-ATT-06)
+  const endedSessions = await db.liveSession.findMany({
+    where: { sectionSubjectId: gdFemaleGd.id, status: "ENDED" },
+    orderBy: { scheduledStart: "asc" },
+  });
+  const roster = await db.student.findMany({
+    where: { enrolments: { some: { sectionSubjectId: gdFemaleGd.id } } },
+    orderBy: { currentRollNo: "asc" },
+  });
+
+  // A register against a class that has not happened is meaningless, and a
+  // developer poking at the API leaves exactly that behind. Clearing it keeps
+  // the seeded figures reproducible — otherwise yesterday's experiment quietly
+  // changes today's progress numbers and nothing explains why.
+  const strays = await db.attendanceRecord.deleteMany({
+    where: { liveSession: { status: { in: ["SCHEDULED", "CANCELLED"] } } },
+  });
+  if (strays.count > 0) {
+    console.log(`  cleared ${strays.count} attendance marks on unheld sessions`);
+  }
+
+  const statusFor = (roll: number, sessionIndex: number) => {
+    if (roll === 3) return sessionIndex === 1 ? "PRESENT" : "ABSENT";
+    if (roll === 5 && sessionIndex === 1) return "LATE";
+    if (roll === 7 && sessionIndex === 2) return "EXCUSED";
+    return "PRESENT";
+  };
+
+  let marks = 0;
+  for (const [sessionIndex, ls] of endedSessions.entries()) {
+    for (const s of roster) {
+      const existing = await db.attendanceRecord.findUnique({
+        where: { liveSessionId_studentId: { liveSessionId: ls.id, studentId: s.id } },
+      });
+      const status = statusFor(s.currentRollNo ?? 0, sessionIndex) as
+        | "PRESENT"
+        | "ABSENT"
+        | "LATE"
+        | "EXCUSED";
+
+      if (existing) {
+        // Re-running the seed must converge on the seeded pattern. Without
+        // this, a register marked by hand during testing keeps skewing every
+        // progress figure afterwards, and nothing in the output says why.
+        if (existing.status !== status) {
+          await db.attendanceRecord.update({ where: { id: existing.id }, data: { status } });
+          marks += 1;
+        }
+        continue;
+      }
+
+      await db.attendanceRecord.create({
+        data: {
+          liveSessionId: ls.id,
+          studentId: s.id,
+          status,
+          markingSource: "MANUAL",
+          markedBy: teacherUser.id,
+          markedAt: new Date(ls.scheduledStart.getTime() + 10 * 60_000),
+        },
+      });
+      marks += 1;
+    }
+  }
+  console.log(`  attendance: ${marks} marks across ${endedSessions.length} ended sessions`);
+
   console.log("\nSeed complete.\n");
   console.log("  superadmin@institute.local  ChangeMe!SuperAdmin2026");
   console.log("  admin@institute.local       ChangeMe!Admin2026");
@@ -389,6 +553,70 @@ async function offer(sectionId: string, subjectId: string, isCompulsory: boolean
     update: {},
     create: { sectionId, subjectId, isCompulsory, status: "ACTIVE" },
   });
+}
+
+async function upsertModule(
+  subjectId: string,
+  title: string,
+  displayOrder: number,
+  publicationStatus: "DRAFT" | "PUBLISHED",
+) {
+  const existing = await db.module.findFirst({ where: { subjectId, title } });
+  if (existing) return existing;
+  return db.module.create({ data: { subjectId, title, displayOrder, publicationStatus } });
+}
+
+async function upsertLesson(input: {
+  moduleId: string;
+  title: string;
+  displayOrder: number;
+  estimatedMinutes: number;
+  publicationStatus: "DRAFT" | "PUBLISHED";
+}) {
+  const existing = await db.lesson.findFirst({
+    where: { moduleId: input.moduleId, title: input.title },
+  });
+  if (existing) return existing;
+  return db.lesson.create({ data: input });
+}
+
+/**
+ * Returns true if it created one, so the caller can count honestly on a re-run.
+ *
+ * TST-004: storageRef is synthetic. It is shaped like a Drive file id so the
+ * column's length and opacity are exercised, but it resolves to nothing — the
+ * availability sweep (ARC-045) will correctly mark these MISSING, which is the
+ * accurate answer for a fixture.
+ */
+async function upsertLecture(input: {
+  lessonId: string;
+  sectionSubjectId: string;
+  title: string;
+  durationSeconds: number;
+  teacherId: string;
+  publicationStatus: "DRAFT" | "PUBLISHED";
+  recordedOn: Date;
+}): Promise<boolean> {
+  const existing = await db.recordedLecture.findFirst({
+    where: { lessonId: input.lessonId, title: input.title },
+  });
+  if (existing) return false;
+
+  const slug = input.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  await db.recordedLecture.create({
+    data: {
+      lessonId: input.lessonId,
+      sectionSubjectId: input.sectionSubjectId,
+      title: input.title,
+      durationSeconds: input.durationSeconds,
+      teacherId: input.teacherId,
+      publicationStatus: input.publicationStatus,
+      recordedOn: input.recordedOn,
+      storageProvider: "google_drive",
+      storageRef: `seed-fixture-${slug}`,
+    },
+  });
+  return true;
 }
 
 async function assign(teacherId: string, sectionSubjectId: string) {
