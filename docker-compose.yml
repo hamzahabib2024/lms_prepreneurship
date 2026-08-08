@@ -1,0 +1,48 @@
+# Local development dependencies only. The application itself runs on the host
+# via `npm run dev`. Docker is not currently installed on this machine — see
+# README "Running without Docker" for the managed-service alternative.
+
+services:
+  postgres:
+    # PostgreSQL 16 is mandated by §3.11: the indexing strategy of §8.4 needs
+    # partial and BRIN indexes, and DB-017 needs native partitioning.
+    image: postgres:16-alpine
+    container_name: lms-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: lms
+      POSTGRES_PASSWORD: lms
+      POSTGRES_DB: lms
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lms -d lms"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: lms-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Uncomment once you reach the file-upload work (SEC-FIL-004 requires every
+  # upload to be scanned before it is persisted).
+  # clamav:
+  #   image: clamav/clamav:stable
+  #   container_name: lms-clamav
+  #   restart: unless-stopped
+  #   ports:
+  #     - "3310:3310"

@@ -1,0 +1,35 @@
+node_modules/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# Compiler output must never land beside sources — a stale .d.ts in src/
+# shadows the .ts it was generated from and produces baffling type errors.
+packages/*/src/**/*.js
+packages/*/src/**/*.d.ts
+packages/*/src/**/*.js.map
+
+# Secrets — SEC-CRY-008: secrets SHALL NOT be committed
+.env
+.env.*
+!.env.example
+keys/
+*.pem
+*.key
+
+# Local data
+*.log
+.DS_Store
+Thumbs.db
+pgdata/
+redisdata/
+uploads/
+
+# Editors
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Generated
+apps/api/src/generated/
