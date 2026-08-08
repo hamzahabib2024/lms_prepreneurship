@@ -211,7 +211,15 @@ export class AttendanceService {
       result.map((r) => r.studentId),
     );
 
-    return { sessionId, marked: result.length, summary, thresholdWarningsRaised: warnings };
+    return {
+      sessionId,
+      marked: result.length,
+      summary,
+      // ARC-033 — echoed back so the caller can see WHAT was recorded, not
+      // merely that something was. Never a vendor name.
+      markingSource: "MANUAL" as const,
+      thresholdWarningsRaised: warnings,
+    };
   }
 
   /**

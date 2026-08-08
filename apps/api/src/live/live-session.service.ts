@@ -395,15 +395,34 @@ export class LiveSessionService {
     return updated;
   }
 
-  /** FR-LIV-005 — upcoming sessions within the caller's scope. */
-  async listUpcoming(params: { sectionSubjectId?: string; days?: number }) {
-    const horizon = new Date(Date.now() + (params.days ?? 7) * 86_400_000);
+  /**
+   * FR-LIV-005 — sessions within the caller's scope.
+   *
+   * `pastDays` matters more than it looks. An UNMARKED REGISTER IS ALWAYS IN
+   * THE PAST, so a forward-only list cannot reach the work the attendance
+   * screen exists to complete (FR-TCH-002). The default stays forward-looking
+   * for the dashboard's next-class widget; the register asks for history.
+   */
+  async listUpcoming(params: {
+    sectionSubjectId?: string;
+    days?: number;
+    pastDays?: number;
+  }) {
+    const now = Date.now();
+    const horizon = new Date(now + (params.days ?? 7) * 86_400_000);
+    const earliest = new Date(now - (params.pastDays ?? 0) * 86_400_000);
+
     const rows = await this.prisma.scoped.liveSession.findMany({
       where: {
         deletedAt: null,
-        status: { in: ["SCHEDULED", "LIVE"] },
+        // ENDED is included only when history was asked for, so the dashboard
+        // never offers a finished class as the next one.
+        status:
+          (params.pastDays ?? 0) > 0
+            ? { in: ["SCHEDULED", "LIVE", "ENDED"] }
+            : { in: ["SCHEDULED", "LIVE"] },
         scheduledStart: { lte: horizon },
-        scheduledEnd: { gte: new Date() },
+        scheduledEnd: { gte: earliest },
         ...(params.sectionSubjectId ? { sectionSubjectId: params.sectionSubjectId } : {}),
       },
       orderBy: { scheduledStart: "asc" },

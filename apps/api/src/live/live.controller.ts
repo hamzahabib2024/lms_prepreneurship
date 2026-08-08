@@ -57,10 +57,16 @@ export class LiveController {
 
   @RequirePermission("live_session", "read")
   @Get("live-sessions")
-  list(@Query("sectionSubjectId") sectionSubjectId?: string, @Query("days") days?: string) {
+  list(
+    @Query("sectionSubjectId") sectionSubjectId?: string,
+    @Query("days") days?: string,
+    @Query("pastDays") pastDays?: string,
+  ) {
     return this.sessions.listUpcoming({
       sectionSubjectId,
       days: days ? Number(days) : undefined,
+      // The attendance register needs history; the dashboard does not.
+      pastDays: pastDays ? Number(pastDays) : undefined,
     });
   }
 
