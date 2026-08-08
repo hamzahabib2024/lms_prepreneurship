@@ -1,0 +1,696 @@
+import { Injectable, Logger } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { randomInt } from "node:crypto";
+import {
+  AppError,
+  buildPagination,
+  clampPageSize,
+  type RegistrationApproveInput,
+  type RegistrationRejectInput,
+  type RegistrationSubmitInput,
+} from "@lms/shared";
+import type { AcquisitionSource, Prisma, RegistrationStatus } from "@prisma/client";
+import { PrismaService } from "../prisma/prisma.service";
+import { AuditService } from "../audit/audit.service";
+import { AuthService } from "../auth/auth.service";
+import { ActorService } from "../auth/actor.service";
+import { getActor } from "../prisma/actor-context";
+import { RegistrationNumberService } from "./registration-number.service";
+
+/** Unambiguous alphabet — no O/0, I/l/1 — because these are read aloud
+ *  over WhatsApp and mis-transcribed characters generate support calls. */
+const TEMP_PASSWORD_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+
+@Injectable()
+export class AdmissionService {
+  private readonly logger = new Logger(AdmissionService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+    private readonly auth: AuthService,
+    private readonly actors: ActorService,
+    private readonly numbers: RegistrationNumberService,
+    private readonly config: ConfigService,
+  ) {}
+
+  // ============================================================ UC-01 ======
+
+  /**
+   * Public application submission — FR-REG-001..021.
+   *
+   * Unauthenticated by design (SEC-AUT-001): most applicants reach this from a
+   * Meta advertisement on a phone and have no account yet.
+   */
+  async submit(input: RegistrationSubmitInput, campaignRef?: Record<string, unknown>) {
+    return this.prisma.asSystem(async (db) => {
+      // FR-REG-016 — a probable duplicate returns the EXISTING application's
+      // status rather than creating a second record. Re-submitting because the
+      // first attempt seemed not to work is normal applicant behaviour, not an
+      // error to punish.
+      const existing = await db.registrationRequest.findFirst({
+        where: {
+          deletedAt: null,
+          status: { in: ["PENDING_REVIEW", "UNDER_REVIEW", "NEEDS_INFO"] },
+          OR: [
+            { nationalId: input.nationalId },
+            { email: input.email },
+            { phone: input.phone },
+          ],
+        },
+        select: { trackingRef: true, status: true, createdAt: true },
+      });
+
+      if (existing) {
+        return {
+          duplicate: true as const,
+          trackingRef: existing.trackingRef,
+          status: existing.status,
+          submittedAt: existing.createdAt,
+          message:
+            "We already have an application from you. Use the reference below to check its status.",
+        };
+      }
+
+      const trackingRef = await this.generateTrackingRef(db);
+
+      const created = await db.registrationRequest.create({
+        data: {
+          trackingRef,
+          status: "PENDING_REVIEW",
+          fullName: input.fullName,
+          fatherName: input.fatherName,
+          dateOfBirth: input.dateOfBirth,
+          gender: input.gender,
+          nationalId: input.nationalId,
+          phone: input.phone,
+          phoneIsWhatsapp: input.phoneIsWhatsapp,
+          altPhone: input.altPhone ?? null,
+          email: input.email,
+          address: input.address,
+          city: input.city,
+          qualification: input.qualification,
+          occupation: input.occupation ?? null,
+          desiredProgrammeId: input.desiredProgrammeId,
+          desiredSectionId: input.desiredSectionId,
+          acquisitionSource: input.acquisitionSource,
+          acquisitionDetail: input.acquisitionDetail ?? null,
+          // FR-REG-006/007 — captured without applicant action so advertising
+          // spend can be attributed to enrolment (OBJ-07).
+          campaignRef: (campaignRef ?? {}) as object,
+          claimedAmount: input.claimedAmount,
+          claimedPaymentDate: input.claimedPaymentDate,
+          claimedBankRef: input.claimedBankRef ?? null,
+          consentVersion: input.consentVersion, // SEC-PRV-003
+          consentAt: new Date(),
+        },
+        select: { id: true, trackingRef: true, createdAt: true },
+      });
+
+      // Attach the already-uploaded slips to this application.
+      await db.registrationDocument.updateMany({
+        where: { id: { in: input.documentIds }, registrationRequestId: created.id },
+        data: {},
+      });
+
+      await this.audit.record(
+        {
+          action: "registration.submit",
+          entityType: "RegistrationRequest",
+          entityId: created.id,
+          after: { trackingRef: created.trackingRef, status: "PENDING_REVIEW" },
+        },
+        db as unknown as Parameters<AuditService["record"]>[1],
+      );
+
+      return {
+        duplicate: false as const,
+        trackingRef: created.trackingRef,
+        status: "PENDING_REVIEW" as const,
+        submittedAt: created.createdAt,
+        message:
+          "Your application has been received. We usually review payment within 48 hours " +
+          "and will email you the outcome.",
+      };
+    });
+  }
+
+  /**
+   * Public status lookup — FR-REG-020.
+   *
+   * SEC-PRV-012: discloses only the state, when it last changed, and any
+   * message directed at the applicant. Nothing else, because this endpoint is
+   * unauthenticated and a tracking reference is not a credential.
+   */
+  async publicStatus(trackingRef: string) {
+    const req = await this.prisma.asSystem((db) =>
+      db.registrationRequest.findUnique({
+        where: { trackingRef },
+        select: {
+          status: true,
+          updatedAt: true,
+          decisionNote: true,
+          decisionReasonCode: true,
+        },
+      }),
+    );
+
+    if (!req) throw new AppError("RESOURCE_NOT_FOUND");
+
+    return {
+      status: req.status,
+      lastUpdatedAt: req.updatedAt,
+      message: req.decisionNote ?? null,
+      reasonCode: req.status === "REJECTED" ? req.decisionReasonCode : null,
+    };
+  }
+
+  // ============================================================ queue ======
+
+  /** FR-REG-022/023 — the review queue, oldest first. */
+  async listQueue(params: {
+    status?: string;
+    sectionId?: string;
+    source?: string;
+    q?: string;
+    page?: number;
+    pageSize?: number;
+  }) {
+    const page = Math.max(1, params.page ?? 1);
+    const pageSize = clampPageSize(params.pageSize);
+
+    const where: Prisma.RegistrationRequestWhereInput = {
+      deletedAt: null,
+      status: params.status
+        ? (params.status as RegistrationStatus)
+        : { in: ["PENDING_REVIEW", "UNDER_REVIEW", "NEEDS_INFO"] },
+      ...(params.sectionId ? { desiredSectionId: params.sectionId } : {}),
+      ...(params.source ? { acquisitionSource: params.source as AcquisitionSource } : {}),
+      ...(params.q
+        ? {
+            OR: [
+              { fullName: { contains: params.q, mode: "insensitive" } },
+              { trackingRef: { contains: params.q, mode: "insensitive" } },
+              { nationalId: { contains: params.q } },
+              { email: { contains: params.q, mode: "insensitive" } },
+              { phone: { contains: params.q } },
+            ],
+          }
+        : {}),
+    };
+
+    const [rows, total] = await Promise.all([
+      this.prisma.scoped.registrationRequest.findMany({
+        where,
+        orderBy: { createdAt: "asc" }, // oldest first — nobody waits unnoticed
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        select: {
+          id: true,
+          trackingRef: true,
+          status: true,
+          fullName: true,
+          gender: true,
+          phone: true,
+          email: true,
+          claimedAmount: true,
+          acquisitionSource: true,
+          createdAt: true,
+          claimedByUserId: true,
+          claimedUntil: true,
+          desiredSection: { select: { id: true, code: true, name: true } },
+        },
+      }),
+      this.prisma.scoped.registrationRequest.count({ where }),
+    ]);
+
+    const overdueHours = Number(this.config.get<string>("REG_OVERDUE_HOURS", "48"));
+    const now = Date.now();
+
+    return {
+      data: rows.map((r: (typeof rows)[number]) => ({
+        ...r,
+        // FR-REG-038 — surface the ones that have been waiting too long.
+        isOverdue: now - r.createdAt.getTime() > overdueHours * 3_600_000,
+        isClaimed: !!r.claimedUntil && r.claimedUntil > new Date(),
+      })),
+      pagination: buildPagination(page, pageSize, total),
+      appliedFilters: params,
+    };
+  }
+
+  /**
+   * FR-REG-026 — claim for review, so two administrators cannot act on the
+   * same application. The claim expires, so an administrator who closes their
+   * laptop does not block the queue indefinitely.
+   */
+  async claim(id: string) {
+    const actor = getActor();
+    if (!actor) throw new AppError("AUTH_TOKEN_INVALID");
+
+    const minutes = Number(this.config.get<string>("REG_CLAIM_MINUTES", "30"));
+
+    return this.prisma.asSystem(async (db) => {
+      const now = new Date();
+
+      // Conditional update: succeeds only if unclaimed, or claimed by us, or
+      // the previous claim has lapsed. Doing it as one statement means two
+      // administrators racing cannot both win.
+      const result = await db.registrationRequest.updateMany({
+        where: {
+          id,
+          status: { in: ["PENDING_REVIEW", "UNDER_REVIEW", "NEEDS_INFO"] },
+          OR: [
+            { claimedByUserId: null },
+            { claimedByUserId: actor.userId },
+            { claimedUntil: { lt: now } },
+          ],
+        },
+        data: {
+          status: "UNDER_REVIEW",
+          claimedByUserId: actor.userId,
+          claimedUntil: new Date(now.getTime() + minutes * 60_000),
+        },
+      });
+
+      if (result.count === 0) {
+        const holder = await db.registrationRequest.findUnique({
+          where: { id },
+          select: { claimedByUserId: true, claimedUntil: true, status: true },
+        });
+        if (!holder) throw new AppError("RESOURCE_NOT_FOUND");
+        if (["APPROVED", "REJECTED", "WITHDRAWN"].includes(holder.status)) {
+          throw new AppError("RESOURCE_CONFLICT", {
+            message: "This application has already been decided.",
+          });
+        }
+        const by = holder.claimedByUserId
+          ? await db.user.findUnique({
+              where: { id: holder.claimedByUserId },
+              select: { fullName: true },
+            })
+          : null;
+        throw new AppError("REGISTRATION_ALREADY_CLAIMED", {
+          message: by
+            ? `${by.fullName} is reviewing this application.`
+            : "Another administrator is reviewing this application.",
+        });
+      }
+
+      return { claimed: true, until: new Date(now.getTime() + minutes * 60_000) };
+    });
+  }
+
+  async releaseClaim(id: string) {
+    const actor = getActor();
+    if (!actor) throw new AppError("AUTH_TOKEN_INVALID");
+    await this.prisma.asSystem((db) =>
+      db.registrationRequest.updateMany({
+        where: { id, claimedByUserId: actor.userId },
+        data: { claimedByUserId: null, claimedUntil: null, status: "PENDING_REVIEW" },
+      }),
+    );
+  }
+
+  // ============================================================ UC-02 ======
+
+  /**
+   * Approve and provision — FR-REG-039, the System's most consequential
+   * transaction.
+   *
+   * BR-REG-09: everything below happens in ONE transaction. If any step fails
+   * the whole approval rolls back, the request stays PENDING_REVIEW, and no
+   * registration number is consumed — the sequence increment rolls back with
+   * everything else.
+   */
+  async approve(id: string, input: RegistrationApproveInput, ip?: string, userAgent?: string) {
+    const actor = getActor();
+    if (!actor) throw new AppError("AUTH_TOKEN_INVALID");
+
+    const tempPassword = this.generateTempPassword();
+    const passwordHash = await this.auth.hashPassword(tempPassword);
+    const format = this.numbers.getFormat();
+
+    const result = await this.prisma.asSystem((db) =>
+      db.$transaction(async (tx) => {
+        // -- 0. Serialise concurrent approvals into this section ------------
+        // Without the lock, two administrators can both pass the capacity
+        // check and both claim the same roll number.
+        await this.numbers.lockSection(tx, input.sectionId);
+
+        const req = await tx.registrationRequest.findUnique({
+          where: { id },
+          include: { desiredProgramme: true },
+        });
+        if (!req) throw new AppError("RESOURCE_NOT_FOUND");
+        if (req.status === "APPROVED") {
+          throw new AppError("RESOURCE_CONFLICT", {
+            message: "This application has already been approved.",
+          });
+        }
+        if (["REJECTED", "WITHDRAWN"].includes(req.status)) {
+          throw new AppError("RESOURCE_CONFLICT", {
+            message: "This application has already been closed.",
+          });
+        }
+        if (req.claimedByUserId && req.claimedByUserId !== actor.userId && req.claimedUntil && req.claimedUntil > new Date()) {
+          throw new AppError("REGISTRATION_ALREADY_CLAIMED");
+        }
+
+        // -- 1. Section eligibility ----------------------------------------
+        const section = await tx.section.findUnique({
+          where: { id: input.sectionId },
+          include: {
+            batch: { include: { academicSession: { include: { programme: true } } } },
+            sectionSubjects: {
+              where: { isCompulsory: true, status: { in: ["PLANNED", "ACTIVE"] } },
+              select: { id: true },
+            },
+          },
+        });
+        if (!section) {
+          throw new AppError("VALIDATION_FAILED", {
+            details: [
+              { field: "sectionId", code: "NOT_FOUND", message: "That section does not exist." },
+            ],
+          });
+        }
+
+        // FR-CRS-009 / BR-ENR-05 — absolute. There is deliberately no
+        // override path for this, unlike capacity.
+        if (
+          section.genderRestriction !== "MIXED" &&
+          section.genderRestriction !== req.gender
+        ) {
+          throw new AppError("SECTION_GENDER_RESTRICTED", {
+            message: `${section.name} admits ${section.genderRestriction.toLowerCase()} students only.`,
+          });
+        }
+
+        // FR-REG-031 / BR-ENR-04 — capacity warns and requires an explicit,
+        // audited override rather than being silently exceeded.
+        if (section.enrolledCount >= section.capacity && !input.capacityOverride) {
+          throw new AppError("SECTION_AT_CAPACITY", {
+            message: `${section.name} is full (${section.enrolledCount} of ${section.capacity}).`,
+            details: [
+              {
+                field: "sectionId",
+                code: "AT_CAPACITY",
+                message: `capacity ${section.capacity}, enrolled ${section.enrolledCount}`,
+              },
+            ],
+          });
+        }
+
+        // FR-REG-028 — a variance between claim and verification needs a reason.
+        if (
+          Number(req.claimedAmount) !== Number(input.payment.verifiedAmount) &&
+          !input.payment.varianceReason
+        ) {
+          throw new AppError("VALIDATION_FAILED", {
+            details: [
+              {
+                field: "payment.varianceReason",
+                code: "REQUIRED",
+                message:
+                  `The verified amount (${input.payment.verifiedAmount}) differs from the ` +
+                  `claimed amount (${req.claimedAmount}). Record why.`,
+              },
+            ],
+          });
+        }
+
+        // -- 2. Registration number, atomically (FR-REG-051, RSK-07) -------
+        const programmeCode =
+          section.batch.academicSession.programme.code ?? req.desiredProgramme?.code ?? "GEN";
+        const { registrationNo } = await this.numbers.allocate(tx, {
+          instituteCode: format.instituteCode,
+          sessionCode: section.batch.academicSession.code,
+          programmeCode,
+          campusCode: format.campusCode,
+        });
+
+        // -- 3. Roll number — lowest unused in this section ----------------
+        const rollNo = await this.numbers.allocateRollNumber(tx, section.id);
+
+        // -- 4. Account (FR-REG-040: temporary, must change at first login) -
+        const user = await tx.user.create({
+          data: {
+            email: req.email,
+            passwordHash,
+            fullName: req.fullName,
+            phone: req.phone,
+            phoneIsWhatsapp: req.phoneIsWhatsapp,
+            status: "INVITED",
+            mustChangePassword: true,
+            roles: {
+              create: { role: { connect: { key: "student" } } },
+            },
+          },
+          select: { id: true },
+        });
+
+        // -- 5. Student profile --------------------------------------------
+        const student = await tx.student.create({
+          data: {
+            userId: user.id,
+            registrationNo,
+            currentSectionId: section.id,
+            currentRollNo: rollNo,
+            nationalId: req.nationalId,
+            dateOfBirth: req.dateOfBirth,
+            gender: req.gender,
+            admissionDate: new Date(),
+          },
+          select: { id: true },
+        });
+
+        // -- 6. Enrolments in every compulsory active subject (BR-ENR-02) ---
+        if (section.sectionSubjects.length > 0) {
+          await tx.enrolment.createMany({
+            data: section.sectionSubjects.map((ss) => ({
+              studentId: student.id,
+              sectionSubjectId: ss.id,
+              status: "ACTIVE" as const,
+              rollNoAtEnrolment: rollNo,
+            })),
+          });
+        }
+
+        // -- 7. Verified payment (BR-REG-10: ours, not the applicant's claim)
+        await tx.payment.create({
+          data: {
+            studentId: student.id,
+            registrationRequestId: req.id,
+            verifiedAmount: input.payment.verifiedAmount,
+            currency: input.payment.currency,
+            paymentDate: input.payment.paymentDate,
+            method: input.payment.method,
+            bankReference: input.payment.bankReference ?? null,
+            verifiedBy: actor.userId,
+            varianceReason: input.payment.varianceReason ?? null,
+          },
+        });
+
+        // -- 8. Section occupancy, in the same transaction (§8.5) ----------
+        await tx.section.update({
+          where: { id: section.id },
+          data: { enrolledCount: { increment: 1 } },
+        });
+
+        // -- 9. Close the application ---------------------------------------
+        await tx.registrationRequest.update({
+          where: { id: req.id },
+          data: {
+            status: "APPROVED",
+            decision: "APPROVED",
+            decisionNote: input.note ?? null,
+            decidedBy: actor.userId,
+            decidedAt: new Date(),
+            createdStudentId: student.id, // FR-REG-045 — permanently linked
+            claimedByUserId: null,
+            claimedUntil: null,
+          },
+        });
+
+        // -- 10. Audit (FR-LOG-003, inside the transaction) -----------------
+        await this.audit.record(
+          {
+            action: "registration.approve",
+            entityType: "RegistrationRequest",
+            entityId: req.id,
+            before: { status: req.status },
+            after: {
+              status: "APPROVED",
+              studentId: student.id,
+              registrationNo,
+              rollNo,
+              sectionId: section.id,
+              verifiedAmount: String(input.payment.verifiedAmount),
+              capacityOverride: input.capacityOverride,
+            },
+            ipAddress: ip,
+            userAgent,
+          },
+          tx as unknown as Parameters<AuditService["record"]>[1],
+        );
+
+        return {
+          studentId: student.id,
+          userId: user.id,
+          registrationNo,
+          rollNo,
+          section: { id: section.id, code: section.code, name: section.name },
+          subjectCount: section.sectionSubjects.length,
+          whatsappLinks: {
+            channel: section.whatsappChannelUrl,
+            group: section.whatsappGroupUrl,
+          },
+        };
+      }),
+    );
+
+    this.logger.log(`Approved ${id} → ${result.registrationNo} (roll ${result.rollNo})`);
+
+    return {
+      student: {
+        id: result.studentId,
+        registrationNo: result.registrationNo,
+        rollNo: result.rollNo,
+        sectionId: result.section.id,
+        sectionName: result.section.name,
+      },
+      account: {
+        email: undefined as string | undefined,
+        // FR-REG-042 — shown ONCE, on screen, because credentials are
+        // relayed by WhatsApp and email delivery may be delayed or fail.
+        temporaryPassword: tempPassword,
+        mustChangePassword: true,
+      },
+      enrolments: { count: result.subjectCount },
+      whatsappLinks: result.whatsappLinks, // FR-REG-044
+      notificationsSent: [] as string[], // wired when the mailer lands (DEP-04)
+    };
+  }
+
+  /** FR-REG-033/034/046 — reject with a mandatory reason code. */
+  async reject(id: string, input: RegistrationRejectInput, ip?: string, userAgent?: string) {
+    const actor = getActor();
+    if (!actor) throw new AppError("AUTH_TOKEN_INVALID");
+
+    return this.prisma.asSystem((db) =>
+      db.$transaction(async (tx) => {
+        const req = await tx.registrationRequest.findUnique({ where: { id } });
+        if (!req) throw new AppError("RESOURCE_NOT_FOUND");
+        if (["APPROVED", "REJECTED"].includes(req.status)) {
+          throw new AppError("RESOURCE_CONFLICT", {
+            message: "This application has already been decided.",
+          });
+        }
+
+        await tx.registrationRequest.update({
+          where: { id },
+          data: {
+            status: "REJECTED",
+            decision: "REJECTED",
+            decisionReasonCode: input.reasonCode,
+            decisionNote: input.note ?? null,
+            decidedBy: actor.userId,
+            decidedAt: new Date(),
+            claimedByUserId: null,
+            claimedUntil: null,
+          },
+        });
+
+        await this.audit.record(
+          {
+            action: "registration.reject",
+            entityType: "RegistrationRequest",
+            entityId: id,
+            before: { status: req.status },
+            after: { status: "REJECTED", reasonCode: input.reasonCode },
+            ipAddress: ip,
+            userAgent,
+          },
+          tx as unknown as Parameters<AuditService["record"]>[1],
+        );
+
+        // BR-REG-11 — the request and its evidence are retained, and the
+        // applicant may reapply.
+        return { status: "REJECTED" as const, reasonCode: input.reasonCode };
+      }),
+    );
+  }
+
+  /** FR-REG-035 — ask for more, without discarding what was supplied. */
+  async requestInfo(id: string, message: string) {
+    const actor = getActor();
+    if (!actor) throw new AppError("AUTH_TOKEN_INVALID");
+
+    return this.prisma.asSystem((db) =>
+      db.$transaction(async (tx) => {
+        const req = await tx.registrationRequest.findUnique({ where: { id } });
+        if (!req) throw new AppError("RESOURCE_NOT_FOUND");
+        if (["APPROVED", "REJECTED"].includes(req.status)) {
+          throw new AppError("RESOURCE_CONFLICT", {
+            message: "This application has already been decided.",
+          });
+        }
+
+        await tx.registrationRequest.update({
+          where: { id },
+          data: {
+            status: "NEEDS_INFO",
+            decisionNote: message,
+            claimedByUserId: null,
+            claimedUntil: null,
+          },
+        });
+
+        await this.audit.record(
+          {
+            action: "registration.request_info",
+            entityType: "RegistrationRequest",
+            entityId: id,
+            before: { status: req.status },
+            after: { status: "NEEDS_INFO" },
+          },
+          tx as unknown as Parameters<AuditService["record"]>[1],
+        );
+
+        return { status: "NEEDS_INFO" as const };
+      }),
+    );
+  }
+
+  // =========================================================== helpers ======
+
+  /**
+   * FR-REG-040 — a temporary password meeting the Student policy, generated
+   * with a CSPRNG (SEC-CRY-007). Grouped for legibility because an
+   * administrator reads it aloud or types it into WhatsApp.
+   */
+  private generateTempPassword(): string {
+    const pick = (n: number): string =>
+      Array.from({ length: n }, () => TEMP_PASSWORD_ALPHABET[randomInt(TEMP_PASSWORD_ALPHABET.length)]).join("");
+    return `${pick(4)}-${pick(4)}-${pick(4)}`;
+  }
+
+  /** FR-REG-018 — short, unambiguous, and unique. */
+  private async generateTrackingRef(db: {
+    registrationRequest: {
+      findUnique: (args: { where: { trackingRef: string } }) => Promise<unknown>;
+    };
+  }): Promise<string> {
+    const year = new Date().getFullYear();
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const suffix = String(randomInt(100_000, 999_999));
+      const ref = `REG-${year}-${suffix}`;
+      const clash = await db.registrationRequest.findUnique({ where: { trackingRef: ref } });
+      if (!clash) return ref;
+    }
+    throw new AppError("INTERNAL_ERROR", {
+      message: "Could not allocate a tracking reference. Please try again.",
+    });
+  }
+}

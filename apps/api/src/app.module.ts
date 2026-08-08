@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { PrismaModule } from "./prisma/prisma.module";
 import { AuthModule } from "./auth/auth.module";
 import { AuditModule } from "./audit/audit.service";
+import { AdmissionModule } from "./admission/admission.module";
 import { HealthController } from "./health.controller";
 
 import { CorrelationMiddleware } from "./common/correlation.middleware";
@@ -30,6 +31,7 @@ import { PermissionsGuard } from "./rbac/permissions.guard";
     PrismaModule,
     AuthModule,
     AuditModule,
+    AdmissionModule,
   ],
   controllers: [HealthController],
   providers: [
