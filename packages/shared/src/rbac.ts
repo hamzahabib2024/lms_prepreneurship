@@ -1,0 +1,708 @@
+/**
+ * Role-Based Access Control — the model defined in SRS §4.
+ *
+ * §4.1: every authorisation decision is the intersection of three independent
+ * dimensions, ALL of which must pass:
+ *
+ *     ACCESS = ROLE  ∩  ACTION  ∩  SCOPE
+ *
+ * This file holds the ROLE × ACTION half as data (FR-RBAC-007). The SCOPE half
+ * is enforced at the data-access layer by the single Prisma extension required
+ * by ARC-051 — see apps/api/src/prisma/scope.extension.ts.
+ *
+ * Keeping the two halves in separate places is deliberate. A role check that
+ * passes tells you the user may perform this KIND of operation; it says nothing
+ * about WHICH records. Conflating them is how systems end up letting a teacher
+ * read another section's students.
+ */
+
+// ---------------------------------------------------------------- roles ----
+
+export const ROLES = ["super_admin", "admin", "teacher", "student"] as const;
+export type Role = (typeof ROLES)[number];
+
+/**
+ * Admin sub-permissions (§4.2.2). Granted individually by a Super Admin; each
+ * grant is a privileged change and is audited (SEC-LOG-009).
+ */
+export const SUB_PERMISSIONS = [
+  "admin_manager", // manage other Admin accounts
+  "financial_reporter", // revenue reports and financial export
+  "bulk_operator", // bulk import and bulk enrolment change
+  "certificate_issuer", // issue and revoke certificates
+] as const;
+export type SubPermission = (typeof SUB_PERMISSIONS)[number];
+
+// --------------------------------------------------------------- actions ---
+
+/** §4.1.2. Export is separate from Read: bulk extraction is a distinct
+ *  privacy risk (SEC-PRV-007). Configure is separate from Full. */
+export const ACTIONS = [
+  "create",
+  "read",
+  "update",
+  "delete",
+  "approve",
+  "export",
+  "configure",
+] as const;
+export type Action = (typeof ACTIONS)[number];
+
+/** Every action except `configure`. §4.1.2: "F" does not imply "G". */
+const FULL: readonly Action[] = ["create", "read", "update", "delete", "approve", "export"];
+
+// ---------------------------------------------------------------- scopes ---
+
+/**
+ * §4.1.1. These definitions are binding and each is individually testable.
+ *
+ *  ALL       every record, no predicate
+ *  SECTION   records in sections the actor administers or is assigned to
+ *  ASSIGNED  records in a subject-WITHIN-a-section the actor actively teaches
+ *  ENROLLED  records in a subject the actor holds an active enrolment in
+ *  OWN       records about, or authored by, the actor
+ *  NONE      denied under all conditions
+ */
+export const SCOPES = ["ALL", "SECTION", "ASSIGNED", "ENROLLED", "OWN", "NONE"] as const;
+export type Scope = (typeof SCOPES)[number];
+
+// ------------------------------------------------------------- resources ---
+
+/**
+ * Resources correspond to the rows of the §4.5 matrix. Names map to domain
+ * concepts, not to database tables, because one resource may span several
+ * tables (`registration` covers requests and their documents).
+ */
+export const RESOURCES = [
+  // identity and access — §4.5.1
+  "super_admin_account",
+  "admin_account",
+  "teacher_account",
+  "student_account",
+  "own_profile",
+  "own_password",
+  "own_session",
+  "other_user_session",
+  "other_user_password",
+  "role_assignment",
+  "account_state",
+  "impersonation",
+  // admission — §4.5.2
+  "registration",
+  "payment_slip",
+  "payment",
+  "registration_number_series",
+  // academic — §4.5.3
+  "programme",
+  "academic_session",
+  "batch",
+  "section",
+  "subject",
+  "section_subject",
+  "teacher_assignment",
+  "enrolment",
+  "timetable",
+  // content — §4.5.4
+  "module",
+  "lesson",
+  "content_publication",
+  "recorded_lecture",
+  "lecture_playback",
+  "lesson_resource",
+  "watch_progress",
+  // live — §4.5.5
+  "live_session",
+  "join_route",
+  "provider_binding",
+  "participation_evidence",
+  // assessment — §4.5.6 / §4.5.7
+  "assignment",
+  "rubric",
+  "submission",
+  "grade",
+  "internal_note",
+  "quiz",
+  "question_bank",
+  "question",
+  "quiz_attempt",
+  "quiz_answer_key",
+  // attendance — §4.5.8
+  "attendance",
+  "attendance_correction",
+  // progress — §4.5.9
+  "progress",
+  "certificate",
+  // communication — §4.5.10
+  "announcement",
+  "notification_config",
+  "own_notification_preference",
+  "whatsapp_link",
+  "discussion_post",
+  // reporting — §4.5.11
+  "dashboard",
+  "report_attendance",
+  "report_progress",
+  "report_enrolment",
+  "report_assessment",
+  "report_financial",
+  "report_teacher_activity",
+  "report_marketing",
+  // governance — §4.5.12
+  "system_setting",
+  "integration_credential",
+  "live_provider_selection",
+  "audit_log",
+  "security_log",
+  "backup",
+  "restore",
+  "bulk_operation",
+  "personal_data_export",
+  "permanent_deletion",
+  "maintenance_mode",
+  "system_health",
+] as const;
+export type Resource = (typeof RESOURCES)[number];
+
+// ----------------------------------------------------------- the matrix ----
+
+export interface Grant {
+  actions: readonly Action[];
+  scope: Scope;
+  /** When set, the grant applies only if the actor holds this sub-permission. */
+  requiresSubPermission?: SubPermission;
+  /** SEC-AUZ-011: privileged operations demand recent re-authentication. */
+  requiresStepUp?: boolean;
+}
+
+type ResourcePolicy = Partial<Record<Role, Grant | Grant[]>>;
+
+/**
+ * The §4.5 permission matrix, executable.
+ *
+ * A resource absent from this map is DENIED to every role — the default is
+ * closed, so forgetting to add a resource fails safe rather than open.
+ */
+export const PERMISSION_MATRIX: Record<Resource, ResourcePolicy> = {
+  // ---------------------------------------------------- §4.5.1 identity ---
+  super_admin_account: {
+    super_admin: { actions: FULL, scope: "ALL", requiresStepUp: true },
+  },
+  admin_account: {
+    super_admin: { actions: FULL, scope: "ALL", requiresStepUp: true },
+    admin: {
+      actions: ["create", "read", "update", "delete"],
+      scope: "ALL",
+      requiresSubPermission: "admin_manager",
+    },
+  },
+  teacher_account: {
+    super_admin: { actions: FULL, scope: "ALL" },
+    admin: { actions: FULL, scope: "ALL" },
+    teacher: { actions: ["read"], scope: "OWN" },
+  },
+  student_account: {
+    super_admin: { actions: FULL, scope: "ALL" },
+    admin: { actions: FULL, scope: "ALL" },
+    teacher: { actions: ["read"], scope: "SECTION" },
+    student: { actions: ["read", "update"], scope: "OWN" },
+  },
+  own_profile: {
+    super_admin: { actions: ["read", "update"], scope: "OWN" },
+    admin: { actions: ["read", "update"], scope: "OWN" },
+    teacher: { actions: ["read", "update"], scope: "OWN" },
+    student: { actions: ["read", "update"], scope: "OWN" },
+  },
+  own_password: {
+    super_admin: { actions: ["update"], scope: "OWN" },
+    admin: { actions: ["update"], scope: "OWN" },
+    teacher: { actions: ["update"], scope: "OWN" },
+    student: { actions: ["update"], scope: "OWN" },
+  },
+  own_session: {
+    super_admin: { actions: ["read", "delete"], scope: "OWN" },
+    admin: { actions: ["read", "delete"], scope: "OWN" },
+    teacher: { actions: ["read", "delete"], scope: "OWN" },
+    student: { actions: ["read", "delete"], scope: "OWN" },
+  },
+  other_user_password: {
+    super_admin: { actions: ["update"], scope: "ALL" },
+    admin: { actions: ["update"], scope: "ALL" },
+  },
+  other_user_session: {
+    super_admin: { actions: ["delete"], scope: "ALL" },
+    admin: { actions: ["delete"], scope: "ALL" },
+  },
+  role_assignment: {
+    super_admin: { actions: ["configure"], scope: "ALL", requiresStepUp: true },
+  },
+  account_state: {
+    super_admin: { actions: FULL, scope: "ALL" },
+    admin: { actions: FULL, scope: "ALL" },
+  },
+  impersonation: {
+    super_admin: { actions: ["create"], scope: "ALL", requiresStepUp: true },
+  },
+
+  // --------------------------------------------------- §4.5.2 admission ---
+  registration: {
+    super_admin: { actions: FULL, scope: "ALL" },
+    admin: { actions: FULL, scope: "ALL" },
+    student: { actions: ["read"], scope: "OWN" },
+  },
+  // BR-REG-04 / §4.7: teachers may NEVER see a payment slip. The absence of a
+  // `teacher` key here is the enforcement, and it is deliberate.
+  payment_slip: {
+    super_admin: { actions: ["read", "export"], scope: "ALL" },
+    admin: { actions: ["read", "export"], scope: "ALL" },
+    student: { actions: ["read"], scope: "OWN" },
+  },
+  payment: {
+    super_admin: { actions: FULL, scope: "ALL", requiresStepUp: true },
+    admin: { actions: FULL, scope: "ALL", requiresStepUp: true },
+    student: { actions: ["read"], scope: "OWN" },
+  },
+  registration_number_series: {
+    super_admin: { actions: ["configure", "read"], scope: "ALL", requiresStepUp: true },
+    admin: { actions: ["read"], scope: "ALL" },
+  },
+
+  // ---------------------------------------------------- §4.5.3 academic ---
+  programme: {
+    super_admin: { actions: FULL, scope: "ALL" },
+    admin: { actions: FULL, scope: "ALL" },
+    teacher: { actions: ["read"], scope: "ASSIGNED" },
+    student: { actions: ["read"], scope: "ENROLLED" },
+  },
+  academic_session: {
+    super_admin: { actions: FULL, scope: "ALL" },
+    admin: { actions: FULL, scope: "ALL" },
+    teacher: { actions: ["read"], scope: "ASSIGNED" },
+    student: { actions: ["read"], scope: "OWN" },
+  },
+  batch: {
+    super_admin: { actions: FULL, scope: "ALL" },
+    admin: { actions: FULL, scope: "ALL" },
+    teacher: { actions: ["read"], scope: "ASSIGNED" },
+    student: { actions: ["read"], scope: "OWN" },
+  },
+  section: {
+    super_admin: { actions: FULL, scope: "ALL" },
+    admin: { actions: FULL, scope: "ALL" },
+    teacher: { actions: ["read"], scope: "ASSIGNED" },
+    student: { actions: ["read"], scope: "OWN" },
+  },
+  subject: {
+    super_admin: { actions: FULL, scope: "ALL" },
+    admin: { actions: FULL, scope: "ALL" },
+    teacher: { actions: ["read", "update"], scope: "ASSIGNED" },
+    student: { actions: ["read"], scope: "ENROLLED" },
+  },
+  section_subject: {
+    super_admin: { actions: FULL, scope: "ALL" },
+    admin: { actions: FULL, scope: "ALL" },
+    teacher: { actions: ["read"], scope: "ASSIGNED" },
+    student: { actions: ["read"], scope: "ENROLLED" },
+  },
+  // BR-ACC-04: this is the sole source of ASSIGNED scope, so a teacher must
+  // never be able to write it (FR-RBAC-012).
+  teacher_assignment: {
+    super_admin: { actions: FULL, scope: "ALL" },
+    admin: { actions: FULL, scope: "ALL" },
+    teacher: { actions: ["read"], scope: "OWN" },
+  },
+  enrolment: {
+    super_admin: { actions: FULL, scope: "ALL" },
+    admin: { actions: FULL, scope: "ALL" },
+    teacher: { actions: ["read"], scope: "ASSIGNED" },
+    student: { actions: ["read"], scope: "OWN" },
+  },
+  timetable: {
+    super_admin: { actions: FULL, scope: "ALL" },
+    admin: { actions: FULL, scope: "ALL" },
+    teacher: { actions: ["read", "update"], scope: "ASSIGNED" },
+    student: { actions: ["read"], scope: "ENROLLED" },
+  },
+
+  // ----------------------------------------------------- §4.5.4 content ---
+  module: {
+    super_admin: { actions: FULL, scope: "ALL" },
+    admin: { actions: FULL, scope: "ALL" },
+    teacher: { actions: FULL, scope: "ASSIGNED" },
+    student: { actions: ["read"], scope: "ENROLLED" },
+  },
+  lesson: {
+    super_admin: { actions: FULL, scope: "ALL" },
+    admin: { actions: FULL, scope: "ALL" },
+    teacher: { actions: FULL, scope: "ASSIGNED" },
+    student: { actions: ["read"], scope: "ENROLLED" },
+  },
+  content_publication: {
+    super_admin: { actions: ["update"], scope: "ALL" },
+    admin: { actions: ["update"], scope: "ALL" },
+    teacher: { actions: ["update"], scope: "ASSIGNED" },
+  },
+  recorded_lecture: {
+    super_admin: { actions: FULL, scope: "ALL" },
+    admin: { actions: FULL, scope: "ALL" },
+    teacher: { actions: FULL, scope: "ASSIGNED" },
+    student: { actions: ["read"], scope: "ENROLLED" },
+  },
+  lecture_playback: {
+    super_admin: { actions: ["read"], scope: "ALL" },
+    admin: { actions: ["read"], scope: "ALL" },
+    teacher: { actions: ["read"], scope: "ASSIGNED" },
+    student: { actions: ["read"], scope: "ENROLLED" },
+  },
+  lesson_resource: {
+    super_admin: { actions: FULL, scope: "ALL" },
+    admin: { actions: FULL, scope: "ALL" },
+    teacher: { actions: FULL, scope: "ASSIGNED" },
+    student: { actions: ["read", "export"], scope: "ENROLLED" },
+  },
+  watch_progress: {
+    super_admin: { actions: ["read"], scope: "ALL" },
+    admin: { actions: ["read"], scope: "ALL" },
+    teacher: { actions: ["read"], scope: "ASSIGNED" },
+    student: { actions: ["read", "update"], scope: "OWN" },
+  },
+
+  // -------------------------------------------------------- §4.5.5 live ---
+  live_session: {
+    super_admin: { actions: FULL, scope: "ALL" },
+    admin: { actions: FULL, scope: "ALL" },
+    teacher: { actions: FULL, scope: "ASSIGNED" },
+    student: { actions: ["read"], scope: "ENROLLED" },
+  },
+  join_route: {
+    super_admin: { actions: ["read"], scope: "ALL" },
+    admin: { actions: ["read"], scope: "ALL" },
+    teacher: { actions: ["read"], scope: "ASSIGNED" },
+    student: { actions: ["read"], scope: "ENROLLED" },
+  },
+  // ARC-025: the raw provider link is never handed to a student — they receive
+  // a JoinRoute instead, and the client renders from its `kind`.
+  provider_binding: {
+    super_admin: { actions: ["read", "configure"], scope: "ALL" },
+    admin: { actions: ["read"], scope: "ALL" },
+    teacher: { actions: ["read"], scope: "ASSIGNED" },
+  },
+  participation_evidence: {
+    super_admin: { actions: ["read"], scope: "ALL" },
+    admin: { actions: ["read"], scope: "ALL" },
+    teacher: { actions: ["read"], scope: "ASSIGNED" },
+  },
+
+  // -------------------------------------------------- §4.5.6/7 assessment -
+  assignment: {
+    super_admin: { actions: FULL, scope: "ALL" },
+    admin: { actions: FULL, scope: "ALL" },
+    teacher: { actions: FULL, scope: "ASSIGNED" },
+    student: { actions: ["read"], scope: "ENROLLED" },
+  },
+  rubric: {
+    super_admin: { actions: FULL, scope: "ALL" },
+    admin: { actions: FULL, scope: "ALL" },
+    teacher: { actions: FULL, scope: "ASSIGNED" },
+    student: { actions: ["read"], scope: "ENROLLED" },
+  },
+  submission: {
+    super_admin: { actions: ["read", "export"], scope: "ALL" },
+    admin: { actions: ["read", "export"], scope: "ALL" },
+    teacher: { actions: ["read", "export"], scope: "ASSIGNED" },
+    student: { actions: ["create", "read", "update", "export"], scope: "OWN" },
+  },
+  grade: {
+    super_admin: { actions: ["read", "update"], scope: "ALL" },
+    admin: { actions: ["read", "update"], scope: "ALL" },
+    teacher: { actions: ["create", "read", "update"], scope: "ASSIGNED" },
+    student: { actions: ["read"], scope: "OWN" },
+  },
+  // §4.7: internal grading notes are never visible to a student. There is no
+  // `student` key and there must never be one.
+  internal_note: {
+    super_admin: { actions: ["read"], scope: "ALL" },
+    admin: { actions: ["read"], scope: "ALL" },
+    teacher: { actions: FULL, scope: "ASSIGNED" },
+  },
+  quiz: {
+    super_admin: { actions: FULL, scope: "ALL" },
+    admin: { actions: FULL, scope: "ALL" },
+    teacher: { actions: FULL, scope: "ASSIGNED" },
+    student: { actions: ["read"], scope: "ENROLLED" },
+  },
+  question_bank: {
+    super_admin: { actions: FULL, scope: "ALL" },
+    admin: { actions: FULL, scope: "ALL" },
+    teacher: { actions: FULL, scope: "OWN" },
+  },
+  question: {
+    super_admin: { actions: FULL, scope: "ALL" },
+    admin: { actions: FULL, scope: "ALL" },
+    teacher: { actions: FULL, scope: "OWN" },
+  },
+  quiz_attempt: {
+    super_admin: { actions: ["read", "update"], scope: "ALL" },
+    admin: { actions: ["read", "update"], scope: "ALL" },
+    teacher: { actions: ["read", "update"], scope: "ASSIGNED" },
+    student: { actions: ["create", "read", "update"], scope: "OWN" },
+  },
+  // SEC-AUZ-009 / BR-QIZ-07: correct answers must not reach a student before
+  // the configured release point — including in a field the UI never renders.
+  quiz_answer_key: {
+    super_admin: { actions: ["read"], scope: "ALL" },
+    admin: { actions: ["read"], scope: "ALL" },
+    teacher: { actions: ["read"], scope: "ASSIGNED" },
+  },
+
+  // -------------------------------------------------- §4.5.8 attendance ---
+  attendance: {
+    super_admin: { actions: FULL, scope: "ALL" },
+    admin: { actions: FULL, scope: "ALL" },
+    teacher: { actions: ["create", "read", "update", "approve", "export"], scope: "ASSIGNED" },
+    student: { actions: ["read", "update"], scope: "OWN" }, // update = self check-in only
+  },
+  attendance_correction: {
+    super_admin: { actions: ["update"], scope: "ALL" },
+    admin: { actions: ["update"], scope: "ALL" },
+    teacher: { actions: ["update"], scope: "ASSIGNED" },
+  },
+
+  // ---------------------------------------------------- §4.5.9 progress ---
+  progress: {
+    super_admin: { actions: ["read", "export"], scope: "ALL" },
+    admin: { actions: ["read", "export"], scope: "ALL" },
+    teacher: { actions: ["read", "export"], scope: "ASSIGNED" },
+    student: { actions: ["read"], scope: "OWN" },
+  },
+  certificate: {
+    super_admin: { actions: FULL, scope: "ALL" },
+    admin: {
+      actions: ["create", "read", "approve", "export"],
+      scope: "ALL",
+      requiresSubPermission: "certificate_issuer",
+    },
+    teacher: { actions: ["read"], scope: "ASSIGNED" },
+    student: { actions: ["read", "export"], scope: "OWN" },
+  },
+
+  // ----------------------------------------------- §4.5.10 communication --
+  announcement: {
+    super_admin: { actions: FULL, scope: "ALL" },
+    admin: { actions: FULL, scope: "ALL" },
+    teacher: { actions: FULL, scope: "ASSIGNED" },
+    student: { actions: ["read"], scope: "ENROLLED" },
+  },
+  notification_config: {
+    super_admin: { actions: ["configure"], scope: "ALL" },
+    admin: { actions: ["configure"], scope: "ALL" },
+  },
+  own_notification_preference: {
+    super_admin: { actions: ["read", "update"], scope: "OWN" },
+    admin: { actions: ["read", "update"], scope: "OWN" },
+    teacher: { actions: ["read", "update"], scope: "OWN" },
+    student: { actions: ["read", "update"], scope: "OWN" },
+  },
+  whatsapp_link: {
+    super_admin: { actions: FULL, scope: "ALL" },
+    admin: { actions: FULL, scope: "ALL" },
+    teacher: { actions: ["read"], scope: "ASSIGNED" },
+    student: { actions: ["read"], scope: "ENROLLED" },
+  },
+  discussion_post: {
+    super_admin: { actions: FULL, scope: "ALL" },
+    admin: { actions: FULL, scope: "ALL" },
+    teacher: { actions: FULL, scope: "ASSIGNED" },
+    student: { actions: ["create", "read", "update", "delete"], scope: "OWN" },
+  },
+
+  // -------------------------------------------------- §4.5.11 reporting ---
+  dashboard: {
+    super_admin: { actions: ["read"], scope: "ALL" },
+    admin: { actions: ["read"], scope: "ALL" },
+    teacher: { actions: ["read"], scope: "ASSIGNED" },
+    student: { actions: ["read"], scope: "OWN" },
+  },
+  report_attendance: {
+    super_admin: { actions: ["read", "export"], scope: "ALL" },
+    admin: { actions: ["read", "export"], scope: "ALL" },
+    teacher: { actions: ["read", "export"], scope: "ASSIGNED" },
+    student: { actions: ["read"], scope: "OWN" },
+  },
+  report_progress: {
+    super_admin: { actions: ["read", "export"], scope: "ALL" },
+    admin: { actions: ["read", "export"], scope: "ALL" },
+    teacher: { actions: ["read", "export"], scope: "ASSIGNED" },
+    student: { actions: ["read"], scope: "OWN" },
+  },
+  report_enrolment: {
+    super_admin: { actions: ["read", "export"], scope: "ALL" },
+    admin: { actions: ["read", "export"], scope: "ALL" },
+    teacher: { actions: ["read"], scope: "ASSIGNED" },
+  },
+  report_assessment: {
+    super_admin: { actions: ["read", "export"], scope: "ALL" },
+    admin: { actions: ["read", "export"], scope: "ALL" },
+    teacher: { actions: ["read", "export"], scope: "ASSIGNED" },
+    student: { actions: ["read"], scope: "OWN" },
+  },
+  report_financial: {
+    super_admin: { actions: ["read", "export"], scope: "ALL" },
+    admin: {
+      actions: ["read", "export"],
+      scope: "ALL",
+      requiresSubPermission: "financial_reporter",
+    },
+  },
+  report_teacher_activity: {
+    super_admin: { actions: ["read", "export"], scope: "ALL" },
+    admin: { actions: ["read", "export"], scope: "ALL" },
+    teacher: { actions: ["read"], scope: "OWN" },
+  },
+  report_marketing: {
+    super_admin: { actions: ["read", "export"], scope: "ALL" },
+    admin: { actions: ["read", "export"], scope: "ALL" },
+  },
+
+  // ------------------------------------------------- §4.5.12 governance ---
+  system_setting: {
+    super_admin: { actions: ["read", "configure"], scope: "ALL" },
+    admin: { actions: ["read"], scope: "ALL" },
+  },
+  integration_credential: {
+    // SEC-CRY-010: write-only. No role may READ a stored secret — not even a
+    // Super Admin, who may replace but never retrieve it.
+    super_admin: { actions: ["configure"], scope: "ALL", requiresStepUp: true },
+  },
+  live_provider_selection: {
+    super_admin: { actions: ["read", "configure"], scope: "ALL" },
+    admin: { actions: ["read"], scope: "ALL" },
+  },
+  audit_log: {
+    // FR-LOG-004: no update, no delete, for anybody, ever.
+    super_admin: { actions: ["read", "export"], scope: "ALL" },
+    admin: { actions: ["read"], scope: "SECTION" },
+  },
+  security_log: {
+    super_admin: { actions: ["read", "export"], scope: "ALL" },
+  },
+  backup: {
+    super_admin: { actions: ["create", "read", "configure"], scope: "ALL" },
+  },
+  restore: {
+    super_admin: { actions: ["create"], scope: "ALL", requiresStepUp: true },
+  },
+  bulk_operation: {
+    super_admin: { actions: FULL, scope: "ALL" },
+    admin: { actions: FULL, scope: "ALL", requiresSubPermission: "bulk_operator" },
+  },
+  personal_data_export: {
+    super_admin: { actions: ["export"], scope: "ALL" },
+    admin: { actions: ["export"], scope: "ALL" },
+    student: { actions: ["export"], scope: "OWN" },
+  },
+  permanent_deletion: {
+    super_admin: { actions: ["delete"], scope: "ALL", requiresStepUp: true },
+  },
+  maintenance_mode: {
+    super_admin: { actions: ["configure"], scope: "ALL" },
+  },
+  system_health: {
+    super_admin: { actions: ["read"], scope: "ALL" },
+    admin: { actions: ["read"], scope: "ALL" },
+  },
+};
+
+// ------------------------------------------------------------ resolution --
+
+export interface ActorPermissions {
+  roles: readonly Role[];
+  subPermissions: readonly SubPermission[];
+  /** Whether the actor re-authenticated within the step-up window (SEC-AUZ-011). */
+  steppedUp?: boolean;
+}
+
+export interface PermissionDecision {
+  allowed: boolean;
+  /** Widest scope granted across the actor's roles for this action. */
+  scope: Scope;
+  /** Machine-readable reason, for the denial log required by SEC-LOG-005. */
+  reason?:
+    | "no_grant_for_role"
+    | "action_not_granted"
+    | "missing_sub_permission"
+    | "step_up_required";
+}
+
+/** Widest first — used to resolve the union across multiple roles (FR-RBAC-006). */
+const SCOPE_BREADTH: Record<Scope, number> = {
+  ALL: 5,
+  SECTION: 4,
+  ASSIGNED: 3,
+  ENROLLED: 2,
+  OWN: 1,
+  NONE: 0,
+};
+
+function toGrants(entry: Grant | Grant[] | undefined): Grant[] {
+  if (!entry) return [];
+  return Array.isArray(entry) ? entry : [entry];
+}
+
+/**
+ * Resolve ROLE ∩ ACTION for a resource, returning the scope that the caller
+ * must then apply at the data layer.
+ *
+ * FR-RBAC-006: where several roles are held, permission is the union — but the
+ * scope is never widened beyond the widest any single held role grants for
+ * that action.
+ */
+export function resolvePermission(
+  actor: ActorPermissions,
+  resource: Resource,
+  action: Action,
+): PermissionDecision {
+  const policy = PERMISSION_MATRIX[resource];
+  if (!policy) {
+    // Default closed: an unmapped resource is denied (see PERMISSION_MATRIX).
+    return { allowed: false, scope: "NONE", reason: "no_grant_for_role" };
+  }
+
+  let best: Scope = "NONE";
+  let sawRole = false;
+  let sawAction = false;
+  let blockedBySubPermission = false;
+  let blockedByStepUp = false;
+
+  for (const role of actor.roles) {
+    for (const grant of toGrants(policy[role])) {
+      sawRole = true;
+      if (!grant.actions.includes(action)) continue;
+      sawAction = true;
+
+      if (grant.requiresSubPermission && !actor.subPermissions.includes(grant.requiresSubPermission)) {
+        blockedBySubPermission = true;
+        continue;
+      }
+      if (grant.requiresStepUp && !actor.steppedUp) {
+        blockedByStepUp = true;
+        continue;
+      }
+      if (SCOPE_BREADTH[grant.scope] > SCOPE_BREADTH[best]) best = grant.scope;
+    }
+  }
+
+  if (best !== "NONE") return { allowed: true, scope: best };
+  if (blockedByStepUp) return { allowed: false, scope: "NONE", reason: "step_up_required" };
+  if (blockedBySubPermission) {
+    return { allowed: false, scope: "NONE", reason: "missing_sub_permission" };
+  }
+  if (sawRole && !sawAction) {
+    return { allowed: false, scope: "NONE", reason: "action_not_granted" };
+  }
+  return { allowed: false, scope: "NONE", reason: "no_grant_for_role" };
+}
+
+/** Convenience predicate for call sites that do not need the scope back. */
+export function can(actor: ActorPermissions, resource: Resource, action: Action): boolean {
+  return resolvePermission(actor, resource, action).allowed;
+}
