@@ -4,6 +4,17 @@ import { scopeExtension } from "./scope.extension";
 import { runUnscoped } from "./actor-context";
 
 /**
+ * Applying the extension through a helper lets TypeScript INFER the resulting
+ * client type. Writing `ReturnType<PrismaClient["$extends"]>` instead erases
+ * it to `unknown`, and every model access downstream then fails to type —
+ * which silently pushes callers toward the unscoped client.
+ */
+const createScopedClient = (client: PrismaClient) => client.$extends(scopeExtension());
+
+/** The scope-enforcing client. Use this for anything a user asked for. */
+export type ScopedPrismaClient = ReturnType<typeof createScopedClient>;
+
+/**
  * The application's only database entry point.
  *
  * Every query made through this service passes the scope predicate of
@@ -15,7 +26,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   private readonly logger = new Logger(PrismaService.name);
 
   /** Scoped client — use this for everything a user asked for. */
-  readonly scoped: ReturnType<PrismaClient["$extends"]>;
+  readonly scoped: ScopedPrismaClient;
 
   constructor() {
     super({
@@ -26,7 +37,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       ],
     });
 
-    this.scoped = this.$extends(scopeExtension());
+    this.scoped = createScopedClient(this);
 
     // NFR-PRF-020: no query in a request path should exceed 200 ms. Anything
     // slower is logged for review rather than silently tolerated.
