@@ -73,18 +73,33 @@ export class AuthController {
     return { steppedUpAt: at, validForSeconds: 600 };
   }
 
-  /** §9.3 — current identity, roles, and resolved permissions. */
+  /**
+   * §9.3 — current identity, roles, and resolved permissions.
+   *
+   * Used on every page load to restore a session, so it returns enough for
+   * the interface to identify the user without a second request.
+   */
   @RequirePermission("own_profile", "read")
   @Get("me")
-  me() {
+  async me() {
     const actor = getActor();
     if (!actor) throw new AppError("AUTH_TOKEN_INVALID");
+
+    const profile = await this.auth.profileFor(actor.userId);
+
     return {
       userId: actor.userId,
+      fullName: profile?.fullName ?? "",
+      email: profile?.email ?? "",
+      photoUrl: profile?.photoUrl ?? null,
+      // FR-REG-040 — the client must know to hold the user at the password
+      // screen even after a page reload, not only immediately after login.
+      mustChangePassword: profile?.mustChangePassword ?? false,
       roles: actor.roles,
       subPermissions: actor.subPermissions,
       studentId: actor.studentId ?? null,
       teacherId: actor.teacherId ?? null,
+      student: profile?.student ?? null,
       // Deliberately NOT returning sectionSubjectIds: it is an internal scope
       // detail, and exposing it invites clients to treat it as authorisation.
       reach: {

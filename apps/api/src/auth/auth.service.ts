@@ -355,6 +355,50 @@ export class AuthService {
     await this.recordSecurityEvent("password.changed", userId, user.email, undefined, undefined, {});
   }
 
+  /**
+   * The profile fields the interface needs to identify the signed-in user.
+   *
+   * Deliberately narrow: no identity number, no phone, no payment data. This
+   * is called on every page load, and §4.7 keeps sensitive fields to the
+   * screens that genuinely need them.
+   */
+  async profileFor(userId: string) {
+    const user = await this.prisma.asSystem((db) =>
+      db.user.findUnique({
+        where: { id: userId },
+        select: {
+          fullName: true,
+          email: true,
+          photoUrl: true,
+          mustChangePassword: true,
+          student: {
+            select: {
+              registrationNo: true,
+              currentRollNo: true,
+              currentSection: { select: { id: true, name: true } },
+            },
+          },
+        },
+      }),
+    );
+    if (!user) return null;
+
+    return {
+      fullName: user.fullName,
+      email: user.email,
+      photoUrl: user.photoUrl,
+      mustChangePassword: user.mustChangePassword,
+      student: user.student
+        ? {
+            registrationNo: user.student.registrationNo,
+            rollNo: user.student.currentRollNo,
+            sectionId: user.student.currentSection?.id ?? null,
+            sectionName: user.student.currentSection?.name ?? null,
+          }
+        : null,
+    };
+  }
+
   /** SEC-AUZ-011 — confirm identity immediately before a privileged action. */
   async stepUp(userId: string, password: string): Promise<number> {
     const user = await this.prisma.asSystem((db) =>
