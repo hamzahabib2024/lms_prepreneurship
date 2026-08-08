@@ -24,6 +24,7 @@ import { AssignmentService } from "./assignment.service";
 import { EnrolmentService } from "./enrolment.service";
 import { zodBody } from "../common/zod-validation.pipe";
 import { RequirePermission } from "../rbac/permissions.guard";
+import { assertOwnStudent } from "../rbac/ownership";
 
 /** SRS §9.5 — academic structure and enrolment endpoints. */
 @Controller()
@@ -170,6 +171,7 @@ export class AcademicController {
   @RequirePermission("enrolment", "read")
   @Get("students/:id/enrolments")
   history(@Param("id") id: string) {
+    assertOwnStudent(id); // SEC-AUZ-004
     return this.enrolments.history(id);
   }
 

@@ -1,12 +1,11 @@
 import { Body, Controller, Get, Param, Post, Query } from "@nestjs/common";
 import { z } from "zod";
-import { AppError } from "@lms/shared";
 import { LiveSessionService } from "./live-session.service";
 import { AttendanceService } from "./attendance.service";
 import { ProviderRegistry } from "./provider/provider.registry";
 import { zodBody } from "../common/zod-validation.pipe";
 import { RequirePermission } from "../rbac/permissions.guard";
-import { getActor } from "../prisma/actor-context";
+import { assertOwnStudent, requireOwnStudentId } from "../rbac/ownership";
 
 const ATTENDANCE_STATUS = ["PRESENT", "ABSENT", "LATE", "EXCUSED", "NOT_MARKED"] as const;
 
@@ -109,14 +108,14 @@ export class LiveController {
 
   // ----------------------------------------------------------- attendance --
 
-  @RequirePermission("attendance", "read")
+  @RequirePermission("attendance_register", "read")
   @Get("live-sessions/:id/attendance")
   register(@Param("id") id: string) {
     return this.attendance.register(id);
   }
 
   /** FR-ATT-007 — a 40-student register in under 60 seconds. */
-  @RequirePermission("attendance", "update")
+  @RequirePermission("attendance_register", "update")
   @Post("live-sessions/:id/attendance")
   markBulk(@Param("id") id: string, @Body(zodBody(bulkMarkSchema)) dto: z.infer<typeof bulkMarkSchema>) {
     return this.attendance.markBulk(id, dto);
@@ -135,6 +134,10 @@ export class LiveController {
   @RequirePermission("attendance", "read")
   @Get("students/:id/attendance")
   studentAttendance(@Param("id") id: string) {
+    // SEC-AUZ-004/006 — a student naming a classmate is refused outright,
+    // rather than receiving an empty-but-successful response that confirms
+    // the identifier exists.
+    assertOwnStudent(id);
     return this.attendance.studentSummary(id);
   }
 
@@ -142,8 +145,9 @@ export class LiveController {
   @RequirePermission("attendance", "read")
   @Get("me/attendance")
   myAttendance() {
-    const actor = getActor();
-    if (!actor?.studentId) throw new AppError("RESOURCE_NOT_FOUND");
-    return this.attendance.studentSummary(actor.studentId);
+    // Previously a 404 saying "that record could not be found", which is both
+    // wrong and unhelpful for a teacher who simply has no student record
+    // (NFR-USE-007).
+    return this.attendance.studentSummary(requireOwnStudentId());
   }
 }

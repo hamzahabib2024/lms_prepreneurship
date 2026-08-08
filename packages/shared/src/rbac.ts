@@ -89,6 +89,9 @@ export const RESOURCES = [
   "impersonation",
   // admission — §4.5.2
   "registration",
+  /** The administrative review queue. Distinct from `registration`, which a
+   *  student holds over their OWN application. */
+  "registration_queue",
   "payment_slip",
   "payment",
   "registration_number_series",
@@ -127,7 +130,14 @@ export const RESOURCES = [
   "quiz_attempt",
   "quiz_answer_key",
   // attendance — §4.5.8
+  /** A student's own attendance record. Read-only for them. */
   "attendance",
+  /** The class register: every enrolled student's row, and bulk marking.
+   *  Separate from `attendance` because marking a WHOLE CLASS is a different
+   *  authority from reading your own row. */
+  "attendance_register",
+  /** FR-ATT-008 — a student confirming their own presence, nothing more. */
+  "attendance_self_checkin",
   "attendance_correction",
   // progress — §4.5.9
   "progress",
@@ -247,7 +257,13 @@ export const PERMISSION_MATRIX: Record<Resource, ResourcePolicy> = {
   registration: {
     super_admin: { actions: FULL, scope: "ALL" },
     admin: { actions: FULL, scope: "ALL" },
+    // A student may see their OWN application, and nothing else. The
+    // administrative queue is a separate resource below.
     student: { actions: ["read"], scope: "OWN" },
+  },
+  registration_queue: {
+    super_admin: { actions: FULL, scope: "ALL" },
+    admin: { actions: FULL, scope: "ALL" },
   },
   // BR-REG-04 / §4.7: teachers may NEVER see a payment slip. The absence of a
   // `teacher` key here is the enforcement, and it is deliberate.
@@ -459,7 +475,18 @@ export const PERMISSION_MATRIX: Record<Resource, ResourcePolicy> = {
     super_admin: { actions: FULL, scope: "ALL" },
     admin: { actions: FULL, scope: "ALL" },
     teacher: { actions: ["create", "read", "update", "approve", "export"], scope: "ASSIGNED" },
-    student: { actions: ["read", "update"], scope: "OWN" }, // update = self check-in only
+    // READ ONLY. `update` used to be granted here "for self check-in", which
+    // also satisfied the bulk-marking endpoint — a student could mark the
+    // whole class present. Self check-in is now its own resource.
+    student: { actions: ["read"], scope: "OWN" },
+  },
+  attendance_register: {
+    super_admin: { actions: FULL, scope: "ALL" },
+    admin: { actions: FULL, scope: "ALL" },
+    teacher: { actions: ["create", "read", "update", "approve", "export"], scope: "ASSIGNED" },
+  },
+  attendance_self_checkin: {
+    student: { actions: ["update"], scope: "OWN" },
   },
   attendance_correction: {
     super_admin: { actions: ["update"], scope: "ALL" },

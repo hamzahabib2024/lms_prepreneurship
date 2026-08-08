@@ -61,7 +61,7 @@ export class AdmissionController {
 
   // ------------------------------------------------------ administrative --
 
-  @RequirePermission("registration", "read")
+  @RequirePermission("registration_queue", "read")
   @Get("registration-requests")
   list(
     @Query("status") status?: string,
