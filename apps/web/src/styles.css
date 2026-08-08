@@ -201,3 +201,44 @@ code { font-family: ui-monospace, Consolas, monospace; font-size: .9em; }
   .queue-list { max-height: 40vh; }
   .field-row { grid-template-columns: 1fr; }
 }
+
+/* ------------------------------------------------------------ attendance -- */
+.inline-field { margin: 0; }
+.inline-field select { min-width: 260px; }
+
+.register-head, .register-foot {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 1rem; flex-wrap: wrap; margin-bottom: .75rem;
+}
+.register-foot { margin-top: .75rem; margin-bottom: 0; position: sticky; bottom: 0; }
+.tally { display: flex; gap: 1rem; flex-wrap: wrap; font-size: .9rem; }
+
+.register td, .register th { vertical-align: middle; }
+.register .center { text-align: center; }
+.block { display: block; }
+
+/* The cursor row is marked by a left bar and a background, never by colour
+   alone (NFR-ACC-007). It is what the keyboard shortcuts act on, so it has to
+   be unmistakable at a glance while calling a roll. */
+.register tr.is-cursor { background: #eef3fa; box-shadow: inset 3px 0 0 var(--primary); }
+.register tr.is-unmarked td:first-child::before { content: "•"; color: var(--warn); margin-right: .3rem; }
+
+/* A 44px target even though the control is a radio (NFR-USE-004, UI-012). */
+.radio-cell {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 44px; min-height: 44px; cursor: pointer;
+}
+.radio-cell input { width: 20px; height: 20px; cursor: pointer; }
+
+.keyboard-hint { margin: 0 0 .5rem; }
+kbd {
+  display: inline-block; padding: .1rem .35rem; border: 1px solid var(--line);
+  border-bottom-width: 2px; border-radius: 4px; background: #fff;
+  font-family: ui-monospace, Consolas, monospace; font-size: .85em;
+}
+
+/* Present for screen readers, absent visually (NFR-ACC-006). */
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}

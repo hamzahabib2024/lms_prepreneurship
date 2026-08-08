@@ -5,6 +5,7 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { SectionsPage } from "./pages/SectionsPage";
 import { ReportsPage } from "./pages/ReportsPage";
 import { AdmissionsPage } from "./pages/AdmissionsPage";
+import { AttendancePage } from "./pages/AttendancePage";
 import { ChangePasswordPage } from "./pages/ChangePasswordPage";
 
 /**
@@ -44,6 +45,9 @@ export function App() {
             Dashboard
           </NavLink>
           {hasRole("super_admin", "admin") && <NavLink to="/admissions">Admissions</NavLink>}
+          {hasRole("super_admin", "admin", "teacher") && (
+            <NavLink to="/attendance">Attendance</NavLink>
+          )}
           <NavLink to="/sections">Sections</NavLink>
           {hasRole("super_admin", "admin", "teacher") && <NavLink to="/reports">Reports</NavLink>}
         </nav>
@@ -61,6 +65,12 @@ export function App() {
           <Route
             path="/admissions"
             element={hasRole("super_admin", "admin") ? <AdmissionsPage /> : <Navigate to="/" replace />}
+          />
+          <Route
+            path="/attendance"
+            element={
+              hasRole("super_admin", "admin", "teacher") ? <AttendancePage /> : <Navigate to="/" replace />
+            }
           />
           <Route path="/sections" element={<SectionsPage />} />
           <Route path="/change-password" element={<ChangePasswordPage forced={false} />} />
