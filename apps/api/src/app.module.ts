@@ -11,6 +11,7 @@ import { AdmissionModule } from "./admission/admission.module";
 import { AcademicModule } from "./academic/academic.module";
 import { LiveModule } from "./live/live.module";
 import { AssessmentModule } from "./assessment/assessment.module";
+import { ProgressModule } from "./progress/progress.module";
 import { HealthController } from "./health.controller";
 
 import { CorrelationMiddleware } from "./common/correlation.middleware";
@@ -38,6 +39,7 @@ import { PermissionsGuard } from "./rbac/permissions.guard";
     AcademicModule,
     LiveModule,
     AssessmentModule,
+    ProgressModule,
   ],
   controllers: [HealthController],
   providers: [
