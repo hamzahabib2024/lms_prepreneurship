@@ -11,7 +11,7 @@
     "node": ">=20.0.0"
   },
   "scripts": {
-    "build": "npm run build -w @lms/shared && npm run build -w @lms/api",
+    "build": "npm run build -w @lms/shared && npm run build -w @lms/api && npm run build -w @lms/web",
     "dev": "npm run dev --workspace=@lms/api",
     "dev:web": "npm run dev --workspace=@lms/web",
     "lint": "npm run lint --workspaces --if-present",
