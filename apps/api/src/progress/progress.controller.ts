@@ -29,8 +29,16 @@ export class ProgressController {
     return this.progress.forSubject(id, ssId);
   }
 
-  /** FR-PRG-011/012 — the cohort, worst-first, so intervention is easy. */
-  @RequirePermission("progress", "read")
+  /**
+   * FR-PRG-011/012 — the cohort, worst-first, so intervention is easy.
+   *
+   * `progress_cohort`, not `progress`. This lists every classmate by name,
+   * roll number, attendance and average grade; a student's own `progress:read`
+   * must not reach it. The scope predicate already reduced the answer to their
+   * own row, but an administrative view should refuse rather than return a
+   * list of one (SEC-AUZ-006).
+   */
+  @RequirePermission("progress_cohort", "read")
   @Get("section-subjects/:id/progress")
   cohort(@Param("id") id: string) {
     return this.progress.forSectionSubject(id);

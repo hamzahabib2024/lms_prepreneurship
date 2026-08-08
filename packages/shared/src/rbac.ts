@@ -141,6 +141,7 @@ export const RESOURCES = [
   "attendance_correction",
   // progress — §4.5.9
   "progress",
+  "progress_cohort",
   "certificate",
   // communication — §4.5.10
   "announcement",
@@ -500,6 +501,19 @@ export const PERMISSION_MATRIX: Record<Resource, ResourcePolicy> = {
     admin: { actions: ["read", "export"], scope: "ALL" },
     teacher: { actions: ["read", "export"], scope: "ASSIGNED" },
     student: { actions: ["read"], scope: "OWN" },
+  },
+  /**
+   * FR-PRG-011/012 — the whole cohort, worst-first.
+   *
+   * Separate from `progress` because it is a different kind of thing: a
+   * teaching tool listing every classmate by name, roll number, attendance and
+   * average grade. A student holds `progress:read` for their OWN figures, and
+   * that must never be enough to open a class list.
+   */
+  progress_cohort: {
+    super_admin: { actions: ["read", "export"], scope: "ALL" },
+    admin: { actions: ["read", "export"], scope: "ALL" },
+    teacher: { actions: ["read", "export"], scope: "ASSIGNED" },
   },
   certificate: {
     super_admin: { actions: FULL, scope: "ALL" },

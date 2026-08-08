@@ -89,6 +89,27 @@ describe("a student cannot reach the administrative admission queue", () => {
   });
 });
 
+describe("a student cannot open the class list", () => {
+  it("is denied progress_cohort", () => {
+    // Found while building the student screens. The cohort view lists every
+    // classmate by name, roll number, attendance and average grade, ordered
+    // worst-first — and a student's own `progress:read` was enough to open it.
+    // The scope predicate reduced the answer to their own row, so nothing
+    // leaked, but a teaching tool should refuse rather than return a list of
+    // one (SEC-AUZ-006).
+    expect(may("student", "progress_cohort", "read")).toBe(false);
+    expect(may("student", "progress_cohort", "export")).toBe(false);
+  });
+
+  it("may still read their own progress", () => {
+    expect(may("student", "progress", "read")).toBe(true);
+  });
+
+  it("still lets a teacher see their cohort (FR-PRG-011)", () => {
+    expect(may("teacher", "progress_cohort", "read")).toBe(true);
+  });
+});
+
 describe("matrix invariants that prevented the original defects", () => {
   it("no student grant is wider than OWN or ENROLLED", () => {
     const RESOURCES_TO_CHECK: Resource[] = [
@@ -98,6 +119,7 @@ describe("matrix invariants that prevented the original defects", () => {
       "registration",
       "registration_queue",
       "progress",
+      "progress_cohort",
       "enrolment",
     ];
     for (const resource of RESOURCES_TO_CHECK) {
