@@ -302,6 +302,10 @@ model RegistrationRequest {
   gender      Gender // drives section eligibility (FR-CRS-009)
   nationalId  String   @db.VarChar(20) // encrypted; masked in lists (SEC-PRV-005)
   phone       String   @db.VarChar(20)
+  // FR-REG-003 — the WhatsApp-capable indicator. Carried on the application
+  // itself because credentials are relayed over WhatsApp at approval
+  // (FR-REG-042), so the reviewer needs to know before the account exists.
+  phoneIsWhatsapp Boolean @default(true)
   altPhone    String?  @db.VarChar(20)
   email       String
   address     String   @db.VarChar(500)
