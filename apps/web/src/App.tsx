@@ -4,6 +4,8 @@ import { LoginPage } from "./pages/LoginPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { SectionsPage } from "./pages/SectionsPage";
 import { ReportsPage } from "./pages/ReportsPage";
+import { AdmissionsPage } from "./pages/AdmissionsPage";
+import { ChangePasswordPage } from "./pages/ChangePasswordPage";
 
 /**
  * Application shell — SRS §13.1.
@@ -31,7 +33,7 @@ export function App() {
 
   // FR-REG-040 — a provisioned account sets its own password before it can
   // go anywhere else.
-  if (mustChangePassword) return <ChangePasswordGate />;
+  if (mustChangePassword) return <ChangePasswordPage forced />;
 
   return (
     <div className="shell">
@@ -41,6 +43,7 @@ export function App() {
           <NavLink to="/" end>
             Dashboard
           </NavLink>
+          {hasRole("super_admin", "admin") && <NavLink to="/admissions">Admissions</NavLink>}
           <NavLink to="/sections">Sections</NavLink>
           {hasRole("super_admin", "admin", "teacher") && <NavLink to="/reports">Reports</NavLink>}
         </nav>
@@ -55,7 +58,12 @@ export function App() {
       <main className="main">
         <Routes>
           <Route path="/" element={<DashboardPage />} />
+          <Route
+            path="/admissions"
+            element={hasRole("super_admin", "admin") ? <AdmissionsPage /> : <Navigate to="/" replace />}
+          />
           <Route path="/sections" element={<SectionsPage />} />
+          <Route path="/change-password" element={<ChangePasswordPage forced={false} />} />
           <Route
             path="/reports"
             element={
@@ -65,30 +73,6 @@ export function App() {
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
-    </div>
-  );
-}
-
-/** FR-REG-040 / SEC-AUT-013 — no navigation until the password is changed. */
-function ChangePasswordGate() {
-  const { completePasswordChange } = useAuth();
-  return (
-    <div className="auth-shell">
-      <div className="card auth-card">
-        <h1 className="auth-title">Set your password</h1>
-        <p className="muted">
-          Your account was created with a temporary password. Choose your own before continuing.
-        </p>
-        <div className="alert alert-warn">
-          <p>
-            The change form is not built yet. Until it is, this gate makes the requirement visible
-            rather than letting a provisioned account roam with a shared password.
-          </p>
-        </div>
-        <button className="btn btn-quiet" onClick={completePasswordChange}>
-          Continue anyway (development only)
-        </button>
-      </div>
     </div>
   );
 }

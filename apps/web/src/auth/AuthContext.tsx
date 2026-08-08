@@ -69,14 +69,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
       try {
-        const me = await api.get<{ userId: string; roles: string[] }>("/auth/me");
+        const me = await api.get<{
+          userId: string;
+          fullName: string;
+          email: string;
+          photoUrl: string | null;
+          mustChangePassword: boolean;
+          roles: string[];
+          student: AuthUser["student"];
+        }>("/auth/me");
         if (cancelled) return;
         setUser({
           id: me.userId,
-          fullName: "",
-          email: "",
+          fullName: me.fullName,
+          email: me.email,
+          photoUrl: me.photoUrl,
           roles: me.roles,
+          student: me.student,
         });
+        // FR-REG-040 — the requirement must survive a page reload, not only
+        // hold immediately after login.
+        setMustChangePassword(me.mustChangePassword);
       } catch {
         if (!cancelled) clear();
       } finally {
