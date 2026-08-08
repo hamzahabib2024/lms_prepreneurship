@@ -1148,3 +1148,271 @@ model AssignmentExtension {
   @@unique([assignmentId, studentId])
   @@map("assignment_extensions")
 }
+
+// =========================================================== quizzes (8.3.5)
+
+enum QuestionType {
+  MCQ_SINGLE
+  MCQ_MULTI
+  TRUE_FALSE
+  SHORT_ANSWER
+  ESSAY
+  NUMERIC
+  MATCHING
+  FILL_BLANK
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum NegativeMarking {
+  NONE
+  FIXED
+  PROPORTIONAL
+}
+
+enum AttemptScoring {
+  HIGHEST
+  LATEST
+  FIRST
+  AVERAGE
+}
+
+enum ResultReleasePolicy {
+  IMMEDIATE
+  AFTER_CLOSE
+  AFTER_GRADING
+  MANUAL
+}
+
+enum AnswerReviewPolicy {
+  NEVER
+  AFTER_RELEASE
+  AFTER_CLOSE
+}
+
+enum QuizPresentation {
+  ONE_PER_PAGE
+  ALL_ON_PAGE
+}
+
+enum AttemptStatus {
+  IN_PROGRESS
+  SUBMITTED
+  AUTO_SUBMITTED
+  GRADING
+  GRADED
+  ABANDONED
+}
+
+model QuestionBank {
+  id             String  @id @default(uuid()) @db.Uuid
+  name           String  @db.VarChar(200)
+  subjectId      String? @db.Uuid
+  /// FR-QIZ-004 — a teacher owns their bank; null means the shared
+  /// institute-wide bank.
+  ownerTeacherId String? @db.Uuid
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  questions Question[]
+
+  @@map("question_banks")
+}
+
+model Question {
+  id             String       @id @default(uuid()) @db.Uuid
+  questionBankId String       @db.Uuid
+  subjectId      String?      @db.Uuid
+  questionType   QuestionType
+  stem           String       @db.Text
+  difficulty     Difficulty   @default(MEDIUM)
+  defaultMarks   Decimal      @default(1) @db.Decimal(6, 2)
+  /// FR-QIZ-006 — shown to the student only after results are released.
+  explanation    String?      @db.Text
+
+  /// SHORT_ANSWER, NUMERIC, FILL_BLANK. SEC-AUZ-009: never projected into a
+  /// student-facing response during an attempt.
+  acceptedAnswers Json?
+  /// NUMERIC — absolute tolerance.
+  tolerance       Decimal? @db.Decimal(12, 4)
+  caseSensitive   Boolean  @default(false)
+
+  tags Json?
+
+  /// FR-QIZ-009 — versioned on edit after use, so a past attempt continues to
+  /// show what was actually asked.
+  version   Int     @default(1) @db.SmallInt
+  /// FR-QIZ-008 — a question used in a completed attempt is retired, never
+  /// deleted.
+  isRetired Boolean @default(false)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  createdBy String?   @db.Uuid
+  deletedAt DateTime?
+
+  bank    QuestionBank     @relation(fields: [questionBankId], references: [id], onDelete: Restrict)
+  options QuestionOption[]
+  answers QuizAnswer[]
+  quizzes QuizQuestion[]
+
+  @@index([questionBankId, isRetired])
+  @@index([subjectId, questionType, difficulty])
+  @@map("questions")
+}
+
+model QuestionOption {
+  id           String  @id @default(uuid()) @db.Uuid
+  questionId   String  @db.Uuid
+  optionText   String  @db.Text
+  /// SEC-AUZ-009 / BR-QIZ-07 — NEVER sent to a student mid-attempt, not even
+  /// in a field the interface does not render.
+  isCorrect    Boolean @default(false)
+  /// MATCHING — the right-hand item this option pairs with.
+  matchKey     String? @db.VarChar(100)
+  displayOrder Int
+  feedback     String? @db.Text
+
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@index([questionId, displayOrder])
+  @@map("question_options")
+}
+
+model Quiz {
+  id               String  @id @default(uuid()) @db.Uuid
+  sectionSubjectId String  @db.Uuid
+  lessonId         String? @db.Uuid
+
+  title        String  @db.VarChar(255)
+  instructions String? @db.Text
+  totalMarks   Decimal @db.Decimal(6, 2)
+
+  opensAt          DateTime
+  closesAt         DateTime
+  /// FR-QIZ-013 — independent of the availability window.
+  timeLimitMinutes Int?     @db.SmallInt
+
+  maxAttempts    Int            @default(1) @db.SmallInt
+  attemptScoring AttemptScoring @default(HIGHEST)
+
+  shuffleQuestions Boolean @default(false)
+  shuffleOptions   Boolean @default(false)
+
+  negativeMarking      NegativeMarking @default(NONE)
+  /// BR-QIZ-06 — applied to INCORRECT answers only, never to unanswered.
+  negativeMarkingValue Decimal?        @db.Decimal(6, 2)
+
+  passingMarks Decimal? @db.Decimal(6, 2)
+
+  presentation            QuizPresentation @default(ONE_PER_PAGE)
+  allowBackwardNavigation Boolean          @default(true)
+
+  resultReleasePolicy ResultReleasePolicy @default(AFTER_CLOSE)
+  answerReviewPolicy  AnswerReviewPolicy  @default(AFTER_RELEASE)
+
+  publicationStatus PublicationStatus @default(DRAFT)
+  resultsReleasedAt DateTime?
+
+  /// FR-QIZ-014 — random draw rules, e.g. [{topic, difficulty, count}].
+  selectionRules Json?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  createdBy String?   @db.Uuid
+  deletedAt DateTime?
+
+  questions QuizQuestion[]
+  attempts  QuizAttempt[]
+
+  @@index([sectionSubjectId, publicationStatus])
+  @@index([opensAt, closesAt])
+  @@map("quizzes")
+}
+
+model QuizQuestion {
+  id           String  @id @default(uuid()) @db.Uuid
+  quizId       String  @db.Uuid
+  questionId   String  @db.Uuid
+  marks        Decimal @db.Decimal(6, 2)
+  displayOrder Int
+
+  quiz     Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  question Question @relation(fields: [questionId], references: [id], onDelete: Restrict)
+
+  @@unique([quizId, questionId])
+  @@index([quizId, displayOrder])
+  @@map("quiz_questions")
+}
+
+model QuizAttempt {
+  id            String @id @default(uuid()) @db.Uuid
+  quizId        String @db.Uuid
+  studentId     String @db.Uuid
+  attemptNumber Int    @db.SmallInt
+
+  /// BR-QIZ-04 — SERVER-authoritative. Remaining time is computed from this,
+  /// never from a client clock and never from the time of reconnection.
+  startedAt      DateTime  @default(now())
+  expiresAt      DateTime?
+  submittedAt    DateTime?
+  /// MANUAL | AUTO_TIME_EXPIRED
+  submissionMode String?   @db.VarChar(30)
+
+  status AttemptStatus @default(IN_PROGRESS)
+
+  /// BR-QIZ-02 — the order and selection ACTUALLY presented, so a dispute
+  /// about what was asked is answerable.
+  questionOrder Json
+
+  autoScore   Decimal?  @db.Decimal(6, 2)
+  manualScore Decimal?  @db.Decimal(6, 2)
+  finalScore  Decimal?  @db.Decimal(6, 2)
+  isPassed    Boolean?
+  releasedAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  quiz    Quiz         @relation(fields: [quizId], references: [id], onDelete: Restrict)
+  answers QuizAnswer[]
+
+  @@unique([quizId, studentId, attemptNumber])
+  @@index([studentId, status])
+  @@index([status])
+  @@map("quiz_attempts")
+}
+
+model QuizAnswer {
+  id              String @id @default(uuid()) @db.Uuid
+  attemptId       String @db.Uuid
+  questionId      String @db.Uuid
+  /// FR-QIZ-009 — pins WHICH version of the question was answered.
+  questionVersion Int    @default(1) @db.SmallInt
+
+  /// Shape depends on the question type: selected option ids, text, a number,
+  /// or a matching map.
+  response Json?
+
+  isCorrect        Boolean?
+  marksAwarded     Decimal? @db.Decimal(6, 2)
+  isManuallyGraded Boolean  @default(false)
+  gradedBy         String?  @db.Uuid
+  graderComment    String?  @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  attempt  QuizAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question Question    @relation(fields: [questionId], references: [id], onDelete: Restrict)
+
+  @@unique([attemptId, questionId])
+  @@index([attemptId])
+  @@map("quiz_answers")
+}
