@@ -1,5 +1,5 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { AppError } from "@lms/shared";
+import { AppError, resolvePermission, type Resource } from "@lms/shared";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { AttendanceService } from "../live/attendance.service";
@@ -19,6 +19,15 @@ interface ReportDefinition {
   key: string;
   name: string;
   description: string;
+  /**
+   * The resource this report reads, checked PER REPORT.
+   *
+   * A single blanket permission on the generic /reports/:key route makes every
+   * report inherit the weakest one, so a teacher holding report_attendance
+   * could run the revenue report. BR-PAY-07 restricts financial data to Super
+   * Admin, or Admin holding financial_reporter.
+   */
+  resource: Resource;
   run: (filters: ReportFilters) => Promise<Record<string, unknown>[]>;
   columns: Array<CsvColumn<Record<string, unknown>>>;
 }
@@ -49,6 +58,7 @@ export class ReportService {
     this.register({
       key: "student-directory",
       name: "Student Directory",
+      resource: "report_enrolment",
       description: "Report 1 — the definitive list of students.",
       run: (f) => this.studentDirectory(f),
       columns: [
@@ -65,6 +75,7 @@ export class ReportService {
     this.register({
       key: "attendance-summary",
       name: "Attendance Summary by Student",
+      resource: "report_attendance",
       description: "Report 3 — the principal early-warning report.",
       run: (f) => this.attendanceSummary(f),
       columns: [
@@ -86,6 +97,7 @@ export class ReportService {
     this.register({
       key: "registration-pipeline",
       name: "Registration Pipeline",
+      resource: "report_enrolment",
       description: "Report 15 — the state of the admission funnel.",
       run: (f) => this.registrationPipeline(f),
       columns: [
@@ -104,6 +116,7 @@ export class ReportService {
     this.register({
       key: "revenue",
       name: "Revenue",
+      resource: "report_financial",
       description: "Report 13 — verified income by period.",
       run: (f) => this.revenue(f),
       columns: [
@@ -122,6 +135,7 @@ export class ReportService {
     this.register({
       key: "acquisition-attribution",
       name: "Marketing Attribution",
+      resource: "report_marketing",
       description: "Report 17 — which channels produce paying students.",
       run: (f) => this.acquisitionAttribution(f),
       columns: [
@@ -138,8 +152,52 @@ export class ReportService {
     this.definitions.set(def.key, def);
   }
 
+  /**
+   * Authorises the caller for THIS report's resource.
+   *
+   * Called by both run() and export() so neither path can be reached without
+   * it. `export` is a distinct action from `read` (§4.1.2) because bulk
+   * extraction of personal data carries its own risk (SEC-PRV-007).
+   */
+  private authorise(def: ReportDefinition, action: "read" | "export"): void {
+    const actor = getActor();
+    if (!actor) throw new AppError("AUTH_TOKEN_INVALID");
+
+    const decision = resolvePermission(
+      { roles: actor.roles, subPermissions: actor.subPermissions, steppedUp: true },
+      def.resource,
+      action,
+    );
+
+    if (!decision.allowed) {
+      this.logger.warn(
+        JSON.stringify({
+          event: "report.denied",
+          userId: actor.userId,
+          roles: actor.roles,
+          report: def.key,
+          resource: def.resource,
+          action,
+          reason: decision.reason,
+        }),
+      );
+      throw new AppError("AUTH_FORBIDDEN");
+    }
+  }
+
+  /** Only the reports this caller may actually run (FR-RPT-019). */
   list() {
-    return [...this.definitions.values()].map((d) => ({
+    const actor = getActor();
+    const permitted = [...this.definitions.values()].filter((d) =>
+      actor
+        ? resolvePermission(
+            { roles: actor.roles, subPermissions: actor.subPermissions, steppedUp: true },
+            d.resource,
+            "read",
+          ).allowed
+        : false,
+    );
+    return permitted.map((d) => ({
       key: d.key,
       name: d.name,
       description: d.description,
@@ -151,6 +209,7 @@ export class ReportService {
   async run(key: string, filters: ReportFilters) {
     const def = this.definitions.get(key);
     if (!def) throw new AppError("RESOURCE_NOT_FOUND", { message: "No such report." });
+    this.authorise(def, "read");
 
     const started = Date.now();
     const rows = await def.run(filters);
@@ -181,6 +240,7 @@ export class ReportService {
 
     const def = this.definitions.get(key);
     if (!def) throw new AppError("RESOURCE_NOT_FOUND", { message: "No such report." });
+    this.authorise(def, "export");
 
     const rows = await def.run(filters);
 
