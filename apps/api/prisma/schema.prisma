@@ -1,0 +1,939 @@
+// ---------------------------------------------------------------------------
+// Data model — SRS-LMS-001 v2.1, Section 8.
+//
+// Conventions (§8.1), applied throughout:
+//   DB-002  surrogate UUID primary key; natural keys carry unique constraints
+//   DB-003  UUIDs are non-guessable in URLs (SEC-AUZ-004)
+//   DB-004  every table carries created/updated audit columns
+//   DB-005  soft deletion via deletedAt (BR-DAT-02)
+//   DB-006  all timestamps UTC
+//   DB-007  money is Decimal(12,2), never a float
+//   DB-008  enumerations are named, not integer codes
+//   DB-009  foreign keys are enforced with an explicit onDelete
+//
+// PostgreSQL 16 is mandated (§3.11): §8.4 needs partial and BRIN indexes and
+// DB-017 needs native partitioning. Those are applied in raw SQL migrations,
+// since Prisma cannot express them — see prisma/migrations/.
+// ---------------------------------------------------------------------------
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =========================================================== enumerations ==
+
+enum UserStatus {
+  INVITED
+  ACTIVE
+  LOCKED
+  SUSPENDED
+  WITHDRAWN
+  ARCHIVED
+}
+
+enum Gender {
+  MALE
+  FEMALE
+}
+
+enum RegistrationStatus {
+  PENDING_REVIEW
+  UNDER_REVIEW
+  NEEDS_INFO
+  APPROVED
+  REJECTED
+  WITHDRAWN
+}
+
+enum AcquisitionSource {
+  FACEBOOK
+  INSTAGRAM
+  WHATSAPP
+  WEBSITE
+  REFERRAL
+  WALK_IN
+  OTHER
+}
+
+enum RejectionReason {
+  PAYMENT_NOT_RECEIVED
+  AMOUNT_INSUFFICIENT
+  SLIP_ILLEGIBLE
+  DUPLICATE_APPLICATION
+  INELIGIBLE
+  SECTION_FULL
+  OTHER
+}
+
+enum PaymentMethod {
+  BANK_TRANSFER
+  CASH_DEPOSIT
+  CHEQUE
+  OTHER
+}
+
+enum DocumentType {
+  PAYMENT_SLIP
+  ID_DOCUMENT
+  QUALIFICATION
+  OTHER
+}
+
+enum ScanStatus {
+  PENDING
+  CLEAN
+  INFECTED
+  FAILED
+}
+
+enum Shift {
+  MORNING
+  AFTERNOON
+  EVENING
+  WEEKEND
+}
+
+enum GenderRestriction {
+  MALE
+  FEMALE
+  MIXED
+}
+
+enum DeliveryMode {
+  ONLINE
+  HYBRID
+  ON_CAMPUS
+}
+
+enum SectionStatus {
+  PLANNED
+  ACTIVE
+  CLOSED_FOR_ADMISSION
+  ARCHIVED
+}
+
+enum EnrolmentStatus {
+  ACTIVE
+  SUSPENDED
+  COMPLETED
+  WITHDRAWN
+  TRANSFERRED
+}
+
+enum AssignmentRole {
+  PRIMARY
+  SUPPORTING
+  SUBSTITUTE
+}
+
+enum PublicationStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHED
+  UNPUBLISHED
+}
+
+enum AvailabilityStatus {
+  AVAILABLE
+  MISSING
+  CHECKING
+}
+
+enum SessionStatus {
+  SCHEDULED
+  LIVE
+  ENDED
+  CANCELLED
+}
+
+enum SessionType {
+  ONLINE
+  OFFLINE
+}
+
+enum AttendancePolicy {
+  MANUAL
+  SELF_CHECKIN
+  PROVIDER_DERIVED
+  HYBRID
+}
+
+enum BindingStatus {
+  PENDING
+  ACTIVE
+  FAILED
+  REVOKED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+  NOT_MARKED
+}
+
+// ARC-033: the SOURCE of the evidence, never the vendor's name. Adding a new
+// source later is additive and needs no schema change.
+enum MarkingSource {
+  MANUAL
+  SELF_CHECKIN
+  PROVIDER_DERIVED
+  AUTOMATED
+  IMPORTED
+}
+
+// =============================================== identity and access (8.3.1)
+
+model User {
+  id           String  @id @default(uuid()) @db.Uuid
+  email        String  @unique
+  passwordHash String
+  fullName     String  @db.VarChar(200)
+  phone        String? @db.VarChar(20)
+  phoneIsWhatsapp Boolean @default(false)
+
+  status       UserStatus @default(INVITED)
+  statusReason String?    @db.Text
+
+  mustChangePassword Boolean   @default(true) // FR-REG-040
+  passwordChangedAt  DateTime?
+
+  mfaEnabled        Boolean @default(false) // SEC-AUT-011
+  mfaSecret         String? // encrypted at rest (SEC-CRY-004)
+  mfaRecoveryCodes  Json?   // hashed, single-use (SEC-AUT-012)
+
+  failedLoginCount Int       @default(0) // SEC-AUT-008
+  lockedUntil      DateTime?
+  lastLoginAt      DateTime?
+
+  photoUrl String? @db.VarChar(500)
+  locale   String  @default("en") @db.VarChar(10)
+  timezone String  @default("Asia/Karachi") @db.VarChar(50)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  createdBy String?   @db.Uuid
+  updatedBy String?   @db.Uuid
+  deletedAt DateTime?
+
+  roles    UserRole[]
+  sessions UserSession[]
+  student  Student?
+  teacher  Teacher?
+
+  @@index([status])
+  @@index([deletedAt])
+  @@map("users")
+}
+
+model Role {
+  id       String  @id @default(uuid()) @db.Uuid
+  key      String  @unique @db.VarChar(50) // super_admin | admin | teacher | student
+  name     String  @db.VarChar(100)
+  isSystem Boolean @default(true) // system roles cannot be deleted
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users UserRole[]
+
+  @@map("roles")
+}
+
+model UserRole {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  roleId String @db.Uuid
+
+  // §4.2.2 — individually granted admin sub-permissions.
+  subPermissions String[] @default([])
+
+  grantedBy String?   @db.Uuid // FR-RBAC-010
+  expiresAt DateTime? // FR-RBAC-013 temporary delegation
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, roleId])
+  @@index([userId])
+  @@map("user_roles")
+}
+
+model UserSession {
+  id               String  @id @default(uuid()) @db.Uuid
+  userId           String  @db.Uuid
+  refreshTokenHash String  @unique // never stored in plaintext
+  tokenFamilyId    String  @db.Uuid // SEC-AUT-004 rotation family
+  deviceLabel      String? @db.VarChar(200)
+  ipAddress        String? @db.VarChar(64)
+  userAgent        String? @db.VarChar(500)
+
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  lastActiveAt DateTime  @default(now())
+  createdAt    DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tokenFamilyId])
+  @@index([expiresAt])
+  @@map("user_sessions")
+}
+
+// ======================================================== admission (8.3.2)
+
+model RegistrationRequest {
+  id          String             @id @default(uuid()) @db.Uuid
+  trackingRef String             @unique @db.VarChar(20) // FR-REG-018
+  status      RegistrationStatus @default(PENDING_REVIEW)
+
+  fullName    String   @db.VarChar(200)
+  fatherName  String   @db.VarChar(200)
+  dateOfBirth DateTime @db.Date
+  gender      Gender // drives section eligibility (FR-CRS-009)
+  nationalId  String   @db.VarChar(20) // encrypted; masked in lists (SEC-PRV-005)
+  phone       String   @db.VarChar(20)
+  altPhone    String?  @db.VarChar(20)
+  email       String
+  address     String   @db.VarChar(500)
+  city        String   @db.VarChar(100)
+  qualification String @db.VarChar(120)
+  occupation  String?  @db.VarChar(120)
+
+  desiredProgrammeId String? @db.Uuid
+  desiredSectionId   String? @db.Uuid
+
+  acquisitionSource AcquisitionSource
+  acquisitionDetail String?           @db.VarChar(255)
+  campaignRef       Json? // auto-captured UTM data (FR-REG-006)
+
+  // The applicant's CLAIM. Not a fact — see Payment for the verified values.
+  claimedAmount      Decimal  @db.Decimal(12, 2)
+  claimedPaymentDate DateTime @db.Date
+  claimedBankRef     String?  @db.VarChar(100)
+
+  consentVersion String   @db.VarChar(20) // SEC-PRV-003
+  consentAt      DateTime
+
+  // FR-REG-026 — review claim, so two admins cannot act on one request.
+  claimedByUserId String?   @db.Uuid
+  claimedUntil    DateTime?
+
+  decision          RegistrationStatus?
+  decisionReasonCode RejectionReason?
+  decisionNote      String?             @db.Text
+  decidedBy         String?             @db.Uuid
+  decidedAt         DateTime?
+
+  createdStudentId String? @unique @db.Uuid // FR-REG-045
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  desiredProgramme Programme?             @relation(fields: [desiredProgrammeId], references: [id], onDelete: SetNull)
+  desiredSection   Section?               @relation(fields: [desiredSectionId], references: [id], onDelete: SetNull)
+  createdStudent   Student?               @relation(fields: [createdStudentId], references: [id], onDelete: SetNull)
+  documents        RegistrationDocument[]
+  payments         Payment[]
+
+  @@index([status, createdAt]) // the review queue, oldest first (FR-REG-022)
+  @@index([nationalId]) // duplicate detection (FR-REG-016)
+  @@index([email])
+  @@index([phone])
+  @@map("registration_requests")
+}
+
+model RegistrationDocument {
+  id                    String       @id @default(uuid()) @db.Uuid
+  registrationRequestId String       @db.Uuid
+  documentType          DocumentType @default(PAYMENT_SLIP)
+
+  storageKey       String     @db.VarChar(500) // never a public URL (SEC-FIL-009)
+  originalFilename String     @db.VarChar(255) // sanitised; never used as a path
+  contentType      String     @db.VarChar(100) // determined by content (SEC-FIL-003)
+  sizeBytes        BigInt
+  contentHash      String     @db.VarChar(64) // SHA-256
+  scanStatus       ScanStatus @default(PENDING) // SEC-FIL-004
+
+  createdAt DateTime @default(now())
+
+  registrationRequest RegistrationRequest @relation(fields: [registrationRequestId], references: [id], onDelete: Cascade)
+
+  @@index([registrationRequestId])
+  @@index([contentHash])
+  @@map("registration_documents")
+}
+
+// BR-PAY-05: never deleted. A reversal marks the row and retains it.
+model Payment {
+  id                    String  @id @default(uuid()) @db.Uuid
+  studentId             String  @db.Uuid
+  registrationRequestId String? @db.Uuid
+
+  verifiedAmount Decimal       @db.Decimal(12, 2) // authoritative (BR-REG-10)
+  currency       String        @default("PKR") @db.Char(3)
+  paymentDate    DateTime      @db.Date
+  method         PaymentMethod
+  bankReference  String?       @db.VarChar(100)
+
+  verifiedBy     String   @db.Uuid
+  verifiedAt     DateTime @default(now())
+  varianceReason String?  @db.Text // required when verified != claimed (FR-REG-028)
+
+  isReversed     Boolean   @default(false)
+  reversedBy     String?   @db.Uuid
+  reversedAt     DateTime?
+  reversalReason String?   @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  student             Student              @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  registrationRequest RegistrationRequest? @relation(fields: [registrationRequestId], references: [id], onDelete: SetNull)
+
+  @@index([studentId, paymentDate])
+  @@map("payments")
+}
+
+// =============================================== academic structure (8.3.3)
+
+model Student {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @unique @db.Uuid
+
+  // FR-REG-052: permanent. Never reused, recycled, or reissued.
+  registrationNo         String  @unique @db.VarChar(50)
+  registrationNoPrevious String? @db.VarChar(50) // alias after a correction
+
+  // Denormalised for query performance (§8.5); authoritative source is Enrolment.
+  currentSectionId String? @db.Uuid
+  currentRollNo    Int?    @db.SmallInt
+
+  nationalId    String   @unique @db.VarChar(20)
+  dateOfBirth   DateTime @db.Date
+  gender        Gender
+  guardianName  String?  @db.VarChar(200)
+  guardianPhone String?  @db.VarChar(20)
+  admissionDate DateTime @db.Date
+
+  outstandingBalance Decimal @default(0) @db.Decimal(12, 2)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  user           User                 @relation(fields: [userId], references: [id], onDelete: Restrict)
+  currentSection Section?             @relation(fields: [currentSectionId], references: [id], onDelete: SetNull)
+  enrolments     Enrolment[]
+  payments       Payment[]
+  attendance     AttendanceRecord[]
+  registration   RegistrationRequest?
+
+  // FR-REG-057: roll numbers are unique within a section and reusable after
+  // withdrawal. Enforced as a partial unique index in raw SQL (live rows only).
+  @@index([currentSectionId, currentRollNo])
+  @@index([registrationNoPrevious])
+  @@map("students")
+}
+
+model Teacher {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @unique @db.Uuid
+
+  employeeCode   String?  @unique @db.VarChar(50)
+  qualifications String?  @db.Text
+  joinedAt       DateTime @db.Date
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  user        User                @relation(fields: [userId], references: [id], onDelete: Restrict)
+  assignments TeacherAssignment[]
+  sessions    LiveSession[]
+
+  @@map("teachers")
+}
+
+model Programme {
+  id          String  @id @default(uuid()) @db.Uuid
+  name        String  @db.VarChar(200)
+  code        String  @unique @db.VarChar(10) // used in registration numbering
+  description String? @db.Text
+  durationWeeks Int?
+  isActive    Boolean @default(true)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  sessions      AcademicSession[]
+  registrations RegistrationRequest[]
+
+  @@map("programmes")
+}
+
+model AcademicSession {
+  id          String   @id @default(uuid()) @db.Uuid
+  programmeId String   @db.Uuid
+  name        String   @db.VarChar(100)
+  code        String   @db.VarChar(10) // SP26, FA26 — used in numbering
+  startDate   DateTime @db.Date
+  endDate     DateTime @db.Date
+  status      String   @default("PLANNED") @db.VarChar(20)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  programme Programme @relation(fields: [programmeId], references: [id], onDelete: Restrict)
+  batches   Batch[]
+
+  @@unique([programmeId, code])
+  @@map("academic_sessions")
+}
+
+model Batch {
+  id                String @id @default(uuid()) @db.Uuid
+  academicSessionId String @db.Uuid
+  name              String @db.VarChar(150)
+  deliveryPattern   String @db.VarChar(50)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  academicSession AcademicSession @relation(fields: [academicSessionId], references: [id], onDelete: Restrict)
+  sections        Section[]
+
+  @@index([academicSessionId])
+  @@map("batches")
+}
+
+model Section {
+  id      String @id @default(uuid()) @db.Uuid
+  batchId String @db.Uuid
+  code    String @unique @db.VarChar(40) // SP26-DM-EVE-A
+  name    String @db.VarChar(150)
+
+  capacity      Int @db.SmallInt
+  enrolledCount Int @default(0) @db.SmallInt // materialised (§8.5)
+
+  genderRestriction GenderRestriction @default(MIXED) // absolute (FR-CRS-009)
+  shift             Shift
+  deliveryMode      DeliveryMode      @default(ONLINE)
+  attributes        Json? // extensible tags (FR-CRS-007)
+
+  whatsappChannelUrl String? @db.VarChar(500)
+  whatsappGroupUrl   String? @db.VarChar(500)
+
+  status SectionStatus @default(PLANNED)
+
+  // ARC-027 — per-section provider override, so migration can be gradual.
+  liveProviderKey String? @db.VarChar(50)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  batch           Batch                 @relation(fields: [batchId], references: [id], onDelete: Restrict)
+  sectionSubjects SectionSubject[]
+  students        Student[]
+  registrations   RegistrationRequest[]
+
+  @@index([batchId])
+  @@index([status])
+  @@map("sections")
+}
+
+model Subject {
+  id          String  @id @default(uuid()) @db.Uuid
+  name        String  @db.VarChar(200)
+  code        String  @unique @db.VarChar(20)
+  description String? @db.Text
+  credits     Int?    @db.SmallInt
+  thumbnailUrl String? @db.VarChar(500)
+  isActive    Boolean @default(true)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  sectionSubjects SectionSubject[]
+  modules         Module[]
+
+  @@map("subjects")
+}
+
+/// The offering of a Subject to a Section — the pivot of the whole model.
+/// Assessment, sessions, attendance and announcements all hang off THIS,
+/// not off Subject, because they concern a specific group at a specific time
+/// (BR-CNT-03).
+model SectionSubject {
+  id           String  @id @default(uuid()) @db.Uuid
+  sectionId    String  @db.Uuid
+  subjectId    String  @db.Uuid
+  isCompulsory Boolean @default(true) // drives auto-enrolment (FR-CRS-019)
+
+  startDate DateTime? @db.Date
+  endDate   DateTime? @db.Date
+  status    String    @default("PLANNED") @db.VarChar(20)
+
+  progressWeights    Json? // per-subject override of Figure 5-3
+  completionCriteria Json? // FR-PRG-009
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  section     Section             @relation(fields: [sectionId], references: [id], onDelete: Restrict)
+  subject     Subject             @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  assignments TeacherAssignment[]
+  enrolments  Enrolment[]
+  sessions    LiveSession[]
+
+  @@unique([sectionId, subjectId])
+  @@index([sectionId])
+  @@index([subjectId])
+  @@map("section_subjects")
+}
+
+/// BR-ACC-04: THE SOLE SOURCE OF `ASSIGNED` SCOPE.
+///
+/// A teacher's authority derives from an assignment to a subject WITHIN a
+/// section — never from the subject alone. Getting this wrong is a security
+/// defect, not a modelling preference, and it is the single most frequently
+/// mis-implemented rule in systems of this kind.
+model TeacherAssignment {
+  id               String         @id @default(uuid()) @db.Uuid
+  teacherId        String         @db.Uuid
+  sectionSubjectId String         @db.Uuid
+  assignmentRole   AssignmentRole @default(PRIMARY)
+
+  startDate DateTime  @db.Date
+  endDate   DateTime? @db.Date // expiry withdraws scope automatically (FR-CRS-025)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  teacher        Teacher        @relation(fields: [teacherId], references: [id], onDelete: Restrict)
+  sectionSubject SectionSubject @relation(fields: [sectionSubjectId], references: [id], onDelete: Restrict)
+
+  @@unique([teacherId, sectionSubjectId, startDate])
+  // The hottest authorisation path in the System — scope resolution on every
+  // single request.
+  @@index([teacherId, endDate])
+  @@index([sectionSubjectId])
+  @@map("teacher_assignments")
+}
+
+model Enrolment {
+  id               String          @id @default(uuid()) @db.Uuid
+  studentId        String          @db.Uuid
+  sectionSubjectId String          @db.Uuid
+  status           EnrolmentStatus @default(ACTIVE)
+
+  rollNoAtEnrolment Int?      @db.SmallInt // historical, across transfers
+  enrolledAt        DateTime  @default(now())
+  endedAt           DateTime?
+  statusReason      String?   @db.Text
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  student        Student        @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  sectionSubject SectionSubject @relation(fields: [sectionSubjectId], references: [id], onDelete: Restrict)
+
+  // FR-ENR-016: no duplicate ACTIVE enrolment. Enforced as a partial unique
+  // index in raw SQL (WHERE status = 'ACTIVE'), which Prisma cannot express.
+  @@index([studentId, status])
+  @@index([sectionSubjectId, status])
+  @@map("enrolments")
+}
+
+// ======================================================== content (8.3.4) ==
+
+model Module {
+  id           String            @id @default(uuid()) @db.Uuid
+  subjectId    String            @db.Uuid
+  title        String            @db.VarChar(255)
+  description  String?           @db.Text
+  displayOrder Int
+  publicationStatus PublicationStatus @default(DRAFT) // BR-CNT-01
+  publishAt    DateTime?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  createdBy String?   @db.Uuid
+  deletedAt DateTime?
+
+  subject Subject  @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  lessons Lesson[]
+
+  @@index([subjectId, displayOrder])
+  @@map("modules")
+}
+
+model Lesson {
+  id           String            @id @default(uuid()) @db.Uuid
+  moduleId     String            @db.Uuid
+  title        String            @db.VarChar(255)
+  description  String?           @db.Text
+  displayOrder Int
+  estimatedMinutes Int?          @db.SmallInt
+  publicationStatus PublicationStatus @default(DRAFT)
+  publishAt    DateTime?
+  prerequisiteLessonId String?   @db.Uuid // FR-CRS-032 sequential release
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  createdBy String?   @db.Uuid
+  deletedAt DateTime?
+
+  module    Module            @relation(fields: [moduleId], references: [id], onDelete: Restrict)
+  lectures  RecordedLecture[]
+  sessions  LiveSession[]
+
+  @@index([moduleId, displayOrder])
+  @@map("lessons")
+}
+
+/// A catalogue entry. The video bytes stay in Google Drive (CON-01, ARC-037).
+model RecordedLecture {
+  id               String  @id @default(uuid()) @db.Uuid
+  lessonId         String? @db.Uuid // may exist before binding (FR-VID-005)
+  sectionSubjectId String  @db.Uuid
+  liveSessionId    String? @unique @db.Uuid
+
+  title       String  @db.VarChar(255)
+  description String? @db.Text
+
+  storageProvider String @default("google_drive") @db.VarChar(50)
+  /// Opaque provider file id. ARC-041: NEVER exposed to a student in any
+  /// response, page source, or client-side state.
+  storageRef      String @db.VarChar(255)
+
+  durationSeconds Int?
+  recordedOn      DateTime @db.Date
+  teacherId       String?  @db.Uuid
+
+  publicationStatus  PublicationStatus  @default(DRAFT)
+  availabilityStatus AvailabilityStatus @default(AVAILABLE) // ARC-045
+  lastVerifiedAt     DateTime?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  lesson      Lesson?      @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  liveSession LiveSession? @relation(fields: [liveSessionId], references: [id], onDelete: SetNull)
+
+  @@index([sectionSubjectId, publicationStatus])
+  @@index([recordedOn])
+  @@map("recorded_lectures")
+}
+
+// ================================================== live sessions (8.3.4) ==
+
+/// PROVIDER-AGNOSTIC BY MANDATE (ARC-023).
+///
+/// No column in this model names or implies a conferencing vendor. Everything
+/// vendor-specific lives in LiveSessionProviderBinding, which is the only
+/// provider-aware persisted structure in the System.
+model LiveSession {
+  id               String  @id @default(uuid()) @db.Uuid
+  sectionSubjectId String  @db.Uuid
+  lessonId         String? @db.Uuid
+
+  title       String  @db.VarChar(255)
+  description String? @db.Text
+
+  scheduledStart DateTime
+  scheduledEnd   DateTime
+  actualStart    DateTime?
+  actualEnd      DateTime?
+
+  hostTeacherId       String  @db.Uuid
+  substituteTeacherId String? @db.Uuid
+
+  status      SessionStatus @default(SCHEDULED)
+  sessionType SessionType   @default(ONLINE)
+
+  joinWindowMinutesBefore Int              @default(15) @db.SmallInt
+  attendancePolicy        AttendancePolicy @default(MANUAL)
+
+  timetableSlotId    String? @db.Uuid
+  cancellationReason String? @db.Text
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  sectionSubject SectionSubject                 @relation(fields: [sectionSubjectId], references: [id], onDelete: Restrict)
+  lesson         Lesson?                        @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  hostTeacher    Teacher                        @relation(fields: [hostTeacherId], references: [id], onDelete: Restrict)
+  binding        LiveSessionProviderBinding?
+  attendance     AttendanceRecord[]
+  recording      RecordedLecture?
+
+  @@index([sectionSubjectId, scheduledStart])
+  @@index([scheduledStart, status])
+  @@map("live_sessions")
+}
+
+/// The ONLY vendor-aware persisted structure (ARC-024).
+///
+/// Replacing Google Meet means writing a new adapter and adding a registry
+/// entry. It must not require touching any other table, and the substitution
+/// test at §3.4.6 verifies exactly that.
+model LiveSessionProviderBinding {
+  id            String @id @default(uuid()) @db.Uuid
+  liveSessionId String @unique @db.Uuid
+
+  providerKey String  @db.VarChar(50) // google_meet | internal_classroom | ...
+  externalId  String? @db.VarChar(255) // provider's own id — opaque to us
+  /// Opaque. ARC-025: never parsed, pattern-matched, or validated by the System.
+  joinUrl     String? @db.VarChar(1000)
+  hostUrl     String? @db.VarChar(1000)
+  providerMetadata Json? // provider's extras; never read by domain code
+
+  status           BindingStatus @default(PENDING)
+  isManualFallback Boolean       @default(false) // FR-LIV-018
+  lastSyncedAt     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  liveSession LiveSession @relation(fields: [liveSessionId], references: [id], onDelete: Cascade)
+
+  @@map("live_session_provider_bindings")
+}
+
+model AttendanceRecord {
+  id            String @id @default(uuid()) @db.Uuid
+  liveSessionId String @db.Uuid
+  studentId     String @db.Uuid
+
+  status        AttendanceStatus @default(NOT_MARKED)
+  markingSource MarkingSource    @default(MANUAL) // ARC-033 — no vendor name
+
+  proposedStatus       AttendanceStatus? // provider proposal (FR-ATT-012)
+  participationSeconds Int?
+
+  markedBy String?   @db.Uuid // null where SYSTEM (FR-LOG-005)
+  markedAt DateTime?
+
+  correctedFrom     AttendanceStatus?
+  correctionReason  String?           @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  liveSession LiveSession @relation(fields: [liveSessionId], references: [id], onDelete: Restrict)
+  student     Student     @relation(fields: [studentId], references: [id], onDelete: Restrict)
+
+  @@unique([liveSessionId, studentId])
+  @@index([studentId, status])
+  @@map("attendance_records")
+}
+
+// ===================================================== governance (8.3.6) ==
+
+/// IMMUTABLE (FR-LOG-004).
+///
+/// There is no update or delete path for this table in application code, and
+/// the migration revokes UPDATE and DELETE at the database privilege level so
+/// that application-level compromise cannot alter history.
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  occurredAt DateTime @default(now())
+
+  actorUserId    String? @db.Uuid // null = SYSTEM principal (§4.2.5)
+  actorRole      String? @db.VarChar(50) // role held AT THE TIME, not now
+  impersonatedBy String? @db.Uuid // SEC-AUZ-013
+
+  action     String @db.VarChar(80) // e.g. registration.approve
+  entityType String @db.VarChar(60)
+  entityId   String @db.VarChar(64)
+
+  beforeValue Json? // changed fields only (FR-LOG-003)
+  afterValue  Json?
+
+  ipAddress     String? @db.VarChar(64)
+  userAgent     String? @db.VarChar(500)
+  correlationId String  @db.Uuid // ARC-008
+
+  @@index([entityType, entityId, occurredAt])
+  @@index([actorUserId, occurredAt])
+  @@index([action, occurredAt])
+  @@map("audit_log")
+}
+
+/// SEC-LOG-001 — kept separate from the general audit log.
+model SecurityEvent {
+  id         String   @id @default(uuid()) @db.Uuid
+  occurredAt DateTime @default(now())
+
+  eventType String  @db.VarChar(60) // login.failed | lockout | permission.denied
+  userId    String? @db.Uuid
+  email     String? // present on failed login where the account may not exist
+
+  outcome       String  @db.VarChar(20)
+  detail        Json?
+  ipAddress     String? @db.VarChar(64)
+  userAgent     String? @db.VarChar(500)
+  correlationId String? @db.Uuid
+
+  @@index([eventType, occurredAt])
+  @@index([userId, occurredAt])
+  @@index([ipAddress, occurredAt])
+  @@map("security_events")
+}
+
+/// Appendix E — every parameter is changeable through the UI without a
+/// deployment (ARC-002, FR-CFG-001).
+model Setting {
+  id    String @id @default(uuid()) @db.Uuid
+  key   String @unique @db.VarChar(60)
+  value Json
+
+  scopeType String? @db.VarChar(30) // INSTITUTE | PROGRAMME | SECTION | SUBJECT
+  scopeId   String? @db.Uuid
+
+  isSecret Boolean @default(false) // write-only through the UI (SEC-CRY-010)
+
+  updatedAt DateTime @updatedAt
+  updatedBy String?  @db.Uuid
+
+  @@unique([key, scopeType, scopeId])
+  @@map("settings")
+}
+
+/// FR-REG-051 — the atomic counter behind registration numbering.
+///
+/// Application-level "read max then add one" is FORBIDDEN (Appendix B): it
+/// collides under concurrent approval, which is RSK-07. Allocation uses an
+/// UPDATE ... RETURNING inside the approval transaction.
+model NumberSeries {
+  id  String @id @default(uuid()) @db.Uuid
+  key String @unique @db.VarChar(80) // institute|session|programme|campus
+
+  nextValue Int @default(1)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("number_series")
+}
