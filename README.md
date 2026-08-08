@@ -10,19 +10,27 @@ first: if the code and the SRS disagree, one of them is a defect.
 
 ## Status
 
-**Phase 0 — Foundations.** The infrastructure that cannot be retrofitted safely
-(§18.2). No business features yet, deliberately.
+**Phase 0 complete; Phase 1 started.** The foundations that cannot be
+retrofitted safely (§18.2) are done, and the first business module — admission
+— is built on top of them.
+
+Admission was chosen first because §2.2.2 identifies it as the Institute's most
+error-prone process: lost payment slips, transcribed-wrong contact numbers,
+registration numbers that collide or skip, and no record of who approved what.
 
 | Built | Not yet |
 |---|---|
-| Monorepo, TypeScript strict, build pipeline | Admission / registration |
-| Prisma schema — core entities from §8 | Academic structure, enrolment |
-| Auth: Argon2id, RS256 JWT, refresh rotation with reuse detection | Content, lectures, streaming |
-| Per-role lockout, session limits, step-up (§4.6) | Live sessions, LCAL adapters |
-| **The scope predicate (ARC-051)** | Attendance, assessment |
-| RBAC guard wired to the §4.5 matrix | Reports, dashboards |
-| Immutable audit log | Notifications |
-| Response envelope, error model, correlation ids | Web client |
+| Monorepo, TypeScript strict, build pipeline | Academic structure CRUD |
+| Prisma schema — core entities from §8 | Content, lectures, streaming |
+| Auth: Argon2id, RS256 JWT, refresh rotation with reuse detection | Live sessions, LCAL adapters |
+| Per-role lockout, session limits, step-up (§4.6) | Attendance, assessment |
+| **The scope predicate (ARC-051)** | Reports, dashboards |
+| RBAC guard wired to the §4.5 matrix | Notifications, email |
+| Immutable audit log + database-level trigger | Web client |
+| Response envelope, error model, correlation ids | |
+| **Admission: UC-01 submit, UC-02 approve** | |
+| Registration + roll numbering (Appendix B) | |
+| Seed data, SQL constraints and indexes | |
 
 ---
 
@@ -41,8 +49,16 @@ cp .env.example .env          # then edit DATABASE_URL
 npm run keys:generate         # RSA keypair for RS256 (SEC-AUT-005)
 npm run db:generate           # Prisma client
 npm run db:migrate            # create the schema
+npm run db:constraints        # partial indexes, checks, audit trigger — REQUIRED
+npm run db:seed               # development data
 npm run dev                   # http://localhost:3000/api/v1
 ```
+
+`db:constraints` is not optional. It adds the partial unique indexes that make
+roll-number reuse correct (FR-REG-057), the check constraints, and the trigger
+that makes the audit log genuinely append-only (FR-LOG-004). Prisma schema
+cannot express any of them. `npm run db:setup` runs migrate, constraints and
+seed together.
 
 API docs (generated from the implementation, API-011): <http://localhost:3000/docs>
 
@@ -127,6 +143,19 @@ tests that prove the System refuses what it must refuse (a teacher reaching a
 payment slip, a student reaching another student's marks, an answer key leaking
 mid-attempt). NFR-MNT-002 requires 100% coverage of authorisation logic; treat a
 failure here as release-blocking.
+
+Integration tests (`*.int-spec.ts`) need a live PostgreSQL and skip themselves
+without one, so `npm test` stays green on a machine with no database:
+
+```bash
+DATABASE_URL=postgresql://... npm test
+```
+
+The most important test in the codebase is in `admission.int-spec.ts`: fifty
+concurrent registration-number allocations must yield fifty distinct values
+with no gaps. It is the only proof that RSK-07 is actually mitigated rather
+than merely designed against — a read-then-write implementation passes every
+other test in the suite and fails this one.
 
 ---
 
