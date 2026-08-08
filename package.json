@@ -17,14 +17,16 @@
     "lint": "npm run lint --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "db:generate": "npm run db:generate --workspace=@lms/api",
-    "db:migrate": "npm run db:migrate --workspace=@lms/api",
-    "db:seed": "npm run db:seed --workspace=@lms/api",
+    "db:migrate": "prisma migrate dev --schema=apps/api/prisma/schema.prisma",
+    "db:seed": "ts-node --compiler-options {\\\"module\\\":\\\"commonjs\\\"} -r dotenv/config apps/api/prisma/seed.ts",
     "db:studio": "npm run db:studio --workspace=@lms/api",
     "keys:generate": "node scripts/generate-keys.mjs",
-    "db:setup": "npm run db:setup --workspace=@lms/api",
-    "db:constraints": "npm run db:constraints --workspace=@lms/api"
+    "db:setup": "npm run db:migrate && npm run db:constraints && npm run db:seed",
+    "db:constraints": "node -r dotenv/config scripts/apply-sql.mjs apps/api/prisma/sql/01_constraints_and_indexes.sql",
+    "db:start": "node scripts/db-local.mjs start"
   },
   "devDependencies": {
+    "embedded-postgres": "^18.4.0-beta.17",
     "typescript": "^5.6.3"
   }
 }

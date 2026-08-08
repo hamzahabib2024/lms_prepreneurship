@@ -15,7 +15,7 @@
     "db:deploy": "prisma migrate deploy",
     "db:seed": "ts-node prisma/seed.ts",
     "db:studio": "prisma studio",
-    "db:constraints": "psql \"$DATABASE_URL\" -f prisma/sql/01_constraints_and_indexes.sql",
+    "db:constraints": "node -r dotenv/config ../../scripts/apply-sql.mjs prisma/sql/01_constraints_and_indexes.sql",
     "db:setup": "prisma migrate deploy && npm run db:constraints && npm run db:seed"
   },
   "prisma": {
