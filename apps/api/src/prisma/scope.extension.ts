@@ -198,6 +198,18 @@ const MODEL_POLICIES: Record<string, PolicyFn> = {
     return DENY_ALL;
   },
 
+  /// A student sees only their own watch history. A teacher sees it for the
+  /// lectures they teach — FR-VID-014 lets them find who has not watched, and
+  /// that is the only legitimate reason to read another person's viewing.
+  WatchProgress: (a) => {
+    if (isAdmin(a)) return null;
+    if (isTeacher(a)) {
+      return { recordedLecture: { sectionSubjectId: { in: [...a.sectionSubjectIds] } } };
+    }
+    if (isStudent(a)) return a.studentId ? { studentId: a.studentId } : DENY_ALL;
+    return DENY_ALL;
+  },
+
   // ----------------------------------------------------------------- live --
   LiveSession: (a) => {
     if (isAdmin(a)) return null;

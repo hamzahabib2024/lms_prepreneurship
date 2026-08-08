@@ -24,6 +24,34 @@ interface PlaybackTicket {
   expiresAt: Date;
 }
 
+/** What the player needs to render a lecture row and resume it. */
+export interface WatchState {
+  watchedPercent: number;
+  lastPositionSeconds: number;
+  isComplete: boolean;
+}
+
+/**
+ * Reads `watchedIntervals` back out of the JSON column.
+ *
+ * A JSON column has no schema, so this validates rather than casts. Anything
+ * malformed degrades to "watched nothing", which loses progress but keeps the
+ * lecture playable — the alternative is a crash on a corrupt row, which would
+ * lock the student out of the subject entirely.
+ */
+function parseIntervals(raw: unknown): Interval[] {
+  if (!Array.isArray(raw)) return [];
+  const out: Interval[] = [];
+  for (const item of raw) {
+    if (!Array.isArray(item) || item.length !== 2) continue;
+    const [start, end] = item;
+    if (typeof start !== "number" || typeof end !== "number") continue;
+    if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
+    out.push([start, end]);
+  }
+  return out;
+}
+
 @Injectable()
 export class ContentService {
   private readonly logger = new Logger(ContentService.name);
@@ -401,7 +429,10 @@ export class ContentService {
   ) {
     const actor = getActor();
     if (!actor?.studentId) throw new AppError("AUTH_FORBIDDEN");
+    const studentId = actor.studentId;
 
+    // Scoped, so a student can only ever report against a lecture that is
+    // PUBLISHED, AVAILABLE and in a section they are enrolled in.
     const lecture = await this.prisma.scoped.recordedLecture.findFirst({
       where: { id: lectureId, deletedAt: null },
       select: { id: true, durationSeconds: true },
@@ -410,20 +441,78 @@ export class ContentService {
 
     const threshold = Number(this.config.get<string>("VIDEO_COMPLETION_PERCENT", "90"));
 
+    const existing = await this.prisma.scoped.watchProgress.findFirst({
+      where: { studentId, recordedLectureId: lectureId },
+    });
+
     const result = applyWatchUpdate({
-      existing: [], // replaced by the persisted set once the model is migrated
+      existing: parseIntervals(existing?.watchedIntervals),
       reported: input.watchedIntervals,
       durationSeconds: lecture.durationSeconds,
       lastPositionSeconds: input.positionSeconds,
       completionThresholdPercent: threshold,
     });
 
+    // Latched. Intervals only ever grow, so the percentage cannot fall on its
+    // own — but a duration corrected downwards later would otherwise revoke a
+    // completion a student had already earned (BR-PRG-05).
+    const wasComplete = existing?.isComplete ?? false;
+    const isComplete = wasComplete || result.isComplete;
+    const completedAt = wasComplete ? existing?.completedAt : isComplete ? new Date() : null;
+
+    await this.prisma.scoped.watchProgress.upsert({
+      where: { studentId_recordedLectureId: { studentId, recordedLectureId: lectureId } },
+      create: {
+        studentId,
+        recordedLectureId: lectureId,
+        watchedIntervals: result.intervals,
+        watchedPercent: result.watchedPercent,
+        lastPositionSeconds: result.lastPositionSeconds,
+        isComplete,
+        completedAt: completedAt ?? null,
+      },
+      update: {
+        watchedIntervals: result.intervals,
+        watchedPercent: result.watchedPercent,
+        lastPositionSeconds: result.lastPositionSeconds,
+        isComplete,
+        completedAt: completedAt ?? null,
+      },
+    });
+
     return {
       lectureId,
       watchedPercent: result.watchedPercent,
       lastPositionSeconds: result.lastPositionSeconds,
-      isComplete: result.isComplete,
+      isComplete,
     };
+  }
+
+  /**
+   * Watch state for a set of lectures, keyed by lecture id.
+   *
+   * One query for the whole list. The subject page shows a progress bar against
+   * every lecture, and doing this per row would put a query per lecture on the
+   * page load.
+   */
+  async watchStateFor(lectureIds: string[]): Promise<Map<string, WatchState>> {
+    const actor = getActor();
+    if (!actor?.studentId || lectureIds.length === 0) return new Map();
+
+    const rows = await this.prisma.scoped.watchProgress.findMany({
+      where: { studentId: actor.studentId, recordedLectureId: { in: lectureIds } },
+    });
+
+    return new Map(
+      rows.map((r: (typeof rows)[number]) => [
+        r.recordedLectureId,
+        {
+          watchedPercent: Number(r.watchedPercent),
+          lastPositionSeconds: r.lastPositionSeconds,
+          isComplete: r.isComplete,
+        },
+      ]),
+    );
   }
 
   /** ARC-045 — the weekly integrity sweep. */

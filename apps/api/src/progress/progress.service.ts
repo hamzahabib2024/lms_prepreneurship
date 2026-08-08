@@ -58,9 +58,23 @@ export class ProgressService {
           where: { sectionSubjectId, publicationStatus: "PUBLISHED", deletedAt: null },
         }),
       ),
-      // Watch progress lands with the content module; until then the video
-      // component is honestly zero rather than fabricated.
-      Promise.resolve(0),
+      // FR-VID-010 — a lecture counts once the student has watched enough
+      // DISTINCT footage to cross the completion threshold. Looping the first
+      // thirty seconds does not count, which is the whole reason watch state
+      // stores merged intervals rather than a running total.
+      this.prisma.asSystem((db) =>
+        db.watchProgress.count({
+          where: {
+            studentId,
+            isComplete: true,
+            recordedLecture: {
+              sectionSubjectId,
+              publicationStatus: "PUBLISHED",
+              deletedAt: null,
+            },
+          },
+        }),
+      ),
       this.prisma.asSystem((db) =>
         db.assignment.count({
           where: { sectionSubjectId, publicationStatus: "PUBLISHED", deletedAt: null },

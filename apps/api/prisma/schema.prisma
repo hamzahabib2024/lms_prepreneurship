@@ -441,6 +441,7 @@ model Student {
   enrolments     Enrolment[]
   payments       Payment[]
   attendance     AttendanceRecord[]
+  watchProgress  WatchProgress[]
   registration   RegistrationRequest?
 
   // FR-REG-057: roll numbers are unique within a section and reusable after
@@ -741,12 +742,50 @@ model RecordedLecture {
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
 
-  lesson      Lesson?      @relation(fields: [lessonId], references: [id], onDelete: SetNull)
-  liveSession LiveSession? @relation(fields: [liveSessionId], references: [id], onDelete: SetNull)
+  lesson        Lesson?         @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  liveSession   LiveSession?    @relation(fields: [liveSessionId], references: [id], onDelete: SetNull)
+  watchProgress WatchProgress[]
 
   @@index([sectionSubjectId, publicationStatus])
   @@index([recordedOn])
   @@map("recorded_lectures")
+}
+
+/// FR-VID-008/009/010 — how much of a lecture a student has actually watched.
+///
+/// `watchedIntervals` holds MERGED, non-overlapping [start, end] pairs in
+/// seconds, not a running total. The distinction is the whole point: a total
+/// cannot tell scrubbing to the end apart from watching the middle, and
+/// `watchedPercent` feeds the video component of progress, which decides
+/// certification (BR-PRG-02). A student has an incentive to inflate it, so the
+/// server merges the intervals itself and never stores a client-sent
+/// percentage.
+model WatchProgress {
+  id                String @id @default(uuid()) @db.Uuid
+  studentId         String @map("student_id") @db.Uuid
+  recordedLectureId String @map("recorded_lecture_id") @db.Uuid
+
+  /// Interval[] — [{ start, end }], merged and sorted. See watch-intervals.ts.
+  watchedIntervals Json @default("[]") @map("watched_intervals")
+
+  watchedPercent      Decimal @default(0) @map("watched_percent") @db.Decimal(5, 2)
+  lastPositionSeconds Int     @default(0) @map("last_position_seconds")
+
+  /// Latched: once true it stays true. Re-watching part of a lecture must not
+  /// take a completion away, or progress would move backwards (BR-PRG-05).
+  isComplete  Boolean   @default(false) @map("is_complete")
+  completedAt DateTime? @map("completed_at")
+
+  firstWatchedAt DateTime @default(now()) @map("first_watched_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  student         Student         @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  recordedLecture RecordedLecture @relation(fields: [recordedLectureId], references: [id], onDelete: Cascade)
+
+  /// One row per student per lecture — the upsert target.
+  @@unique([studentId, recordedLectureId])
+  @@index([recordedLectureId, isComplete])
+  @@map("watch_progress")
 }
 
 // ================================================== live sessions (8.3.4) ==
