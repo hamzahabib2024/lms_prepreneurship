@@ -14,6 +14,7 @@ import { AssessmentModule } from "./assessment/assessment.module";
 import { ProgressModule } from "./progress/progress.module";
 import { ContentModule } from "./content/content.module";
 import { QuizModule } from "./quiz/quiz.module";
+import { ReportingModule } from "./reporting/reporting.module";
 import { HealthController } from "./health.controller";
 
 import { CorrelationMiddleware } from "./common/correlation.middleware";
@@ -44,6 +45,7 @@ import { PermissionsGuard } from "./rbac/permissions.guard";
     ProgressModule,
     ContentModule,
     QuizModule,
+    ReportingModule,
   ],
   controllers: [HealthController],
   providers: [
