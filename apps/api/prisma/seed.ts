@@ -229,10 +229,120 @@ async function main(): Promise<void> {
   await assign(otherTeacher.id, dmFullDm.id);
   console.log("  offerings: 4, assignments: 4");
 
+  // -- students, enrolments and sessions ------------------------------------
+  // Without these every roster is empty, the teacher dashboard has nothing to
+  // show, and the attendance register cannot be exercised at all.
+  const cohort = [
+    "Ayesha Siddiqui",
+    "Hina Malik",
+    "Zainab Raza",
+    "Maryam Iqbal",
+    "Fatima Noor",
+    "Sana Javed",
+    "Aliya Hassan",
+    "Rabia Aslam",
+  ];
+
+  const studentPassword = await hash("ChangeMe!Student2026");
+  let enrolled = 0;
+
+  for (const [index, name] of cohort.entries()) {
+    const roll = index + 1;
+    const email = `${name.split(" ")[0]!.toLowerCase()}${roll}@student.local`;
+    if (await db.user.findUnique({ where: { email } })) continue;
+
+    const user = await db.user.create({
+      data: {
+        email,
+        passwordHash: studentPassword,
+        fullName: name,
+        phone: `+9230012345${String(roll).padStart(2, "0")}`,
+        status: "ACTIVE",
+        mustChangePassword: false,
+        roles: { create: { roleId: roles["student"]! } },
+      },
+    });
+
+    const student = await db.student.create({
+      data: {
+        userId: user.id,
+        // Mirrors the Appendix B format. Real numbers come from the atomic
+        // series at approval (FR-REG-051); these are fixtures, not issued.
+        registrationNo: `CIIT/SP26-GD-${String(roll).padStart(3, "0")}/ISB`,
+        currentSectionId: gdFemale.id,
+        currentRollNo: roll,
+        nationalId: `61101${String(1000000 + roll)}${roll % 10}`,
+        dateOfBirth: new Date("2006-06-15"),
+        gender: "FEMALE",
+        admissionDate: new Date("2026-02-01"),
+      },
+    });
+
+    await db.enrolment.createMany({
+      data: [gdFemaleGd.id, gdFemaleEng.id].map((sectionSubjectId) => ({
+        studentId: student.id,
+        sectionSubjectId,
+        status: "ACTIVE" as const,
+        rollNoAtEnrolment: roll,
+      })),
+      skipDuplicates: true,
+    });
+    enrolled += 1;
+  }
+
+  await db.section.update({
+    where: { id: gdFemale.id },
+    data: { enrolledCount: cohort.length },
+  });
+  console.log(`  students: ${enrolled} enrolled in ${gdFemale.code}`);
+
+  // Sessions spanning past and future, so the register has something to mark
+  // and the dashboard has a next class to show.
+  const at = (dayOffset: number, hour: number): Date => {
+    const d = new Date();
+    d.setDate(d.getDate() + dayOffset);
+    d.setHours(hour, 0, 0, 0);
+    return d;
+  };
+
+  const plan = [
+    { offset: -3, title: "Colour theory in practice" },
+    { offset: -2, title: "Typography fundamentals" },
+    { offset: -1, title: "Grid systems" },
+    { offset: 0, title: "Composition and balance" },
+    { offset: 1, title: "Brand identity basics" },
+  ];
+
+  let sessions = 0;
+  for (const item of plan) {
+    const scheduledStart = at(item.offset, 9);
+    const clash = await db.liveSession.findFirst({
+      where: { sectionSubjectId: gdFemaleGd.id, scheduledStart },
+    });
+    if (clash) continue;
+
+    await db.liveSession.create({
+      data: {
+        sectionSubjectId: gdFemaleGd.id,
+        title: item.title,
+        scheduledStart,
+        scheduledEnd: new Date(scheduledStart.getTime() + 90 * 60_000),
+        hostTeacherId: teacher.id,
+        // Past sessions are ENDED so they show as work outstanding — which is
+        // exactly what the teacher's action queue counts (FR-TCH-002).
+        status: item.offset < 0 ? "ENDED" : "SCHEDULED",
+        sessionType: "ONLINE",
+      },
+    });
+    sessions += 1;
+  }
+  console.log(`  sessions: ${sessions} (3 past, 2 upcoming)`);
+
   console.log("\nSeed complete.\n");
   console.log("  superadmin@institute.local  ChangeMe!SuperAdmin2026");
   console.log("  admin@institute.local       ChangeMe!Admin2026");
   console.log("  sana@institute.local        ChangeMe!Teacher2026   (GD + English, Female A)");
+  console.log("  ayesha1@student.local       ChangeMe!Student2026   (and 7 more students)");
   console.log("  imran@institute.local       ChangeMe!Teacher2026   (GD Male B, DM Evening A)");
   console.log("\nThese are development credentials. SEC-CFG-002 forbids them in production.\n");
 
