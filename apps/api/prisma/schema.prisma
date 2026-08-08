@@ -193,34 +193,34 @@ enum MarkingSource {
 model User {
   id              String  @id @default(uuid()) @db.Uuid
   email           String  @unique
-  passwordHash    String
-  fullName        String  @db.VarChar(200)
+  passwordHash    String  @map("password_hash")
+  fullName        String  @map("full_name") @db.VarChar(200)
   phone           String? @db.VarChar(20)
-  phoneIsWhatsapp Boolean @default(false)
+  phoneIsWhatsapp Boolean @default(false) @map("phone_is_whatsapp")
 
   status       UserStatus @default(INVITED)
-  statusReason String?    @db.Text
+  statusReason String?    @map("status_reason") @db.Text
 
-  mustChangePassword Boolean   @default(true) // FR-REG-040
-  passwordChangedAt  DateTime?
+  mustChangePassword Boolean   @default(true) @map("must_change_password") // FR-REG-040
+  passwordChangedAt  DateTime? @map("password_changed_at")
 
-  mfaEnabled       Boolean @default(false) // SEC-AUT-011
-  mfaSecret        String? // encrypted at rest (SEC-CRY-004)
-  mfaRecoveryCodes Json? // hashed, single-use (SEC-AUT-012)
+  mfaEnabled       Boolean @default(false) @map("mfa_enabled") // SEC-AUT-011
+  mfaSecret        String? @map("mfa_secret") // encrypted at rest (SEC-CRY-004)
+  mfaRecoveryCodes Json?   @map("mfa_recovery_codes") // hashed, single-use (SEC-AUT-012)
 
-  failedLoginCount Int       @default(0) // SEC-AUT-008
-  lockedUntil      DateTime?
-  lastLoginAt      DateTime?
+  failedLoginCount Int       @default(0) @map("failed_login_count") // SEC-AUT-008
+  lockedUntil      DateTime? @map("locked_until")
+  lastLoginAt      DateTime? @map("last_login_at")
 
-  photoUrl String? @db.VarChar(500)
+  photoUrl String? @map("photo_url") @db.VarChar(500)
   locale   String  @default("en") @db.VarChar(10)
   timezone String  @default("Asia/Karachi") @db.VarChar(50)
 
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  createdBy String?   @db.Uuid
-  updatedBy String?   @db.Uuid
-  deletedAt DateTime?
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at")
 
   roles    UserRole[]
   sessions UserSession[]
@@ -236,10 +236,10 @@ model Role {
   id       String  @id @default(uuid()) @db.Uuid
   key      String  @unique @db.VarChar(50) // super_admin | admin | teacher | student
   name     String  @db.VarChar(100)
-  isSystem Boolean @default(true) // system roles cannot be deleted
+  isSystem Boolean @default(true) @map("is_system") // system roles cannot be deleted
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   users UserRole[]
 
@@ -248,16 +248,16 @@ model Role {
 
 model UserRole {
   id     String @id @default(uuid()) @db.Uuid
-  userId String @db.Uuid
-  roleId String @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  roleId String @map("role_id") @db.Uuid
 
   // §4.2.2 — individually granted admin sub-permissions.
-  subPermissions String[] @default([])
+  subPermissions String[] @default([]) @map("sub_permissions")
 
-  grantedBy String?   @db.Uuid // FR-RBAC-010
-  expiresAt DateTime? // FR-RBAC-013 temporary delegation
+  grantedBy String?   @map("granted_by") @db.Uuid // FR-RBAC-010
+  expiresAt DateTime? @map("expires_at") // FR-RBAC-013 temporary delegation
 
-  createdAt DateTime @default(now())
+  createdAt DateTime @default(now()) @map("created_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   role Role @relation(fields: [roleId], references: [id], onDelete: Restrict)
@@ -269,17 +269,17 @@ model UserRole {
 
 model UserSession {
   id               String  @id @default(uuid()) @db.Uuid
-  userId           String  @db.Uuid
-  refreshTokenHash String  @unique // never stored in plaintext
-  tokenFamilyId    String  @db.Uuid // SEC-AUT-004 rotation family
-  deviceLabel      String? @db.VarChar(200)
-  ipAddress        String? @db.VarChar(64)
-  userAgent        String? @db.VarChar(500)
+  userId           String  @map("user_id") @db.Uuid
+  refreshTokenHash String  @unique @map("refresh_token_hash") // never stored in plaintext
+  tokenFamilyId    String  @map("token_family_id") @db.Uuid // SEC-AUT-004 rotation family
+  deviceLabel      String? @map("device_label") @db.VarChar(200)
+  ipAddress        String? @map("ip_address") @db.VarChar(64)
+  userAgent        String? @map("user_agent") @db.VarChar(500)
 
-  expiresAt    DateTime
-  revokedAt    DateTime?
-  lastActiveAt DateTime  @default(now())
-  createdAt    DateTime  @default(now())
+  expiresAt    DateTime  @map("expires_at")
+  revokedAt    DateTime? @map("revoked_at")
+  lastActiveAt DateTime  @default(now()) @map("last_active_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -293,56 +293,56 @@ model UserSession {
 
 model RegistrationRequest {
   id          String             @id @default(uuid()) @db.Uuid
-  trackingRef String             @unique @db.VarChar(20) // FR-REG-018
+  trackingRef String             @unique @map("tracking_ref") @db.VarChar(20) // FR-REG-018
   status      RegistrationStatus @default(PENDING_REVIEW)
 
-  fullName        String   @db.VarChar(200)
-  fatherName      String   @db.VarChar(200)
-  dateOfBirth     DateTime @db.Date
+  fullName        String   @map("full_name") @db.VarChar(200)
+  fatherName      String   @map("father_name") @db.VarChar(200)
+  dateOfBirth     DateTime @map("date_of_birth") @db.Date
   gender          Gender // drives section eligibility (FR-CRS-009)
-  nationalId      String   @db.VarChar(20) // encrypted; masked in lists (SEC-PRV-005)
+  nationalId      String   @map("national_id") @db.VarChar(20) // encrypted; masked in lists (SEC-PRV-005)
   phone           String   @db.VarChar(20)
   // FR-REG-003 — the WhatsApp-capable indicator. Carried on the application
   // itself because credentials are relayed over WhatsApp at approval
   // (FR-REG-042), so the reviewer needs to know before the account exists.
-  phoneIsWhatsapp Boolean  @default(true)
-  altPhone        String?  @db.VarChar(20)
+  phoneIsWhatsapp Boolean  @default(true) @map("phone_is_whatsapp")
+  altPhone        String?  @map("alt_phone") @db.VarChar(20)
   email           String
   address         String   @db.VarChar(500)
   city            String   @db.VarChar(100)
   qualification   String   @db.VarChar(120)
   occupation      String?  @db.VarChar(120)
 
-  desiredProgrammeId String? @db.Uuid
-  desiredSectionId   String? @db.Uuid
+  desiredProgrammeId String? @map("desired_programme_id") @db.Uuid
+  desiredSectionId   String? @map("desired_section_id") @db.Uuid
 
-  acquisitionSource AcquisitionSource
-  acquisitionDetail String?           @db.VarChar(255)
-  campaignRef       Json? // auto-captured UTM data (FR-REG-006)
+  acquisitionSource AcquisitionSource @map("acquisition_source")
+  acquisitionDetail String?           @map("acquisition_detail") @db.VarChar(255)
+  campaignRef       Json?             @map("campaign_ref") // auto-captured UTM data (FR-REG-006)
 
   // The applicant's CLAIM. Not a fact — see Payment for the verified values.
-  claimedAmount      Decimal  @db.Decimal(12, 2)
-  claimedPaymentDate DateTime @db.Date
-  claimedBankRef     String?  @db.VarChar(100)
+  claimedAmount      Decimal  @map("claimed_amount") @db.Decimal(12, 2)
+  claimedPaymentDate DateTime @map("claimed_payment_date") @db.Date
+  claimedBankRef     String?  @map("claimed_bank_ref") @db.VarChar(100)
 
-  consentVersion String   @db.VarChar(20) // SEC-PRV-003
-  consentAt      DateTime
+  consentVersion String   @map("consent_version") @db.VarChar(20) // SEC-PRV-003
+  consentAt      DateTime @map("consent_at")
 
   // FR-REG-026 — review claim, so two admins cannot act on one request.
-  claimedByUserId String?   @db.Uuid
-  claimedUntil    DateTime?
+  claimedByUserId String?   @map("claimed_by_user_id") @db.Uuid
+  claimedUntil    DateTime? @map("claimed_until")
 
   decision           RegistrationStatus?
-  decisionReasonCode RejectionReason?
-  decisionNote       String?             @db.Text
-  decidedBy          String?             @db.Uuid
-  decidedAt          DateTime?
+  decisionReasonCode RejectionReason?    @map("decision_reason_code")
+  decisionNote       String?             @map("decision_note") @db.Text
+  decidedBy          String?             @map("decided_by") @db.Uuid
+  decidedAt          DateTime?           @map("decided_at")
 
-  createdStudentId String? @unique @db.Uuid // FR-REG-045
+  createdStudentId String? @unique @map("created_student_id") @db.Uuid // FR-REG-045
 
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
 
   desiredProgramme Programme?             @relation(fields: [desiredProgrammeId], references: [id], onDelete: SetNull)
   desiredSection   Section?               @relation(fields: [desiredSectionId], references: [id], onDelete: SetNull)
@@ -359,17 +359,17 @@ model RegistrationRequest {
 
 model RegistrationDocument {
   id                    String       @id @default(uuid()) @db.Uuid
-  registrationRequestId String       @db.Uuid
-  documentType          DocumentType @default(PAYMENT_SLIP)
+  registrationRequestId String       @map("registration_request_id") @db.Uuid
+  documentType          DocumentType @default(PAYMENT_SLIP) @map("document_type")
 
-  storageKey       String     @db.VarChar(500) // never a public URL (SEC-FIL-009)
-  originalFilename String     @db.VarChar(255) // sanitised; never used as a path
-  contentType      String     @db.VarChar(100) // determined by content (SEC-FIL-003)
-  sizeBytes        BigInt
-  contentHash      String     @db.VarChar(64) // SHA-256
-  scanStatus       ScanStatus @default(PENDING) // SEC-FIL-004
+  storageKey       String     @map("storage_key") @db.VarChar(500) // never a public URL (SEC-FIL-009)
+  originalFilename String     @map("original_filename") @db.VarChar(255) // sanitised; never used as a path
+  contentType      String     @map("content_type") @db.VarChar(100) // determined by content (SEC-FIL-003)
+  sizeBytes        BigInt     @map("size_bytes")
+  contentHash      String     @map("content_hash") @db.VarChar(64) // SHA-256
+  scanStatus       ScanStatus @default(PENDING) @map("scan_status") // SEC-FIL-004
 
-  createdAt DateTime @default(now())
+  createdAt DateTime @default(now()) @map("created_at")
 
   registrationRequest RegistrationRequest @relation(fields: [registrationRequestId], references: [id], onDelete: Cascade)
 
@@ -381,26 +381,26 @@ model RegistrationDocument {
 // BR-PAY-05: never deleted. A reversal marks the row and retains it.
 model Payment {
   id                    String  @id @default(uuid()) @db.Uuid
-  studentId             String  @db.Uuid
-  registrationRequestId String? @db.Uuid
+  studentId             String  @map("student_id") @db.Uuid
+  registrationRequestId String? @map("registration_request_id") @db.Uuid
 
-  verifiedAmount Decimal       @db.Decimal(12, 2) // authoritative (BR-REG-10)
+  verifiedAmount Decimal       @map("verified_amount") @db.Decimal(12, 2) // authoritative (BR-REG-10)
   currency       String        @default("PKR") @db.Char(3)
-  paymentDate    DateTime      @db.Date
+  paymentDate    DateTime      @map("payment_date") @db.Date
   method         PaymentMethod
-  bankReference  String?       @db.VarChar(100)
+  bankReference  String?       @map("bank_reference") @db.VarChar(100)
 
-  verifiedBy     String   @db.Uuid
-  verifiedAt     DateTime @default(now())
-  varianceReason String?  @db.Text // required when verified != claimed (FR-REG-028)
+  verifiedBy     String   @map("verified_by") @db.Uuid
+  verifiedAt     DateTime @default(now()) @map("verified_at")
+  varianceReason String?  @map("variance_reason") @db.Text // required when verified != claimed (FR-REG-028)
 
-  isReversed     Boolean   @default(false)
-  reversedBy     String?   @db.Uuid
-  reversedAt     DateTime?
-  reversalReason String?   @db.Text
+  isReversed     Boolean   @default(false) @map("is_reversed")
+  reversedBy     String?   @map("reversed_by") @db.Uuid
+  reversedAt     DateTime? @map("reversed_at")
+  reversalReason String?   @map("reversal_reason") @db.Text
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   student             Student              @relation(fields: [studentId], references: [id], onDelete: Restrict)
   registrationRequest RegistrationRequest? @relation(fields: [registrationRequestId], references: [id], onDelete: SetNull)
@@ -413,28 +413,28 @@ model Payment {
 
 model Student {
   id     String @id @default(uuid()) @db.Uuid
-  userId String @unique @db.Uuid
+  userId String @unique @map("user_id") @db.Uuid
 
   // FR-REG-052: permanent. Never reused, recycled, or reissued.
-  registrationNo         String  @unique @db.VarChar(50)
-  registrationNoPrevious String? @db.VarChar(50) // alias after a correction
+  registrationNo         String  @unique @map("registration_no") @db.VarChar(50)
+  registrationNoPrevious String? @map("registration_no_previous") @db.VarChar(50) // alias after a correction
 
   // Denormalised for query performance (§8.5); authoritative source is Enrolment.
-  currentSectionId String? @db.Uuid
-  currentRollNo    Int?    @db.SmallInt
+  currentSectionId String? @map("current_section_id") @db.Uuid
+  currentRollNo    Int?    @map("current_roll_no") @db.SmallInt
 
-  nationalId    String   @unique @db.VarChar(20)
-  dateOfBirth   DateTime @db.Date
+  nationalId    String   @unique @map("national_id") @db.VarChar(20)
+  dateOfBirth   DateTime @map("date_of_birth") @db.Date
   gender        Gender
-  guardianName  String?  @db.VarChar(200)
-  guardianPhone String?  @db.VarChar(20)
-  admissionDate DateTime @db.Date
+  guardianName  String?  @map("guardian_name") @db.VarChar(200)
+  guardianPhone String?  @map("guardian_phone") @db.VarChar(20)
+  admissionDate DateTime @map("admission_date") @db.Date
 
-  outstandingBalance Decimal @default(0) @db.Decimal(12, 2)
+  outstandingBalance Decimal @default(0) @map("outstanding_balance") @db.Decimal(12, 2)
 
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
 
   user           User                 @relation(fields: [userId], references: [id], onDelete: Restrict)
   currentSection Section?             @relation(fields: [currentSectionId], references: [id], onDelete: SetNull)
@@ -452,15 +452,15 @@ model Student {
 
 model Teacher {
   id     String @id @default(uuid()) @db.Uuid
-  userId String @unique @db.Uuid
+  userId String @unique @map("user_id") @db.Uuid
 
-  employeeCode   String?  @unique @db.VarChar(50)
+  employeeCode   String?  @unique @map("employee_code") @db.VarChar(50)
   qualifications String?  @db.Text
-  joinedAt       DateTime @db.Date
+  joinedAt       DateTime @map("joined_at") @db.Date
 
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
 
   user        User                @relation(fields: [userId], references: [id], onDelete: Restrict)
   assignments TeacherAssignment[]
@@ -474,12 +474,12 @@ model Programme {
   name          String  @db.VarChar(200)
   code          String  @unique @db.VarChar(10) // used in registration numbering
   description   String? @db.Text
-  durationWeeks Int?
-  isActive      Boolean @default(true)
+  durationWeeks Int?    @map("duration_weeks")
+  isActive      Boolean @default(true) @map("is_active")
 
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
 
   sessions      AcademicSession[]
   registrations RegistrationRequest[]
@@ -489,16 +489,16 @@ model Programme {
 
 model AcademicSession {
   id          String   @id @default(uuid()) @db.Uuid
-  programmeId String   @db.Uuid
+  programmeId String   @map("programme_id") @db.Uuid
   name        String   @db.VarChar(100)
   code        String   @db.VarChar(10) // SP26, FA26 — used in numbering
-  startDate   DateTime @db.Date
-  endDate     DateTime @db.Date
+  startDate   DateTime @map("start_date") @db.Date
+  endDate     DateTime @map("end_date") @db.Date
   status      String   @default("PLANNED") @db.VarChar(20)
 
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
 
   programme Programme @relation(fields: [programmeId], references: [id], onDelete: Restrict)
   batches   Batch[]
@@ -509,13 +509,13 @@ model AcademicSession {
 
 model Batch {
   id                String @id @default(uuid()) @db.Uuid
-  academicSessionId String @db.Uuid
+  academicSessionId String @map("academic_session_id") @db.Uuid
   name              String @db.VarChar(150)
-  deliveryPattern   String @db.VarChar(50)
+  deliveryPattern   String @map("delivery_pattern") @db.VarChar(50)
 
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
 
   academicSession AcademicSession @relation(fields: [academicSessionId], references: [id], onDelete: Restrict)
   sections        Section[]
@@ -526,29 +526,29 @@ model Batch {
 
 model Section {
   id      String @id @default(uuid()) @db.Uuid
-  batchId String @db.Uuid
+  batchId String @map("batch_id") @db.Uuid
   code    String @unique @db.VarChar(40) // SP26-DM-EVE-A
   name    String @db.VarChar(150)
 
   capacity      Int @db.SmallInt
-  enrolledCount Int @default(0) @db.SmallInt // materialised (§8.5)
+  enrolledCount Int @default(0) @map("enrolled_count") @db.SmallInt // materialised (§8.5)
 
-  genderRestriction GenderRestriction @default(MIXED) // absolute (FR-CRS-009)
+  genderRestriction GenderRestriction @default(MIXED) @map("gender_restriction") // absolute (FR-CRS-009)
   shift             Shift
-  deliveryMode      DeliveryMode      @default(ONLINE)
+  deliveryMode      DeliveryMode      @default(ONLINE) @map("delivery_mode")
   attributes        Json? // extensible tags (FR-CRS-007)
 
-  whatsappChannelUrl String? @db.VarChar(500)
-  whatsappGroupUrl   String? @db.VarChar(500)
+  whatsappChannelUrl String? @map("whatsapp_channel_url") @db.VarChar(500)
+  whatsappGroupUrl   String? @map("whatsapp_group_url") @db.VarChar(500)
 
   status SectionStatus @default(PLANNED)
 
   // ARC-027 — per-section provider override, so migration can be gradual.
-  liveProviderKey String? @db.VarChar(50)
+  liveProviderKey String? @map("live_provider_key") @db.VarChar(50)
 
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
 
   batch           Batch                 @relation(fields: [batchId], references: [id], onDelete: Restrict)
   sectionSubjects SectionSubject[]
@@ -566,12 +566,12 @@ model Subject {
   code         String  @unique @db.VarChar(20)
   description  String? @db.Text
   credits      Int?    @db.SmallInt
-  thumbnailUrl String? @db.VarChar(500)
-  isActive     Boolean @default(true)
+  thumbnailUrl String? @map("thumbnail_url") @db.VarChar(500)
+  isActive     Boolean @default(true) @map("is_active")
 
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
 
   sectionSubjects SectionSubject[]
   modules         Module[]
@@ -585,20 +585,20 @@ model Subject {
 /// (BR-CNT-03).
 model SectionSubject {
   id           String  @id @default(uuid()) @db.Uuid
-  sectionId    String  @db.Uuid
-  subjectId    String  @db.Uuid
-  isCompulsory Boolean @default(true) // drives auto-enrolment (FR-CRS-019)
+  sectionId    String  @map("section_id") @db.Uuid
+  subjectId    String  @map("subject_id") @db.Uuid
+  isCompulsory Boolean @default(true) @map("is_compulsory") // drives auto-enrolment (FR-CRS-019)
 
-  startDate DateTime? @db.Date
-  endDate   DateTime? @db.Date
+  startDate DateTime? @map("start_date") @db.Date
+  endDate   DateTime? @map("end_date") @db.Date
   status    String    @default("PLANNED") @db.VarChar(20)
 
-  progressWeights    Json? // per-subject override of Figure 5-3
-  completionCriteria Json? // FR-PRG-009
+  progressWeights    Json? @map("progress_weights") // per-subject override of Figure 5-3
+  completionCriteria Json? @map("completion_criteria") // FR-PRG-009
 
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
 
   section     Section             @relation(fields: [sectionId], references: [id], onDelete: Restrict)
   subject     Subject             @relation(fields: [subjectId], references: [id], onDelete: Restrict)
@@ -620,16 +620,16 @@ model SectionSubject {
 /// mis-implemented rule in systems of this kind.
 model TeacherAssignment {
   id               String         @id @default(uuid()) @db.Uuid
-  teacherId        String         @db.Uuid
-  sectionSubjectId String         @db.Uuid
-  assignmentRole   AssignmentRole @default(PRIMARY)
+  teacherId        String         @map("teacher_id") @db.Uuid
+  sectionSubjectId String         @map("section_subject_id") @db.Uuid
+  assignmentRole   AssignmentRole @default(PRIMARY) @map("assignment_role")
 
-  startDate DateTime  @db.Date
-  endDate   DateTime? @db.Date // expiry withdraws scope automatically (FR-CRS-025)
+  startDate DateTime  @map("start_date") @db.Date
+  endDate   DateTime? @map("end_date") @db.Date // expiry withdraws scope automatically (FR-CRS-025)
 
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
 
   teacher        Teacher        @relation(fields: [teacherId], references: [id], onDelete: Restrict)
   sectionSubject SectionSubject @relation(fields: [sectionSubjectId], references: [id], onDelete: Restrict)
@@ -644,18 +644,18 @@ model TeacherAssignment {
 
 model Enrolment {
   id               String          @id @default(uuid()) @db.Uuid
-  studentId        String          @db.Uuid
-  sectionSubjectId String          @db.Uuid
+  studentId        String          @map("student_id") @db.Uuid
+  sectionSubjectId String          @map("section_subject_id") @db.Uuid
   status           EnrolmentStatus @default(ACTIVE)
 
-  rollNoAtEnrolment Int?      @db.SmallInt // historical, across transfers
-  enrolledAt        DateTime  @default(now())
-  endedAt           DateTime?
-  statusReason      String?   @db.Text
+  rollNoAtEnrolment Int?      @map("roll_no_at_enrolment") @db.SmallInt // historical, across transfers
+  enrolledAt        DateTime  @default(now()) @map("enrolled_at")
+  endedAt           DateTime? @map("ended_at")
+  statusReason      String?   @map("status_reason") @db.Text
 
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
 
   student        Student        @relation(fields: [studentId], references: [id], onDelete: Restrict)
   sectionSubject SectionSubject @relation(fields: [sectionSubjectId], references: [id], onDelete: Restrict)
@@ -671,17 +671,17 @@ model Enrolment {
 
 model Module {
   id                String            @id @default(uuid()) @db.Uuid
-  subjectId         String            @db.Uuid
+  subjectId         String            @map("subject_id") @db.Uuid
   title             String            @db.VarChar(255)
   description       String?           @db.Text
-  displayOrder      Int
-  publicationStatus PublicationStatus @default(DRAFT) // BR-CNT-01
-  publishAt         DateTime?
+  displayOrder      Int               @map("display_order")
+  publicationStatus PublicationStatus @default(DRAFT) @map("publication_status") // BR-CNT-01
+  publishAt         DateTime?         @map("publish_at")
 
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  createdBy String?   @db.Uuid
-  deletedAt DateTime?
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  createdBy String?   @map("created_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at")
 
   subject Subject  @relation(fields: [subjectId], references: [id], onDelete: Restrict)
   lessons Lesson[]
@@ -692,19 +692,19 @@ model Module {
 
 model Lesson {
   id                   String            @id @default(uuid()) @db.Uuid
-  moduleId             String            @db.Uuid
+  moduleId             String            @map("module_id") @db.Uuid
   title                String            @db.VarChar(255)
   description          String?           @db.Text
-  displayOrder         Int
-  estimatedMinutes     Int?              @db.SmallInt
-  publicationStatus    PublicationStatus @default(DRAFT)
-  publishAt            DateTime?
-  prerequisiteLessonId String?           @db.Uuid // FR-CRS-032 sequential release
+  displayOrder         Int               @map("display_order")
+  estimatedMinutes     Int?              @map("estimated_minutes") @db.SmallInt
+  publicationStatus    PublicationStatus @default(DRAFT) @map("publication_status")
+  publishAt            DateTime?         @map("publish_at")
+  prerequisiteLessonId String?           @map("prerequisite_lesson_id") @db.Uuid // FR-CRS-032 sequential release
 
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  createdBy String?   @db.Uuid
-  deletedAt DateTime?
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  createdBy String?   @map("created_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at")
 
   module   Module            @relation(fields: [moduleId], references: [id], onDelete: Restrict)
   lectures RecordedLecture[]
@@ -717,29 +717,29 @@ model Lesson {
 /// A catalogue entry. The video bytes stay in Google Drive (CON-01, ARC-037).
 model RecordedLecture {
   id               String  @id @default(uuid()) @db.Uuid
-  lessonId         String? @db.Uuid // may exist before binding (FR-VID-005)
-  sectionSubjectId String  @db.Uuid
-  liveSessionId    String? @unique @db.Uuid
+  lessonId         String? @map("lesson_id") @db.Uuid // may exist before binding (FR-VID-005)
+  sectionSubjectId String  @map("section_subject_id") @db.Uuid
+  liveSessionId    String? @unique @map("live_session_id") @db.Uuid
 
   title       String  @db.VarChar(255)
   description String? @db.Text
 
-  storageProvider String @default("google_drive") @db.VarChar(50)
+  storageProvider String @default("google_drive") @map("storage_provider") @db.VarChar(50)
   /// Opaque provider file id. ARC-041: NEVER exposed to a student in any
   /// response, page source, or client-side state.
-  storageRef      String @db.VarChar(255)
+  storageRef      String @map("storage_ref") @db.VarChar(255)
 
-  durationSeconds Int?
-  recordedOn      DateTime @db.Date
-  teacherId       String?  @db.Uuid
+  durationSeconds Int?     @map("duration_seconds")
+  recordedOn      DateTime @map("recorded_on") @db.Date
+  teacherId       String?  @map("teacher_id") @db.Uuid
 
-  publicationStatus  PublicationStatus  @default(DRAFT)
-  availabilityStatus AvailabilityStatus @default(AVAILABLE) // ARC-045
-  lastVerifiedAt     DateTime?
+  publicationStatus  PublicationStatus  @default(DRAFT) @map("publication_status")
+  availabilityStatus AvailabilityStatus @default(AVAILABLE) @map("availability_status") // ARC-045
+  lastVerifiedAt     DateTime?          @map("last_verified_at")
 
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
 
   lesson      Lesson?      @relation(fields: [lessonId], references: [id], onDelete: SetNull)
   liveSession LiveSession? @relation(fields: [liveSessionId], references: [id], onDelete: SetNull)
@@ -758,32 +758,32 @@ model RecordedLecture {
 /// provider-aware persisted structure in the System.
 model LiveSession {
   id               String  @id @default(uuid()) @db.Uuid
-  sectionSubjectId String  @db.Uuid
-  lessonId         String? @db.Uuid
+  sectionSubjectId String  @map("section_subject_id") @db.Uuid
+  lessonId         String? @map("lesson_id") @db.Uuid
 
   title       String  @db.VarChar(255)
   description String? @db.Text
 
-  scheduledStart DateTime
-  scheduledEnd   DateTime
-  actualStart    DateTime?
-  actualEnd      DateTime?
+  scheduledStart DateTime  @map("scheduled_start")
+  scheduledEnd   DateTime  @map("scheduled_end")
+  actualStart    DateTime? @map("actual_start")
+  actualEnd      DateTime? @map("actual_end")
 
-  hostTeacherId       String  @db.Uuid
-  substituteTeacherId String? @db.Uuid
+  hostTeacherId       String  @map("host_teacher_id") @db.Uuid
+  substituteTeacherId String? @map("substitute_teacher_id") @db.Uuid
 
   status      SessionStatus @default(SCHEDULED)
-  sessionType SessionType   @default(ONLINE)
+  sessionType SessionType   @default(ONLINE) @map("session_type")
 
-  joinWindowMinutesBefore Int              @default(15) @db.SmallInt
-  attendancePolicy        AttendancePolicy @default(MANUAL)
+  joinWindowMinutesBefore Int              @default(15) @map("join_window_minutes_before") @db.SmallInt
+  attendancePolicy        AttendancePolicy @default(MANUAL) @map("attendance_policy")
 
-  timetableSlotId    String? @db.Uuid
-  cancellationReason String? @db.Text
+  timetableSlotId    String? @map("timetable_slot_id") @db.Uuid
+  cancellationReason String? @map("cancellation_reason") @db.Text
 
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
 
   sectionSubject SectionSubject              @relation(fields: [sectionSubjectId], references: [id], onDelete: Restrict)
   lesson         Lesson?                     @relation(fields: [lessonId], references: [id], onDelete: SetNull)
@@ -804,21 +804,21 @@ model LiveSession {
 /// test at §3.4.6 verifies exactly that.
 model LiveSessionProviderBinding {
   id            String @id @default(uuid()) @db.Uuid
-  liveSessionId String @unique @db.Uuid
+  liveSessionId String @unique @map("live_session_id") @db.Uuid
 
-  providerKey      String  @db.VarChar(50) // google_meet | internal_classroom | ...
-  externalId       String? @db.VarChar(255) // provider's own id — opaque to us
+  providerKey      String  @map("provider_key") @db.VarChar(50) // google_meet | internal_classroom | ...
+  externalId       String? @map("external_id") @db.VarChar(255) // provider's own id — opaque to us
   /// Opaque. ARC-025: never parsed, pattern-matched, or validated by the System.
-  joinUrl          String? @db.VarChar(1000)
-  hostUrl          String? @db.VarChar(1000)
-  providerMetadata Json? // provider's extras; never read by domain code
+  joinUrl          String? @map("join_url") @db.VarChar(1000)
+  hostUrl          String? @map("host_url") @db.VarChar(1000)
+  providerMetadata Json?   @map("provider_metadata") // provider's extras; never read by domain code
 
   status           BindingStatus @default(PENDING)
-  isManualFallback Boolean       @default(false) // FR-LIV-018
-  lastSyncedAt     DateTime?
+  isManualFallback Boolean       @default(false) @map("is_manual_fallback") // FR-LIV-018
+  lastSyncedAt     DateTime?     @map("last_synced_at")
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   liveSession LiveSession @relation(fields: [liveSessionId], references: [id], onDelete: Cascade)
 
@@ -827,23 +827,23 @@ model LiveSessionProviderBinding {
 
 model AttendanceRecord {
   id            String @id @default(uuid()) @db.Uuid
-  liveSessionId String @db.Uuid
-  studentId     String @db.Uuid
+  liveSessionId String @map("live_session_id") @db.Uuid
+  studentId     String @map("student_id") @db.Uuid
 
   status        AttendanceStatus @default(NOT_MARKED)
-  markingSource MarkingSource    @default(MANUAL) // ARC-033 — no vendor name
+  markingSource MarkingSource    @default(MANUAL) @map("marking_source") // ARC-033 — no vendor name
 
-  proposedStatus       AttendanceStatus? // provider proposal (FR-ATT-012)
-  participationSeconds Int?
+  proposedStatus       AttendanceStatus? @map("proposed_status") // provider proposal (FR-ATT-012)
+  participationSeconds Int?              @map("participation_seconds")
 
-  markedBy String?   @db.Uuid // null where SYSTEM (FR-LOG-005)
-  markedAt DateTime?
+  markedBy String?   @map("marked_by") @db.Uuid // null where SYSTEM (FR-LOG-005)
+  markedAt DateTime? @map("marked_at")
 
-  correctedFrom    AttendanceStatus?
-  correctionReason String?           @db.Text
+  correctedFrom    AttendanceStatus? @map("corrected_from")
+  correctionReason String?           @map("correction_reason") @db.Text
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   liveSession LiveSession @relation(fields: [liveSessionId], references: [id], onDelete: Restrict)
   student     Student     @relation(fields: [studentId], references: [id], onDelete: Restrict)
@@ -862,22 +862,22 @@ model AttendanceRecord {
 /// that application-level compromise cannot alter history.
 model AuditLog {
   id         String   @id @default(uuid()) @db.Uuid
-  occurredAt DateTime @default(now())
+  occurredAt DateTime @default(now()) @map("occurred_at")
 
-  actorUserId    String? @db.Uuid // null = SYSTEM principal (§4.2.5)
-  actorRole      String? @db.VarChar(50) // role held AT THE TIME, not now
-  impersonatedBy String? @db.Uuid // SEC-AUZ-013
+  actorUserId    String? @map("actor_user_id") @db.Uuid // null = SYSTEM principal (§4.2.5)
+  actorRole      String? @map("actor_role") @db.VarChar(50) // role held AT THE TIME, not now
+  impersonatedBy String? @map("impersonated_by") @db.Uuid // SEC-AUZ-013
 
   action     String @db.VarChar(80) // e.g. registration.approve
-  entityType String @db.VarChar(60)
-  entityId   String @db.VarChar(64)
+  entityType String @map("entity_type") @db.VarChar(60)
+  entityId   String @map("entity_id") @db.VarChar(64)
 
-  beforeValue Json? // changed fields only (FR-LOG-003)
-  afterValue  Json?
+  beforeValue Json? @map("before_value") // changed fields only (FR-LOG-003)
+  afterValue  Json? @map("after_value")
 
-  ipAddress     String? @db.VarChar(64)
-  userAgent     String? @db.VarChar(500)
-  correlationId String  @db.Uuid // ARC-008
+  ipAddress     String? @map("ip_address") @db.VarChar(64)
+  userAgent     String? @map("user_agent") @db.VarChar(500)
+  correlationId String  @map("correlation_id") @db.Uuid // ARC-008
 
   @@index([entityType, entityId, occurredAt])
   @@index([actorUserId, occurredAt])
@@ -888,17 +888,17 @@ model AuditLog {
 /// SEC-LOG-001 — kept separate from the general audit log.
 model SecurityEvent {
   id         String   @id @default(uuid()) @db.Uuid
-  occurredAt DateTime @default(now())
+  occurredAt DateTime @default(now()) @map("occurred_at")
 
-  eventType String  @db.VarChar(60) // login.failed | lockout | permission.denied
-  userId    String? @db.Uuid
+  eventType String  @map("event_type") @db.VarChar(60) // login.failed | lockout | permission.denied
+  userId    String? @map("user_id") @db.Uuid
   email     String? // present on failed login where the account may not exist
 
   outcome       String  @db.VarChar(20)
   detail        Json?
-  ipAddress     String? @db.VarChar(64)
-  userAgent     String? @db.VarChar(500)
-  correlationId String? @db.Uuid
+  ipAddress     String? @map("ip_address") @db.VarChar(64)
+  userAgent     String? @map("user_agent") @db.VarChar(500)
+  correlationId String? @map("correlation_id") @db.Uuid
 
   @@index([eventType, occurredAt])
   @@index([userId, occurredAt])
@@ -913,13 +913,13 @@ model Setting {
   key   String @unique @db.VarChar(60)
   value Json
 
-  scopeType String? @db.VarChar(30) // INSTITUTE | PROGRAMME | SECTION | SUBJECT
-  scopeId   String? @db.Uuid
+  scopeType String? @map("scope_type") @db.VarChar(30) // INSTITUTE | PROGRAMME | SECTION | SUBJECT
+  scopeId   String? @map("scope_id") @db.Uuid
 
-  isSecret Boolean @default(false) // write-only through the UI (SEC-CRY-010)
+  isSecret Boolean @default(false) @map("is_secret") // write-only through the UI (SEC-CRY-010)
 
-  updatedAt DateTime @updatedAt
-  updatedBy String?  @db.Uuid
+  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedBy String?  @map("updated_by") @db.Uuid
 
   @@unique([key, scopeType, scopeId])
   @@map("settings")
@@ -934,10 +934,10 @@ model NumberSeries {
   id  String @id @default(uuid()) @db.Uuid
   key String @unique @db.VarChar(80) // institute|session|programme|campus
 
-  nextValue Int @default(1)
+  nextValue Int @default(1) @map("next_value")
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("number_series")
 }
@@ -969,11 +969,11 @@ model Rubric {
   description    String? @db.Text
   /// FR-ASG-012 — reusable across assignments. Owned by a teacher, or shared
   /// institute-wide when ownerTeacherId is null.
-  ownerTeacherId String? @db.Uuid
+  ownerTeacherId String? @map("owner_teacher_id") @db.Uuid
 
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
 
   criteria    RubricCriterion[]
   assignments Assignment[]
@@ -983,14 +983,14 @@ model Rubric {
 
 model RubricCriterion {
   id       String @id @default(uuid()) @db.Uuid
-  rubricId String @db.Uuid
+  rubricId String @map("rubric_id") @db.Uuid
 
   name         String  @db.VarChar(200)
   description  String? @db.Text
-  maxMarks     Decimal @db.Decimal(6, 2)
-  displayOrder Int
+  maxMarks     Decimal @map("max_marks") @db.Decimal(6, 2)
+  displayOrder Int     @map("display_order")
   /// FR-ASG-014 — an internal criterion is never shown to a student.
-  isInternal   Boolean @default(false)
+  isInternal   Boolean @default(false) @map("is_internal")
   /// Performance-level descriptors, e.g. [{label:"Excellent", marks:10, text:"…"}]
   levels       Json?
 
@@ -1002,45 +1002,45 @@ model RubricCriterion {
 
 model Assignment {
   id               String  @id @default(uuid()) @db.Uuid
-  sectionSubjectId String  @db.Uuid
-  lessonId         String? @db.Uuid
+  sectionSubjectId String  @map("section_subject_id") @db.Uuid
+  lessonId         String? @map("lesson_id") @db.Uuid
 
   title          String  @db.VarChar(255)
   instructions   String  @db.Text
-  marksAvailable Decimal @db.Decimal(6, 2)
+  marksAvailable Decimal @map("marks_available") @db.Decimal(6, 2)
 
-  opensAt      DateTime
-  dueAt        DateTime
+  opensAt      DateTime  @map("opens_at")
+  dueAt        DateTime  @map("due_at")
   /// FR-ASG-002 — an absolute bar. After this, submission is impossible.
-  hardCloseAt  DateTime?
-  graceMinutes Int       @default(0) @db.SmallInt
+  hardCloseAt  DateTime? @map("hard_close_at")
+  graceMinutes Int       @default(0) @map("grace_minutes") @db.SmallInt
 
-  latePolicy       LatePolicy @default(FLAG_ONLY)
-  latePenaltyValue Decimal?   @db.Decimal(6, 2)
+  latePolicy       LatePolicy @default(FLAG_ONLY) @map("late_policy")
+  latePenaltyValue Decimal?   @map("late_penalty_value") @db.Decimal(6, 2)
   /// The minimum retainable mark, as a percentage of marksAvailable.
-  latePenaltyFloor Decimal?   @db.Decimal(6, 2)
+  latePenaltyFloor Decimal?   @map("late_penalty_floor") @db.Decimal(6, 2)
 
-  submissionType   SubmissionType @default(FILE)
+  submissionType   SubmissionType @default(FILE) @map("submission_type")
   /// Bounded by the institute-wide policy (Appendix H); a teacher may narrow
   /// it but never widen it (FR-ASG-006).
-  allowedFileTypes Json
-  maxFileSizeMb    Int            @default(10) @db.SmallInt
-  maxFileCount     Int            @default(5) @db.SmallInt
+  allowedFileTypes Json           @map("allowed_file_types")
+  maxFileSizeMb    Int            @default(10) @map("max_file_size_mb") @db.SmallInt
+  maxFileCount     Int            @default(5) @map("max_file_count") @db.SmallInt
 
-  resubmissionPolicy ResubmissionPolicy @default(NONE)
-  maxAttempts        Int?               @db.SmallInt
+  resubmissionPolicy ResubmissionPolicy @default(NONE) @map("resubmission_policy")
+  maxAttempts        Int?               @map("max_attempts") @db.SmallInt
 
-  rubricId String? @db.Uuid
+  rubricId String? @map("rubric_id") @db.Uuid
 
-  publicationStatus PublicationStatus @default(DRAFT)
+  publicationStatus PublicationStatus @default(DRAFT) @map("publication_status")
   /// BR-ASG-09 — grades are withheld from students until this is set.
-  gradesReleased    Boolean           @default(false)
-  gradesReleasedAt  DateTime?
+  gradesReleased    Boolean           @default(false) @map("grades_released")
+  gradesReleasedAt  DateTime?         @map("grades_released_at")
 
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  createdBy String?   @db.Uuid
-  deletedAt DateTime?
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  createdBy String?   @map("created_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at")
 
   rubric      Rubric?                @relation(fields: [rubricId], references: [id], onDelete: SetNull)
   submissions AssignmentSubmission[]
@@ -1054,21 +1054,21 @@ model Assignment {
 /// FR-ASG-022 / BR-ASG-07 — every version is retained; the latest is graded.
 model AssignmentSubmission {
   id           String @id @default(uuid()) @db.Uuid
-  assignmentId String @db.Uuid
-  studentId    String @db.Uuid
+  assignmentId String @map("assignment_id") @db.Uuid
+  studentId    String @map("student_id") @db.Uuid
 
   version  Int     @default(1) @db.SmallInt
-  isLatest Boolean @default(true)
+  isLatest Boolean @default(true) @map("is_latest")
 
   /// BR-ASG-04 — SERVER time at completion of upload, never client-supplied.
-  submittedAt DateTime @default(now())
-  isLate      Boolean  @default(false)
-  minutesLate Int      @default(0)
+  submittedAt DateTime @default(now()) @map("submitted_at")
+  isLate      Boolean  @default(false) @map("is_late")
+  minutesLate Int      @default(0) @map("minutes_late")
 
-  textResponse String? @db.Text
+  textResponse String? @map("text_response") @db.Text
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   assignment Assignment       @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
   files      SubmissionFile[]
@@ -1082,18 +1082,18 @@ model AssignmentSubmission {
 
 model SubmissionFile {
   id           String @id @default(uuid()) @db.Uuid
-  submissionId String @db.Uuid
+  submissionId String @map("submission_id") @db.Uuid
 
-  storageKey       String     @db.VarChar(500)
-  originalFilename String     @db.VarChar(255)
-  contentType      String     @db.VarChar(100)
-  sizeBytes        BigInt
+  storageKey       String     @map("storage_key") @db.VarChar(500)
+  originalFilename String     @map("original_filename") @db.VarChar(255)
+  contentType      String     @map("content_type") @db.VarChar(100)
+  sizeBytes        BigInt     @map("size_bytes")
   /// FR-ASG-021 — supports internal duplicate detection and a future external
   /// plagiarism integration.
-  contentHash      String     @db.VarChar(64)
-  scanStatus       ScanStatus @default(PENDING)
+  contentHash      String     @map("content_hash") @db.VarChar(64)
+  scanStatus       ScanStatus @default(PENDING) @map("scan_status")
 
-  createdAt DateTime @default(now())
+  createdAt DateTime @default(now()) @map("created_at")
 
   submission AssignmentSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
 
@@ -1104,28 +1104,28 @@ model SubmissionFile {
 
 model AssignmentGrade {
   id           String @id @default(uuid()) @db.Uuid
-  submissionId String @unique @db.Uuid
+  submissionId String @unique @map("submission_id") @db.Uuid
 
   /// FR-ASG-026 — raw, penalty and final are stored separately so a student
   /// can see exactly what the lateness cost them.
-  rawMarks       Decimal @db.Decimal(6, 2)
-  penaltyApplied Decimal @default(0) @db.Decimal(6, 2)
-  finalMarks     Decimal @db.Decimal(6, 2)
+  rawMarks       Decimal @map("raw_marks") @db.Decimal(6, 2)
+  penaltyApplied Decimal @default(0) @map("penalty_applied") @db.Decimal(6, 2)
+  finalMarks     Decimal @map("final_marks") @db.Decimal(6, 2)
 
-  rubricScores  Json?
+  rubricScores  Json?   @map("rubric_scores")
   feedback      String? @db.Text
   /// BR-ASG-08 — NEVER visible to a student, in any response, export or report.
-  internalNotes String? @db.Text
+  internalNotes String? @map("internal_notes") @db.Text
 
-  gradedBy   String    @db.Uuid
-  gradedAt   DateTime  @default(now())
-  releasedAt DateTime?
+  gradedBy   String    @map("graded_by") @db.Uuid
+  gradedAt   DateTime  @default(now()) @map("graded_at")
+  releasedAt DateTime? @map("released_at")
 
   /// BR-ASG-11 — changing a released grade requires a reason and is audited.
-  revisionReason String? @db.Text
+  revisionReason String? @map("revision_reason") @db.Text
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   submission AssignmentSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
 
@@ -1135,13 +1135,13 @@ model AssignmentGrade {
 /// FR-ASG-024 / BR-ASG-13 — a per-student exception, visible on their record.
 model AssignmentExtension {
   id           String   @id @default(uuid()) @db.Uuid
-  assignmentId String   @db.Uuid
-  studentId    String   @db.Uuid
-  extendedTo   DateTime
+  assignmentId String   @map("assignment_id") @db.Uuid
+  studentId    String   @map("student_id") @db.Uuid
+  extendedTo   DateTime @map("extended_to")
   reason       String   @db.Text
-  grantedBy    String   @db.Uuid
+  grantedBy    String   @map("granted_by") @db.Uuid
 
-  createdAt DateTime @default(now())
+  createdAt DateTime @default(now()) @map("created_at")
 
   assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
 
@@ -1211,14 +1211,14 @@ enum AttemptStatus {
 model QuestionBank {
   id             String  @id @default(uuid()) @db.Uuid
   name           String  @db.VarChar(200)
-  subjectId      String? @db.Uuid
+  subjectId      String? @map("subject_id") @db.Uuid
   /// FR-QIZ-004 — a teacher owns their bank; null means the shared
   /// institute-wide bank.
-  ownerTeacherId String? @db.Uuid
+  ownerTeacherId String? @map("owner_teacher_id") @db.Uuid
 
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
 
   questions Question[]
 
@@ -1227,21 +1227,21 @@ model QuestionBank {
 
 model Question {
   id             String       @id @default(uuid()) @db.Uuid
-  questionBankId String       @db.Uuid
-  subjectId      String?      @db.Uuid
-  questionType   QuestionType
+  questionBankId String       @map("question_bank_id") @db.Uuid
+  subjectId      String?      @map("subject_id") @db.Uuid
+  questionType   QuestionType @map("question_type")
   stem           String       @db.Text
   difficulty     Difficulty   @default(MEDIUM)
-  defaultMarks   Decimal      @default(1) @db.Decimal(6, 2)
+  defaultMarks   Decimal      @default(1) @map("default_marks") @db.Decimal(6, 2)
   /// FR-QIZ-006 — shown to the student only after results are released.
   explanation    String?      @db.Text
 
   /// SHORT_ANSWER, NUMERIC, FILL_BLANK. SEC-AUZ-009: never projected into a
   /// student-facing response during an attempt.
-  acceptedAnswers Json?
+  acceptedAnswers Json?    @map("accepted_answers")
   /// NUMERIC — absolute tolerance.
   tolerance       Decimal? @db.Decimal(12, 4)
-  caseSensitive   Boolean  @default(false)
+  caseSensitive   Boolean  @default(false) @map("case_sensitive")
 
   tags Json?
 
@@ -1250,12 +1250,12 @@ model Question {
   version   Int     @default(1) @db.SmallInt
   /// FR-QIZ-008 — a question used in a completed attempt is retired, never
   /// deleted.
-  isRetired Boolean @default(false)
+  isRetired Boolean @default(false) @map("is_retired")
 
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  createdBy String?   @db.Uuid
-  deletedAt DateTime?
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  createdBy String?   @map("created_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at")
 
   bank    QuestionBank     @relation(fields: [questionBankId], references: [id], onDelete: Restrict)
   options QuestionOption[]
@@ -1269,14 +1269,14 @@ model Question {
 
 model QuestionOption {
   id           String  @id @default(uuid()) @db.Uuid
-  questionId   String  @db.Uuid
-  optionText   String  @db.Text
+  questionId   String  @map("question_id") @db.Uuid
+  optionText   String  @map("option_text") @db.Text
   /// SEC-AUZ-009 / BR-QIZ-07 — NEVER sent to a student mid-attempt, not even
   /// in a field the interface does not render.
-  isCorrect    Boolean @default(false)
+  isCorrect    Boolean @default(false) @map("is_correct")
   /// MATCHING — the right-hand item this option pairs with.
-  matchKey     String? @db.VarChar(100)
-  displayOrder Int
+  matchKey     String? @map("match_key") @db.VarChar(100)
+  displayOrder Int     @map("display_order")
   feedback     String? @db.Text
 
   question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
@@ -1287,46 +1287,46 @@ model QuestionOption {
 
 model Quiz {
   id               String  @id @default(uuid()) @db.Uuid
-  sectionSubjectId String  @db.Uuid
-  lessonId         String? @db.Uuid
+  sectionSubjectId String  @map("section_subject_id") @db.Uuid
+  lessonId         String? @map("lesson_id") @db.Uuid
 
   title        String  @db.VarChar(255)
   instructions String? @db.Text
-  totalMarks   Decimal @db.Decimal(6, 2)
+  totalMarks   Decimal @map("total_marks") @db.Decimal(6, 2)
 
-  opensAt          DateTime
-  closesAt         DateTime
+  opensAt          DateTime @map("opens_at")
+  closesAt         DateTime @map("closes_at")
   /// FR-QIZ-013 — independent of the availability window.
-  timeLimitMinutes Int?     @db.SmallInt
+  timeLimitMinutes Int?     @map("time_limit_minutes") @db.SmallInt
 
-  maxAttempts    Int            @default(1) @db.SmallInt
-  attemptScoring AttemptScoring @default(HIGHEST)
+  maxAttempts    Int            @default(1) @map("max_attempts") @db.SmallInt
+  attemptScoring AttemptScoring @default(HIGHEST) @map("attempt_scoring")
 
-  shuffleQuestions Boolean @default(false)
-  shuffleOptions   Boolean @default(false)
+  shuffleQuestions Boolean @default(false) @map("shuffle_questions")
+  shuffleOptions   Boolean @default(false) @map("shuffle_options")
 
-  negativeMarking      NegativeMarking @default(NONE)
+  negativeMarking      NegativeMarking @default(NONE) @map("negative_marking")
   /// BR-QIZ-06 — applied to INCORRECT answers only, never to unanswered.
-  negativeMarkingValue Decimal?        @db.Decimal(6, 2)
+  negativeMarkingValue Decimal?        @map("negative_marking_value") @db.Decimal(6, 2)
 
-  passingMarks Decimal? @db.Decimal(6, 2)
+  passingMarks Decimal? @map("passing_marks") @db.Decimal(6, 2)
 
   presentation            QuizPresentation @default(ONE_PER_PAGE)
-  allowBackwardNavigation Boolean          @default(true)
+  allowBackwardNavigation Boolean          @default(true) @map("allow_backward_navigation")
 
-  resultReleasePolicy ResultReleasePolicy @default(AFTER_CLOSE)
-  answerReviewPolicy  AnswerReviewPolicy  @default(AFTER_RELEASE)
+  resultReleasePolicy ResultReleasePolicy @default(AFTER_CLOSE) @map("result_release_policy")
+  answerReviewPolicy  AnswerReviewPolicy  @default(AFTER_RELEASE) @map("answer_review_policy")
 
-  publicationStatus PublicationStatus @default(DRAFT)
-  resultsReleasedAt DateTime?
+  publicationStatus PublicationStatus @default(DRAFT) @map("publication_status")
+  resultsReleasedAt DateTime?         @map("results_released_at")
 
   /// FR-QIZ-014 — random draw rules, e.g. [{topic, difficulty, count}].
-  selectionRules Json?
+  selectionRules Json? @map("selection_rules")
 
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  createdBy String?   @db.Uuid
-  deletedAt DateTime?
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  createdBy String?   @map("created_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at")
 
   questions QuizQuestion[]
   attempts  QuizAttempt[]
@@ -1338,10 +1338,10 @@ model Quiz {
 
 model QuizQuestion {
   id           String  @id @default(uuid()) @db.Uuid
-  quizId       String  @db.Uuid
-  questionId   String  @db.Uuid
+  quizId       String  @map("quiz_id") @db.Uuid
+  questionId   String  @map("question_id") @db.Uuid
   marks        Decimal @db.Decimal(6, 2)
-  displayOrder Int
+  displayOrder Int     @map("display_order")
 
   quiz     Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
   question Question @relation(fields: [questionId], references: [id], onDelete: Restrict)
@@ -1353,32 +1353,32 @@ model QuizQuestion {
 
 model QuizAttempt {
   id            String @id @default(uuid()) @db.Uuid
-  quizId        String @db.Uuid
-  studentId     String @db.Uuid
-  attemptNumber Int    @db.SmallInt
+  quizId        String @map("quiz_id") @db.Uuid
+  studentId     String @map("student_id") @db.Uuid
+  attemptNumber Int    @map("attempt_number") @db.SmallInt
 
   /// BR-QIZ-04 — SERVER-authoritative. Remaining time is computed from this,
   /// never from a client clock and never from the time of reconnection.
-  startedAt      DateTime  @default(now())
-  expiresAt      DateTime?
-  submittedAt    DateTime?
+  startedAt      DateTime  @default(now()) @map("started_at")
+  expiresAt      DateTime? @map("expires_at")
+  submittedAt    DateTime? @map("submitted_at")
   /// MANUAL | AUTO_TIME_EXPIRED
-  submissionMode String?   @db.VarChar(30)
+  submissionMode String?   @map("submission_mode") @db.VarChar(30)
 
   status AttemptStatus @default(IN_PROGRESS)
 
   /// BR-QIZ-02 — the order and selection ACTUALLY presented, so a dispute
   /// about what was asked is answerable.
-  questionOrder Json
+  questionOrder Json @map("question_order")
 
-  autoScore   Decimal?  @db.Decimal(6, 2)
-  manualScore Decimal?  @db.Decimal(6, 2)
-  finalScore  Decimal?  @db.Decimal(6, 2)
-  isPassed    Boolean?
-  releasedAt  DateTime?
+  autoScore   Decimal?  @map("auto_score") @db.Decimal(6, 2)
+  manualScore Decimal?  @map("manual_score") @db.Decimal(6, 2)
+  finalScore  Decimal?  @map("final_score") @db.Decimal(6, 2)
+  isPassed    Boolean?  @map("is_passed")
+  releasedAt  DateTime? @map("released_at")
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   quiz    Quiz         @relation(fields: [quizId], references: [id], onDelete: Restrict)
   answers QuizAnswer[]
@@ -1391,23 +1391,23 @@ model QuizAttempt {
 
 model QuizAnswer {
   id              String @id @default(uuid()) @db.Uuid
-  attemptId       String @db.Uuid
-  questionId      String @db.Uuid
+  attemptId       String @map("attempt_id") @db.Uuid
+  questionId      String @map("question_id") @db.Uuid
   /// FR-QIZ-009 — pins WHICH version of the question was answered.
-  questionVersion Int    @default(1) @db.SmallInt
+  questionVersion Int    @default(1) @map("question_version") @db.SmallInt
 
   /// Shape depends on the question type: selected option ids, text, a number,
   /// or a matching map.
   response Json?
 
-  isCorrect        Boolean?
-  marksAwarded     Decimal? @db.Decimal(6, 2)
-  isManuallyGraded Boolean  @default(false)
-  gradedBy         String?  @db.Uuid
-  graderComment    String?  @db.Text
+  isCorrect        Boolean? @map("is_correct")
+  marksAwarded     Decimal? @map("marks_awarded") @db.Decimal(6, 2)
+  isManuallyGraded Boolean  @default(false) @map("is_manually_graded")
+  gradedBy         String?  @map("graded_by") @db.Uuid
+  graderComment    String?  @map("grader_comment") @db.Text
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   attempt  QuizAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
   question Question    @relation(fields: [questionId], references: [id], onDelete: Restrict)
