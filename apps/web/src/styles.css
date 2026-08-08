@@ -242,3 +242,34 @@ kbd {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
   overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
 }
+
+/* ------------------------------------------------------ lessons & player -- */
+.lesson { margin-top: 1rem; padding-top: .75rem; border-top: 1px solid var(--line); }
+.lesson:first-of-type { border-top: 0; padding-top: 0; }
+.lesson h3 { margin: 0 0 .35rem; font-size: 1rem; font-weight: 600; }
+
+/* The row action group sits inline here rather than wrapping to its own line,
+   which is what .row-actions does inside a card. */
+.list .row-actions { margin-top: 0; align-items: center; }
+
+/* UI-011 — the dialog scrolls internally; the page behind it never does. */
+.modal-backdrop {
+  position: fixed; inset: 0; background: rgba(17, 19, 24, .6);
+  display: flex; align-items: center; justify-content: center;
+  padding: 1rem; z-index: 50;
+}
+.modal {
+  background: #fff; border-radius: var(--radius); padding: 1rem;
+  width: min(900px, 100%); max-height: 90vh; overflow-y: auto;
+}
+.modal-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 1rem; margin-bottom: .75rem;
+}
+.modal-head h2 { margin: 0; }
+
+/* Letterboxed rather than cropped: a slide deck loses its edges otherwise. */
+.player {
+  width: 100%; max-height: 65vh; background: #000;
+  border-radius: var(--radius); object-fit: contain;
+}

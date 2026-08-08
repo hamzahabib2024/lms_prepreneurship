@@ -15,6 +15,19 @@ export class ProgressController {
     return this.progress.mine();
   }
 
+  /**
+   * The same breakdown for one subject, without the caller needing to know
+   * their own student id.
+   *
+   * Declared BEFORE the parameterised student routes: `me` would otherwise be
+   * matched as an `:id`, and the ownership check would reject it.
+   */
+  @RequirePermission("progress", "read")
+  @Get("me/progress/:sectionSubjectId")
+  mineForSubject(@Param("sectionSubjectId") ssId: string) {
+    return this.progress.mineForSubject(ssId);
+  }
+
   @RequirePermission("progress", "read")
   @Get("students/:id/progress")
   forStudent(@Param("id") id: string) {

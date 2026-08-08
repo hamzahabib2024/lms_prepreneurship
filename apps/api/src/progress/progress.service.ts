@@ -117,6 +117,11 @@ export class ProgressService {
 
     return {
       studentId,
+      // The subject as TAUGHT IN THIS SECTION. The interface needs this id to
+      // link onward, and subject.id alone is not enough: the same subject runs
+      // in several sections, and a student's lectures, register and grades all
+      // hang off the offering rather than the subject.
+      sectionSubjectId,
       subject: ss.subject,
       overallPercent: progress.overallPercent,
       // FR-PRG-006 — computed on read, so it is never stale. Returned anyway
@@ -165,6 +170,7 @@ export class ProgressService {
       completedCount: perSubject.filter((p) => p.completionCriteria.met).length,
       computedAt: new Date(),
       subjects: perSubject.map((p) => ({
+        sectionSubjectId: p.sectionSubjectId,
         subject: p.subject,
         overallPercent: p.overallPercent,
         attendancePercent: p.attendance.percentage,
@@ -181,6 +187,15 @@ export class ProgressService {
       throw new AppError("AUTH_FORBIDDEN", { message: "Only a student has progress to show." });
     }
     return this.forStudent(actor.studentId);
+  }
+
+  /** The signed-in student's progress in one subject. */
+  async mineForSubject(sectionSubjectId: string) {
+    const actor = getActor();
+    if (!actor?.studentId) {
+      throw new AppError("AUTH_FORBIDDEN", { message: "Only a student has progress to show." });
+    }
+    return this.forSubject(actor.studentId, sectionSubjectId);
   }
 
   /**

@@ -7,6 +7,8 @@ import { ReportsPage } from "./pages/ReportsPage";
 import { AdmissionsPage } from "./pages/AdmissionsPage";
 import { AttendancePage } from "./pages/AttendancePage";
 import { ChangePasswordPage } from "./pages/ChangePasswordPage";
+import { MySubjectsPage } from "./pages/MySubjectsPage";
+import { SubjectPage } from "./pages/SubjectPage";
 
 /**
  * Application shell — SRS §13.1.
@@ -44,6 +46,7 @@ export function App() {
           <NavLink to="/" end>
             Dashboard
           </NavLink>
+          {hasRole("student") && <NavLink to="/subjects">My subjects</NavLink>}
           {hasRole("super_admin", "admin") && <NavLink to="/admissions">Admissions</NavLink>}
           {hasRole("super_admin", "admin", "teacher") && (
             <NavLink to="/attendance">Attendance</NavLink>
@@ -71,6 +74,17 @@ export function App() {
             element={
               hasRole("super_admin", "admin", "teacher") ? <AttendancePage /> : <Navigate to="/" replace />
             }
+          />
+          {/* A student's own material. The server refuses these for anyone
+              else (ARC-003); the role check here only keeps the interface from
+              offering a page that would be refused. */}
+          <Route
+            path="/subjects"
+            element={hasRole("student") ? <MySubjectsPage /> : <Navigate to="/" replace />}
+          />
+          <Route
+            path="/subjects/:sectionSubjectId"
+            element={hasRole("student") ? <SubjectPage /> : <Navigate to="/" replace />}
           />
           <Route path="/sections" element={<SectionsPage />} />
           <Route path="/change-password" element={<ChangePasswordPage forced={false} />} />

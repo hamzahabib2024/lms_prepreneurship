@@ -247,6 +247,15 @@ export class ContentService {
       },
     });
 
+    // One query for every lecture on the page rather than one per row.
+    // Returns empty for a teacher or admin, who have no watch state of their
+    // own — the field is simply absent for them.
+    const watch = await this.watchStateFor(
+      modules.flatMap((m: (typeof modules)[number]) =>
+        m.lessons.flatMap((l: (typeof m.lessons)[number]) => l.lectures.map((v) => v.id)),
+      ),
+    );
+
     return modules.map((m: (typeof modules)[number]) => ({
       id: m.id,
       title: m.title,
@@ -258,7 +267,12 @@ export class ContentService {
         description: l.description,
         estimatedMinutes: l.estimatedMinutes,
         publicationStatus: l.publicationStatus,
-        lectures: l.lectures,
+        lectures: l.lectures.map((v: (typeof l.lectures)[number]) => ({
+          ...v,
+          // FR-VID-008 — so the list can show how far through each lecture the
+          // student is, and offer "resume" rather than restarting from zero.
+          watch: watch.get(v.id) ?? null,
+        })),
       })),
     }));
   }
@@ -356,11 +370,12 @@ export class ContentService {
     this.tickets.set(ticket.ticketId, ticket);
     this.sweepExpiredTickets();
 
-    const progress = await this.prisma.asSystem((db) =>
-      db.$queryRaw<Array<{ last_position_seconds: number; watched_percent: number }>>`
-        SELECT 0::int AS last_position_seconds, 0::numeric AS watched_percent
-      `.catch(() => []),
-    );
+    // FR-VID-008 — where this student stopped last time, so the player opens
+    // at the resume point rather than restarting a 40-minute lecture.
+    const progress = await this.prisma.scoped.watchProgress.findFirst({
+      where: { studentId: actor.studentId, recordedLectureId: lecture.id },
+      select: { lastPositionSeconds: true, watchedPercent: true },
+    });
 
     // SEC-LOG-008 — every ticket issue is logged with student and lecture.
     this.logger.log(
@@ -381,8 +396,8 @@ export class ContentService {
       renewable: true,
       supportsRangeRequests: true,
       durationSeconds: lecture.durationSeconds,
-      resumePositionSeconds: progress[0]?.last_position_seconds ?? 0,
-      watchedPercent: Number(progress[0]?.watched_percent ?? 0),
+      resumePositionSeconds: progress?.lastPositionSeconds ?? 0,
+      watchedPercent: Number(progress?.watchedPercent ?? 0),
     };
   }
 
