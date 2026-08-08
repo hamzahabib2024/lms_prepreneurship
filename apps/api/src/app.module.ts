@@ -9,6 +9,7 @@ import { AuthModule } from "./auth/auth.module";
 import { AuditModule } from "./audit/audit.service";
 import { AdmissionModule } from "./admission/admission.module";
 import { AcademicModule } from "./academic/academic.module";
+import { LiveModule } from "./live/live.module";
 import { HealthController } from "./health.controller";
 
 import { CorrelationMiddleware } from "./common/correlation.middleware";
@@ -34,6 +35,7 @@ import { PermissionsGuard } from "./rbac/permissions.guard";
     AuditModule,
     AdmissionModule,
     AcademicModule,
+    LiveModule,
   ],
   controllers: [HealthController],
   providers: [
