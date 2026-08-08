@@ -191,11 +191,11 @@ enum MarkingSource {
 // =============================================== identity and access (8.3.1)
 
 model User {
-  id           String  @id @default(uuid()) @db.Uuid
-  email        String  @unique
-  passwordHash String
-  fullName     String  @db.VarChar(200)
-  phone        String? @db.VarChar(20)
+  id              String  @id @default(uuid()) @db.Uuid
+  email           String  @unique
+  passwordHash    String
+  fullName        String  @db.VarChar(200)
+  phone           String? @db.VarChar(20)
   phoneIsWhatsapp Boolean @default(false)
 
   status       UserStatus @default(INVITED)
@@ -204,9 +204,9 @@ model User {
   mustChangePassword Boolean   @default(true) // FR-REG-040
   passwordChangedAt  DateTime?
 
-  mfaEnabled        Boolean @default(false) // SEC-AUT-011
-  mfaSecret         String? // encrypted at rest (SEC-CRY-004)
-  mfaRecoveryCodes  Json?   // hashed, single-use (SEC-AUT-012)
+  mfaEnabled       Boolean @default(false) // SEC-AUT-011
+  mfaSecret        String? // encrypted at rest (SEC-CRY-004)
+  mfaRecoveryCodes Json? // hashed, single-use (SEC-AUT-012)
 
   failedLoginCount Int       @default(0) // SEC-AUT-008
   lockedUntil      DateTime?
@@ -296,22 +296,22 @@ model RegistrationRequest {
   trackingRef String             @unique @db.VarChar(20) // FR-REG-018
   status      RegistrationStatus @default(PENDING_REVIEW)
 
-  fullName    String   @db.VarChar(200)
-  fatherName  String   @db.VarChar(200)
-  dateOfBirth DateTime @db.Date
-  gender      Gender // drives section eligibility (FR-CRS-009)
-  nationalId  String   @db.VarChar(20) // encrypted; masked in lists (SEC-PRV-005)
-  phone       String   @db.VarChar(20)
+  fullName        String   @db.VarChar(200)
+  fatherName      String   @db.VarChar(200)
+  dateOfBirth     DateTime @db.Date
+  gender          Gender // drives section eligibility (FR-CRS-009)
+  nationalId      String   @db.VarChar(20) // encrypted; masked in lists (SEC-PRV-005)
+  phone           String   @db.VarChar(20)
   // FR-REG-003 — the WhatsApp-capable indicator. Carried on the application
   // itself because credentials are relayed over WhatsApp at approval
   // (FR-REG-042), so the reviewer needs to know before the account exists.
-  phoneIsWhatsapp Boolean @default(true)
-  altPhone    String?  @db.VarChar(20)
-  email       String
-  address     String   @db.VarChar(500)
-  city        String   @db.VarChar(100)
-  qualification String @db.VarChar(120)
-  occupation  String?  @db.VarChar(120)
+  phoneIsWhatsapp Boolean  @default(true)
+  altPhone        String?  @db.VarChar(20)
+  email           String
+  address         String   @db.VarChar(500)
+  city            String   @db.VarChar(100)
+  qualification   String   @db.VarChar(120)
+  occupation      String?  @db.VarChar(120)
 
   desiredProgrammeId String? @db.Uuid
   desiredSectionId   String? @db.Uuid
@@ -332,11 +332,11 @@ model RegistrationRequest {
   claimedByUserId String?   @db.Uuid
   claimedUntil    DateTime?
 
-  decision          RegistrationStatus?
+  decision           RegistrationStatus?
   decisionReasonCode RejectionReason?
-  decisionNote      String?             @db.Text
-  decidedBy         String?             @db.Uuid
-  decidedAt         DateTime?
+  decisionNote       String?             @db.Text
+  decidedBy          String?             @db.Uuid
+  decidedAt          DateTime?
 
   createdStudentId String? @unique @db.Uuid // FR-REG-045
 
@@ -470,12 +470,12 @@ model Teacher {
 }
 
 model Programme {
-  id          String  @id @default(uuid()) @db.Uuid
-  name        String  @db.VarChar(200)
-  code        String  @unique @db.VarChar(10) // used in registration numbering
-  description String? @db.Text
+  id            String  @id @default(uuid()) @db.Uuid
+  name          String  @db.VarChar(200)
+  code          String  @unique @db.VarChar(10) // used in registration numbering
+  description   String? @db.Text
   durationWeeks Int?
-  isActive    Boolean @default(true)
+  isActive      Boolean @default(true)
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -561,13 +561,13 @@ model Section {
 }
 
 model Subject {
-  id          String  @id @default(uuid()) @db.Uuid
-  name        String  @db.VarChar(200)
-  code        String  @unique @db.VarChar(20)
-  description String? @db.Text
-  credits     Int?    @db.SmallInt
+  id           String  @id @default(uuid()) @db.Uuid
+  name         String  @db.VarChar(200)
+  code         String  @unique @db.VarChar(20)
+  description  String? @db.Text
+  credits      Int?    @db.SmallInt
   thumbnailUrl String? @db.VarChar(500)
-  isActive    Boolean @default(true)
+  isActive     Boolean @default(true)
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -670,13 +670,13 @@ model Enrolment {
 // ======================================================== content (8.3.4) ==
 
 model Module {
-  id           String            @id @default(uuid()) @db.Uuid
-  subjectId    String            @db.Uuid
-  title        String            @db.VarChar(255)
-  description  String?           @db.Text
-  displayOrder Int
+  id                String            @id @default(uuid()) @db.Uuid
+  subjectId         String            @db.Uuid
+  title             String            @db.VarChar(255)
+  description       String?           @db.Text
+  displayOrder      Int
   publicationStatus PublicationStatus @default(DRAFT) // BR-CNT-01
-  publishAt    DateTime?
+  publishAt         DateTime?
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -691,24 +691,24 @@ model Module {
 }
 
 model Lesson {
-  id           String            @id @default(uuid()) @db.Uuid
-  moduleId     String            @db.Uuid
-  title        String            @db.VarChar(255)
-  description  String?           @db.Text
-  displayOrder Int
-  estimatedMinutes Int?          @db.SmallInt
-  publicationStatus PublicationStatus @default(DRAFT)
-  publishAt    DateTime?
-  prerequisiteLessonId String?   @db.Uuid // FR-CRS-032 sequential release
+  id                   String            @id @default(uuid()) @db.Uuid
+  moduleId             String            @db.Uuid
+  title                String            @db.VarChar(255)
+  description          String?           @db.Text
+  displayOrder         Int
+  estimatedMinutes     Int?              @db.SmallInt
+  publicationStatus    PublicationStatus @default(DRAFT)
+  publishAt            DateTime?
+  prerequisiteLessonId String?           @db.Uuid // FR-CRS-032 sequential release
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   createdBy String?   @db.Uuid
   deletedAt DateTime?
 
-  module    Module            @relation(fields: [moduleId], references: [id], onDelete: Restrict)
-  lectures  RecordedLecture[]
-  sessions  LiveSession[]
+  module   Module            @relation(fields: [moduleId], references: [id], onDelete: Restrict)
+  lectures RecordedLecture[]
+  sessions LiveSession[]
 
   @@index([moduleId, displayOrder])
   @@map("lessons")
@@ -785,9 +785,9 @@ model LiveSession {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  sectionSubject SectionSubject                 @relation(fields: [sectionSubjectId], references: [id], onDelete: Restrict)
-  lesson         Lesson?                        @relation(fields: [lessonId], references: [id], onDelete: SetNull)
-  hostTeacher    Teacher                        @relation(fields: [hostTeacherId], references: [id], onDelete: Restrict)
+  sectionSubject SectionSubject              @relation(fields: [sectionSubjectId], references: [id], onDelete: Restrict)
+  lesson         Lesson?                     @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  hostTeacher    Teacher                     @relation(fields: [hostTeacherId], references: [id], onDelete: Restrict)
   binding        LiveSessionProviderBinding?
   attendance     AttendanceRecord[]
   recording      RecordedLecture?
@@ -806,11 +806,11 @@ model LiveSessionProviderBinding {
   id            String @id @default(uuid()) @db.Uuid
   liveSessionId String @unique @db.Uuid
 
-  providerKey String  @db.VarChar(50) // google_meet | internal_classroom | ...
-  externalId  String? @db.VarChar(255) // provider's own id — opaque to us
+  providerKey      String  @db.VarChar(50) // google_meet | internal_classroom | ...
+  externalId       String? @db.VarChar(255) // provider's own id — opaque to us
   /// Opaque. ARC-025: never parsed, pattern-matched, or validated by the System.
-  joinUrl     String? @db.VarChar(1000)
-  hostUrl     String? @db.VarChar(1000)
+  joinUrl          String? @db.VarChar(1000)
+  hostUrl          String? @db.VarChar(1000)
   providerMetadata Json? // provider's extras; never read by domain code
 
   status           BindingStatus @default(PENDING)
@@ -839,8 +839,8 @@ model AttendanceRecord {
   markedBy String?   @db.Uuid // null where SYSTEM (FR-LOG-005)
   markedAt DateTime?
 
-  correctedFrom     AttendanceStatus?
-  correctionReason  String?           @db.Text
+  correctedFrom    AttendanceStatus?
+  correctionReason String?           @db.Text
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -940,4 +940,211 @@ model NumberSeries {
   updatedAt DateTime @updatedAt
 
   @@map("number_series")
+}
+
+// ======================================================== assessment (8.3.5)
+
+enum LatePolicy {
+  NOT_ACCEPTED
+  FLAG_ONLY
+  FIXED_DEDUCTION
+  PER_DAY_PERCENT
+}
+
+enum SubmissionType {
+  FILE
+  TEXT
+  BOTH
+}
+
+enum ResubmissionPolicy {
+  NONE
+  UNLIMITED_UNTIL_DUE
+  LIMITED
+}
+
+model Rubric {
+  id             String  @id @default(uuid()) @db.Uuid
+  name           String  @db.VarChar(200)
+  description    String? @db.Text
+  /// FR-ASG-012 — reusable across assignments. Owned by a teacher, or shared
+  /// institute-wide when ownerTeacherId is null.
+  ownerTeacherId String? @db.Uuid
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  criteria    RubricCriterion[]
+  assignments Assignment[]
+
+  @@map("rubrics")
+}
+
+model RubricCriterion {
+  id       String @id @default(uuid()) @db.Uuid
+  rubricId String @db.Uuid
+
+  name         String  @db.VarChar(200)
+  description  String? @db.Text
+  maxMarks     Decimal @db.Decimal(6, 2)
+  displayOrder Int
+  /// FR-ASG-014 — an internal criterion is never shown to a student.
+  isInternal   Boolean @default(false)
+  /// Performance-level descriptors, e.g. [{label:"Excellent", marks:10, text:"…"}]
+  levels       Json?
+
+  rubric Rubric @relation(fields: [rubricId], references: [id], onDelete: Cascade)
+
+  @@index([rubricId, displayOrder])
+  @@map("rubric_criteria")
+}
+
+model Assignment {
+  id               String  @id @default(uuid()) @db.Uuid
+  sectionSubjectId String  @db.Uuid
+  lessonId         String? @db.Uuid
+
+  title          String  @db.VarChar(255)
+  instructions   String  @db.Text
+  marksAvailable Decimal @db.Decimal(6, 2)
+
+  opensAt      DateTime
+  dueAt        DateTime
+  /// FR-ASG-002 — an absolute bar. After this, submission is impossible.
+  hardCloseAt  DateTime?
+  graceMinutes Int       @default(0) @db.SmallInt
+
+  latePolicy       LatePolicy @default(FLAG_ONLY)
+  latePenaltyValue Decimal?   @db.Decimal(6, 2)
+  /// The minimum retainable mark, as a percentage of marksAvailable.
+  latePenaltyFloor Decimal?   @db.Decimal(6, 2)
+
+  submissionType   SubmissionType @default(FILE)
+  /// Bounded by the institute-wide policy (Appendix H); a teacher may narrow
+  /// it but never widen it (FR-ASG-006).
+  allowedFileTypes Json
+  maxFileSizeMb    Int            @default(10) @db.SmallInt
+  maxFileCount     Int            @default(5) @db.SmallInt
+
+  resubmissionPolicy ResubmissionPolicy @default(NONE)
+  maxAttempts        Int?               @db.SmallInt
+
+  rubricId String? @db.Uuid
+
+  publicationStatus PublicationStatus @default(DRAFT)
+  /// BR-ASG-09 — grades are withheld from students until this is set.
+  gradesReleased    Boolean           @default(false)
+  gradesReleasedAt  DateTime?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  createdBy String?   @db.Uuid
+  deletedAt DateTime?
+
+  rubric      Rubric?                @relation(fields: [rubricId], references: [id], onDelete: SetNull)
+  submissions AssignmentSubmission[]
+  extensions  AssignmentExtension[]
+
+  @@index([sectionSubjectId, publicationStatus])
+  @@index([dueAt])
+  @@map("assignments")
+}
+
+/// FR-ASG-022 / BR-ASG-07 — every version is retained; the latest is graded.
+model AssignmentSubmission {
+  id           String @id @default(uuid()) @db.Uuid
+  assignmentId String @db.Uuid
+  studentId    String @db.Uuid
+
+  version  Int     @default(1) @db.SmallInt
+  isLatest Boolean @default(true)
+
+  /// BR-ASG-04 — SERVER time at completion of upload, never client-supplied.
+  submittedAt DateTime @default(now())
+  isLate      Boolean  @default(false)
+  minutesLate Int      @default(0)
+
+  textResponse String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  assignment Assignment       @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+  files      SubmissionFile[]
+  grade      AssignmentGrade?
+
+  @@unique([assignmentId, studentId, version])
+  @@index([assignmentId, isLatest])
+  @@index([studentId])
+  @@map("assignment_submissions")
+}
+
+model SubmissionFile {
+  id           String @id @default(uuid()) @db.Uuid
+  submissionId String @db.Uuid
+
+  storageKey       String     @db.VarChar(500)
+  originalFilename String     @db.VarChar(255)
+  contentType      String     @db.VarChar(100)
+  sizeBytes        BigInt
+  /// FR-ASG-021 — supports internal duplicate detection and a future external
+  /// plagiarism integration.
+  contentHash      String     @db.VarChar(64)
+  scanStatus       ScanStatus @default(PENDING)
+
+  createdAt DateTime @default(now())
+
+  submission AssignmentSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@index([submissionId])
+  @@index([contentHash])
+  @@map("submission_files")
+}
+
+model AssignmentGrade {
+  id           String @id @default(uuid()) @db.Uuid
+  submissionId String @unique @db.Uuid
+
+  /// FR-ASG-026 — raw, penalty and final are stored separately so a student
+  /// can see exactly what the lateness cost them.
+  rawMarks       Decimal @db.Decimal(6, 2)
+  penaltyApplied Decimal @default(0) @db.Decimal(6, 2)
+  finalMarks     Decimal @db.Decimal(6, 2)
+
+  rubricScores  Json?
+  feedback      String? @db.Text
+  /// BR-ASG-08 — NEVER visible to a student, in any response, export or report.
+  internalNotes String? @db.Text
+
+  gradedBy   String    @db.Uuid
+  gradedAt   DateTime  @default(now())
+  releasedAt DateTime?
+
+  /// BR-ASG-11 — changing a released grade requires a reason and is audited.
+  revisionReason String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  submission AssignmentSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@map("assignment_grades")
+}
+
+/// FR-ASG-024 / BR-ASG-13 — a per-student exception, visible on their record.
+model AssignmentExtension {
+  id           String   @id @default(uuid()) @db.Uuid
+  assignmentId String   @db.Uuid
+  studentId    String   @db.Uuid
+  extendedTo   DateTime
+  reason       String   @db.Text
+  grantedBy    String   @db.Uuid
+
+  createdAt DateTime @default(now())
+
+  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+
+  @@unique([assignmentId, studentId])
+  @@map("assignment_extensions")
 }
