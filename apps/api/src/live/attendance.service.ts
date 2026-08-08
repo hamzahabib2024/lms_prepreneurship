@@ -302,7 +302,23 @@ export class AttendanceService {
     const rows = await this.prisma.scoped.attendanceRecord.findMany({
       where: {
         studentId,
-        ...(sectionSubjectId ? { liveSession: { sectionSubjectId } } : {}),
+        liveSession: {
+          ...(sectionSubjectId ? { sectionSubjectId } : {}),
+          // Only classes that have actually happened.
+          //
+          // A record can exist against a SCHEDULED session — a register opened
+          // early, a bulk operation, a fixture — and counting it marks a
+          // student absent from a class nobody has taught yet. That silently
+          // lowers attendance, which feeds the attendance component of
+          // progress and therefore completion (BR-PRG-02). A CANCELLED class
+          // is excluded for the same reason: the Institute called it off, so
+          // it cannot count against the student (BR-ATT-06).
+          //
+          // LIVE is excluded too. A class in progress has an incomplete
+          // register by definition, and counting it would make every student's
+          // percentage dip for ninety minutes and then recover.
+          status: "ENDED",
+        },
       },
       select: { status: true },
     });
