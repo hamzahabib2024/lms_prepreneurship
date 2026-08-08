@@ -8,6 +8,7 @@ import { PrismaModule } from "./prisma/prisma.module";
 import { AuthModule } from "./auth/auth.module";
 import { AuditModule } from "./audit/audit.service";
 import { AdmissionModule } from "./admission/admission.module";
+import { AcademicModule } from "./academic/academic.module";
 import { HealthController } from "./health.controller";
 
 import { CorrelationMiddleware } from "./common/correlation.middleware";
@@ -32,6 +33,7 @@ import { PermissionsGuard } from "./rbac/permissions.guard";
     AuthModule,
     AuditModule,
     AdmissionModule,
+    AcademicModule,
   ],
   controllers: [HealthController],
   providers: [
