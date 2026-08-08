@@ -2,7 +2,7 @@ import { Global, Module } from "@nestjs/common";
 import { JwtModule } from "@nestjs/jwt";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { AuthService } from "./auth.service";
 import { AuthController } from "./auth.controller";
 import { ActorService } from "./actor.service";
@@ -15,15 +15,35 @@ import { ActorContextMiddleware } from "./actor-context.middleware";
  * downgraded token fail; without it, a verifier can be tricked into honouring
  * whatever the token's own header claims.
  */
+/**
+ * Reads a key, searching upward from the working directory.
+ *
+ * The API runs from apps/api under `npm run dev` but from the repository root
+ * under `npm start`, while the keys live at the root in both cases. Resolving
+ * against cwd alone works from one and fails from the other, so the lookup
+ * walks up until it finds the file.
+ */
 function readKey(path: string): string {
-  try {
-    return readFileSync(resolve(process.cwd(), path), "utf8");
-  } catch {
-    throw new Error(
-      `Could not read JWT key at "${path}". Run \`npm run keys:generate\` from the ` +
-        `repository root before starting the API.`,
-    );
+  const attempted: string[] = [];
+  let dir = process.cwd();
+
+  for (let depth = 0; depth < 5; depth++) {
+    const candidate = resolve(dir, path);
+    attempted.push(candidate);
+    try {
+      return readFileSync(candidate, "utf8");
+    } catch {
+      const parent = dirname(dir);
+      if (parent === dir) break; // reached the filesystem root
+      dir = parent;
+    }
   }
+
+  throw new Error(
+    `Could not read the JWT signing key "${path}". Run \`npm run keys:generate\` ` +
+      `from the repository root before starting the API.\nLooked in:\n  ` +
+      attempted.join("\n  "),
+  );
 }
 
 @Global()
