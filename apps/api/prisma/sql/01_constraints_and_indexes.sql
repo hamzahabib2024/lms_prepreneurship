@@ -46,9 +46,15 @@ CREATE INDEX IF NOT EXISTS registration_requests_queue_idx
 
 -- Scope resolution reads this on EVERY request, so it is the hottest index in
 -- the System. Only live assignments grant reach (BR-ACC-04).
+--
+-- end_date is an INDEXED COLUMN rather than part of the predicate. PostgreSQL
+-- rejects CURRENT_DATE in an index predicate because it is STABLE, not
+-- IMMUTABLE — an index built against "today" would silently rot as today
+-- moved on, and Postgres refuses rather than letting that happen. Only the
+-- soft-delete condition, which is genuinely immutable, stays in the WHERE.
 CREATE INDEX IF NOT EXISTS teacher_assignments_live_idx
-  ON teacher_assignments (teacher_id, section_subject_id)
-  WHERE deleted_at IS NULL AND (end_date IS NULL OR end_date >= CURRENT_DATE);
+  ON teacher_assignments (teacher_id, end_date, section_subject_id)
+  WHERE deleted_at IS NULL;
 
 -- The session reminder job sweeps upcoming sessions only (section 3.6).
 CREATE INDEX IF NOT EXISTS live_sessions_upcoming_idx
