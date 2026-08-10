@@ -1,16 +1,16 @@
 # Project status
 
-Last updated: 10 August 2026 (quiz authoring added)
+Last updated: 10 August 2026 (user management screen, audit log viewer, rubrics)
 
-**Roughly 66–70% of the SRS scope is built.**
+**Roughly 72–75% of the SRS scope is built.**
 
 That figure is an estimate, not a measurement, and it is worth saying what it
 rests on. The SRS defines around a thousand numbered requirements; nobody has
-walked all of them one by one. What has been counted is: 48 database models, 107
-endpoints across 12 controllers, 19 web pages, 426 automated tests, and 10
+walked all of them one by one. What has been counted is: 48 database models, 134
+endpoints across 15 controllers, 20 web pages, 475 automated tests, and 12
 end-to-end probes. What the estimate weighs against that is the §4.5 permission
-matrix, which names 85 resources — **41 are reachable by an endpoint today and
-44 are not.**
+matrix, which names 82 resources — **48 are reachable by an endpoint today and
+34 are not.**
 
 The shape of the gap matters more than the number:
 
@@ -20,9 +20,9 @@ The shape of the gap matters more than the number:
 - **The teacher's journey is complete.** Set assignments and quizzes, build
   course content, take the register, mark, grade, announce, and see who is at
   risk — all from a screen.
-- **The administrator's journey is starting.** Admissions, certificates and now
-  user administration exist; user management still needs a screen, and
-  settings, audit viewing and governance have neither.
+- **The administrator's journey is half built.** Admissions, certificates, user
+  management and audit viewing now have both an API and a screen. Settings,
+  bulk operations, impersonation, maintenance mode and backup have neither.
 - **The two external integrations are stubs by necessity** — no credentials
   exist yet (DEP-01, DEP-04). Both sit behind adapters, so each is one file when
   the credentials arrive.
@@ -44,6 +44,18 @@ The shape of the gap matters more than the number:
 - [x] Suspend and reactivate — BR-ACC-02 protects the last Super Admin
 - [x] Reset a password; revoke every session
 - [x] Grant sub-permissions (Super Admin, with step-up)
+- [x] **People screen** — directory, provisioning, suspension, password reset.
+      The temporary password is a persistent panel, not a toast: it is
+      Argon2id-hashed at creation and genuinely cannot be shown again.
+
+### Audit and accountability
+- [x] Every privileged action written immutably, with a correlation id
+- [x] Database triggers refuse UPDATE and DELETE on the log (FR-LOG-004)
+- [x] **Audit viewer** — API and screen. A Super Admin sees everything; an
+      Admin sees only their own actions (§4.5.12), because an administrator
+      reading colleagues' actions is surveillance, not administration.
+- [x] The history of one record, and everything done in one request
+- [x] Changes rendered as before → after, not as a bare action name
 
 ### Authentication and authorisation
 - [x] RS256 JWT with refresh-token rotation and family invalidation (SEC-AUT-004)
@@ -100,6 +112,12 @@ The shape of the gap matters more than the number:
 - [x] **Quiz authoring**: question banks, eight question types with per-type
       validation, papers, publication that refuses an incoherent quiz
 - [x] Quiz builder screen: type-driven composer, paper assembly, publish
+- [x] **Rubrics**: authoring, reuse across assignments, institute-wide sharing,
+      per-criterion levels, fit check against an assignment's total
+- [x] Internal criteria (FR-ASG-014) never reach a student — not the marks,
+      not the names, not the fact that any exist
+- [x] Rubric scores validated on the way in; a rubric already used to mark
+      cannot be edited out from under the marks that depend on it
 
 ### Progress and certificates
 - [x] Weighted progress with redistribution when a component is absent (BR-PRG-03)
@@ -131,11 +149,8 @@ The shape of the gap matters more than the number:
       sending and never claims success.
 
 ### Administrator surface (the largest gap)
-- [ ] User management SCREEN (the API is done: directory, provisioning,
-      suspension, password reset, session revocation, sub-permissions)
 - [ ] System settings (thresholds, weights, templates are configurable but have no screen)
-- [ ] Audit log viewer — the log is written and immutable, nothing reads it
-- [ ] Security event log viewer
+- [ ] Security event log viewer (the audit log now has one; this is the other log)
 - [ ] Bulk operations (import, bulk enrolment change)
 - [ ] Impersonation with its audit trail
 - [ ] Maintenance mode
@@ -146,7 +161,7 @@ The shape of the gap matters more than the number:
 - [ ] Section and offering management beyond the read-only list
 
 ### Not started at all
-- [ ] Rubrics (the model exists; nothing creates or applies one)
+- [ ] Rubric authoring SCREEN (the API is done; nothing in the web app reaches it)
 - [ ] Lesson resources — files attached to a lesson, separate from lectures
 - [ ] Timetable
 - [ ] Discussion posts
@@ -172,7 +187,7 @@ The shape of the gap matters more than the number:
 
 Worth recording, because it shapes what to expect from the remainder.
 
-Fourteen security defects have been found and fixed, and **the permission
+Fifteen security defects have been found and fixed, and **the permission
 matrix was correct in every one of them.** What went wrong each time was a resource
 named after a *topic* — "attendance", "progress", "submission" — attached to
 endpoints serving very different audiences under it. Two more came from
@@ -180,5 +195,15 @@ structural limits of the scope predicate: it does not filter nested includes,
 and it does not constrain creates. Both are now documented where the next person
 will look, and both have a static guard.
 
-Nearly every defect was found by running code against a real database, not by
-reading it. The 393 unit tests never caught one of them.
+The fifteenth had a mechanism the other fourteen did not. A student's rubric
+breakdown came from a JSON column, and a JSON column is invisible to every
+structural defence at once: the scope predicate filters rows, `select` narrows
+columns, and both static guards read the Prisma schema — to all of them the
+field is one opaque value. Half of it did have a structural answer that was not
+being used (`isInternal` is row state, so `RubricCriterion` now has a policy);
+the other half can only be enforced in application code, which is why those
+rules sit in a pure module with 45 tests rather than inline in a service.
+
+**The lesson has been the same every time: nearly every defect was found by
+running the code against a real database, not by reading it.** The 475 unit
+tests have never caught one. The twelve end-to-end probes caught all fifteen.
