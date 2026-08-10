@@ -148,6 +148,39 @@ describe("a student cannot open the grading roster", () => {
   });
 });
 
+describe("a student cannot award marks on a quiz", () => {
+  it("is denied quiz_answer_grade", () => {
+    // The eighth instance, and the first that was a WRITE. Awarding marks for
+    // a written answer was guarded by `quiz_attempt:update` — the permission a
+    // student needs to save their own answers as they type. A student could
+    // therefore mark their own essay, and because the service looked the
+    // answer up under asSystem with no ownership check, anyone else's too.
+    expect(may("student", "quiz_answer_grade", "update")).toBe(false);
+  });
+
+  it("keeps the permission a student DOES need to sit a quiz", () => {
+    // The counterpart. A fix that removed quiz_attempt:update would satisfy
+    // the assertion above and make every quiz unanswerable.
+    expect(may("student", "quiz_attempt", "create")).toBe(true);
+    expect(may("student", "quiz_attempt", "update")).toBe(true);
+    expect(may("student", "quiz_attempt", "read")).toBe(true);
+  });
+
+  it("still lets a teacher mark a written answer (FR-QIZ-031)", () => {
+    expect(may("teacher", "quiz_answer_grade", "update")).toBe(true);
+  });
+
+  it("never grants a student the answer key", () => {
+    // SEC-AUZ-009 / BR-QIZ-07. There is no student key on this resource and
+    // there must never be one.
+    for (const action of ["create", "read", "update", "delete", "approve", "export"] as const) {
+      expect(may("student", "quiz_answer_key", action)).toBe(false);
+      expect(may("student", "question_bank", action)).toBe(false);
+      expect(may("student", "question", action)).toBe(false);
+    }
+  });
+});
+
 describe("matrix invariants that prevented the original defects", () => {
   it("no student grant is wider than OWN or ENROLLED", () => {
     const RESOURCES_TO_CHECK: Resource[] = [

@@ -129,6 +129,7 @@ export const RESOURCES = [
   "question_bank",
   "question",
   "quiz_attempt",
+  "quiz_answer_grade",
   "quiz_answer_key",
   // attendance — §4.5.8
   /** A student's own attendance record. Read-only for them. */
@@ -476,7 +477,21 @@ export const PERMISSION_MATRIX: Record<Resource, ResourcePolicy> = {
     super_admin: { actions: ["read", "update"], scope: "ALL" },
     admin: { actions: ["read", "update"], scope: "ALL" },
     teacher: { actions: ["read", "update"], scope: "ASSIGNED" },
+    // `update` is how a student saves an answer mid-attempt (FR-QIZ-026). It
+    // is NOT marking — see quiz_answer_grade.
     student: { actions: ["create", "read", "update"], scope: "OWN" },
+  },
+  /**
+   * FR-QIZ-031 — awarding marks for a written answer.
+   *
+   * Split from `quiz_attempt` because a student holds `quiz_attempt:update` in
+   * order to save their own answers as they type, and that must never be the
+   * same permission that decides what those answers are worth.
+   */
+  quiz_answer_grade: {
+    super_admin: { actions: ["update"], scope: "ALL" },
+    admin: { actions: ["update"], scope: "ALL" },
+    teacher: { actions: ["update"], scope: "ASSIGNED" },
   },
   // SEC-AUZ-009 / BR-QIZ-07: correct answers must not reach a student before
   // the configured release point — including in a field the UI never renders.

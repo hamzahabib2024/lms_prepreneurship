@@ -29,6 +29,19 @@ export class QuizController {
   constructor(private readonly quiz: QuizService) {}
 
   /**
+   * FR-QIZ-023 — the quizzes set for one subject, with the student's standing.
+   *
+   * `quiz:read`, not `quiz_attempt`: this is the list of work set, and it
+   * carries no question data at all — a student browsing has not started an
+   * attempt, and shipping the paper early would let them read it off the clock.
+   */
+  @RequirePermission("quiz", "read")
+  @Get("section-subjects/:id/my-quizzes")
+  mine(@Param("id") id: string) {
+    return this.quiz.listForStudent(id);
+  }
+
+  /**
    * FR-QIZ-024 — start, or resume an attempt already in progress.
    *
    * The response carries no correct-answer data of any kind: not in a hidden
@@ -60,7 +73,14 @@ export class QuizController {
     return this.quiz.attemptResult(id);
   }
 
-  @RequirePermission("quiz_attempt", "update")
+  /**
+   * FR-QIZ-031 — marks for a written answer.
+   *
+   * `quiz_answer_grade`, not `quiz_attempt`. A student holds
+   * `quiz_attempt:update` so they can save answers while sitting the quiz;
+   * that must never be the permission that decides what an answer is worth.
+   */
+  @RequirePermission("quiz_answer_grade", "update")
   @Post("quiz-answers/:id/grade")
   grade(@Param("id") id: string, @Body(zodBody(gradeAnswerSchema)) dto: z.infer<typeof gradeAnswerSchema>) {
     return this.quiz.gradeAnswer(id, dto.marks, dto.comment);

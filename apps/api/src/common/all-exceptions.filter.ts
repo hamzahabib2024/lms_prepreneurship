@@ -72,6 +72,19 @@ export class AllExceptionsFilter implements ExceptionFilter {
           code = "RESOURCE_CONFLICT";
           message = "That record is referenced elsewhere and cannot be removed.";
           break;
+        case "P2023":
+          // Malformed value for a typed column — in practice, a path parameter
+          // that is not a UUID. DB-003 puts UUIDs in URLs, so anything else was
+          // never a real identifier.
+          //
+          // This used to fall through to 500, which is wrong twice over: it
+          // reports a client mistake as a server fault, and it fills the error
+          // log with entries carrying a reference number that nobody can act
+          // on. A crawler probing /students/1 should not raise an alert.
+          status = 400;
+          code = "VALIDATION_FAILED";
+          message = "That identifier is not valid.";
+          break;
         default:
           status = 500;
           code = "INTERNAL_ERROR";

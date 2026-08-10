@@ -3,6 +3,7 @@ import { AppError } from "@lms/shared";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { getActor } from "../prisma/actor-context";
+import { assertOwnStudent } from "../rbac/ownership";
 import {
   resolveAttemptScore,
   scoreAttempt,
@@ -36,6 +37,107 @@ export class QuizService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
   ) {}
+
+  /**
+   * FR-QIZ-023 — the quizzes set for one subject, with this student's standing.
+   *
+   * Deliberately carries NO question data. A student browsing the list has not
+   * started an attempt, and shipping the paper early would let them read the
+   * questions without the clock running.
+   */
+  async listForStudent(sectionSubjectId: string) {
+    const actor = getActor();
+    if (!actor?.studentId) {
+      throw new AppError("AUTH_FORBIDDEN", {
+        message: "This view is for students. Your account is not a student account.",
+      });
+    }
+    const studentId = actor.studentId;
+
+    // Scoped: PUBLISHED quizzes in the student's own sections only.
+    const quizzes = await this.prisma.scoped.quiz.findMany({
+      where: { sectionSubjectId, deletedAt: null },
+      orderBy: { closesAt: "asc" },
+      select: {
+        id: true,
+        title: true,
+        instructions: true,
+        totalMarks: true,
+        opensAt: true,
+        closesAt: true,
+        timeLimitMinutes: true,
+        maxAttempts: true,
+        attemptScoring: true,
+        passingMarks: true,
+        negativeMarking: true,
+        resultReleasePolicy: true,
+        resultsReleasedAt: true,
+      },
+    });
+    if (quizzes.length === 0) return [];
+
+    const attempts = await this.prisma.scoped.quizAttempt.findMany({
+      where: { studentId, quizId: { in: quizzes.map((q) => q.id) } },
+      orderBy: { attemptNumber: "asc" },
+      select: {
+        quizId: true,
+        attemptNumber: true,
+        status: true,
+        finalScore: true,
+        releasedAt: true,
+      },
+    });
+
+    const byQuiz = new Map<string, typeof attempts>();
+    for (const a of attempts) {
+      const list = byQuiz.get(a.quizId) ?? [];
+      list.push(a);
+      byQuiz.set(a.quizId, list);
+    }
+
+    const now = new Date();
+
+    return quizzes.map((q: (typeof quizzes)[number]) => {
+      const mine = byQuiz.get(q.id) ?? [];
+      const inProgress = mine.find((a) => a.status === "IN_PROGRESS");
+
+      // BR-QIZ-07 — a score is a score only once released. Anything else must
+      // read as "not yet", never as zero.
+      const released = mine.filter((a) => a.releasedAt != null && a.finalScore != null);
+      const scores = released.map((a) => Number(a.finalScore));
+      const recorded =
+        scores.length === 0
+          ? null
+          : resolveAttemptScore(scores, q.attemptScoring);
+
+      return {
+        id: q.id,
+        title: q.title,
+        instructions: q.instructions,
+        totalMarks: Number(q.totalMarks),
+        passingMarks: q.passingMarks == null ? null : Number(q.passingMarks),
+        opensAt: q.opensAt,
+        closesAt: q.closesAt,
+        timeLimitMinutes: q.timeLimitMinutes,
+        maxAttempts: q.maxAttempts,
+        attemptsUsed: mine.length,
+        // FR-QIZ-013 — stated up front, because a student choosing whether to
+        // guess needs to know before they start, not afterwards.
+        negativeMarking: q.negativeMarking,
+
+        isOpen: now >= q.opensAt && now <= q.closesAt,
+        opensLater: now < q.opensAt,
+        hasClosed: now > q.closesAt,
+        canAttempt:
+          now >= q.opensAt && now <= q.closesAt && mine.length < q.maxAttempts,
+        inProgress: inProgress != null,
+
+        awaitingMarking: mine.some((a) => a.status === "GRADING"),
+        recordedScore: recorded,
+        scorePolicy: q.attemptScoring,
+      };
+    });
+  }
 
   // ------------------------------------------------------------- attempts --
 
@@ -456,9 +558,18 @@ export class QuizService {
     const actor = getActor();
     if (!actor) throw new AppError("AUTH_TOKEN_INVALID");
 
-    const answer = await this.prisma.asSystem((db) =>
-      db.quizAnswer.findUnique({ where: { id: answerId }, include: { attempt: true } }),
-    );
+    // SCOPED, not asSystem. This lookup is the authorisation: the QuizAnswer
+    // policy limits a teacher to answers on quizzes in the subject-sections
+    // they actively teach (BR-ACC-04), and denies students outright.
+    //
+    // It used to run under asSystem with no ownership check at all, guarded
+    // only by `quiz_attempt:update` — a permission every student holds so they
+    // can save their own answers as they type. A student could therefore award
+    // marks, on their own attempt or anyone else's.
+    const answer = await this.prisma.scoped.quizAnswer.findFirst({
+      where: { id: answerId },
+      include: { attempt: true },
+    });
     if (!answer) throw new AppError("RESOURCE_NOT_FOUND");
 
     await this.prisma.asSystem((db) =>
@@ -515,6 +626,12 @@ export class QuizService {
 
   /** FR-QIZ-018 — the recorded score across a student's attempts. */
   async recordedScore(quizId: string, studentId: string) {
+    // SEC-AUZ-004. The studentId comes from the URL, and this ran under
+    // asSystem with no check on it, so any caller holding `quiz_attempt:read`
+    // — which includes every student — could read a classmate's score by
+    // naming their id.
+    assertOwnStudent(studentId);
+
     const quiz = await this.prisma.asSystem((db) =>
       db.quiz.findUnique({ where: { id: quizId }, select: { attemptScoring: true } }),
     );
