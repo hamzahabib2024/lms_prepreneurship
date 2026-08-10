@@ -16,70 +16,91 @@ const configWith = (values: Record<string, string> = {}): ConfigService =>
     get: (key: string, fallback?: string) => values[key] ?? fallback,
   }) as unknown as ConfigService;
 
-describe("RegistrationNumberService — format (Appendix B)", () => {
+describe("RegistrationNumberService — format", () => {
   const svc = new RegistrationNumberService(configWith());
   const parts = {
     instituteCode: "CIIT",
     sessionCode: "SP26",
-    programmeCode: "GD",
     campusCode: "ISB",
   };
 
-  it("produces the documented Appendix B example", () => {
-    expect(svc.format(parts, 34)).toBe("CIIT/SP26-GD-034/ISB");
+  it("carries NO programme code", () => {
+    // THE POINT. A registration number identifies a student, and a student may
+    // take more than one course. A number with a programme in it would have to
+    // change when they enrolled in a second one — breaking a permanent public
+    // identifier already printed on certificates (BR-REG-07) — or would
+    // describe them wrongly from then on.
+    const formatted = svc.format(parts, 34);
+    expect(formatted).toBe("CIIT/SP26-034/ISB");
+    expect(formatted).not.toContain("GD");
   });
 
   it("zero-pads the sequence to the configured width", () => {
-    expect(svc.format(parts, 1)).toBe("CIIT/SP26-GD-001/ISB");
-    expect(svc.format(parts, 999)).toBe("CIIT/SP26-GD-999/ISB");
+    expect(svc.format(parts, 1)).toBe("CIIT/SP26-001/ISB");
+    expect(svc.format(parts, 999)).toBe("CIIT/SP26-999/ISB");
   });
 
   it("does not truncate a sequence that outgrows the pad width", () => {
     // Padding is a minimum, not a maximum. Truncating at 1000 students would
     // silently create duplicates, which BR-REG-06 forbids.
-    expect(svc.format(parts, 1000)).toBe("CIIT/SP26-GD-1000/ISB");
-    expect(svc.format(parts, 12345)).toBe("CIIT/SP26-GD-12345/ISB");
+    expect(svc.format(parts, 1000)).toBe("CIIT/SP26-1000/ISB");
+    expect(svc.format(parts, 12345)).toBe("CIIT/SP26-12345/ISB");
   });
 
   it("upper-cases every component", () => {
-    const lower = {
-      instituteCode: "ciit",
-      sessionCode: "sp26",
-      programmeCode: "gd",
-      campusCode: "isb",
-    };
-    expect(svc.format(lower, 7)).toBe("CIIT/SP26-GD-007/ISB");
+    const lower = { instituteCode: "ciit", sessionCode: "sp26", campusCode: "isb" };
+    expect(svc.format(lower, 7)).toBe("CIIT/SP26-007/ISB");
   });
 
   it("honours a configured template and pad width (FR-REG-054)", () => {
     const custom = new RegistrationNumberService(
-      configWith({
-        REG_NO_TEMPLATE: "{SESSION}/{PROGRAMME}/{SEQUENCE}",
-        REG_NO_PAD_WIDTH: "5",
-      }),
+      configWith({ REG_NO_TEMPLATE: "{SESSION}/{SEQUENCE}", REG_NO_PAD_WIDTH: "5" }),
     );
-    expect(custom.format(parts, 42)).toBe("SP26/GD/00042");
+    expect(custom.format(parts, 42)).toBe("SP26/00042");
+  });
+
+  it("still substitutes {PROGRAMME} for a deployment that configures it", () => {
+    // The placeholder is retained so an institute that genuinely wants it can
+    // have it; nothing supplies it by default.
+    const custom = new RegistrationNumberService(
+      configWith({ REG_NO_TEMPLATE: "{SESSION}-{PROGRAMME}-{SEQUENCE}" }),
+    );
+    expect(custom.format({ ...parts, programmeCode: "GD" }, 42)).toBe("SP26-GD-042");
+  });
+
+  it("leaves {PROGRAMME} empty rather than printing undefined", () => {
+    const custom = new RegistrationNumberService(
+      configWith({ REG_NO_TEMPLATE: "{SESSION}-{PROGRAMME}{SEQUENCE}" }),
+    );
+    expect(custom.format(parts, 42)).toBe("SP26-042");
   });
 });
 
 describe("RegistrationNumberService — series key (Appendix B)", () => {
   const svc = new RegistrationNumberService(configWith());
 
-  it("is unique over institute, session, programme and campus", () => {
-    const base = {
-      instituteCode: "CIIT",
-      sessionCode: "SP26",
-      programmeCode: "GD",
-      campusCode: "ISB",
-    };
+  it("is unique over institute, session and campus", () => {
+    const base = { instituteCode: "CIIT", sessionCode: "SP26", campusCode: "ISB" };
     const key = svc.buildSeriesKey(base);
 
-    // Each of these must be a DIFFERENT series, so the same sequence number
-    // can legitimately appear in each. This is intentional per Appendix B.
+    // Each of these is a DIFFERENT series, so the same sequence number can
+    // legitimately appear in each: the campuses admit independently.
     expect(svc.buildSeriesKey({ ...base, campusCode: "LHR" })).not.toBe(key);
-    expect(svc.buildSeriesKey({ ...base, programmeCode: "DM" })).not.toBe(key);
     expect(svc.buildSeriesKey({ ...base, sessionCode: "FA26" })).not.toBe(key);
     expect(svc.buildSeriesKey({ ...base, instituteCode: "OTHER" })).not.toBe(key);
+  });
+
+  it("is the SAME series across programmes", () => {
+    // One institute-wide series per session and campus. A series per programme
+    // would hand a student a second number when they took a second course,
+    // which is exactly what the number must not do.
+    const base = { instituteCode: "CIIT", sessionCode: "SP26", campusCode: "ISB" };
+    expect(svc.buildSeriesKey({ ...base, programmeCode: "DM" })).toBe(
+      svc.buildSeriesKey({ ...base, programmeCode: "GD" }),
+    );
+    expect(svc.buildSeriesKey({ ...base, programmeCode: "GD" })).toBe(
+      svc.buildSeriesKey(base),
+    );
   });
 
   it("is stable regardless of case or surrounding whitespace", () => {
@@ -132,11 +153,10 @@ describe("RegistrationNumberService — allocation contract", () => {
     const result = await svc.allocate(tx, {
       instituteCode: "CIIT",
       sessionCode: "SP26",
-      programmeCode: "GD",
       campusCode: "ISB",
     });
 
-    expect(result).toEqual({ registrationNo: "CIIT/SP26-GD-034/ISB", sequence: 34 });
+    expect(result).toEqual({ registrationNo: "CIIT/SP26-034/ISB", sequence: 34 });
 
     // RSK-07: the allocation must be a single atomic statement. A
     // read-then-write pair collides under concurrent approval.

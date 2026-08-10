@@ -17,15 +17,30 @@ export interface NumberFormatConfig {
   instituteCode: string;
   campusCode: string;
   padWidth: number;
-  /** Appendix B default: {INSTITUTE}/{SESSION}-{PROGRAMME}-{SEQUENCE}/{CAMPUS} */
+  /**
+   * Default: {INSTITUTE}/{SESSION}-{SEQUENCE}/{CAMPUS}
+   *
+   * NO {PROGRAMME}. A registration number identifies a STUDENT, and a student
+   * may take more than one course — so a number carrying a programme code would
+   * either have to change when they enrol in a second one, breaking a permanent
+   * public identifier that appears on certificates (BR-REG-07), or would
+   * describe them wrongly for the rest of their time here.
+   *
+   * The placeholder is still substituted if a deployment configures a template
+   * that uses it, but nothing supplies it by default.
+   */
   template: string;
 }
 
 export interface SeriesKeyParts {
   instituteCode: string;
   sessionCode: string; // SP26
-  programmeCode: string; // GD
   campusCode: string; // ISB
+  /**
+   * Retained for a deployment whose configured template still uses
+   * {PROGRAMME}. It takes no part in the SERIES KEY — see buildSeriesKey.
+   */
+  programmeCode?: string;
 }
 
 /** A minimal transaction client — anything with $queryRaw and the models we touch. */
@@ -50,19 +65,24 @@ export class RegistrationNumberService {
       padWidth: Number(this.config.get<string>("REG_NO_PAD_WIDTH", "3")),
       template: this.config.get<string>(
         "REG_NO_TEMPLATE",
-        "{INSTITUTE}/{SESSION}-{PROGRAMME}-{SEQUENCE}/{CAMPUS}",
+        "{INSTITUTE}/{SESSION}-{SEQUENCE}/{CAMPUS}",
       ),
     };
   }
 
   /**
-   * The tuple over which the sequence is unique (Appendix B).
+   * The tuple over which the sequence is unique.
    *
-   * SP26-GD-034/ISB and SP26-GD-034/LHR are therefore DIFFERENT students, and
-   * SP26-DM-034/ISB is a third. This is intentional and must be preserved.
+   * SP26-034/ISB and SP26-034/LHR are different students; the campus runs its
+   * own series because the two campuses admit independently.
+   *
+   * THE PROGRAMME IS DELIBERATELY ABSENT. A per-programme series would hand one
+   * person a second number when they took a second course, and the number is
+   * meant to identify the person. One student, one number, however many courses
+   * they enrol in.
    */
   buildSeriesKey(parts: SeriesKeyParts): string {
-    return [parts.instituteCode, parts.sessionCode, parts.programmeCode, parts.campusCode]
+    return [parts.instituteCode, parts.sessionCode, parts.campusCode]
       .map((p) => p.trim().toUpperCase())
       .join("|");
   }
@@ -71,7 +91,7 @@ export class RegistrationNumberService {
     return cfg.template
       .replace("{INSTITUTE}", parts.instituteCode.toUpperCase())
       .replace("{SESSION}", parts.sessionCode.toUpperCase())
-      .replace("{PROGRAMME}", parts.programmeCode.toUpperCase())
+      .replace("{PROGRAMME}", (parts.programmeCode ?? "").toUpperCase())
       .replace("{SEQUENCE}", String(sequence).padStart(cfg.padWidth, "0"))
       .replace("{CAMPUS}", parts.campusCode.toUpperCase());
   }

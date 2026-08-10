@@ -35,6 +35,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
     let message: string = ERROR_CODES.INTERNAL_ERROR.message;
     let details: ErrorDetail[] | undefined;
     let logAsError = true;
+    /** Extra context for the log only — never for the response (NFR-ERR-002). */
+    let logDetail: string | undefined;
 
     if (exception instanceof AppError) {
       status = exception.status;
@@ -61,6 +63,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
           status = 409;
           code = "DUPLICATE_RESOURCE";
           message = ERROR_CODES.DUPLICATE_RESOURCE.message;
+          // The response stays generic — naming a column tells a caller about
+          // the schema. The LOG names it, because "a record with that value
+          // already exists" is not something an operator can act on.
+          logDetail = `unique constraint on ${JSON.stringify(exception.meta?.["target"] ?? "unknown")}`;
           break;
         case "P2025": // record not found
           status = 404;
@@ -111,6 +117,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       status,
       code,
       userId: (req as { user?: { userId?: string } }).user?.userId,
+      ...(logDetail ? { detail: logDetail } : {}),
     };
 
     if (logAsError) {

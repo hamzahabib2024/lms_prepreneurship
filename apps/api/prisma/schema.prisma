@@ -341,7 +341,17 @@ model RegistrationRequest {
   decidedBy          String?             @map("decided_by") @db.Uuid
   decidedAt          DateTime?           @map("decided_at")
 
-  createdStudentId String? @unique @map("created_student_id") @db.Uuid // FR-REG-045
+  /// FR-REG-045 — the student this request admitted.
+  ///
+  /// NOT unique. It was, on the assumption that one request produces one new
+  /// student — but a student may take more than one course, and their second
+  /// admission points at the record they already have. The unique constraint
+  /// made that impossible: the second approval failed with "a record with that
+  /// value already exists" and an administrator had no way forward.
+  ///
+  /// "Created" is now read as "resulted in": for a returning student the
+  /// request enrolled them rather than creating them.
+  createdStudentId String? @map("created_student_id") @db.Uuid
 
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
@@ -450,7 +460,9 @@ model Student {
   extensions      AssignmentExtension[]
   quizAttempts    QuizAttempt[]
   certificates    Certificate[]
-  registration   RegistrationRequest?
+  /// Plural now: a student who takes a second course was admitted by a second
+  /// request, and both point at the same record.
+  registrations   RegistrationRequest[]
 
   // FR-REG-057: roll numbers are unique within a section and reusable after
   // withdrawal. Enforced as a partial unique index in raw SQL (live rows only).

@@ -276,9 +276,10 @@ async function main(): Promise<void> {
     const student = await db.student.create({
       data: {
         userId: user.id,
-        // Mirrors the Appendix B format. Real numbers come from the atomic
-        // series at approval (FR-REG-051); these are fixtures, not issued.
-        registrationNo: `CIIT/SP26-GD-${String(roll).padStart(3, "0")}/ISB`,
+        // No programme code: a registration number identifies the STUDENT, and
+        // a student may take more than one course. Real numbers come from the
+        // atomic series at approval (FR-REG-051); these are fixtures.
+        registrationNo: `CIIT/SP26-${String(roll).padStart(3, "0")}/ISB`,
         currentSectionId: gdFemale.id,
         currentRollNo: roll,
         nationalId: `61101${String(1000000 + roll)}${roll % 10}`,

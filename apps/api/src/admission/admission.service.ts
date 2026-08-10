@@ -420,50 +420,98 @@ export class AdmissionService {
           });
         }
 
-        // -- 2. Registration number, atomically (FR-REG-051, RSK-07) -------
-        const programmeCode =
-          section.batch.academicSession.programme.code ?? req.desiredProgramme?.code ?? "GEN";
-        const { registrationNo } = await this.numbers.allocate(tx, {
-          instituteCode: format.instituteCode,
-          sessionCode: section.batch.academicSession.code,
-          programmeCode,
-          campusCode: format.campusCode,
+        // -- 2. Is this somebody we already have? --------------------------
+        //
+        // A student may take MORE THAN ONE COURSE, and when they do they keep
+        // the account and the registration number they already hold. Without
+        // this the approval simply failed: User.email is unique, so a returning
+        // student's second admission collided and an administrator was told
+        // "duplicate resource" with no way forward.
+        //
+        // Matched on email, which is what the applicant used to apply and what
+        // they sign in with. National id is a stronger identifier but is
+        // optional on the form, so it corroborates rather than decides.
+        const existing = await tx.user.findFirst({
+          where: { email: req.email, deletedAt: null },
+          select: { id: true, student: { select: { id: true, registrationNo: true } } },
         });
 
-        // -- 3. Roll number — lowest unused in this section ----------------
+        const returning = existing?.student ?? null;
+
+        // -- 3. Registration number, atomically (FR-REG-051, RSK-07) -------
+        //
+        // Allocated ONLY for somebody new. A returning student keeps the number
+        // they already have: it is permanent and public (BR-REG-07), it is on
+        // certificates already issued, and a second one would make the same
+        // person two people in every report.
+        const registrationNo =
+          returning?.registrationNo ??
+          (
+            await this.numbers.allocate(tx, {
+              instituteCode: format.instituteCode,
+              sessionCode: section.batch.academicSession.code,
+              campusCode: format.campusCode,
+            })
+          ).registrationNo;
+
+        // -- 4. Roll number — lowest unused in THIS section ----------------
+        //
+        // Per section, so a student in two courses holds two roll numbers. That
+        // is correct: a roll number is a position in one classroom register,
+        // not an identity (BR-REG-08).
         const rollNo = await this.numbers.allocateRollNumber(tx, section.id);
 
-        // -- 4. Account (FR-REG-040: temporary, must change at first login) -
-        const user = await tx.user.create({
-          data: {
-            email: req.email,
-            passwordHash,
-            fullName: req.fullName,
-            phone: req.phone,
-            phoneIsWhatsapp: req.phoneIsWhatsapp,
-            status: "INVITED",
-            mustChangePassword: true,
-            roles: {
-              create: { role: { connect: { key: "student" } } },
-            },
-          },
-          select: { id: true },
-        });
+        // -- 5. Account and profile ----------------------------------------
+        let studentId: string;
+        let userId: string;
 
-        // -- 5. Student profile --------------------------------------------
-        const student = await tx.student.create({
-          data: {
-            userId: user.id,
-            registrationNo,
-            currentSectionId: section.id,
-            currentRollNo: rollNo,
-            nationalId: req.nationalId,
-            dateOfBirth: req.dateOfBirth,
-            gender: req.gender,
-            admissionDate: new Date(),
-          },
-          select: { id: true },
-        });
+        if (returning) {
+          studentId = returning.id;
+          userId = existing!.id;
+          // currentSection and currentRollNo are denormalised "where are they
+          // now" fields (§8.5); the authoritative answer is the Enrolment rows.
+          // Pointing them at the newest admission keeps the register views
+          // sensible without claiming the earlier course has ended.
+          await tx.student.update({
+            where: { id: studentId },
+            data: { currentSectionId: section.id, currentRollNo: rollNo },
+          });
+        } else {
+          // FR-REG-040: temporary password, must change at first login.
+          const user = await tx.user.create({
+            data: {
+              email: req.email,
+              passwordHash,
+              fullName: req.fullName,
+              phone: req.phone,
+              phoneIsWhatsapp: req.phoneIsWhatsapp,
+              status: "INVITED",
+              mustChangePassword: true,
+              roles: {
+                create: { role: { connect: { key: "student" } } },
+              },
+            },
+            select: { id: true },
+          });
+
+          const created = await tx.student.create({
+            data: {
+              userId: user.id,
+              registrationNo,
+              currentSectionId: section.id,
+              currentRollNo: rollNo,
+              nationalId: req.nationalId,
+              dateOfBirth: req.dateOfBirth,
+              gender: req.gender,
+              admissionDate: new Date(),
+            },
+            select: { id: true },
+          });
+          studentId = created.id;
+          userId = user.id;
+        }
+
+        const student = { id: studentId };
 
         // -- 6. Enrolments in every compulsory active subject (BR-ENR-02) ---
         if (section.sectionSubjects.length > 0) {
@@ -474,6 +522,9 @@ export class AdmissionService {
               status: "ACTIVE" as const,
               rollNoAtEnrolment: rollNo,
             })),
+            // A returning student re-admitted to a section they already hold
+            // must not gain a second enrolment in the same subject.
+            skipDuplicates: true,
           });
         }
 
@@ -537,9 +588,12 @@ export class AdmissionService {
 
         return {
           studentId: student.id,
-          userId: user.id,
+          userId,
           registrationNo,
           rollNo,
+          // So the administrator is told they enrolled somebody who was already
+          // here, rather than believing they created a new record.
+          returningStudent: returning !== null,
           section: { id: section.id, code: section.code, name: section.name },
           subjectCount: section.sectionSubjects.length,
           whatsappLinks: {
@@ -559,14 +613,28 @@ export class AdmissionService {
         rollNo: result.rollNo,
         sectionId: result.section.id,
         sectionName: result.section.name,
+        // A student taking a second course keeps the number they already hold.
+        returningStudent: result.returningStudent,
       },
-      account: {
-        email: undefined as string | undefined,
-        // FR-REG-042 — shown ONCE, on screen, because credentials are
-        // relayed by WhatsApp and email delivery may be delayed or fail.
-        temporaryPassword: tempPassword,
-        mustChangePassword: true,
-      },
+      account: result.returningStudent
+        ? {
+            email: undefined as string | undefined,
+            // No password for somebody who already has one. Their account was
+            // not touched, so printing a temporary password would hand the
+            // administrator something that does not work — and would read as
+            // though the existing credentials had been reset.
+            temporaryPassword: null,
+            mustChangePassword: false,
+            note: "This student already has an account. Their existing sign-in is unchanged.",
+          }
+        : {
+            email: undefined as string | undefined,
+            // FR-REG-042 — shown ONCE, on screen, because credentials are
+            // relayed by WhatsApp and email delivery may be delayed or fail.
+            temporaryPassword: tempPassword as string | null,
+            mustChangePassword: true,
+            note: undefined as string | undefined,
+          },
       enrolments: { count: result.subjectCount },
       whatsappLinks: result.whatsappLinks, // FR-REG-044
       notificationsSent: [] as string[], // wired when the mailer lands (DEP-04)
