@@ -18,6 +18,7 @@ import { AssignmentBuilderPage } from "./pages/AssignmentBuilderPage";
 import { UsersPage } from "./pages/UsersPage";
 import { AuditPage } from "./pages/AuditPage";
 import { RubricsPage } from "./pages/RubricsPage";
+import { SettingsPage } from "./pages/SettingsPage";
 import { VerifyPage } from "./pages/VerifyPage";
 import { CertificatesPage } from "./pages/CertificatesPage";
 import { AnnouncementsPage } from "./pages/AnnouncementsPage";
@@ -76,6 +77,7 @@ export function App() {
           {hasRole("super_admin", "admin") && <NavLink to="/certificates">Certificates</NavLink>}
           {hasRole("super_admin", "admin") && <NavLink to="/users">People</NavLink>}
           {hasRole("super_admin", "admin") && <NavLink to="/audit">Audit</NavLink>}
+          {hasRole("super_admin", "admin") && <NavLink to="/settings">Settings</NavLink>}
           {hasRole("super_admin", "admin", "teacher") && (
             <NavLink to="/attendance">Attendance</NavLink>
           )}
@@ -174,6 +176,13 @@ export function App() {
           <Route
             path="/audit"
             element={hasRole("super_admin", "admin") ? <AuditPage /> : <Navigate to="/" replace />}
+          />
+          {/* An Admin may READ institute policy and not change it (§4.5), so
+              the route is open to both and the inputs decide. Refusing the page
+              would hide from an administrator the rules they administer. */}
+          <Route
+            path="/settings"
+            element={hasRole("super_admin", "admin") ? <SettingsPage /> : <Navigate to="/" replace />}
           />
           {/* Teacher and above. A student may READ a rubric they are marked
               against, but that belongs beside their grade, not on an
