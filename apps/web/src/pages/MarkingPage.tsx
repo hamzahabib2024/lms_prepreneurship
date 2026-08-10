@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ApiError, api } from "../api/client";
+import { AtRiskPanel } from "../components/AtRiskPanel";
 
 /**
  * A teacher's marking queue — SRS §13.6, FR-TCH-018.
@@ -105,6 +106,12 @@ function SectionAssignments({ section }: { section: TeacherSection }) {
   }, [section.sectionSubjectId]);
 
   return (
+    <>
+      {/* Above the marking. A student falling out of a course is more urgent
+          than a stack of essays, and it is the thing a teacher is least likely
+          to go looking for. */}
+      <AtRiskPanel sectionSubjectId={section.sectionSubjectId} />
+
     <section className="card">
       <h2>
         {section.subject.name} <span className="muted small">{section.section.code}</span>
@@ -169,5 +176,6 @@ function SectionAssignments({ section }: { section: TeacherSection }) {
         </ul>
       )}
     </section>
+    </>
   );
 }
