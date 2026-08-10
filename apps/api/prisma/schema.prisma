@@ -446,6 +446,7 @@ model Student {
   submissions     AssignmentSubmission[]
   extensions      AssignmentExtension[]
   quizAttempts    QuizAttempt[]
+  certificates    Certificate[]
   registration   RegistrationRequest?
 
   // FR-REG-057: roll numbers are unique within a section and reusable after
@@ -488,6 +489,7 @@ model Programme {
 
   sessions      AcademicSession[]
   registrations RegistrationRequest[]
+  certificates  Certificate[]
 
   @@map("programmes")
 }
@@ -607,9 +609,10 @@ model SectionSubject {
 
   section     Section             @relation(fields: [sectionId], references: [id], onDelete: Restrict)
   subject     Subject             @relation(fields: [subjectId], references: [id], onDelete: Restrict)
-  assignments TeacherAssignment[]
-  enrolments  Enrolment[]
-  sessions    LiveSession[]
+  assignments  TeacherAssignment[]
+  enrolments   Enrolment[]
+  sessions     LiveSession[]
+  certificates Certificate[]
 
   @@unique([sectionId, subjectId])
   @@index([sectionId])
@@ -790,6 +793,69 @@ model WatchProgress {
   @@unique([studentId, recordedLectureId])
   @@index([recordedLectureId, isComplete])
   @@map("watch_progress")
+}
+
+/// A completion certificate — SRS §5.15, FR-CRT-001..020.
+///
+/// THE FIGURES ARE A SNAPSHOT, NOT A POINTER.
+///
+/// Progress is derived and computed on read (ARC-007, DB-011): it changes when
+/// a teacher publishes another lecture, when a register is corrected, when a
+/// mark is revised. A certificate is a statement about a MOMENT — "this student
+/// met the requirements on this date" — so it carries its own copies of the
+/// evidence. Pointing at the live figures would mean a certificate silently
+/// saying something different next term from what was printed and handed over.
+model Certificate {
+  id            String @id @default(uuid()) @db.Uuid
+  /// The permanent public identifier, printed on the document.
+  certificateNo String @unique @map("certificate_no") @db.VarChar(50)
+
+  studentId String          @map("student_id") @db.Uuid
+  type      CertificateType
+
+  /// Exactly one of these is set, per the type.
+  sectionSubjectId String? @map("section_subject_id") @db.Uuid
+  programmeId      String? @map("programme_id") @db.Uuid
+
+  /// What was true at the moment of issue (FR-CRT-008).
+  progressPercent     Decimal  @map("progress_percent") @db.Decimal(5, 2)
+  attendancePercent   Decimal? @map("attendance_percent") @db.Decimal(5, 2)
+  averageGradePercent Decimal? @map("average_grade_percent") @db.Decimal(5, 2)
+  /// The criteria themselves, so a challenge years later can be answered with
+  /// the rule that was actually applied rather than today's configuration.
+  criteriaApplied     Json     @map("criteria_applied")
+
+  status   CertificateStatus @default(ISSUED)
+  issuedAt DateTime          @default(now()) @map("issued_at")
+  issuedBy String            @map("issued_by") @db.Uuid
+
+  /// BR-DAT-02 — revoked, never deleted. A certificate that vanished would
+  /// leave an employer holding a document the System denies exists.
+  revokedAt        DateTime? @map("revoked_at")
+  revokedBy        String?   @map("revoked_by") @db.Uuid
+  revocationReason String?   @map("revocation_reason") @db.Text
+
+  /// FR-CRT-015 — quoted by an employer to confirm the document is genuine,
+  /// without an account. Separate from certificateNo so the printed number can
+  /// be human-friendly while the check remains unguessable (SEC-AUZ-004).
+  verificationCode String @unique @map("verification_code") @db.VarChar(64)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  student        Student         @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  sectionSubject SectionSubject? @relation(fields: [sectionSubjectId], references: [id], onDelete: Restrict)
+  programme      Programme?      @relation(fields: [programmeId], references: [id], onDelete: Restrict)
+
+  /// FR-CRT-004 — at most one LIVE certificate per student per thing.
+  ///
+  /// Expressed as PARTIAL unique indexes in the migration, not here: Prisma
+  /// cannot write `WHERE status = 'ISSUED'`, and a plain unique over
+  /// (student, subject, status) would allow only one REVOKED row too — so
+  /// issue, revoke, reissue, revoke would collide on the second revocation.
+  @@index([studentId])
+  @@index([issuedAt])
+  @@map("certificates")
 }
 
 // ================================================== live sessions (8.3.4) ==
@@ -1216,6 +1282,16 @@ model AssignmentExtension {
 }
 
 // =========================================================== quizzes (8.3.5)
+
+enum CertificateType {
+  SUBJECT
+  PROGRAMME
+}
+
+enum CertificateStatus {
+  ISSUED
+  REVOKED
+}
 
 enum QuestionType {
   MCQ_SINGLE

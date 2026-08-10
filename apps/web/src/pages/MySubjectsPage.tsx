@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ApiError, api } from "../api/client";
+import { CertificatePanel } from "../components/CertificatePanel";
 
 /**
  * A student's subjects — SRS §13.5, FR-PRG-007.
@@ -83,6 +84,10 @@ export function MySubjectsPage() {
           <SubjectCard key={s.sectionSubjectId} s={s} />
         ))}
       </div>
+
+      {/* Below the subjects: a certificate is the outcome of the work above,
+          and renders nothing at all until one exists. */}
+      <CertificatePanel />
     </>
   );
 }

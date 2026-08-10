@@ -398,6 +398,26 @@ const MODEL_POLICIES: Record<string, PolicyFn> = {
     return DENY_ALL;
   },
 
+  /**
+   * A certificate is a public document, but WHO HOLDS ONE is not public.
+   *
+   * A student sees their own, including a revoked one: they may be holding the
+   * printed copy, and hiding the record would leave them unable to find out why
+   * it is no longer valid (BR-ENR-08 keeps this readable after withdrawal).
+   *
+   * Verification by code is deliberately NOT routed through here — an employer
+   * has no account. That path runs under asSystem with its own narrow
+   * projection; see CertificateService.verify.
+   */
+  Certificate: (a) => {
+    if (isAdmin(a)) return null;
+    if (isTeacher(a)) {
+      return { sectionSubject: { id: { in: [...a.sectionSubjectIds] } } };
+    }
+    if (isStudent(a)) return a.studentId ? { studentId: a.studentId } : DENY_ALL;
+    return DENY_ALL;
+  },
+
   // ------------------------------------------------------- the answer key --
   // QuestionOption.isCorrect, Question.acceptedAnswers and Question.explanation
   // ARE the answer key. Quiz delivery is not built yet, so nothing reads these

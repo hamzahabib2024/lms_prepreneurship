@@ -1,4 +1,4 @@
-import { NavLink, Navigate, Route, Routes } from "react-router-dom";
+import { NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { useAuth } from "./auth/AuthContext";
 import { LoginPage } from "./pages/LoginPage";
 import { DashboardPage } from "./pages/DashboardPage";
@@ -12,6 +12,7 @@ import { SubjectPage } from "./pages/SubjectPage";
 import { MarkingPage } from "./pages/MarkingPage";
 import { GradingPage } from "./pages/GradingPage";
 import { QuizMarkingPage } from "./pages/QuizMarkingPage";
+import { VerifyPage } from "./pages/VerifyPage";
 
 /**
  * Application shell — SRS §13.1.
@@ -24,6 +25,18 @@ import { QuizMarkingPage } from "./pages/QuizMarkingPage";
  */
 export function App() {
   const { user, initialising, mustChangePassword, signOut, hasRole } = useAuth();
+  const location = useLocation();
+
+  // FR-CRT-015 — certificate verification is PUBLIC, and is checked before the
+  // authentication gate below. An employer holding a printed certificate has no
+  // account, and sending them to a login screen would make the link useless.
+  if (location.pathname.startsWith("/verify/")) {
+    return (
+      <Routes>
+        <Route path="/verify/:code" element={<VerifyPage />} />
+      </Routes>
+    );
+  }
 
   // Distinguishing "still checking" from "signed out" avoids flashing the
   // login screen at a user who is in fact signed in.

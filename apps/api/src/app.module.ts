@@ -11,6 +11,7 @@ import { AdmissionModule } from "./admission/admission.module";
 import { AcademicModule } from "./academic/academic.module";
 import { LiveModule } from "./live/live.module";
 import { AssessmentModule } from "./assessment/assessment.module";
+import { CertificateModule } from "./certificate/certificate.module";
 import { ProgressModule } from "./progress/progress.module";
 import { ContentModule } from "./content/content.module";
 import { QuizModule } from "./quiz/quiz.module";
@@ -43,6 +44,7 @@ import { PermissionsGuard } from "./rbac/permissions.guard";
     LiveModule,
     AssessmentModule,
     ProgressModule,
+    CertificateModule,
     ContentModule,
     QuizModule,
     ReportingModule,

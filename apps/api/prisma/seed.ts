@@ -215,7 +215,17 @@ async function main(): Promise<void> {
 
   // -- offerings and assignments -------------------------------------------
   const gdFemaleGd = await offer(gdFemale.id, gd!.id, true);
-  const gdFemaleEng = await offer(gdFemale.id, eng!.id, true);
+  // English carries lighter criteria ON PURPOSE (FR-PRG-009 makes them
+  // per-offering). Graphic Designing keeps the institute defaults, so a
+  // mid-term student fails them — which is the case worth having. English asks
+  // only for progress, and it has a single lecture and nothing else, so
+  // watching it is genuinely completing the subject and the CERTIFICATE path
+  // becomes reachable without inventing data.
+  const gdFemaleEng = await offer(gdFemale.id, eng!.id, true, {
+    minProgressPercent: 80,
+    minAttendancePercent: null,
+    minAverageGradePercent: null,
+  });
   const gdMaleGd = await offer(gdMale.id, gd!.id, true);
   const dmFullDm = await offer(dmFull.id, dm!.id, true);
 
@@ -725,11 +735,22 @@ async function upsertSection(input: {
   });
 }
 
-async function offer(sectionId: string, subjectId: string, isCompulsory: boolean) {
+async function offer(
+  sectionId: string,
+  subjectId: string,
+  isCompulsory: boolean,
+  completionCriteria?: object,
+) {
   return db.sectionSubject.upsert({
     where: { sectionId_subjectId: { sectionId, subjectId } },
-    update: {},
-    create: { sectionId, subjectId, isCompulsory, status: "ACTIVE" },
+    update: completionCriteria ? { completionCriteria } : {},
+    create: {
+      sectionId,
+      subjectId,
+      isCompulsory,
+      status: "ACTIVE",
+      ...(completionCriteria ? { completionCriteria } : {}),
+    },
   });
 }
 
