@@ -496,6 +496,114 @@ async function main(): Promise<void> {
   }
   console.log(`  assignments: ${assignmentCount} (1 open, 1 overdue but still accepting)`);
 
+  // -- a quiz (§5.10) -------------------------------------------------------
+  // Mixed question types on purpose. Auto-marked types and an ESSAY behave
+  // differently at submission — one scores immediately, the other leaves the
+  // attempt awaiting a human — and a quiz with only MCQs never exercises that.
+  const existingQuiz = await db.quiz.findFirst({
+    where: { sectionSubjectId: gdFemaleGd.id, title: "Colour and typography basics" },
+  });
+
+  if (!existingQuiz) {
+    const bank = await db.questionBank.upsert({
+      where: { id: "00000000-0000-4000-8000-000000000001" },
+      update: {},
+      create: {
+        id: "00000000-0000-4000-8000-000000000001",
+        name: "Graphic Designing — core",
+        subjectId: gd!.id,
+      },
+    });
+
+    const questionPlan = [
+      {
+        stem: "Which colour model is used for print?",
+        questionType: "MCQ_SINGLE" as const,
+        marks: 2,
+        options: [
+          { text: "CMYK", correct: true },
+          { text: "RGB", correct: false },
+          { text: "HSL", correct: false },
+        ],
+      },
+      {
+        stem: "A typeface with small strokes at the ends of letters is called a serif.",
+        questionType: "TRUE_FALSE" as const,
+        marks: 1,
+        options: [
+          { text: "True", correct: true },
+          { text: "False", correct: false },
+        ],
+      },
+      {
+        stem: "Which of these improve readability in body text? Select all that apply.",
+        questionType: "MCQ_MULTI" as const,
+        marks: 3,
+        options: [
+          { text: "Generous line height", correct: true },
+          { text: "Adequate contrast", correct: true },
+          { text: "Setting everything in capitals", correct: false },
+          { text: "Very long line lengths", correct: false },
+        ],
+      },
+      {
+        // Cannot be auto-marked, so the attempt lands AWAITING_MARKING and the
+        // teacher's marking path becomes reachable (FR-QIZ-031).
+        stem: "In two or three sentences, explain why you would choose a serif over a sans-serif for a printed book.",
+        questionType: "ESSAY" as const,
+        marks: 4,
+        options: [],
+      },
+    ];
+
+    const quiz = await db.quiz.create({
+      data: {
+        sectionSubjectId: gdFemaleGd.id,
+        title: "Colour and typography basics",
+        instructions: "Ten minutes. You may attempt this twice; the higher score counts.",
+        totalMarks: questionPlan.reduce((sum, q) => sum + q.marks, 0),
+        opensAt: at(-2, 9),
+        closesAt: at(10, 23),
+        timeLimitMinutes: 10,
+        maxAttempts: 2,
+        attemptScoring: "HIGHEST",
+        shuffleQuestions: true,
+        shuffleOptions: true,
+        passingMarks: 5,
+        presentation: "ALL_ON_PAGE",
+        allowBackwardNavigation: true,
+        publicationStatus: "PUBLISHED",
+        createdBy: teacherUser.id,
+      },
+    });
+
+    for (const [index, q] of questionPlan.entries()) {
+      const question = await db.question.create({
+        data: {
+          questionBankId: bank.id,
+          subjectId: gd!.id,
+          stem: q.stem,
+          questionType: q.questionType,
+          defaultMarks: q.marks,
+          options: {
+            create: q.options.map((o, i) => ({
+              optionText: o.text,
+              isCorrect: o.correct,
+              displayOrder: i + 1,
+            })),
+          },
+        },
+      });
+
+      await db.quizQuestion.create({
+        data: { quizId: quiz.id, questionId: question.id, marks: q.marks, displayOrder: index + 1 },
+      });
+    }
+    console.log(`  quiz: 1 published, ${questionPlan.length} questions (1 essay, marked by hand)`);
+  } else {
+    console.log("  quiz: already present");
+  }
+
   // -- attendance for the sessions that have already happened ---------------
   // Every ENDED session needs a marked register, or the attendance component
   // of progress has an empty denominator and every student silently reports

@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { ApiError, api } from "../api/client";
 import { LecturePlayer } from "../components/LecturePlayer";
 import { AssignmentPanel } from "../components/AssignmentPanel";
+import { QuizPanel } from "../components/QuizPanel";
 
 /**
  * One subject — SRS §13.5, §5.6, §5.7.
@@ -152,6 +153,7 @@ export function SubjectPage() {
           to watch, and a deadline the student scrolls past is a deadline
           missed. */}
       <AssignmentPanel sectionSubjectId={sectionSubjectId} />
+      <QuizPanel sectionSubjectId={sectionSubjectId} />
 
       {modules.length === 0 && (
         <div className="card">
