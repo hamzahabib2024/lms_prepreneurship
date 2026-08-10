@@ -82,6 +82,10 @@ export function MarkingPage() {
     <>
       <header className="page-head">
         <h1>Marking</h1>
+        {/* The one thing a teacher comes here to START rather than finish. */}
+        <Link className="btn btn-quiet" to="/quiz-builder">
+          New quiz
+        </Link>
       </header>
       {sections.map((s) => (
         <SectionAssignments key={s.sectionSubjectId} section={s} />
@@ -161,6 +165,11 @@ function SectionAssignments({ section }: { section: TeacherSection }) {
                 <span className="muted small"> · quiz · {q.attemptCount} attempts</span>
               </span>
               <span className="row-actions">
+                {q.publicationStatus !== "PUBLISHED" && (
+                  <Link className="btn btn-quiet" to={`/quiz-builder/${q.id}`}>
+                    Edit
+                  </Link>
+                )}
                 {q.awaitingMarking > 0 ? (
                   <strong className="small">{q.awaitingMarking} to mark</strong>
                 ) : q.unreleased > 0 ? (

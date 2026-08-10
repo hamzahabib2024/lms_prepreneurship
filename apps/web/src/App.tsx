@@ -12,6 +12,7 @@ import { SubjectPage } from "./pages/SubjectPage";
 import { MarkingPage } from "./pages/MarkingPage";
 import { GradingPage } from "./pages/GradingPage";
 import { QuizMarkingPage } from "./pages/QuizMarkingPage";
+import { QuizBuilderPage } from "./pages/QuizBuilderPage";
 import { VerifyPage } from "./pages/VerifyPage";
 import { CertificatesPage } from "./pages/CertificatesPage";
 import { AnnouncementsPage } from "./pages/AnnouncementsPage";
@@ -121,6 +122,18 @@ export function App() {
             path="/marking/:assignmentId"
             element={
               hasRole("super_admin", "admin", "teacher") ? <GradingPage /> : <Navigate to="/" replace />
+            }
+          />
+          <Route
+            path="/quiz-builder"
+            element={
+              hasRole("super_admin", "admin", "teacher") ? <QuizBuilderPage /> : <Navigate to="/" replace />
+            }
+          />
+          <Route
+            path="/quiz-builder/:quizId"
+            element={
+              hasRole("super_admin", "admin", "teacher") ? <QuizBuilderPage /> : <Navigate to="/" replace />
             }
           />
           <Route

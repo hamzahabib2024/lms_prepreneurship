@@ -336,3 +336,16 @@ kbd {
 
 /* Preserves the author's paragraphs without letting a pasted line overflow. */
 .announcement-body { white-space: pre-wrap; overflow-wrap: anywhere; margin: .5rem 0 0; }
+
+/* ---------------------------------------------------------- authoring -- */
+.composer { border-top: 1px solid var(--line); padding-top: .9rem; margin-top: .9rem; }
+.field-label { display: block; margin: .6rem 0 .3rem; font-weight: 500; font-size: .9rem; }
+/* The option text grows; the tick and the remove button do not. */
+.option-text {
+  flex: 1; padding: .45rem .6rem; border: 1px solid var(--line);
+  border-radius: var(--radius); font: inherit; min-height: 40px;
+}
+.field input[type="datetime-local"] {
+  width: 100%; min-height: 44px; padding: .5rem .6rem;
+  border: 1px solid var(--line); border-radius: var(--radius); font: inherit;
+}
