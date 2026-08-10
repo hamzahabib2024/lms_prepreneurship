@@ -200,7 +200,12 @@ export const api = {
   patch: <T>(path: string, body?: unknown) => request<T>(path, { method: "PATCH", body }),
   /** For resources with ONE value, where PATCH would imply a partial one. */
   put: <T>(path: string, body?: unknown) => request<T>(path, { method: "PUT", body }),
-  del: <T>(path: string) => request<T>(path, { method: "DELETE" }),
+  /**
+   * A body is optional and unusual, but legal, and one route needs it: erasing
+   * personal data requires a written reason, and the act is a DELETE.
+   */
+  del: <T>(path: string, body?: unknown) =>
+    request<T>(path, { method: "DELETE", ...(body !== undefined ? { body } : {}) }),
 
   /**
    * Multipart upload. Goes through the same path as everything else, so it

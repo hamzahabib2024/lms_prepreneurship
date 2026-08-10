@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { ApiError, api } from "../api/client";
+import { ApiError, api, tokens } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
+import { StepUpPrompt, needsStepUp } from "../components/StepUpPrompt";
 
 /**
  * User administration — SRS §13.7, FR-USR-003..015.
@@ -123,6 +124,8 @@ export function UsersPage() {
                 key={u.id}
                 user={u}
                 canGrant={hasRole("super_admin")}
+                canImpersonate={hasRole("super_admin")}
+                canErase={hasRole("super_admin")}
                 onChanged={load}
                 onIssued={(i) => { setIssued(i); load(); }}
               />
@@ -311,34 +314,166 @@ function NewStaff({ onCreated }: { onCreated: (issued: Issued) => void }) {
   );
 }
 
+/**
+ * FR-PRV-008/009 — erasure, with the plan shown first.
+ *
+ * The plan is not a confirmation dialogue. It is the honest answer to what
+ * somebody is actually asking for: erasure ANONYMISES, because the audit log is
+ * append-only and certificates must stay verifiable, and a person expecting
+ * "delete everything" needs to read what will really happen before they agree
+ * to it — and, if the server refuses, why.
+ */
+function ErasePanel({
+  user: u,
+  reason,
+  onDone,
+}: {
+  user: DirectoryUser;
+  reason: string;
+  onDone: () => void;
+}) {
+  const [plan, setPlan] = useState<{
+    canErase: boolean;
+    refusal?: string;
+    warning: string;
+    plan: Array<{ label: string; what: string; reason: string }>;
+  } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [stepUp, setStepUp] = useState(false);
+
+  // Reading the PLAN needs step-up too, because it is guarded by the same
+  // permission as the act: nobody should be able to enumerate who is erasable
+  // without being able to erase.
+  const fetchPlan = () =>
+    api
+      .get<NonNullable<typeof plan>>(`/admin/users/${u.id}/erasure-plan`)
+      .then((p) => {
+        setPlan(p);
+        setStepUp(false);
+      })
+      .catch((e) => {
+        if (needsStepUp(e)) setStepUp(true);
+        else setError(e instanceof ApiError ? e.message : "Could not read the plan.");
+      });
+
+  if (stepUp) {
+    return (
+      <StepUpPrompt
+        what={`erase ${u.fullName}'s personal data`}
+        onCancel={() => setStepUp(false)}
+        onDone={() => void fetchPlan()}
+      />
+    );
+  }
+
+  if (!plan) {
+    return (
+      <span className="row-actions">
+        <button className="btn btn-quiet" onClick={() => void fetchPlan()}>
+          Erase personal data…
+        </button>
+        {error && <span className="warn small">{error}</span>}
+      </span>
+    );
+  }
+
+  return (
+    <div className="alert alert-warn">
+      <p>
+        <strong>{plan.warning}</strong>
+      </p>
+      <ul className="list small">
+        {plan.plan.map((p) => (
+          <li key={p.label}>
+            <span>
+              <strong>{p.label}</strong> — {p.what}
+              <br />
+              <span className="muted small">{p.reason}</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+
+      {/* Why it cannot proceed, if it cannot. Shown here rather than after
+          pressing, because the remedy is usually somebody else's job. */}
+      {!plan.canErase && <p className="warn">{plan.refusal}</p>}
+      {error && <p className="warn">{error}</p>}
+
+      <span className="row-actions">
+        <button
+          className="btn btn-primary"
+          disabled={busy || !plan.canErase || reason.trim().length < 10}
+          onClick={() => {
+            setBusy(true);
+            setError(null);
+            api
+              .del(`/admin/users/${u.id}/personal-data`, { reason })
+              .then(onDone)
+              .catch((e) =>
+                setError(
+                  e instanceof ApiError
+                    ? (e.details?.map((d) => d.message).join(" ") ?? e.message)
+                    : "That did not work.",
+                ),
+              )
+              .finally(() => setBusy(false));
+          }}
+        >
+          {busy ? "Erasing…" : `Erase ${u.fullName}`}
+        </button>
+        <button className="btn btn-quiet" onClick={() => setPlan(null)}>
+          Cancel
+        </button>
+        {reason.trim().length < 10 && (
+          <span className="muted small">Give a reason above first — it cannot be undone.</span>
+        )}
+      </span>
+    </div>
+  );
+}
+
 function UserRow({
   user: u,
   canGrant,
+  canImpersonate,
+  canErase,
   onChanged,
   onIssued,
 }: {
   user: DirectoryUser;
   canGrant: boolean;
+  canImpersonate: boolean;
+  canErase: boolean;
   onChanged: () => void;
   onIssued: (issued: Issued) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // The action the server refused for want of a recent re-authentication, kept
+  // so it can be run again once the password is confirmed rather than making
+  // somebody find the button a second time.
+  const [pending, setPending] = useState<{ what: string; run: () => Promise<unknown> } | null>(null);
 
-  const act = async (fn: () => Promise<unknown>) => {
+  const act = async (fn: () => Promise<unknown>, what?: string) => {
     setBusy(true);
     setError(null);
     try {
       await fn();
       onChanged();
     } catch (e) {
-      setError(
-        e instanceof ApiError
-          ? (e.details?.map((d) => d.message).join(" ") ?? e.message)
-          : "That did not work.",
-      );
+      if (needsStepUp(e) && what) {
+        setPending({ what, run: fn });
+      } else {
+        setError(
+          e instanceof ApiError
+            ? (e.details?.map((d) => d.message).join(" ") ?? e.message)
+            : "That did not work.",
+        );
+      }
     } finally {
       setBusy(false);
     }
@@ -386,6 +521,18 @@ function UserRow({
             <div className="alert alert-error">
               <p>{error}</p>
             </div>
+          )}
+
+          {pending && (
+            <StepUpPrompt
+              what={pending.what}
+              onCancel={() => setPending(null)}
+              onDone={() => {
+                const retry = pending.run;
+                setPending(null);
+                void act(retry);
+              }}
+            />
           )}
 
           <label className="field">
@@ -439,7 +586,88 @@ function UserRow({
             >
               Sign out everywhere
             </button>
+
+            {/* SEC-AUT-008 — not a password reset, and the label says so. A
+                lockout is usually somebody mistyping their own password, and
+                until this existed the only remedy was replacing it. */}
+            <button
+              className="btn btn-quiet"
+              disabled={busy}
+              onClick={() =>
+                void act(async () => {
+                  const r = await api.post<{ message: string }>(`/admin/users/${u.id}/unlock`);
+                  setNotice(r.message);
+                })
+              }
+            >
+              Unlock
+            </button>
+
+            {/* FR-PRV-001. Downloaded rather than shown: it is a file somebody
+                asked for, and it is audited as bulk extraction either way. */}
+            <button
+              className="btn btn-quiet"
+              disabled={busy}
+              onClick={() =>
+                void act(async () => {
+                  const data = await api.get<unknown>(`/admin/users/${u.id}/personal-data`);
+                  download(`personal-data-${u.id}.json`, JSON.stringify(data, null, 2));
+                  setNotice("Downloaded. This export is recorded in the audit log.");
+                })
+              }
+            >
+              Export their data
+            </button>
           </span>
+
+          {notice && <p className="small">{notice}</p>}
+
+          {/* The two that are not peers of the buttons above, kept apart on
+              purpose. One puts you inside somebody else's account; the other
+              cannot be undone. Putting them in the same row as "Sign out
+              everywhere" would invite the wrong click. */}
+          {(canImpersonate || canErase) && (
+            <div className="danger-zone">
+              {canImpersonate && !u.roles.includes("super_admin") && (
+                <span className="row-actions">
+                  <button
+                    className="btn btn-quiet"
+                    disabled={busy || reason.trim().length < 10}
+                    onClick={() =>
+                      void act(async () => {
+                        const r = await api.post<{ accessToken: string; message: string }>(
+                          "/admin/impersonate",
+                          { userId: u.id, reason },
+                        );
+                        // Replacing the token IS becoming them. The banner in
+                        // the shell reads /me/impersonation on load, so a full
+                        // reload is what makes it appear.
+                        tokens.setAccess(r.accessToken);
+                        window.location.assign("/");
+                      }, `act as ${u.fullName}`)
+                    }
+                  >
+                    Act as {u.fullName.split(" ")[0]}
+                  </button>
+                  <span className="muted small">
+                    15 minutes, cannot be extended, and everything you do is recorded against
+                    your name. Needs a reason above and a recent re-authentication.
+                  </span>
+                </span>
+              )}
+
+              {canErase && (
+                <ErasePanel
+                  user={u}
+                  reason={reason}
+                  onDone={() => {
+                    setNotice("Erased.");
+                    onChanged();
+                  }}
+                />
+              )}
+            </div>
+          )}
 
           {!suspended && (
             <p className="muted small">
@@ -456,4 +684,21 @@ function UserRow({
       )}
     </li>
   );
+}
+
+/**
+ * Save a file the browser never fetched from a URL.
+ *
+ * The export arrives as a response body, not as a link: a downloadable URL for
+ * somebody's personal data would be a URL that could be forwarded, and the
+ * whole point of SEC-PRV-007 auditing the extraction is that it happens once,
+ * to a named person.
+ */
+function download(filename: string, contents: string): void {
+  const url = URL.createObjectURL(new Blob([contents], { type: "application/json" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
 }

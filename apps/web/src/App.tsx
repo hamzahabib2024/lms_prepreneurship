@@ -20,6 +20,7 @@ import { AuditPage } from "./pages/AuditPage";
 import { RubricsPage } from "./pages/RubricsPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SecurityPage } from "./pages/SecurityPage";
+import { BulkPage } from "./pages/BulkPage";
 import { VerifyPage } from "./pages/VerifyPage";
 import { CertificatesPage } from "./pages/CertificatesPage";
 import { AnnouncementsPage } from "./pages/AnnouncementsPage";
@@ -84,6 +85,7 @@ export function App() {
           {hasRole("super_admin", "admin") && <NavLink to="/audit">Audit</NavLink>}
           {hasRole("super_admin", "admin") && <NavLink to="/settings">Settings</NavLink>}
           {hasRole("super_admin") && <NavLink to="/security">Security</NavLink>}
+          {hasRole("super_admin", "admin") && <NavLink to="/bulk">Bulk</NavLink>}
           {hasRole("super_admin", "admin", "teacher") && (
             <NavLink to="/attendance">Attendance</NavLink>
           )}
@@ -182,6 +184,13 @@ export function App() {
           <Route
             path="/audit"
             element={hasRole("super_admin", "admin") ? <AuditPage /> : <Navigate to="/" replace />}
+          />
+          {/* Admin too: bulk_operation reaches an Admin holding the
+              bulk_operator sub-permission, and the server decides. Hiding the
+              page from every Admin would hide it from the ones who may. */}
+          <Route
+            path="/bulk"
+            element={hasRole("super_admin", "admin") ? <BulkPage /> : <Navigate to="/" replace />}
           />
           {/* Super Admin ALONE (4.5). Unlike the audit log there is no Admin
               tier: this log names who has been attacked and from where, and is

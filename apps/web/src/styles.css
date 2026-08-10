@@ -364,3 +364,12 @@ kbd {
   background: var(--warn-bg); color: var(--warn);
 }
 .impersonation-banner .btn { border-color: var(--warn); color: var(--warn); }
+
+/* Actions that are not peers of the ordinary ones: one puts you inside
+   somebody else's account, the other cannot be undone. Separated so the wrong
+   click is harder to make. */
+.danger-zone {
+  margin-top: .75rem; padding-top: .75rem;
+  border-top: 1px dashed var(--line);
+  display: flex; flex-direction: column; gap: .5rem;
+}
