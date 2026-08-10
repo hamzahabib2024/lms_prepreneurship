@@ -19,6 +19,7 @@ import { UsersPage } from "./pages/UsersPage";
 import { AuditPage } from "./pages/AuditPage";
 import { RubricsPage } from "./pages/RubricsPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { SecurityPage } from "./pages/SecurityPage";
 import { VerifyPage } from "./pages/VerifyPage";
 import { CertificatesPage } from "./pages/CertificatesPage";
 import { AnnouncementsPage } from "./pages/AnnouncementsPage";
@@ -78,6 +79,7 @@ export function App() {
           {hasRole("super_admin", "admin") && <NavLink to="/users">People</NavLink>}
           {hasRole("super_admin", "admin") && <NavLink to="/audit">Audit</NavLink>}
           {hasRole("super_admin", "admin") && <NavLink to="/settings">Settings</NavLink>}
+          {hasRole("super_admin") && <NavLink to="/security">Security</NavLink>}
           {hasRole("super_admin", "admin", "teacher") && (
             <NavLink to="/attendance">Attendance</NavLink>
           )}
@@ -176,6 +178,13 @@ export function App() {
           <Route
             path="/audit"
             element={hasRole("super_admin", "admin") ? <AuditPage /> : <Navigate to="/" replace />}
+          />
+          {/* Super Admin ALONE (4.5). Unlike the audit log there is no Admin
+              tier: this log names who has been attacked and from where, and is
+              as useful for investigating a colleague as for defending one. */}
+          <Route
+            path="/security"
+            element={hasRole("super_admin") ? <SecurityPage /> : <Navigate to="/" replace />}
           />
           {/* An Admin may READ institute policy and not change it (§4.5), so
               the route is open to both and the inputs decide. Refusing the page
