@@ -132,6 +132,16 @@ interface RequestOptions {
   body?: unknown;
   /** Internal: prevents an infinite refresh loop. */
   _retried?: boolean;
+  /**
+   * Internal: return the whole §9.2 envelope rather than just `data`.
+   *
+   * Only `list()` wants this, because pagination lives beside the rows rather
+   * than inside them. It exists so that list() does not need its own fetch —
+   * it had one, and that copy had no token refresh, so every PAGINATED screen
+   * in the app failed on an expired access token while every other screen
+   * recovered silently. Two code paths, one of them missing a feature.
+   */
+  _envelope?: boolean;
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
@@ -180,6 +190,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   }
 
   // §9.2 — every success is wrapped. Screens receive the payload itself.
+  if (options._envelope) return body as T;
   return (body as { data: T }).data;
 }
 
@@ -197,21 +208,18 @@ export const api = {
   upload: <T>(path: string, form: FormData) =>
     request<T>(path, { method: "POST", body: form }),
 
-  /** Collections carry pagination alongside the rows. */
+  /**
+   * Collections carry pagination alongside the rows.
+   *
+   * Goes through request() like everything else, so it inherits token refresh:
+   * a list opened after the access token expired now reloads itself instead of
+   * showing an error.
+   */
   async list<T>(path: string): Promise<{ data: T[]; pagination?: Pagination }> {
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
-
-    const res = await fetch(`${BASE}${path}`, { headers });
-    const body = (await res.json()) as {
-      data?: T[];
-      pagination?: Pagination;
-      error?: Record<string, unknown>;
-    };
-
-    if (!res.ok) {
-      throw new ApiError(res.status, (body.error ?? {}) as ConstructorParameters<typeof ApiError>[1]);
-    }
+    const body =
+      (await request<{ data?: T[]; pagination?: Pagination } | undefined>(path, {
+        _envelope: true,
+      })) ?? {};
     const result: { data: T[]; pagination?: Pagination } = { data: body.data ?? [] };
     if (body.pagination) result.pagination = body.pagination;
     return result;
