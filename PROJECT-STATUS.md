@@ -1,16 +1,16 @@
 # Project status
 
-Last updated: 10 August 2026
+Last updated: 10 August 2026 (quiz authoring added)
 
-**Roughly 55–60% of the SRS scope is built.**
+**Roughly 58–62% of the SRS scope is built.**
 
 That figure is an estimate, not a measurement, and it is worth saying what it
 rests on. The SRS defines around a thousand numbered requirements; nobody has
 walked all of them one by one. What has been counted is: 48 database models, 107
-endpoints across 11 controllers, 15 web pages, 393 automated tests, and 8
+endpoints across 12 controllers, 16 web pages, 426 automated tests, and 9
 end-to-end probes. What the estimate weighs against that is the §4.5 permission
-matrix, which names 85 resources — **38 are reachable by an endpoint today and
-47 are not.**
+matrix, which names 85 resources — **41 are reachable by an endpoint today and
+44 are not.**
 
 The shape of the gap matters more than the number:
 
@@ -86,6 +86,8 @@ The shape of the gap matters more than the number:
 - [x] Cohort grade release (FR-ASG-028); internal notes never reach a student
 - [x] Quizzes: attempts, resume with the same paper, auto-marking, manual marking
 - [x] Four result-release policies, all four now honoured
+- [x] **Quiz authoring**: question banks, eight question types with per-type
+      validation, papers, publication that refuses an incoherent quiz
 
 ### Progress and certificates
 - [x] Weighted progress with redistribution when a component is absent (BR-PRG-03)
@@ -131,11 +133,10 @@ The shape of the gap matters more than the number:
 ### Authoring screens (endpoints exist, no interface)
 - [ ] Teacher creating modules, lessons and uploading lectures
 - [ ] Teacher creating and publishing assignments
+- [ ] Teacher building a quiz — the whole authoring API exists, no screen yet
 - [ ] Section and offering management beyond the read-only list
 
 ### Not started at all
-- [ ] **Quiz authoring** — question banks, questions, building a quiz. No
-      endpoints; the seed writes quizzes directly
 - [ ] Rubrics (the model exists; nothing creates or applies one)
 - [ ] Lesson resources — files attached to a lesson, separate from lectures
 - [ ] Timetable
