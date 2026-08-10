@@ -7,7 +7,7 @@ Last updated: 10 August 2026 (quiz authoring added)
 That figure is an estimate, not a measurement, and it is worth saying what it
 rests on. The SRS defines around a thousand numbered requirements; nobody has
 walked all of them one by one. What has been counted is: 48 database models, 107
-endpoints across 12 controllers, 16 web pages, 426 automated tests, and 9
+endpoints across 12 controllers, 17 web pages, 426 automated tests, and 9
 end-to-end probes. What the estimate weighs against that is the §4.5 permission
 matrix, which names 85 resources — **41 are reachable by an endpoint today and
 44 are not.**
@@ -88,6 +88,7 @@ The shape of the gap matters more than the number:
 - [x] Four result-release policies, all four now honoured
 - [x] **Quiz authoring**: question banks, eight question types with per-type
       validation, papers, publication that refuses an incoherent quiz
+- [x] Quiz builder screen: type-driven composer, paper assembly, publish
 
 ### Progress and certificates
 - [x] Weighted progress with redistribution when a component is absent (BR-PRG-03)
@@ -133,7 +134,6 @@ The shape of the gap matters more than the number:
 ### Authoring screens (endpoints exist, no interface)
 - [ ] Teacher creating modules, lessons and uploading lectures
 - [ ] Teacher creating and publishing assignments
-- [ ] Teacher building a quiz — the whole authoring API exists, no screen yet
 - [ ] Section and offering management beyond the read-only list
 
 ### Not started at all
