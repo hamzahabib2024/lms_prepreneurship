@@ -1,8 +1,9 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { createHmac, randomUUID } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
 import { mkdir, readFile, readdir, stat, unlink, writeFile } from "node:fs/promises";
-import { dirname, join, resolve, sep } from "node:path";
+import { dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { AppError } from "@lms/shared";
 import type {
   FolderEntry,
@@ -20,6 +21,45 @@ import type {
  * paths, the signing code would only ever execute in production, which is
  * exactly where nobody wants to discover it is wrong.
  */
+/**
+ * Anchors a relative storage root to the repository, not to the working
+ * directory.
+ *
+ * The API runs from apps/api under `npm run dev` and from the repository root
+ * under `npm start`. `resolve("./storage")` therefore produced two different
+ * directories depending on how it was started — and unlike the JWT key path,
+ * which throws when it looks in the wrong place, this failure is SILENT: the
+ * provider happily creates the new directory, and every file uploaded under
+ * the other one becomes unreachable with no error anywhere.
+ *
+ * An absolute path is honoured untouched, which is what production sets.
+ */
+function resolveStorageRoot(configured: string): string {
+  if (isAbsolute(configured)) return resolve(configured);
+
+  let dir = process.cwd();
+  for (let depth = 0; depth < 5; depth++) {
+    // The workspace root is the package.json that declares workspaces. Using
+    // .git would fail in a deployed tarball, which has no repository.
+    const manifest = join(dir, "package.json");
+    if (existsSync(manifest)) {
+      try {
+        const parsed = JSON.parse(readFileSync(manifest, "utf8")) as { workspaces?: unknown };
+        if (parsed.workspaces) return resolve(dir, configured);
+      } catch {
+        // An unreadable package.json is not our problem to report here.
+      }
+    }
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+
+  // No workspace root found. Falling back to cwd keeps a standalone deployment
+  // working rather than refusing to start.
+  return resolve(configured);
+}
+
 @Injectable()
 export class LocalStorageProvider implements StorageProvider {
   readonly key = "local";
@@ -28,8 +68,9 @@ export class LocalStorageProvider implements StorageProvider {
   private readonly secret: string;
 
   constructor(private readonly config: ConfigService) {
-    this.root = resolve(this.config.get<string>("LOCAL_STORAGE_ROOT", "./storage"));
+    this.root = resolveStorageRoot(this.config.get<string>("LOCAL_STORAGE_ROOT", "./storage"));
     this.secret = this.config.get<string>("LOCAL_STORAGE_SECRET", "dev-only-signing-secret");
+    this.logger.log(`Local storage root: ${this.root}`);
   }
 
   /**
