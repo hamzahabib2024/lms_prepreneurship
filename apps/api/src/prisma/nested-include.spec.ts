@@ -77,6 +77,21 @@ const MODEL_BY_CAMEL = new Map(
  * can check the claim rather than trust it.
  */
 const ACKNOWLEDGED: Record<string, string> = {
+  "assessment/assignment.service.ts::Assignment.rubric":
+    "To-one parent of a rubric the student is already marked against. Rubric " +
+    "itself is unscoped reference data; the criteria under it are the policed " +
+    "part and are handled by the entry below.",
+  "assessment/assignment.service.ts::Rubric.criteria":
+    "DELIBERATELY UNRESTATED, and the only include in the codebase that loads " +
+    "policed rows on purpose. studentView needs the INTERNAL criteria in order " +
+    "to remove them: forStudent drops each internal row and reports " +
+    "isPartialAccount when internal marks were awarded, so the student is told " +
+    "the breakdown does not account for the whole mark rather than left to " +
+    "discover the arithmetic does not work. Restating `isInternal: false` here " +
+    "would silently return a total that fails to reconcile with the grade " +
+    "beside it. Nothing from this include is returned unprojected — forStudent " +
+    "is the only consumer, and rubric-scoring.spec.ts asserts the internal " +
+    "name, id and marks are absent from its output.",
   "assessment/assignment.service.ts::AssignmentSubmission.grade":
     "To-one, so Prisma accepts no where. listForStudent and studentView both " +
     "check grade.releasedAt explicitly before exposing anything (BR-ASG-09); " +

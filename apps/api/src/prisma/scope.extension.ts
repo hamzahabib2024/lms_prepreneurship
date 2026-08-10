@@ -113,7 +113,13 @@ const isStudent = (a: Actor) => a.roles.includes("student");
  *
  *   Programme, Subject, AcademicSession, Batch   the prospectus
  *   Role                                          the four fixed roles (§4.2)
- *   Rubric, RubricCriterion                       marking schemes
+ *   Rubric                                        the marking scheme itself
+ *
+ * RubricCriterion USED TO BE ON THIS LIST and is not any more. A rubric is
+ * reference data, but its criteria are not uniformly so: one marked
+ * `isInternal` records something the student must never read (FR-ASG-014) —
+ * a moderation adjustment, a plagiarism weighting. That is a row-state
+ * condition, which is exactly what a policy expresses, so it has one.
  *
  * A model carrying a person's work, marks, money or contact details does NOT
  * belong on this list. If you are adding one, add a policy instead.
@@ -148,6 +154,7 @@ const STATE_FILTERED = [
   "RecordedLecture", // publicationStatus + availabilityStatus
   "Quiz", // publicationStatus
   "SubmissionFile", // submissionId — an unsubmitted draft upload
+  "RubricCriterion", // isInternal — a criterion the student must not see
 ] as const;
 
 const DELIBERATELY_UNSCOPED = [
@@ -157,7 +164,6 @@ const DELIBERATELY_UNSCOPED = [
   "Batch",
   "Role",
   "Rubric",
-  "RubricCriterion",
 ] as const;
 
 /**
@@ -323,6 +329,20 @@ const MODEL_POLICIES: Record<string, PolicyFn> = {
 
   /// BR-CNT-01 again: a draft assignment is invisible to students, and an
   /// assignment belonging to another section does not exist for them.
+  /**
+   * FR-ASG-014 — an internal criterion is never shown to a student.
+   *
+   * Staff see the whole rubric: a teacher marks against the internal criteria,
+   * so hiding them would make the rubric unusable for its actual purpose.
+   *
+   * This filters ROWS, which is the half of the problem scope can solve. The
+   * other half is `AssignmentGrade.rubricScores`, a JSON column holding
+   * criterion-id -> marks. No predicate can reach inside a blob, so the marks
+   * are stripped in application code by rubric-scoring.forStudent. Two
+   * mechanisms because there are two shapes of the same secret.
+   */
+  RubricCriterion: (a) => (isStudent(a) ? { isInternal: false } : null),
+
   Assignment: (a) => {
     if (isAdmin(a)) return null;
     if (isTeacher(a)) return { sectionSubjectId: { in: [...a.sectionSubjectIds] } };

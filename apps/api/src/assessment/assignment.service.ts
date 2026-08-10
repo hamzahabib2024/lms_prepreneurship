@@ -4,6 +4,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { getActor } from "../prisma/actor-context";
 import { applyLatePenalty, assessLateness, type LatePolicy } from "./late-penalty";
+import { forStudent, validateScores } from "./rubric-scoring";
 import { NotificationService } from "../notification/notification.service";
 import { assertOwnsSectionSubject } from "../rbac/ownership";
 
@@ -542,6 +543,54 @@ export class AssignmentService {
       });
     }
 
+    // FR-ASG-016 — the rubric scores must be a valid marking of THIS rubric.
+    //
+    // They are stored in a JSON column, so nothing below this line can check
+    // them: not the scope predicate, not `select`, not the DMMF-based guards.
+    // Until this ran, the endpoint stored whatever `Record<string, number>` it
+    // was handed — a score above the criterion maximum, a negative one, or a
+    // criterion belonging to an entirely different rubric all went in, and the
+    // first anyone knew was a student reading "12 out of 10".
+    if (input.rubricScores && Object.keys(input.rubricScores).length > 0) {
+      if (!a.rubricId) {
+        throw new AppError("VALIDATION_FAILED", {
+          details: [
+            {
+              field: "rubricScores",
+              code: "NO_RUBRIC",
+              message: "This assignment is not marked against a rubric.",
+            },
+          ],
+        });
+      }
+      const criteria = await this.prisma.asSystem((db) =>
+        db.rubricCriterion.findMany({
+          where: { rubricId: a.rubricId as string },
+          orderBy: { displayOrder: "asc" },
+        }),
+      );
+      const problems = validateScores(
+        criteria.map((c: (typeof criteria)[number]) => ({
+          id: c.id,
+          name: c.name,
+          maxMarks: Number(c.maxMarks),
+          displayOrder: c.displayOrder,
+          isInternal: c.isInternal,
+          description: c.description,
+        })),
+        input.rubricScores,
+      );
+      if (problems.length > 0) {
+        throw new AppError("VALIDATION_FAILED", {
+          details: problems.map((p) => ({
+            field: p.criterionId ? `rubricScores.${p.criterionId}` : "rubricScores",
+            code: "INVALID",
+            message: p.message,
+          })),
+        });
+      }
+    }
+
     // BR-ASG-03 — the System computes the penalty. A teacher entering a
     // reduced figure by hand is unreproducible and indefensible if challenged.
     const penalty = applyLatePenalty(input.rawMarks, submission.minutesLate, {
@@ -787,12 +836,28 @@ export class AssignmentService {
       include: {
         grade: true,
         files: { select: { id: true, originalFilename: true, sizeBytes: true } },
+        // The criteria are loaded so they can be REMOVED. forStudent needs the
+        // internal ones to know which rows to drop and whether the remaining
+        // account is complete; they are stripped before anything is returned.
+        assignment: {
+          select: { rubric: { select: { criteria: { orderBy: { displayOrder: "asc" } } } } },
+        },
       },
     });
     if (!submission) return { submitted: false as const };
 
     const g = submission.grade;
     const isReleased = !!g?.releasedAt;
+    const criteria = (submission.assignment.rubric?.criteria ?? []).map(
+      (c: { id: string; name: string; maxMarks: unknown; displayOrder: number; isInternal: boolean; description: string | null }) => ({
+        id: c.id,
+        name: c.name,
+        maxMarks: Number(c.maxMarks),
+        displayOrder: c.displayOrder,
+        isInternal: c.isInternal,
+        description: c.description,
+      }),
+    );
 
     return {
       submitted: true as const,
@@ -821,7 +886,19 @@ export class AssignmentService {
               penaltyApplied: Number(g.penaltyApplied),
               finalMarks: Number(g.finalMarks),
               feedback: g.feedback,
-              rubricScores: g.rubricScores,
+              // FR-ASG-014 — the breakdown, WITHOUT the internal criteria.
+              //
+              // This handed back `g.rubricScores` verbatim. It is a JSON
+              // column, so the whole blob went out: every internal criterion's
+              // id and its mark, for a student to read in the network tab. A
+              // criterion is marked internal precisely because it records
+              // something the student must not see — a moderation adjustment, a
+              // plagiarism weighting, a marker's confidence.
+              //
+              // Nothing structural could have caught this. Scope filters rows,
+              // `select` narrows columns, and the DMMF guards read the schema;
+              // to all three this field is one opaque value.
+              rubric: forStudent(criteria, (g.rubricScores ?? {}) as Record<string, number>),
               releasedAt: g.releasedAt,
               // internalNotes is absent by construction — there is no branch
               // in this method that can emit it.
