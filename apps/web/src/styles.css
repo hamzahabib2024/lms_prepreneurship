@@ -354,3 +354,13 @@ kbd {
    something to deal with rather than a notice that fades. */
 .password-panel { border-color: var(--warn); background: var(--warn-bg); }
 .password-panel .stat { font-family: ui-monospace, Consolas, monospace; letter-spacing: .05em; }
+
+/* SEC-AUZ-013 — an impersonated session must never look like an ordinary one.
+   Above everything, undismissable, and coloured as a warning rather than an
+   error: nothing is wrong, but the identity on screen is not yours. */
+.impersonation-banner {
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  padding: .6rem 1rem; border-bottom: 2px solid var(--warn);
+  background: var(--warn-bg); color: var(--warn);
+}
+.impersonation-banner .btn { border-color: var(--warn); color: var(--warn); }

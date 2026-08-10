@@ -3,6 +3,7 @@ import { Reflector } from "@nestjs/core";
 import { AppError, resolvePermission, type Action, type Resource, type Scope } from "@lms/shared";
 import type { Request } from "express";
 import { getActor } from "../prisma/actor-context";
+import { refuseWhileImpersonating } from "../admin/impersonation-rules";
 
 export const PERMISSION_KEY = "lms:permission";
 export const PUBLIC_KEY = "lms:public";
@@ -67,6 +68,28 @@ export class PermissionsGuard implements CanActivate {
         `Route ${req.method} ${req.originalUrl} has no @RequirePermission and is not @Public.`,
       );
       throw new AppError("AUTH_FORBIDDEN");
+    }
+
+    // SEC-AUZ-013 — checked BEFORE the matrix, because the question is not
+    // whether the target may do this. They may; that is exactly the problem.
+    // An impersonator who can change a password locks the owner out and can
+    // thereafter sign in directly, with nothing marked as impersonation at all.
+    if (actor.impersonatedBy) {
+      const refusal = refuseWhileImpersonating(required.resource, required.action);
+      if (refusal.refused) {
+        this.logger.warn(
+          JSON.stringify({
+            event: "impersonation.refused",
+            impersonator: actor.impersonatedBy,
+            actingAs: actor.userId,
+            resource: required.resource,
+            action: required.action,
+            path: req.originalUrl,
+            correlationId: actor.correlationId,
+          }),
+        );
+        throw new AppError("AUTH_FORBIDDEN", { message: refusal.message ?? "" });
+      }
     }
 
     const decision = resolvePermission(

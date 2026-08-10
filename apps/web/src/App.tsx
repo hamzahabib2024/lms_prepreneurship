@@ -24,6 +24,7 @@ import { VerifyPage } from "./pages/VerifyPage";
 import { CertificatesPage } from "./pages/CertificatesPage";
 import { AnnouncementsPage } from "./pages/AnnouncementsPage";
 import { NotificationBell } from "./components/NotificationBell";
+import { ImpersonationBanner } from "./components/ImpersonationBanner";
 
 /**
  * Application shell — SRS §13.1.
@@ -67,6 +68,9 @@ export function App() {
 
   return (
     <div className="shell">
+      {/* Above the header, so it is the first thing on the page and cannot be
+          scrolled past (SEC-AUZ-013). */}
+      <ImpersonationBanner />
       <header className="topbar">
         <div className="brand">LMS</div>
         <nav className="nav">
