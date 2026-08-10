@@ -83,9 +83,14 @@ export function MarkingPage() {
       <header className="page-head">
         <h1>Marking</h1>
         {/* The one thing a teacher comes here to START rather than finish. */}
-        <Link className="btn btn-quiet" to="/quiz-builder">
-          New quiz
-        </Link>
+        <span className="row-actions">
+          <Link className="btn btn-quiet" to="/assignment-builder">
+            New assignment
+          </Link>
+          <Link className="btn btn-quiet" to="/quiz-builder">
+            New quiz
+          </Link>
+        </span>
       </header>
       {sections.map((s) => (
         <SectionAssignments key={s.sectionSubjectId} section={s} />

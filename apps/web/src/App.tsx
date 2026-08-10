@@ -14,6 +14,7 @@ import { GradingPage } from "./pages/GradingPage";
 import { QuizMarkingPage } from "./pages/QuizMarkingPage";
 import { QuizBuilderPage } from "./pages/QuizBuilderPage";
 import { ContentPage } from "./pages/ContentPage";
+import { AssignmentBuilderPage } from "./pages/AssignmentBuilderPage";
 import { VerifyPage } from "./pages/VerifyPage";
 import { CertificatesPage } from "./pages/CertificatesPage";
 import { AnnouncementsPage } from "./pages/AnnouncementsPage";
@@ -130,6 +131,12 @@ export function App() {
             path="/content"
             element={
               hasRole("super_admin", "admin", "teacher") ? <ContentPage /> : <Navigate to="/" replace />
+            }
+          />
+          <Route
+            path="/assignment-builder"
+            element={
+              hasRole("super_admin", "admin", "teacher") ? <AssignmentBuilderPage /> : <Navigate to="/" replace />
             }
           />
           <Route
