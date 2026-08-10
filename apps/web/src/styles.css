@@ -273,3 +273,26 @@ kbd {
   width: 100%; max-height: 65vh; background: #000;
   border-radius: var(--radius); object-fit: contain;
 }
+
+/* ---------------------------------------------------------- assignments -- */
+.assignment { display: block; }
+.assignment-head { display: flex; justify-content: space-between; gap: 1rem; align-items: baseline; }
+.assignment-body { margin: .6rem 0 .25rem; padding-left: .75rem; border-left: 2px solid var(--line); }
+
+/* A control that reads as a link but behaves as a button: it toggles a panel,
+   it does not navigate, and a screen reader should be told which (NFR-ACC-002). */
+.link-button {
+  background: none; border: 0; padding: 0; font: inherit; font-weight: 600;
+  color: var(--primary); cursor: pointer; text-align: left;
+}
+.link-button:hover { text-decoration: underline; }
+.link-button:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+.submit-panel { margin-top: .75rem; }
+.field textarea {
+  width: 100%; padding: .5rem .6rem; border: 1px solid var(--line);
+  border-radius: var(--radius); font: inherit; resize: vertical;
+}
+/* A 44px target, since a file input is the one control on this page a student
+   on a phone must hit reliably (UI-012). */
+.field input[type="file"] { display: block; width: 100%; padding: .55rem 0; min-height: 44px; }

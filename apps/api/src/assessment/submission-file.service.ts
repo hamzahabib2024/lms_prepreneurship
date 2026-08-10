@@ -132,7 +132,9 @@ export class SubmissionFileService {
       );
       throw new AppError("VALIDATION_FAILED", {
         message: rejection.message,
-        details: [{ field: "file", message: rejection.message }],
+        // The rejection code travels to the client, so an interface can react
+        // to TOO_LARGE differently from CONTENT_MISMATCH without parsing prose.
+        details: [{ field: "file", code: rejection.code, message: rejection.message }],
       });
     }
 

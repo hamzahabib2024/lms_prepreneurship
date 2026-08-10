@@ -537,6 +537,100 @@ export class AssignmentService {
    * remembering: internal notes are absent from the returned shape entirely,
    * and an unreleased grade reports as pending rather than leaking the mark.
    */
+  /**
+   * FR-ASG-011 — every assignment in one subject, with this student's standing
+   * in each.
+   *
+   * One query for the assignments and one for the submissions, rather than a
+   * submission lookup per row. A subject with twenty assignments would
+   * otherwise issue twenty-one queries to render one page.
+   *
+   * The scope policy restricts this to PUBLISHED assignments in the student's
+   * own sections, so nothing here filters on publication status.
+   */
+  async listForStudent(sectionSubjectId: string) {
+    const actor = getActor();
+    if (!actor?.studentId) {
+      throw new AppError("AUTH_FORBIDDEN", {
+        message: "This view is for students. Your account is not a student account.",
+      });
+    }
+    const studentId = actor.studentId;
+
+    const assignments = await this.prisma.scoped.assignment.findMany({
+      where: { sectionSubjectId, deletedAt: null },
+      orderBy: { dueAt: "asc" },
+    });
+    if (assignments.length === 0) return [];
+
+    const submissions = await this.prisma.scoped.assignmentSubmission.findMany({
+      where: { studentId, assignmentId: { in: assignments.map((a) => a.id) }, isLatest: true },
+      include: { grade: true, files: { select: { id: true } } },
+    });
+    const byAssignment = new Map(
+      submissions.map((s: (typeof submissions)[number]) => [s.assignmentId, s]),
+    );
+
+    const extensions = await this.prisma.scoped.assignmentExtension.findMany({
+      where: { studentId, assignmentId: { in: assignments.map((a) => a.id) } },
+    });
+    const extensionFor = new Map(
+      extensions.map((e: (typeof extensions)[number]) => [e.assignmentId, e.extendedTo]),
+    );
+
+    const now = new Date();
+
+    return assignments.map((a: (typeof assignments)[number]) => {
+      const submission = byAssignment.get(a.id);
+      const extendedTo = extensionFor.get(a.id) ?? null;
+      const effectiveDue = extendedTo ?? a.dueAt;
+      const grade = submission?.grade;
+
+      return {
+        id: a.id,
+        title: a.title,
+        instructions: a.instructions,
+        marksAvailable: Number(a.marksAvailable),
+        opensAt: a.opensAt,
+        dueAt: a.dueAt,
+        // FR-ASG-018 — a personal extension replaces the deadline the student
+        // is shown. Displaying the cohort deadline to someone who has been
+        // granted longer is simply wrong information.
+        extendedTo,
+        hardCloseAt: a.hardCloseAt,
+        submissionType: a.submissionType,
+        allowedFileTypes: a.allowedFileTypes,
+        maxFileSizeMb: a.maxFileSizeMb,
+        maxFileCount: a.maxFileCount,
+        resubmissionPolicy: a.resubmissionPolicy,
+        latePolicy: a.latePolicy,
+
+        isOpen: now >= a.opensAt && (!a.hardCloseAt || now <= a.hardCloseAt),
+        isOverdue: now > effectiveDue,
+
+        submitted: submission != null,
+        submittedAt: submission?.submittedAt ?? null,
+        version: submission?.version ?? 0,
+        wasLate: submission?.isLate ?? false,
+        fileCount: submission?.files.length ?? 0,
+
+        // BR-ASG-09 — a mark does not exist for the student until released.
+        // The scope policy already withholds an unreleased grade, so reaching
+        // this with a grade present means it IS released; the ternary is here
+        // so an absent grade reads as "not yet", not as zero.
+        grade: grade
+          ? {
+              status: "RELEASED" as const,
+              finalMarks: Number(grade.finalMarks),
+              penaltyApplied: Number(grade.penaltyApplied),
+            }
+          : submission
+            ? { status: "AWAITING_GRADE" as const }
+            : { status: "NOT_SUBMITTED" as const },
+      };
+    });
+  }
+
   async studentView(assignmentId: string) {
     const actor = getActor();
     if (!actor?.studentId) throw new AppError("AUTH_FORBIDDEN");

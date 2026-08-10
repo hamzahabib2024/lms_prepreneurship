@@ -97,6 +97,19 @@ export class AssessmentController {
     return this.assignments.publish(id);
   }
 
+  /**
+   * FR-ASG-011 — the student's assignments for one subject.
+   *
+   * `assignment:read` rather than `submission:read`: this lists the WORK SET,
+   * and a student's own standing is folded in. The scope policy limits it to
+   * published assignments in their own sections.
+   */
+  @RequirePermission("assignment", "read")
+  @Get("section-subjects/:id/my-assignments")
+  myAssignments(@Param("id") id: string) {
+    return this.assignments.listForStudent(id);
+  }
+
   /** FR-TCH-019 — submitted, not submitted, late, ungraded, at a glance. */
   @RequirePermission("submission", "read")
   @Get("assignments/:id/submissions")
@@ -140,7 +153,7 @@ export class AssessmentController {
     if (!file) {
       throw new AppError("VALIDATION_FAILED", {
         message: "No file was received. Choose a file and try again.",
-        details: [{ field: "file", message: "A file is required." }],
+        details: [{ field: "file", code: "REQUIRED", message: "A file is required." }],
       });
     }
     return this.files.upload(id, {

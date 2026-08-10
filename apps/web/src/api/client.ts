@@ -135,13 +135,20 @@ interface RequestOptions {
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  // FormData carries its own multipart boundary, which only the browser can
+  // generate. Setting Content-Type ourselves would omit it and the server would
+  // fail to parse a body that is otherwise perfectly well formed.
+  const isForm = options.body instanceof FormData;
+
+  const headers: Record<string, string> = isForm ? {} : { "Content-Type": "application/json" };
   if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
 
   const res = await fetch(`${BASE}${path}`, {
     method: options.method ?? "GET",
     headers,
-    ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
+    ...(options.body !== undefined
+      ? { body: isForm ? (options.body as FormData) : JSON.stringify(options.body) }
+      : {}),
   });
 
   if (res.status === 204) return undefined as T;
@@ -181,6 +188,14 @@ export const api = {
   post: <T>(path: string, body?: unknown) => request<T>(path, { method: "POST", body }),
   patch: <T>(path: string, body?: unknown) => request<T>(path, { method: "PATCH", body }),
   del: <T>(path: string) => request<T>(path, { method: "DELETE" }),
+
+  /**
+   * Multipart upload. Goes through the same path as everything else, so it
+   * inherits token refresh — a 401 halfway through a large upload retries
+   * instead of losing the file.
+   */
+  upload: <T>(path: string, form: FormData) =>
+    request<T>(path, { method: "POST", body: form }),
 
   /** Collections carry pagination alongside the rows. */
   async list<T>(path: string): Promise<{ data: T[]; pagination?: Pagination }> {
