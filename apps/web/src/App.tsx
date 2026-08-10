@@ -15,6 +15,8 @@ import { QuizMarkingPage } from "./pages/QuizMarkingPage";
 import { QuizBuilderPage } from "./pages/QuizBuilderPage";
 import { ContentPage } from "./pages/ContentPage";
 import { AssignmentBuilderPage } from "./pages/AssignmentBuilderPage";
+import { UsersPage } from "./pages/UsersPage";
+import { AuditPage } from "./pages/AuditPage";
 import { VerifyPage } from "./pages/VerifyPage";
 import { CertificatesPage } from "./pages/CertificatesPage";
 import { AnnouncementsPage } from "./pages/AnnouncementsPage";
@@ -71,6 +73,8 @@ export function App() {
           {hasRole("student") && <NavLink to="/subjects">My subjects</NavLink>}
           {hasRole("super_admin", "admin") && <NavLink to="/admissions">Admissions</NavLink>}
           {hasRole("super_admin", "admin") && <NavLink to="/certificates">Certificates</NavLink>}
+          {hasRole("super_admin", "admin") && <NavLink to="/users">People</NavLink>}
+          {hasRole("super_admin", "admin") && <NavLink to="/audit">Audit</NavLink>}
           {hasRole("super_admin", "admin", "teacher") && (
             <NavLink to="/attendance">Attendance</NavLink>
           )}
@@ -156,6 +160,18 @@ export function App() {
             element={
               hasRole("super_admin", "admin", "teacher") ? <QuizMarkingPage /> : <Navigate to="/" replace />
             }
+          />
+          <Route
+            path="/users"
+            element={hasRole("super_admin", "admin") ? <UsersPage /> : <Navigate to="/" replace />}
+          />
+          {/* An Admin sees only their own actions here, a Super Admin sees
+              everything (§4.5.12). The route is open to both because the
+              narrower view is genuinely useful — an administrator checking
+              what they did last Tuesday. */}
+          <Route
+            path="/audit"
+            element={hasRole("super_admin", "admin") ? <AuditPage /> : <Navigate to="/" replace />}
           />
           <Route
             path="/certificates"
