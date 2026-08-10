@@ -23,6 +23,7 @@ import { SecurityPage } from "./pages/SecurityPage";
 import { BulkPage } from "./pages/BulkPage";
 import { FeesPage } from "./pages/FeesPage";
 import { TimetablePage } from "./pages/TimetablePage";
+import { DiscussionPage } from "./pages/DiscussionPage";
 import { VerifyPage } from "./pages/VerifyPage";
 import { CertificatesPage } from "./pages/CertificatesPage";
 import { AnnouncementsPage } from "./pages/AnnouncementsPage";
@@ -100,6 +101,9 @@ export function App() {
           {/* Everyone has a timetable: a student's classes, a teacher's
               teaching, an administrator's view of both. */}
           <NavLink to="/timetable">Timetable</NavLink>
+          {/* Students and teachers both. An administrator has the grant too,
+              but a forum is not something they need in the navigation. */}
+          {hasRole("student", "teacher") && <NavLink to="/discussions">Discussion</NavLink>}
           <NavLink to="/announcements">Announcements</NavLink>
           <NavLink to="/sections">Sections</NavLink>
           {hasRole("super_admin", "admin", "teacher") && <NavLink to="/reports">Reports</NavLink>}
@@ -194,6 +198,8 @@ export function App() {
             element={hasRole("super_admin", "admin") ? <AuditPage /> : <Navigate to="/" replace />}
           />
           <Route path="/timetable" element={<TimetablePage />} />
+          <Route path="/discussions" element={<DiscussionPage />} />
+          <Route path="/discussions/:sectionSubjectId" element={<DiscussionPage />} />
           {/* A student sees their own statement, staff see the list. A teacher
               has no business in anybody's finances and the server refuses them,
               so the route sends them home rather than to an error. */}
