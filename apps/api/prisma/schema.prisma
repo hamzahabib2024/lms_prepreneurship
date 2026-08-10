@@ -440,9 +440,12 @@ model Student {
   currentSection Section?             @relation(fields: [currentSectionId], references: [id], onDelete: SetNull)
   enrolments     Enrolment[]
   payments       Payment[]
-  attendance     AttendanceRecord[]
-  watchProgress  WatchProgress[]
+  attendance      AttendanceRecord[]
+  watchProgress   WatchProgress[]
   submissionFiles SubmissionFile[]
+  submissions     AssignmentSubmission[]
+  extensions      AssignmentExtension[]
+  quizAttempts    QuizAttempt[]
   registration   RegistrationRequest?
 
   // FR-REG-057: roll numbers are unique within a section and reusable after
@@ -1112,6 +1115,7 @@ model AssignmentSubmission {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   assignment Assignment       @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+  student    Student          @relation(fields: [studentId], references: [id], onDelete: Restrict)
   files      SubmissionFile[]
   grade      AssignmentGrade?
 
@@ -1205,6 +1209,7 @@ model AssignmentExtension {
   createdAt DateTime @default(now()) @map("created_at")
 
   assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  student    Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@unique([assignmentId, studentId])
   @@map("assignment_extensions")
@@ -1442,6 +1447,9 @@ model QuizAttempt {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   quiz    Quiz         @relation(fields: [quizId], references: [id], onDelete: Restrict)
+  /// DB-009 — the column existed with no constraint, so a deleted student left
+  /// their attempts behind as orphans pointing at nothing.
+  student Student      @relation(fields: [studentId], references: [id], onDelete: Restrict)
   answers QuizAnswer[]
 
   @@unique([quizId, studentId, attemptNumber])
