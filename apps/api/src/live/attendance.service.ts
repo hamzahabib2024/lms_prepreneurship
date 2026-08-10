@@ -7,6 +7,7 @@ import { AuditService } from "../audit/audit.service";
 import { getActor } from "../prisma/actor-context";
 import { assertOwnsSectionSubject } from "../rbac/ownership";
 import { NotificationService } from "../notification/notification.service";
+import { SettingsService } from "../settings/settings.service";
 import {
   decideWarning,
   warningMessage,
@@ -40,6 +41,7 @@ export class AttendanceService {
     private readonly audit: AuditService,
     private readonly config: ConfigService,
     private readonly notifications: NotificationService,
+    private readonly settings: SettingsService,
   ) {}
 
   /**
@@ -341,7 +343,10 @@ export class AttendanceService {
     const absent = counts["ABSENT"] ?? 0;
     const excused = counts["EXCUSED"] ?? 0;
 
-    const lateWeight = Number(this.config.get<string>("ATT_LATE_WEIGHT", "1.0"));
+    // Institute policy, not deployment configuration. This was an environment
+    // variable, so deciding that a late arrival counts as half a presence
+    // needed a developer and a redeploy.
+    const lateWeight = await this.settings.number("attendance.lateWeight");
     const attended = present + late * lateWeight;
     const denominator = present + late + absent; // excused and unmarked excluded
 
@@ -370,11 +375,50 @@ export class AttendanceService {
    * attendance-warning.ts, pure and tested, because a system that repeats
    * itself after every class is one people stop reading.
    */
+  /**
+   * The programme, section and subject an offering belongs to, for resolving a
+   * setting at the most specific scope that has one.
+   *
+   * Read under asSystem: this runs inside marking a register, where the actor
+   * is a teacher whose scope covers the section anyway, but it also runs from
+   * the scheduled sweep where there is no actor at all.
+   */
+  private async scopeContextFor(sectionSubjectId: string) {
+    const ss = await this.prisma.asSystem((db) =>
+      db.sectionSubject.findUnique({
+        where: { id: sectionSubjectId },
+        select: {
+          subjectId: true,
+          sectionId: true,
+          // The programme is four hops away: a section belongs to a batch,
+          // which runs in an academic session, which is a session OF a
+          // programme. Worth the join — a programme-wide threshold is the one
+          // an administrator most plausibly sets.
+          section: {
+            select: {
+              batch: { select: { academicSession: { select: { programmeId: true } } } },
+            },
+          },
+        },
+      }),
+    );
+    if (!ss) return {};
+    return {
+      SUBJECT: ss.subjectId,
+      SECTION: ss.sectionId,
+      PROGRAMME: ss.section.batch.academicSession.programmeId,
+    };
+  }
+
   private async evaluateThresholds(sectionSubjectId: string, studentIds: string[]) {
+    // Resolved for THIS section, so a programme or a section may set its own
+    // threshold — an evening cohort of working students reasonably runs to a
+    // different figure from a full-time one.
+    const context = await this.scopeContextFor(sectionSubjectId);
     const config: ThresholdConfig = {
-      warningPercent: Number(this.config.get<string>("ATT_WARNING_THRESHOLD", "75")),
-      criticalPercent: Number(this.config.get<string>("ATT_CRITICAL_THRESHOLD", "60")),
-      minimumSessions: Number(this.config.get<string>("ATT_MIN_SESSIONS_FOR_WARNING", "3")),
+      warningPercent: await this.settings.number("attendance.warningThreshold", context),
+      criticalPercent: await this.settings.number("attendance.criticalThreshold", context),
+      minimumSessions: await this.settings.number("attendance.minimumSessions", context),
     };
 
     const warnings: Array<{
@@ -587,7 +631,7 @@ export class AttendanceService {
     );
 
     const overall = await this.percentageFor(studentId);
-    const threshold = Number(this.config.get<string>("ATT_WARNING_THRESHOLD", "75"));
+    const threshold = await this.settings.number("attendance.warningThreshold");
 
     return {
       overall,

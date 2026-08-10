@@ -2,6 +2,7 @@ import { Injectable, Logger } from "@nestjs/common";
 import { AppError } from "@lms/shared";
 import { PrismaService } from "../prisma/prisma.service";
 import { AttendanceService } from "../live/attendance.service";
+import { SettingsService } from "../settings/settings.service";
 import { getActor } from "../prisma/actor-context";
 import {
   DEFAULT_WEIGHTS,
@@ -32,6 +33,7 @@ export class ProgressService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly attendance: AttendanceService,
+    private readonly settings: SettingsService,
   ) {}
 
   /** FR-PRG-001/004 — progress in one subject, with its breakdown. */
@@ -105,11 +107,20 @@ export class ProgressService {
       },
     };
 
-    const weights = this.weightsFor(ss.progressWeights);
+    // Institute policy, resolved for this subject and section. Until settings
+    // existed, "the institute defaults" WERE the constants in this file: an
+    // administrator could not change the weighting or the pass criteria at all,
+    // only a developer could, and only per-subject overrides existed.
+    const policy = await this.settings.resolveFor({
+      SUBJECT: subjectId,
+      SECTION: ss.sectionId,
+    });
+
+    const weights = this.weightsFor(ss.progressWeights, policy["progress.weights"]);
     const progress = computeProgress(inputs, weights);
 
     const averageGrade = await this.averageGradePercent(studentId, sectionSubjectId);
-    const criteria = this.criteriaFor(ss.completionCriteria);
+    const criteria = this.criteriaFor(ss.completionCriteria, policy);
     const completion = evaluateCompletion(progress, criteria, {
       attendancePercent: attendance.percentage,
       averageGradePercent: averageGrade,
@@ -273,14 +284,25 @@ export class ProgressService {
   }
 
   /** CFG-PRG-01..04 — per-subject override, falling back to institute defaults. */
-  private weightsFor(configured: unknown): Record<ComponentKey, number> {
-    if (!configured || typeof configured !== "object") return DEFAULT_WEIGHTS;
+  private weightsFor(
+    configured: unknown,
+    instituteWeights: unknown,
+  ): Record<ComponentKey, number> {
+    // The institute setting is the baseline; DEFAULT_WEIGHTS is the last
+    // resort, used only when nothing is configured anywhere. Keeping the
+    // constant means a fresh install behaves identically to a configured one.
+    const base =
+      instituteWeights && typeof instituteWeights === "object"
+        ? { ...DEFAULT_WEIGHTS, ...(instituteWeights as Partial<Record<ComponentKey, number>>) }
+        : DEFAULT_WEIGHTS;
+
+    if (!configured || typeof configured !== "object") return base;
     const c = configured as Partial<Record<ComponentKey, number>>;
     const merged = {
-      video: c.video ?? DEFAULT_WEIGHTS.video,
-      assignment: c.assignment ?? DEFAULT_WEIGHTS.assignment,
-      quiz: c.quiz ?? DEFAULT_WEIGHTS.quiz,
-      attendance: c.attendance ?? DEFAULT_WEIGHTS.attendance,
+      video: c.video ?? base.video,
+      assignment: c.assignment ?? base.assignment,
+      quiz: c.quiz ?? base.quiz,
+      attendance: c.attendance ?? base.attendance,
     };
     const sum = Object.values(merged).reduce((a, b) => a + b, 0);
     if (Math.abs(sum - 1) > 0.0001) {
@@ -289,18 +311,25 @@ export class ProgressService {
       this.logger.error(
         `Progress weights for a subject sum to ${sum.toFixed(4)}, not 1.00; using institute defaults.`,
       );
-      return DEFAULT_WEIGHTS;
+      return base;
     }
     return merged;
   }
 
-  private criteriaFor(configured: unknown): CompletionCriteria {
+  private criteriaFor(configured: unknown, policy: Record<string, unknown>): CompletionCriteria {
+    // The settings service guarantees a number for every catalogued key, so
+    // these are reads rather than a second layer of defaulting.
     const defaults: CompletionCriteria = {
-      minProgressPercent: 80,
-      minAttendancePercent: 75,
-      minAverageGradePercent: 50,
+      minProgressPercent: asNumber(policy["completion.minProgressPercent"], 80),
+      minAttendancePercent: asNumber(policy["completion.minAttendancePercent"], 75),
+      minAverageGradePercent: asNumber(policy["completion.minAverageGradePercent"], 50),
     };
     if (!configured || typeof configured !== "object") return defaults;
     return { ...defaults, ...(configured as CompletionCriteria) };
   }
+}
+
+/** A stored setting of the wrong type must not become NaN on a student's record. */
+function asNumber(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }

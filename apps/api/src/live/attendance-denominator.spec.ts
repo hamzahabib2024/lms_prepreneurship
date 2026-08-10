@@ -41,7 +41,16 @@ describe("percentageFor counts only classes that have happened", () => {
     // The warning path is exercised by attendance-warning.spec.ts; this suite
     // is about the DENOMINATOR, so notifications are a stub.
     const notifications = { notify: jest.fn(async () => ({ raised: 0 })) } as never;
-    return new AttendanceService(prisma, {} as AuditService, config, notifications);
+
+    // Settings answer with the catalogue defaults, which is what this suite
+    // assumed when the same numbers came from environment variables. The
+    // denominator does not depend on them; lateWeight only scales the
+    // numerator, and 1.0 leaves it alone.
+    const settings = {
+      number: jest.fn(async (key: string) => (key === "attendance.lateWeight" ? 1.0 : 75)),
+    } as never;
+
+    return new AttendanceService(prisma, {} as AuditService, config, notifications, settings);
   };
 
   it("restricts the query to ENDED sessions", async () => {
