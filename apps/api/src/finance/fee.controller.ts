@@ -67,7 +67,10 @@ export class FeeController {
    * the stored balances agree with the charges and payments they summarise, and
    * says what it corrected rather than quietly fixing the evidence.
    */
-  @RequirePermission("payment", "configure")
+  // `update`, not `configure`. The matrix grants payment FULL, and FULL is
+  // create/read/update/delete/approve/export — there is no `configure` on this
+  // resource, so guarding it with one made the route unreachable by anybody.
+  @RequirePermission("payment", "update")
   @Post("fees/reconcile")
   @HttpCode(200)
   reconcile() {
