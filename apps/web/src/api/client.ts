@@ -216,6 +216,37 @@ export const api = {
     request<T>(path, { method: "POST", body: form }),
 
   /**
+   * Bytes, not JSON.
+   *
+   * A file the System holds is fetched on an AUTHENTICATED request and handed
+   * to the browser as a blob, never linked. The storage location never reaches
+   * the client (ARC-041), and a URL a student could forward would be one that
+   * outlives their enrolment.
+   *
+   * It does not share request(), which parses JSON and unwraps the §9.2
+   * envelope — neither of which applies to a PDF. The cost is that it repeats
+   * the Authorization header and the 401 handling, which is why it stays short.
+   */
+  async download(path: string): Promise<Blob> {
+    const headers: Record<string, string> = {};
+    if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
+
+    let res = await fetch(`${BASE}${path}`, { headers });
+    if (res.status === 401 && (await refreshAccessToken())) {
+      const retry: Record<string, string> = {};
+      if (accessToken) retry["Authorization"] = `Bearer ${accessToken}`;
+      res = await fetch(`${BASE}${path}`, { headers: retry });
+    }
+
+    if (!res.ok) {
+      // An error body IS json, even when the success body is not.
+      const body = (await res.json().catch(() => ({}))) as { error?: Record<string, unknown> };
+      throw new ApiError(res.status, (body.error ?? {}) as ConstructorParameters<typeof ApiError>[1]);
+    }
+    return res.blob();
+  },
+
+  /**
    * Collections carry pagination alongside the rows.
    *
    * Goes through request() like everything else, so it inherits token refresh:

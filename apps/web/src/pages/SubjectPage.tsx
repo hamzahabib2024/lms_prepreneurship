@@ -186,6 +186,11 @@ export function SubjectPage() {
                   ))}
                 </ul>
               )}
+              {/* FR-CRS-035 — the handouts. Only ones the teacher has
+                  published, inside a published lesson: the server decides, and
+                  a lesson with none renders nothing at all rather than an
+                  empty heading. */}
+              <LessonHandouts lessonId={l.id} />
             </div>
           ))}
         </section>
@@ -241,4 +246,79 @@ function formatLength(seconds: number | null): string {
   if (!seconds || seconds <= 0) return "";
   const m = Math.round(seconds / 60);
   return m < 60 ? `${m} min` : `${Math.floor(m / 60)}h ${m % 60}m`;
+}
+
+interface Handout {
+  id: string;
+  title: string;
+  filename: string;
+  sizeBytes: number;
+}
+
+/**
+ * The files that go with a lesson.
+ *
+ * DOWNLOADED THROUGH THE API, not from a link. The storage location never
+ * reaches the browser (ARC-041), so the bytes come back on an authenticated
+ * request and are handed to the browser as a blob. A URL a student could
+ * forward would be a URL that outlives their enrolment.
+ */
+function LessonHandouts({ lessonId }: { lessonId: string }) {
+  const [handouts, setHandouts] = useState<Handout[] | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    api
+      .get<Handout[]>(`/lessons/${lessonId}/resources`)
+      .then(setHandouts)
+      .catch(() => setHandouts([]));
+  }, [lessonId]);
+
+  // Nothing published means nothing to say. An empty "Handouts" heading on
+  // every lesson is noise on the screen a student reads most.
+  if (!handouts || handouts.length === 0) return null;
+
+  const download = async (h: Handout) => {
+    setBusy(h.id);
+    setError(null);
+    try {
+      const blob = await api.download(`/lesson-resources/${h.id}/download`);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = h.filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      // ARC-045 — a missing file is the Institute's problem, said plainly.
+      setError("That file could not be downloaded. Please tell your teacher.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <ul className="list small">
+      {handouts.map((h) => (
+        <li key={h.id}>
+          <span>
+            {h.title}
+            <br />
+            <span className="muted small">
+              {h.filename} · {Math.max(1, Math.round(h.sizeBytes / 1024))} KB
+            </span>
+          </span>
+          <button className="btn btn-quiet" disabled={busy === h.id} onClick={() => void download(h)}>
+            {busy === h.id ? "Downloading…" : "Download"}
+          </button>
+        </li>
+      ))}
+      {error && (
+        <li>
+          <span className="warn small">{error}</span>
+        </li>
+      )}
+    </ul>
+  );
 }

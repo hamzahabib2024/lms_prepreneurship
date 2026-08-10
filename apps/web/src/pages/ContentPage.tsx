@@ -340,6 +340,11 @@ function LessonRow({
         </ul>
       )}
 
+      {/* FR-CRS-035 — the handouts, beside the recording rather than on a
+          separate screen: a teacher preparing a lesson is thinking about the
+          lesson, not about which kind of file they are attaching. */}
+      <LessonResources lessonId={l.id} lessonPublished={l.publicationStatus === "PUBLISHED"} />
+
       {attaching ? (
         <AttachLecture
           lessonId={l.id}
@@ -353,6 +358,145 @@ function LessonRow({
         <button className="btn btn-quiet" onClick={() => setAttaching(true)}>
           Attach a recording
         </button>
+      )}
+    </div>
+  );
+}
+
+interface Resource {
+  id: string;
+  title: string;
+  filename: string;
+  sizeBytes: number;
+  publicationStatus: string;
+}
+
+/**
+ * Handouts, slides and worksheets on a lesson.
+ *
+ * Loaded on demand rather than with the tree: most lessons have none, and a
+ * request per lesson on every page load to discover that is a poor trade.
+ *
+ * PUBLISHING A RESOURCE IS NOT THE SAME AS PUBLISHING THE LESSON, and the
+ * server says so when they disagree. The message is shown as it comes back
+ * rather than replaced with a generic success, because "published, but nobody
+ * can see it yet" is the thing a teacher needs to read.
+ */
+function LessonResources({
+  lessonId,
+  lessonPublished,
+}: {
+  lessonId: string;
+  lessonPublished: boolean;
+}) {
+  const [resources, setResources] = useState<Resource[] | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(() => {
+    api
+      .get<Resource[]>(`/lessons/${lessonId}/resources`)
+      .then(setResources)
+      .catch(() => setResources([]));
+  }, [lessonId]);
+
+  useEffect(load, [load]);
+
+  const attach = async (file: File, title: string) => {
+    setBusy(true);
+    setError(null);
+    const form = new FormData();
+    form.append("file", file);
+    form.append("title", title || file.name);
+    try {
+      await api.upload(`/lessons/${lessonId}/resources`, form);
+      setNotice("Attached as a draft. Publish it when it is ready.");
+      load();
+    } catch (e) {
+      setError(
+        e instanceof ApiError
+          ? (e.details?.map((d) => d.message).join(" ") ?? e.message)
+          : "That file could not be attached.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!resources) return null;
+
+  return (
+    <div className="lesson-resources">
+      {resources.length > 0 && (
+        <ul className="list small">
+          {resources.map((r) => (
+            <li key={r.id}>
+              <span>
+                {r.title}
+                <br />
+                <span className="muted small">
+                  {r.filename} · {Math.max(1, Math.round(r.sizeBytes / 1024))} KB
+                </span>
+              </span>
+              <span className="row-actions">
+                <PublicationBadge status={r.publicationStatus} />
+                <button
+                  className="btn btn-quiet"
+                  disabled={busy}
+                  onClick={() =>
+                    void api
+                      .post<{ message: string }>(`/lesson-resources/${r.id}/publication`, {
+                        status: r.publicationStatus === "PUBLISHED" ? "DRAFT" : "PUBLISHED",
+                      })
+                      .then((res) => {
+                        // The server's own sentence: it is the one that says
+                        // the lesson is still a draft.
+                        setNotice(res.message);
+                        load();
+                      })
+                      .catch(() => setError("That did not work."))
+                  }
+                >
+                  {r.publicationStatus === "PUBLISHED" ? "Hide" : "Publish"}
+                </button>
+                <button
+                  className="btn btn-quiet"
+                  disabled={busy}
+                  onClick={() =>
+                    void api
+                      .del(`/lesson-resources/${r.id}`)
+                      .then(load)
+                      .catch(() => setError("That did not work."))
+                  }
+                >
+                  Remove
+                </button>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {notice && <p className={/cannot see it yet/.test(notice) ? "warn small" : "muted small"}>{notice}</p>}
+      {error && <p className="warn small">{error}</p>}
+
+      <label className="inline-field">
+        <span className="muted small">Attach a handout</span>
+        <input
+          type="file"
+          disabled={busy}
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) void attach(file, file.name.replace(/\.[^.]+$/, ""));
+            e.target.value = "";
+          }}
+        />
+      </label>
+      {!lessonPublished && resources.length > 0 && (
+        <p className="muted small">
+          This lesson is a draft, so students cannot see any of these yet.
+        </p>
       )}
     </div>
   );
