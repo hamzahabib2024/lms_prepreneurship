@@ -21,6 +21,7 @@ import { RubricsPage } from "./pages/RubricsPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SecurityPage } from "./pages/SecurityPage";
 import { BulkPage } from "./pages/BulkPage";
+import { FeesPage } from "./pages/FeesPage";
 import { VerifyPage } from "./pages/VerifyPage";
 import { CertificatesPage } from "./pages/CertificatesPage";
 import { AnnouncementsPage } from "./pages/AnnouncementsPage";
@@ -86,6 +87,9 @@ export function App() {
           {hasRole("super_admin", "admin") && <NavLink to="/settings">Settings</NavLink>}
           {hasRole("super_admin") && <NavLink to="/security">Security</NavLink>}
           {hasRole("super_admin", "admin") && <NavLink to="/bulk">Bulk</NavLink>}
+          {/* Staff and students. A TEACHER holds no `payment` grant at all
+              (§4.5) — offering them the page would be offering a 403. */}
+          {hasRole("super_admin", "admin", "student") && <NavLink to="/fees">Fees</NavLink>}
           {hasRole("super_admin", "admin", "teacher") && (
             <NavLink to="/attendance">Attendance</NavLink>
           )}
@@ -184,6 +188,15 @@ export function App() {
           <Route
             path="/audit"
             element={hasRole("super_admin", "admin") ? <AuditPage /> : <Navigate to="/" replace />}
+          />
+          {/* A student sees their own statement, staff see the list. A teacher
+              has no business in anybody's finances and the server refuses them,
+              so the route sends them home rather than to an error. */}
+          <Route
+            path="/fees"
+            element={
+              hasRole("super_admin", "admin", "student") ? <FeesPage /> : <Navigate to="/" replace />
+            }
           />
           {/* Admin too: bulk_operation reaches an Admin holding the
               bulk_operator sub-permission, and the server decides. Hiding the
