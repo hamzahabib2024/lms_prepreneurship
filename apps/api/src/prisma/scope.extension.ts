@@ -343,6 +343,27 @@ const MODEL_POLICIES: Record<string, PolicyFn> = {
     return DENY_ALL;
   },
 
+  /**
+   * FR-DSC-001 — a question thread on an offering.
+   *
+   * READING IS ENROLLED, NOT OWN, and that is a deliberate reading of §4.5.
+   * The matrix grants a student create/read/update/delete at OWN scope; taken
+   * literally for READ, a student would see only their own posts, which is not
+   * a discussion but a diary — nobody would ever see the answer to their own
+   * question, including the teacher's.
+   *
+   * OWN is enforced where it means something: discussion-rules.ts refuses an
+   * edit or a removal of somebody else's post. If the SRS intends the narrower
+   * reading it is one line here, but the feature would have no purpose.
+   */
+  DiscussionPost: (a) => {
+    if (isAdmin(a)) return null;
+    if (isTeacher(a) || isStudent(a)) {
+      return { sectionSubjectId: { in: [...a.sectionSubjectIds] } };
+    }
+    return DENY_ALL;
+  },
+
   RecordedLecture: (a) => {
     if (isAdmin(a)) return null;
     if (isTeacher(a)) return { sectionSubjectId: { in: [...a.sectionSubjectIds] } };

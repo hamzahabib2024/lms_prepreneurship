@@ -230,6 +230,7 @@ model User {
   student  Student?
   teacher  Teacher?
 
+  discussionPosts DiscussionPost[]
   @@index([status])
   @@index([deletedAt])
   @@map("users")
@@ -635,6 +636,7 @@ model SectionSubject {
   announcements Announcement[]
   attendanceWarnings AttendanceWarning[]
 
+  discussionPosts DiscussionPost[]
   @@unique([sectionId, subjectId])
   @@index([sectionId])
   @@index([subjectId])
@@ -1311,6 +1313,51 @@ model FeeCharge {
   @@index([studentId, dueDate])
   @@index([dueDate, waivedAt])
   @@map("fee_charges")
+}
+
+/// FR-DSC-001 — a question thread on a subject offering.
+///
+/// One level of replies: a post, and answers to it. Arbitrary nesting makes a
+/// thread unreadable on a phone and makes "which question is this answering"
+/// ambiguous, which is the only thing a course forum has to get right.
+model DiscussionPost {
+  id               String @id @default(uuid()) @db.Uuid
+  sectionSubjectId String @map("section_subject_id") @db.Uuid
+  authorUserId     String @map("author_user_id") @db.Uuid
+
+  /// Null for a top-level question; set for an answer.
+  parentPostId String? @map("parent_post_id") @db.Uuid
+
+  /// Only a top-level post has one.
+  title String? @db.VarChar(200)
+  body  String  @db.Text
+
+  /// FR-DSC-008 — a pinned thread stays at the top of the list.
+  isPinned Boolean @default(false) @map("is_pinned")
+  /// FR-DSC-009 — closed to further replies. Moderators only.
+  isLocked Boolean @default(false) @map("is_locked")
+
+  /// An edited post SAYS SO. A thread whose answers changed after people read
+  /// them is unreadable otherwise.
+  editedAt DateTime? @map("edited_at")
+
+  /// Set when a moderator removed it rather than the author (FR-DSC-011). The
+  /// difference matters to whoever's post disappeared.
+  removedByModerator Boolean @default(false) @map("removed_by_moderator")
+  removalReason      String? @map("removal_reason") @db.Text
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  sectionSubject SectionSubject   @relation(fields: [sectionSubjectId], references: [id], onDelete: Restrict)
+  author         User             @relation(fields: [authorUserId], references: [id], onDelete: Restrict)
+  parent         DiscussionPost?  @relation("PostReplies", fields: [parentPostId], references: [id], onDelete: Restrict)
+  replies        DiscussionPost[] @relation("PostReplies")
+
+  @@index([sectionSubjectId, isPinned, createdAt])
+  @@index([parentPostId, createdAt])
+  @@map("discussion_posts")
 }
 
 model NumberSeries {

@@ -21,6 +21,7 @@ import { ReportingModule } from "./reporting/reporting.module";
 import { SettingsModule } from "./settings/settings.module";
 import { MaintenanceGuard } from "./admin/maintenance.guard";
 import { FinanceModule } from "./finance/finance.module";
+import { DiscussionModule } from "./discussion/discussion.module";
 import { HealthController } from "./health.controller";
 
 import { CorrelationMiddleware } from "./common/correlation.middleware";
@@ -59,6 +60,7 @@ import { PermissionsGuard } from "./rbac/permissions.guard";
     QuizModule,
     ReportingModule,
     FinanceModule,
+    DiscussionModule,
   ],
   controllers: [HealthController],
   providers: [
