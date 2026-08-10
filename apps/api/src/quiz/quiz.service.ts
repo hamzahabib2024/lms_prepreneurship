@@ -60,7 +60,26 @@ export class QuizService {
       where: { id: quizId, deletedAt: null, publicationStatus: "PUBLISHED" },
       include: {
         questions: {
-          include: { question: { include: { options: true } } },
+          // `options: true` would load isCorrect — the answer key — into this
+          // process. projectForStudent does not copy it, so nothing leaked,
+          // but that is a guarantee held by one function: any future code
+          // returning quiz.questions directly would hand students the answers.
+          //
+          // Selecting the columns instead means the key never leaves the
+          // database on a student's request at all, which no later edit here
+          // can undo. Question.explanation and acceptedAnswers are omitted for
+          // the same reason (FR-QIZ-018).
+          include: {
+            question: {
+              select: {
+                id: true,
+                version: true,
+                questionType: true,
+                stem: true,
+                options: { select: { id: true, optionText: true, displayOrder: true } },
+              },
+            },
+          },
           orderBy: { displayOrder: "asc" },
         },
       },

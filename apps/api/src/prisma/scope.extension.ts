@@ -98,6 +98,38 @@ const isStudent = (a: Actor) => a.roles.includes("student");
  * A model carrying a person's work, marks, money or contact details does NOT
  * belong on this list. If you are adding one, add a policy instead.
  */
+/**
+ * Models whose policy restricts on ROW STATE, not just on ownership.
+ *
+ * This distinction is what makes nested includes dangerous, and it is worth
+ * being precise about.
+ *
+ * Most policies here answer "is this row reachable from who you are?" — a
+ * teacher's sections, a student's own id. For those, traversing to a parent
+ * from a row you already legitimately hold cannot expose anything: if you may
+ * see the Enrolment, its SectionSubject is within your scope by construction.
+ *
+ * The models below are different. They add a condition about the ROW'S OWN
+ * STATE — published, released, available — on top of ownership. Holding the
+ * parent tells you nothing about whether that condition is met, so an include
+ * of one can hand back exactly the row the policy exists to withhold. Both
+ * nested-include leaks were of this kind: an unreleased AssignmentGrade
+ * reached through the student's own submission (BR-ASG-09), and a draft
+ * RecordedLecture reached through a published Module (BR-CNT-01).
+ *
+ * nested-include.spec.ts uses this list to decide which to-one includes demand
+ * a restatement.
+ */
+const STATE_FILTERED = [
+  "Assignment", // publicationStatus — a draft assignment
+  "AssignmentGrade", // releasedAt — an unreleased mark
+  "Module", // publicationStatus
+  "Lesson", // publicationStatus
+  "RecordedLecture", // publicationStatus + availabilityStatus
+  "Quiz", // publicationStatus
+  "SubmissionFile", // submissionId — an unsubmitted draft upload
+] as const;
+
 const DELIBERATELY_UNSCOPED = [
   "Programme",
   "Subject",
@@ -503,4 +535,10 @@ export function scopeExtension() {
 }
 
 /** Exported for the negative test suites required by §17.2. */
-export const __testing = { MODEL_POLICIES, DENY_ALL, combine, DELIBERATELY_UNSCOPED };
+export const __testing = {
+  MODEL_POLICIES,
+  DENY_ALL,
+  combine,
+  DELIBERATELY_UNSCOPED,
+  STATE_FILTERED,
+};
