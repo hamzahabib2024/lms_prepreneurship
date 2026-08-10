@@ -13,6 +13,7 @@ import { MarkingPage } from "./pages/MarkingPage";
 import { GradingPage } from "./pages/GradingPage";
 import { QuizMarkingPage } from "./pages/QuizMarkingPage";
 import { QuizBuilderPage } from "./pages/QuizBuilderPage";
+import { ContentPage } from "./pages/ContentPage";
 import { VerifyPage } from "./pages/VerifyPage";
 import { CertificatesPage } from "./pages/CertificatesPage";
 import { AnnouncementsPage } from "./pages/AnnouncementsPage";
@@ -73,6 +74,7 @@ export function App() {
             <NavLink to="/attendance">Attendance</NavLink>
           )}
           {hasRole("super_admin", "admin", "teacher") && <NavLink to="/marking">Marking</NavLink>}
+          {hasRole("super_admin", "admin", "teacher") && <NavLink to="/content">Content</NavLink>}
           <NavLink to="/announcements">Announcements</NavLink>
           <NavLink to="/sections">Sections</NavLink>
           {hasRole("super_admin", "admin", "teacher") && <NavLink to="/reports">Reports</NavLink>}
@@ -122,6 +124,12 @@ export function App() {
             path="/marking/:assignmentId"
             element={
               hasRole("super_admin", "admin", "teacher") ? <GradingPage /> : <Navigate to="/" replace />
+            }
+          />
+          <Route
+            path="/content"
+            element={
+              hasRole("super_admin", "admin", "teacher") ? <ContentPage /> : <Navigate to="/" replace />
             }
           />
           <Route
