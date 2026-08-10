@@ -4,6 +4,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { getActor } from "../prisma/actor-context";
 import { assertOwnStudent } from "../rbac/ownership";
+import { isResultVisible, shouldStampRelease, type ResultReleasePolicy } from "./result-release";
 import {
   resolveAttemptScore,
   scoreAttempt,
@@ -103,7 +104,21 @@ export class QuizService {
 
       // BR-QIZ-07 — a score is a score only once released. Anything else must
       // read as "not yet", never as zero.
-      const released = mine.filter((a) => a.releasedAt != null && a.finalScore != null);
+      //
+      // The POLICY is evaluated, not just the stamp: AFTER_CLOSE becomes
+      // visible the moment the window shuts, and waiting for a stamp would
+      // need a job running at exactly that time.
+      const released = mine.filter(
+        (a) =>
+          a.finalScore != null &&
+          isResultVisible({
+            policy: q.resultReleasePolicy as ResultReleasePolicy,
+            releasedAt: a.releasedAt,
+            awaitingManualMarking: a.status === "GRADING",
+            closesAt: q.closesAt,
+            now,
+          }),
+      );
       const scores = released.map((a) => Number(a.finalScore));
       const recorded =
         scores.length === 0
@@ -137,6 +152,145 @@ export class QuizService {
         scorePolicy: q.attemptScoring,
       };
     });
+  }
+
+  /**
+   * FR-TCH-018 — the teacher's quizzes for one subject-section.
+   *
+   * Includes DRAFT quizzes, unlike the student list: a teacher needs to see
+   * what they are still preparing.
+   */
+  async listForTeacher(sectionSubjectId: string) {
+    const quizzes = await this.prisma.scoped.quiz.findMany({
+      where: { sectionSubjectId, deletedAt: null },
+      orderBy: { closesAt: "desc" },
+    });
+    if (quizzes.length === 0) return [];
+
+    const attempts = await this.prisma.scoped.quizAttempt.findMany({
+      where: { quizId: { in: quizzes.map((q: (typeof quizzes)[number]) => q.id) } },
+      select: { quizId: true, status: true, releasedAt: true },
+    });
+
+    return quizzes.map((q: (typeof quizzes)[number]) => {
+      const mine = attempts.filter((a: (typeof attempts)[number]) => a.quizId === q.id);
+      return {
+        id: q.id,
+        title: q.title,
+        totalMarks: Number(q.totalMarks),
+        opensAt: q.opensAt,
+        closesAt: q.closesAt,
+        publicationStatus: q.publicationStatus,
+        resultReleasePolicy: q.resultReleasePolicy,
+        attemptCount: mine.length,
+        // The number that decides what a teacher does next.
+        awaitingMarking: mine.filter((a) => a.status === "GRADING").length,
+        unreleased: mine.filter((a) => a.status === "GRADED" && a.releasedAt === null).length,
+      };
+    });
+  }
+
+  /**
+   * FR-QIZ-031 — the written answers waiting on a human, for one quiz.
+   *
+   * Only answers that genuinely need marking: an auto-marked answer already
+   * has isCorrect set, and listing it would bury the handful that need
+   * judgement among dozens that do not.
+   */
+  async markingQueue(quizId: string) {
+    const quiz = await this.prisma.scoped.quiz.findFirst({
+      where: { id: quizId, deletedAt: null },
+      select: { id: true, title: true, totalMarks: true, resultReleasePolicy: true },
+    });
+    if (!quiz) throw new AppError("RESOURCE_NOT_FOUND");
+
+    const answers = await this.prisma.scoped.quizAnswer.findMany({
+      where: {
+        attempt: { quizId, status: { in: ["GRADING", "GRADED"] } },
+        isCorrect: null, // never auto-marked, so a human must decide
+      },
+      include: {
+        attempt: {
+          include: { student: { include: { user: { select: { fullName: true } } } } },
+        },
+        question: { select: { id: true, stem: true, questionType: true } },
+      },
+    });
+
+    // The marks available come from the QUIZ's weighting, not the question's
+    // default: the same question can be worth different marks in two quizzes.
+    const weights = await this.prisma.scoped.quizQuestion.findMany({
+      where: { quizId },
+      select: { questionId: true, marks: true },
+    });
+    const marksFor = new Map(
+      weights.map((w: (typeof weights)[number]) => [w.questionId, Number(w.marks)]),
+    );
+
+    const rows = answers.map((a: (typeof answers)[number]) => ({
+      answerId: a.id,
+      attemptId: a.attemptId,
+      studentName: a.attempt.student.user.fullName,
+      rollNo: a.attempt.student.currentRollNo,
+      attemptNumber: a.attempt.attemptNumber,
+      questionId: a.question.id,
+      stem: a.question.stem,
+      questionType: a.question.questionType,
+      marksAvailable: marksFor.get(a.question.id) ?? 0,
+      response: a.response,
+      marksAwarded: a.marksAwarded == null ? null : Number(a.marksAwarded),
+      graderComment: a.graderComment,
+      isMarked: a.isManuallyGraded,
+    }));
+
+    return {
+      quiz: { id: quiz.id, title: quiz.title, totalMarks: Number(quiz.totalMarks) },
+      // Unmarked first: that is the queue.
+      answers: rows.sort(
+        (x, y) => Number(x.isMarked) - Number(y.isMarked) || (x.rollNo ?? 0) - (y.rollNo ?? 0),
+      ),
+      remaining: rows.filter((r) => !r.isMarked).length,
+    };
+  }
+
+  /**
+   * FR-QIZ-021 — releases every fully-marked attempt on a quiz.
+   *
+   * The cohort goes together, like assignment grades (FR-ASG-028), so nobody
+   * learns their score before their classmates. An attempt still awaiting
+   * marking is skipped rather than released with a partial score.
+   */
+  async releaseResults(quizId: string) {
+    const quiz = await this.prisma.scoped.quiz.findFirst({
+      where: { id: quizId, deletedAt: null },
+      select: { id: true, title: true },
+    });
+    if (!quiz) throw new AppError("RESOURCE_NOT_FOUND");
+
+    const now = new Date();
+    const result = await this.prisma.asSystem((db) =>
+      db.quizAttempt.updateMany({
+        where: { quizId, status: "GRADED", releasedAt: null },
+        data: { releasedAt: now },
+      }),
+    );
+
+    await this.prisma.asSystem((db) =>
+      db.quiz.update({ where: { id: quizId }, data: { resultsReleasedAt: now } }),
+    );
+
+    await this.audit.record({
+      action: "quiz.results_release",
+      entityType: "Quiz",
+      entityId: quizId,
+      after: { released: result.count, releasedAt: now },
+    });
+
+    const stillMarking = await this.prisma.asSystem((db) =>
+      db.quizAttempt.count({ where: { quizId, status: "GRADING" } }),
+    );
+
+    return { quizId, released: result.count, stillAwaitingMarking: stillMarking };
   }
 
   // ------------------------------------------------------------- attempts --
@@ -515,7 +669,19 @@ export class QuizService {
     if (attempt.status === "IN_PROGRESS") {
       throw new AppError("RESOURCE_CONFLICT", { message: "This attempt is still in progress." });
     }
-    if (!attempt.releasedAt) {
+    // Evaluated, not merely read. AFTER_CLOSE becomes visible the moment the
+    // window shuts, and stamping that would need a job running at exactly that
+    // time — so visibility is decided here and the stamp records only
+    // decisions actually taken.
+    const visible = isResultVisible({
+      policy: attempt.quiz.resultReleasePolicy as ResultReleasePolicy,
+      releasedAt: attempt.releasedAt,
+      awaitingManualMarking: attempt.status === "GRADING",
+      closesAt: attempt.quiz.closesAt,
+      now: new Date(),
+    });
+
+    if (!visible) {
       return {
         attemptId,
         status: attempt.status,
@@ -611,6 +777,19 @@ export class QuizService {
         const passing = attempt.quiz.passingMarks ? Number(attempt.quiz.passingMarks) : null;
         const finalScore = Math.max(0, Math.round(total * 100) / 100);
 
+        // FR-QIZ-021 — marking is finished, so the release policy gets its
+        // chance. Nothing stamped releasedAt here before, which meant an
+        // AFTER_GRADING quiz stayed invisible for ever: the teacher marked the
+        // essay, the score was computed, and the student was told indefinitely
+        // that marking was still in progress.
+        const stamp = shouldStampRelease({
+          policy: attempt.quiz.resultReleasePolicy as ResultReleasePolicy,
+          releasedAt: attempt.releasedAt,
+          awaitingManualMarking: stillPending,
+          closesAt: attempt.quiz.closesAt,
+          now: new Date(),
+        });
+
         await tx.quizAttempt.update({
           where: { id: attemptId },
           data: {
@@ -618,6 +797,7 @@ export class QuizService {
             finalScore: stillPending ? null : finalScore,
             status: stillPending ? "GRADING" : "GRADED",
             isPassed: stillPending || passing === null ? null : finalScore >= passing,
+            ...(stamp ? { releasedAt: new Date() } : {}),
           },
         });
       }),

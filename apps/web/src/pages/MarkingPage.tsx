@@ -22,6 +22,17 @@ interface TeacherSection {
   enrolled: number;
 }
 
+interface TeacherQuiz {
+  id: string;
+  title: string;
+  closesAt: string;
+  totalMarks: number;
+  publicationStatus: string;
+  attemptCount: number;
+  awaitingMarking: number;
+  unreleased: number;
+}
+
 interface TeacherAssignment {
   id: string;
   title: string;
@@ -80,12 +91,17 @@ export function MarkingPage() {
 
 function SectionAssignments({ section }: { section: TeacherSection }) {
   const [items, setItems] = useState<TeacherAssignment[] | null>(null);
+  const [quizzes, setQuizzes] = useState<TeacherQuiz[]>([]);
 
   useEffect(() => {
     api
       .get<TeacherAssignment[]>(`/section-subjects/${section.sectionSubjectId}/assignments`)
       .then(setItems)
       .catch(() => setItems([]));
+    api
+      .get<TeacherQuiz[]>(`/section-subjects/${section.sectionSubjectId}/quizzes`)
+      .then(setQuizzes)
+      .catch(() => setQuizzes([]));
   }, [section.sectionSubjectId]);
 
   return (
@@ -122,6 +138,30 @@ function SectionAssignments({ section }: { section: TeacherSection }) {
                   <span className="small">✓ Released</span>
                 ) : (
                   <span className="small">Marked, not released</span>
+                )}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {quizzes.length > 0 && (
+        <ul className="list">
+          {quizzes.map((q) => (
+            <li key={q.id} className={q.awaitingMarking > 0 ? "warn" : ""}>
+              <span>
+                <Link to={`/marking/quiz/${q.id}`}>{q.title}</Link>
+                <span className="muted small"> · quiz · {q.attemptCount} attempts</span>
+              </span>
+              <span className="row-actions">
+                {q.awaitingMarking > 0 ? (
+                  <strong className="small">{q.awaitingMarking} to mark</strong>
+                ) : q.unreleased > 0 ? (
+                  <span className="small">{q.unreleased} unreleased</span>
+                ) : q.attemptCount === 0 ? (
+                  <span className="muted small">No attempts</span>
+                ) : (
+                  <span className="small">✓ Released</span>
                 )}
               </span>
             </li>

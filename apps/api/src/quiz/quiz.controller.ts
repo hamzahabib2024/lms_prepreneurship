@@ -42,6 +42,33 @@ export class QuizController {
   }
 
   /**
+   * FR-TCH-018 — the teacher's quizzes for one subject-section.
+   *
+   * `submission_roster`: the counts on each row are cohort figures, and
+   * guarding this with `quiz:read` would let a student see how many classmates
+   * have attempted.
+   */
+  @RequirePermission("submission_roster", "read")
+  @Get("section-subjects/:id/quizzes")
+  forTeacher(@Param("id") id: string) {
+    return this.quiz.listForTeacher(id);
+  }
+
+  /** FR-QIZ-031 — the written answers waiting on a human. */
+  @RequirePermission("quiz_answer_grade", "update")
+  @Get("quizzes/:id/marking")
+  marking(@Param("id") id: string) {
+    return this.quiz.markingQueue(id);
+  }
+
+  /** FR-QIZ-021 — release the cohort together, so nobody sees a score first. */
+  @RequirePermission("quiz_answer_grade", "update")
+  @Post("quizzes/:id/release-results")
+  release(@Param("id") id: string) {
+    return this.quiz.releaseResults(id);
+  }
+
+  /**
    * FR-QIZ-024 — start, or resume an attempt already in progress.
    *
    * The response carries no correct-answer data of any kind: not in a hidden

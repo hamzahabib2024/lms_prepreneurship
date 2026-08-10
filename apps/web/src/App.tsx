@@ -11,6 +11,7 @@ import { MySubjectsPage } from "./pages/MySubjectsPage";
 import { SubjectPage } from "./pages/SubjectPage";
 import { MarkingPage } from "./pages/MarkingPage";
 import { GradingPage } from "./pages/GradingPage";
+import { QuizMarkingPage } from "./pages/QuizMarkingPage";
 
 /**
  * Application shell — SRS §13.1.
@@ -101,6 +102,12 @@ export function App() {
             path="/marking/:assignmentId"
             element={
               hasRole("super_admin", "admin", "teacher") ? <GradingPage /> : <Navigate to="/" replace />
+            }
+          />
+          <Route
+            path="/marking/quiz/:quizId"
+            element={
+              hasRole("super_admin", "admin", "teacher") ? <QuizMarkingPage /> : <Navigate to="/" replace />
             }
           />
           <Route path="/sections" element={<SectionsPage />} />
