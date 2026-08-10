@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, Param, Post, Query } from "@nestjs/common";
 import { z } from "zod";
 import { LiveSessionService } from "./live-session.service";
 import { AttendanceService } from "./attendance.service";
@@ -8,6 +8,11 @@ import { RequirePermission } from "../rbac/permissions.guard";
 import { assertOwnStudent, requireOwnStudentId } from "../rbac/ownership";
 
 const ATTENDANCE_STATUS = ["PRESENT", "ABSENT", "LATE", "EXCUSED", "NOT_MARKED"] as const;
+
+/** FR-ATT-022 — a note is optional; the act of acknowledging is the record. */
+const acknowledgeWarningSchema = z.object({
+  note: z.string().trim().max(1000).optional(),
+});
 
 const scheduleSchema = z.object({
   sectionSubjectId: z.string().uuid(),
@@ -129,6 +134,30 @@ export class LiveController {
     @Body(zodBody(correctSchema)) dto: z.infer<typeof correctSchema>,
   ) {
     return this.attendance.correct(id, studentId, dto.status, dto.reason);
+  }
+
+  /**
+   * FR-ATT-022 — the live warnings in one subject-section.
+   *
+   * `attendance_register`, the teaching resource, not `attendance`. This is a
+   * cohort list naming students and their figures; a student holds
+   * `attendance:read` over their OWN record and must not reach it.
+   */
+  @RequirePermission("attendance_register", "read")
+  @Get("section-subjects/:id/at-risk")
+  atRisk(@Param("id") id: string) {
+    return this.attendance.atRisk(id);
+  }
+
+  /** FR-ATT-022 — record that somebody has acted on a warning. */
+  @RequirePermission("attendance_register", "update")
+  @Post("attendance-warnings/:id/acknowledge")
+  @HttpCode(200)
+  acknowledgeWarning(
+    @Param("id") id: string,
+    @Body(zodBody(acknowledgeWarningSchema)) dto: { note?: string },
+  ) {
+    return this.attendance.acknowledgeWarning(id, dto.note);
   }
 
   @RequirePermission("attendance", "read")

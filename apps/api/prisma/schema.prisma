@@ -460,6 +460,7 @@ model Student {
   extensions      AssignmentExtension[]
   quizAttempts    QuizAttempt[]
   certificates    Certificate[]
+  attendanceWarnings AttendanceWarning[]
   /// Plural now: a student who takes a second course was admitted by a second
   /// request, and both point at the same record.
   registrations   RegistrationRequest[]
@@ -630,6 +631,7 @@ model SectionSubject {
   sessions      LiveSession[]
   certificates  Certificate[]
   announcements Announcement[]
+  attendanceWarnings AttendanceWarning[]
 
   @@unique([sectionId, subjectId])
   @@index([sectionId])
@@ -1002,6 +1004,47 @@ model NotificationPreference {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("notification_preferences")
+}
+
+/// A live attendance warning — SRS FR-ATT-020/022, Appendix F.
+///
+/// ONE ROW PER STUDENT PER SUBJECT, holding the level they currently sit at.
+/// It exists so the System can tell a TRANSITION from a STATE: thresholds are
+/// re-evaluated on every register a teacher marks, and without somewhere to
+/// remember what was already said, a struggling student would be notified after
+/// every single class until they stopped reading.
+///
+/// clearedAt records a recovery rather than deleting the row, so a relapse can
+/// be recognised as new information and warned about again.
+model AttendanceWarning {
+  id               String @id @default(uuid()) @db.Uuid
+  studentId        String @map("student_id") @db.Uuid
+  sectionSubjectId String @map("section_subject_id") @db.Uuid
+
+  severity WarningSeverity
+  /// What the figure was when this level was reached — the evidence for the
+  /// message that was sent.
+  percentage         Decimal @map("percentage") @db.Decimal(5, 2)
+  thresholdApplied   Decimal @map("threshold_applied") @db.Decimal(5, 2)
+
+  raisedAt  DateTime  @default(now()) @map("raised_at")
+  /// Set when the student climbs back above the threshold. A cleared row is
+  /// history, not a live warning.
+  clearedAt DateTime? @map("cleared_at")
+
+  /// FR-ATT-022 — a teacher recording that they have acted on it.
+  acknowledgedAt DateTime? @map("acknowledged_at")
+  acknowledgedBy String?   @map("acknowledged_by") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  student        Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  sectionSubject SectionSubject @relation(fields: [sectionSubjectId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, sectionSubjectId])
+  @@index([sectionSubjectId, severity, clearedAt])
+  @@map("attendance_warnings")
 }
 
 // ================================================== live sessions (8.3.4) ==
@@ -1437,6 +1480,11 @@ enum CertificateType {
 enum CertificateStatus {
   ISSUED
   REVOKED
+}
+
+enum WarningSeverity {
+  WARNING
+  CRITICAL
 }
 
 enum AnnouncementAudience {

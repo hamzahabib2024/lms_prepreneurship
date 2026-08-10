@@ -38,7 +38,10 @@ describe("percentageFor counts only classes that have happened", () => {
       get: (_key: string, fallback: string) => fallback,
     } as unknown as ConfigService;
 
-    return new AttendanceService(prisma, {} as AuditService, config);
+    // The warning path is exercised by attendance-warning.spec.ts; this suite
+    // is about the DENOMINATOR, so notifications are a stub.
+    const notifications = { notify: jest.fn(async () => ({ raised: 0 })) } as never;
+    return new AttendanceService(prisma, {} as AuditService, config, notifications);
   };
 
   it("restricts the query to ENDED sessions", async () => {

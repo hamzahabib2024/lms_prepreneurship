@@ -438,6 +438,21 @@ const MODEL_POLICIES: Record<string, PolicyFn> = {
     return DENY_ALL;
   },
 
+  /**
+   * A warning is about a student and belongs to their teacher's at-risk list.
+   *
+   * The student sees their own — being warned and then unable to look at the
+   * warning would be its own small cruelty — and a teacher sees the ones in the
+   * subject-sections they teach, which is the whole point of an early-warning
+   * signal (FR-ATT-020).
+   */
+  AttendanceWarning: (a) => {
+    if (isAdmin(a)) return null;
+    if (isTeacher(a)) return { sectionSubjectId: { in: [...a.sectionSubjectIds] } };
+    if (isStudent(a)) return a.studentId ? { studentId: a.studentId } : DENY_ALL;
+    return DENY_ALL;
+  },
+
   // ------------------------------------------------------- communication --
 
   /**

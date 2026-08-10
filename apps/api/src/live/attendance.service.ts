@@ -5,6 +5,13 @@ import type { AttendanceStatus } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { getActor } from "../prisma/actor-context";
+import { assertOwnsSectionSubject } from "../rbac/ownership";
+import { NotificationService } from "../notification/notification.service";
+import {
+  decideWarning,
+  warningMessage,
+  type ThresholdConfig,
+} from "./attendance-warning";
 
 export interface BulkMarkInput {
   defaultStatus: AttendanceStatus;
@@ -32,6 +39,7 @@ export class AttendanceService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly config: ConfigService,
+    private readonly notifications: NotificationService,
   ) {}
 
   /**
@@ -352,34 +360,214 @@ export class AttendanceService {
     };
   }
 
-  /** FR-ATT-020/022 — evaluate against the warning and critical thresholds. */
+  /**
+   * FR-ATT-020/022 — evaluate against the thresholds, and say something when
+   * the answer has CHANGED.
+   *
+   * This runs on every register a teacher marks and every correction they make,
+   * so the decision of whether to notify is not "is this student below the
+   * line" but "have we already told them". That rule lives in
+   * attendance-warning.ts, pure and tested, because a system that repeats
+   * itself after every class is one people stop reading.
+   */
   private async evaluateThresholds(sectionSubjectId: string, studentIds: string[]) {
-    const threshold = Number(this.config.get<string>("ATT_WARNING_THRESHOLD", "75"));
-    const critical = Number(this.config.get<string>("ATT_CRITICAL_THRESHOLD", "60"));
+    const config: ThresholdConfig = {
+      warningPercent: Number(this.config.get<string>("ATT_WARNING_THRESHOLD", "75")),
+      criticalPercent: Number(this.config.get<string>("ATT_CRITICAL_THRESHOLD", "60")),
+      minimumSessions: Number(this.config.get<string>("ATT_MIN_SESSIONS_FOR_WARNING", "3")),
+    };
 
     const warnings: Array<{
       studentId: string;
       percentage: number;
       threshold: number;
       severity: "WARNING" | "CRITICAL";
+      notified: boolean;
     }> = [];
+
+    // Read once for the subject name in the message and the student's user id.
+    const offering = await this.prisma.asSystem((db) =>
+      db.sectionSubject.findUnique({
+        where: { id: sectionSubjectId },
+        select: { subject: { select: { name: true } } },
+      }),
+    );
+    const subjectName = offering?.subject.name ?? "this subject";
 
     for (const studentId of studentIds) {
       const stats = await this.percentageFor(studentId, sectionSubjectId);
-      if (stats.percentage === null) continue;
-      // Only meaningful once there is enough history; flagging a student after
-      // one missed class produces noise that teachers learn to ignore.
-      if (stats.sessionsInDenominator < 3) continue;
 
-      if (stats.percentage < critical) {
-        warnings.push({ studentId, percentage: stats.percentage, threshold: critical, severity: "CRITICAL" });
-      } else if (stats.percentage < threshold) {
-        warnings.push({ studentId, percentage: stats.percentage, threshold, severity: "WARNING" });
+      const previous = await this.prisma.asSystem((db) =>
+        db.attendanceWarning.findUnique({
+          where: { studentId_sectionSubjectId: { studentId, sectionSubjectId } },
+        }),
+      );
+
+      const decision = decideWarning({
+        percentage: stats.percentage,
+        sessionsInDenominator: stats.sessionsInDenominator,
+        previous: previous
+          ? { severity: previous.severity, clearedAt: previous.clearedAt }
+          : null,
+        config,
+      });
+
+      if (decision.action === "CLEAR") {
+        await this.prisma.asSystem((db) =>
+          db.attendanceWarning.update({
+            where: { studentId_sectionSubjectId: { studentId, sectionSubjectId } },
+            data: { clearedAt: new Date() },
+          }),
+        );
+        // No "well done" message. Nobody asked to be told they are now doing
+        // what was expected, and it would dilute the warnings that matter.
+        continue;
       }
+
+      if (decision.action === "NONE") continue;
+
+      const threshold =
+        decision.severity === "CRITICAL" ? config.criticalPercent : config.warningPercent;
+      const percentage = stats.percentage as number;
+
+      await this.prisma.asSystem((db) =>
+        db.attendanceWarning.upsert({
+          where: { studentId_sectionSubjectId: { studentId, sectionSubjectId } },
+          create: {
+            studentId,
+            sectionSubjectId,
+            severity: decision.severity,
+            percentage,
+            thresholdApplied: threshold,
+          },
+          update: {
+            severity: decision.severity,
+            percentage,
+            thresholdApplied: threshold,
+            raisedAt: new Date(),
+            // A re-raise is a new warning, so a previous clearance and a
+            // previous acknowledgement no longer apply.
+            clearedAt: null,
+            acknowledgedAt: null,
+            acknowledgedBy: null,
+          },
+        }),
+      );
+
+      const student = await this.prisma.asSystem((db) =>
+        db.student.findUnique({ where: { id: studentId }, select: { userId: true } }),
+      );
+
+      if (student) {
+        const message = warningMessage(decision.severity, percentage, subjectName, config);
+        await this.notifications.notify({
+          recipientUserIds: [student.userId],
+          kind: `attendance.${decision.severity.toLowerCase()}`,
+          title: message.title,
+          body: message.body,
+          linkPath: "/subjects",
+          // BR-COM-02 — a critical warning reaches the student past their quiet
+          // hours. Falling out of a course is worth being woken for; a first
+          // warning is not.
+          isUrgent: decision.severity === "CRITICAL",
+        });
+      }
+
+      warnings.push({
+        studentId,
+        percentage,
+        threshold,
+        severity: decision.severity,
+        notified: student != null,
+      });
     }
 
-    // TODO: raise notifications per Appendix F once the mailer lands (DEP-04).
     return warnings;
+  }
+
+  /**
+   * FR-ATT-022 — the live warnings in one subject-section.
+   *
+   * Worst first, then longest-standing: a critical warning raised three weeks
+   * ago and never acted on is the one a teacher most needs to see, and sorting
+   * by roll number would bury it among students who are fine.
+   *
+   * Cleared warnings are excluded. They are history, and a list of problems
+   * that have already resolved is a list nobody reads.
+   */
+  async atRisk(sectionSubjectId: string) {
+    // The scope policy already returns nothing for a section this teacher does
+    // not teach — but an empty 200 still confirms the identifier is real, and
+    // SEC-AUZ-006 wants the answer to be the same either way.
+    assertOwnsSectionSubject(sectionSubjectId);
+
+    const rows = await this.prisma.scoped.attendanceWarning.findMany({
+      where: { sectionSubjectId, clearedAt: null },
+      include: { student: { include: { user: { select: { fullName: true } } } } },
+    });
+
+    const ranked = { CRITICAL: 0, WARNING: 1 } as const;
+
+    return {
+      sectionSubjectId,
+      critical: rows.filter((r: (typeof rows)[number]) => r.severity === "CRITICAL").length,
+      warning: rows.filter((r: (typeof rows)[number]) => r.severity === "WARNING").length,
+      unacknowledged: rows.filter((r: (typeof rows)[number]) => r.acknowledgedAt === null).length,
+      students: rows
+        .map((r: (typeof rows)[number]) => ({
+          warningId: r.id,
+          studentId: r.studentId,
+          rollNo: r.student.currentRollNo,
+          name: r.student.user.fullName,
+          severity: r.severity,
+          percentage: Number(r.percentage),
+          thresholdApplied: Number(r.thresholdApplied),
+          raisedAt: r.raisedAt,
+          acknowledgedAt: r.acknowledgedAt,
+        }))
+        .sort(
+          (a, b) =>
+            ranked[a.severity] - ranked[b.severity] ||
+            a.raisedAt.getTime() - b.raisedAt.getTime(),
+        ),
+    };
+  }
+
+  /**
+   * FR-ATT-022 — a teacher recording that they have acted on a warning.
+   *
+   * It does NOT clear the warning. The student is still below the threshold;
+   * what has changed is that somebody has spoken to them. Clearing is the
+   * student's to earn by attending, and conflating the two would let a class
+   * look healthy because its teacher had been diligent about paperwork.
+   */
+  async acknowledgeWarning(warningId: string, note?: string) {
+    const actor = getActor();
+    if (!actor) throw new AppError("AUTH_TOKEN_INVALID");
+
+    const warning = await this.prisma.scoped.attendanceWarning.findFirst({
+      where: { id: warningId },
+    });
+    if (!warning) throw new AppError("RESOURCE_NOT_FOUND");
+
+    const updated = await this.prisma.scoped.attendanceWarning.update({
+      where: { id: warningId },
+      data: { acknowledgedAt: new Date(), acknowledgedBy: actor.userId },
+    });
+
+    await this.audit.record({
+      action: "attendance.warning_acknowledged",
+      entityType: "AttendanceWarning",
+      entityId: warningId,
+      after: { severity: warning.severity, percentage: Number(warning.percentage), note },
+    });
+
+    return {
+      warningId: updated.id,
+      acknowledgedAt: updated.acknowledgedAt,
+      // Said plainly, so nobody reads the tick as "resolved".
+      stillBelowThreshold: updated.clearedAt === null,
+    };
   }
 
   /** FR-ATT-023 — a student's own record, per subject. */
