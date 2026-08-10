@@ -7,7 +7,7 @@ Last updated: 10 August 2026 (quiz authoring added)
 That figure is an estimate, not a measurement, and it is worth saying what it
 rests on. The SRS defines around a thousand numbered requirements; nobody has
 walked all of them one by one. What has been counted is: 48 database models, 107
-endpoints across 12 controllers, 17 web pages, 426 automated tests, and 9
+endpoints across 12 controllers, 18 web pages, 426 automated tests, and 10
 end-to-end probes. What the estimate weighs against that is the §4.5 permission
 matrix, which names 85 resources — **41 are reachable by an endpoint today and
 44 are not.**
@@ -69,6 +69,8 @@ The shape of the gap matters more than the number:
 - [x] Playback tickets: short-lived, user-bound, never a storage identifier (ARC-039/041/052)
 - [x] Watch progress from MERGED intervals, so replaying the opening earns nothing
 - [x] Resume where the student stopped
+- [x] Content authoring screen: modules, lessons, cataloguing from storage,
+      publication at every level
 
 ### Live classes and attendance
 - [x] LCAL provider abstraction (ARC-023/028) — no vendor named outside an adapter
@@ -132,7 +134,6 @@ The shape of the gap matters more than the number:
 - [ ] Personal data export and permanent deletion (SEC-PRV)
 
 ### Authoring screens (endpoints exist, no interface)
-- [ ] Teacher creating modules, lessons and uploading lectures
 - [ ] Teacher creating and publishing assignments
 - [ ] Section and offering management beyond the read-only list
 
@@ -163,8 +164,8 @@ The shape of the gap matters more than the number:
 
 Worth recording, because it shapes what to expect from the remainder.
 
-Twelve security defects have been found and fixed, and **the permission matrix
-was correct in every one of them.** What went wrong each time was a resource
+Thirteen security defects have been found and fixed, and **the permission
+matrix was correct in every one of them.** What went wrong each time was a resource
 named after a *topic* — "attendance", "progress", "submission" — attached to
 endpoints serving very different audiences under it. Two more came from
 structural limits of the scope predicate: it does not filter nested includes,
