@@ -99,6 +99,18 @@ const ACKNOWLEDGED: Record<string, string> = {
     "Selected down to id, optionText and displayOrder, so isCorrect never " +
     "leaves the database on a student's request. The restriction is enforced " +
     "by the projection in the query itself, which is stronger than a where.",
+  "quiz/quiz-authoring.service.ts::Question.options":
+    "AUTHORING. The teacher writing a question must see which option is " +
+    "correct, so the key is returned deliberately. It cannot reach a student: " +
+    "§4.5 gives no student key on `question` or `quiz_answer_key`, and the " +
+    "Question/QuestionOption policies are DENY_ALL for them, so a mis-guarded " +
+    "route would still return nothing. The STUDENT-facing path is " +
+    "quiz.service.ts, which selects id, optionText and displayOrder so " +
+    "isCorrect never leaves the database.",
+  "quiz/quiz-authoring.service.ts::Quiz.questions":
+    "QuizQuestion is a join row carrying a mark and a display order, and the " +
+    "parent Quiz was already scoped. Authoring endpoints only; a student " +
+    "holds nothing on quiz_answer_key.",
   "progress/progress.service.ts::AssignmentGrade.submission":
     "To-one parent. The query runs under asSystem with an explicit " +
     "releasedAt: { not: null } and a studentId filter, which is stricter than " +
