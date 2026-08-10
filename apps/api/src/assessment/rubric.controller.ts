@@ -12,7 +12,13 @@ const levelSchema = z.object({
 const criterionSchema = z.object({
   name: z.string().trim().min(1).max(200),
   description: z.string().trim().max(2000).nullish(),
-  maxMarks: z.number().positive().max(1000),
+  // Deliberately NOT .positive(). Zod would reject it first with "Number must
+  // be greater than 0" against the field path `criteria.3.maxMarks`, and the
+  // screen shows the message alone — so a teacher with eight criteria is told
+  // a number is wrong and not which one. validateRubric says «"Evidence" must
+  // be worth more than zero marks». The bound stays here; the judgement does
+  // not.
+  maxMarks: z.number().max(1000),
   /** FR-ASG-014 — used to reach the mark, never shown to the student. */
   isInternal: z.boolean().optional(),
   levels: z.array(levelSchema).max(10).nullish(),

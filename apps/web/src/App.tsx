@@ -17,6 +17,7 @@ import { ContentPage } from "./pages/ContentPage";
 import { AssignmentBuilderPage } from "./pages/AssignmentBuilderPage";
 import { UsersPage } from "./pages/UsersPage";
 import { AuditPage } from "./pages/AuditPage";
+import { RubricsPage } from "./pages/RubricsPage";
 import { VerifyPage } from "./pages/VerifyPage";
 import { CertificatesPage } from "./pages/CertificatesPage";
 import { AnnouncementsPage } from "./pages/AnnouncementsPage";
@@ -79,6 +80,7 @@ export function App() {
             <NavLink to="/attendance">Attendance</NavLink>
           )}
           {hasRole("super_admin", "admin", "teacher") && <NavLink to="/marking">Marking</NavLink>}
+          {hasRole("super_admin", "admin", "teacher") && <NavLink to="/rubrics">Rubrics</NavLink>}
           {hasRole("super_admin", "admin", "teacher") && <NavLink to="/content">Content</NavLink>}
           <NavLink to="/announcements">Announcements</NavLink>
           <NavLink to="/sections">Sections</NavLink>
@@ -172,6 +174,15 @@ export function App() {
           <Route
             path="/audit"
             element={hasRole("super_admin", "admin") ? <AuditPage /> : <Navigate to="/" replace />}
+          />
+          {/* Teacher and above. A student may READ a rubric they are marked
+              against, but that belongs beside their grade, not on an
+              authoring screen. */}
+          <Route
+            path="/rubrics"
+            element={
+              hasRole("super_admin", "admin", "teacher") ? <RubricsPage /> : <Navigate to="/" replace />
+            }
           />
           <Route
             path="/certificates"
