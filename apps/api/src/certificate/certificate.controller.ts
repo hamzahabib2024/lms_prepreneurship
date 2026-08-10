@@ -50,6 +50,21 @@ export class CertificateController {
     return this.certificates.revoke(id, dto.reason);
   }
 
+  /**
+   * FR-CRT-006 — the issuance worklist for a subject-section.
+   *
+   * Guarded by `certificate:create`, the same permission as issuing. This is a
+   * cohort list with every classmate's marks and standing on it, so guarding it
+   * with `certificate:read` — which a student holds over their OWN certificate
+   * — would open the class to them. Only someone who can actually issue has any
+   * use for it.
+   */
+  @RequirePermission("certificate", "create")
+  @Get("section-subjects/:id/certificates")
+  issuanceView(@Param("id") id: string) {
+    return this.certificates.issuanceView(id);
+  }
+
   /** A student's own, including revoked ones (BR-ENR-08). */
   @RequirePermission("certificate", "read")
   @Get("me/certificates")

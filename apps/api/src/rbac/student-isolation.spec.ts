@@ -181,6 +181,39 @@ describe("a student cannot award marks on a quiz", () => {
   });
 });
 
+describe("certificates", () => {
+  it("lets a student read and export their OWN", () => {
+    expect(may("student", "certificate", "read")).toBe(true);
+    expect(may("student", "certificate", "export")).toBe(true);
+  });
+
+  it("never lets a student issue one for themselves", () => {
+    // `certificate:create` also guards the issuance WORKLIST, which lists
+    // every classmate's standing — so this one grant covers both the act and
+    // the cohort view of who is eligible.
+    expect(may("student", "certificate", "create")).toBe(false);
+    expect(may("student", "certificate", "approve")).toBe(false);
+  });
+
+  it("never lets a teacher issue one", () => {
+    // A teacher may see certificates for their own sections, but awarding a
+    // qualification is an institute act, not a teaching one.
+    expect(may("teacher", "certificate", "read")).toBe(true);
+    expect(may("teacher", "certificate", "create")).toBe(false);
+    expect(may("teacher", "certificate", "delete")).toBe(false);
+  });
+
+  it("reserves revocation to a Super Admin (separation of duties)", () => {
+    // An Admin with certificate_issuer can create, read, approve and export —
+    // but not delete. Whoever issues a qualification must not be able to
+    // unilaterally undo it. `delete` is revocation here; BR-DAT-02 forbids
+    // destroying the record.
+    expect(may("super_admin", "certificate", "delete")).toBe(true);
+    expect(may("admin", "certificate", "delete")).toBe(false);
+    expect(may("student", "certificate", "delete")).toBe(false);
+  });
+});
+
 describe("matrix invariants that prevented the original defects", () => {
   it("no student grant is wider than OWN or ENROLLED", () => {
     const RESOURCES_TO_CHECK: Resource[] = [

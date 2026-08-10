@@ -13,6 +13,7 @@ import { MarkingPage } from "./pages/MarkingPage";
 import { GradingPage } from "./pages/GradingPage";
 import { QuizMarkingPage } from "./pages/QuizMarkingPage";
 import { VerifyPage } from "./pages/VerifyPage";
+import { CertificatesPage } from "./pages/CertificatesPage";
 
 /**
  * Application shell — SRS §13.1.
@@ -64,6 +65,7 @@ export function App() {
           </NavLink>
           {hasRole("student") && <NavLink to="/subjects">My subjects</NavLink>}
           {hasRole("super_admin", "admin") && <NavLink to="/admissions">Admissions</NavLink>}
+          {hasRole("super_admin", "admin") && <NavLink to="/certificates">Certificates</NavLink>}
           {hasRole("super_admin", "admin", "teacher") && (
             <NavLink to="/attendance">Attendance</NavLink>
           )}
@@ -121,6 +123,12 @@ export function App() {
             path="/marking/quiz/:quizId"
             element={
               hasRole("super_admin", "admin", "teacher") ? <QuizMarkingPage /> : <Navigate to="/" replace />
+            }
+          />
+          <Route
+            path="/certificates"
+            element={
+              hasRole("super_admin", "admin") ? <CertificatesPage /> : <Navigate to="/" replace />
             }
           />
           <Route path="/sections" element={<SectionsPage />} />

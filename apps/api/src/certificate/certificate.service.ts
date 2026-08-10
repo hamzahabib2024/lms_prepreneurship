@@ -155,6 +155,67 @@ export class CertificateService {
     return this.present(updated, { alreadyIssued: false });
   }
 
+  /**
+   * FR-CRT-006 — the issuance worklist for one subject-section.
+   *
+   * Every enrolled student, whether they have met the criteria, and whether a
+   * certificate already exists. An administrator opening this wants one
+   * question answered — who can I issue to now — so the answer is computed
+   * here rather than left to the interface to derive from three separate calls.
+   *
+   * The cohort progress is reused from ProgressService rather than recomputed:
+   * it already walks every enrolment and applies the same formula, and a second
+   * implementation would be a second thing to keep in step.
+   */
+  async issuanceView(sectionSubjectId: string) {
+    const cohort = await this.progress.forSectionSubject(sectionSubjectId);
+
+    const certificates = await this.prisma.scoped.certificate.findMany({
+      where: { sectionSubjectId },
+      orderBy: { issuedAt: "desc" },
+    });
+
+    // Latest first, so a revoked certificate does not mask a live reissue.
+    const byStudent = new Map<string, (typeof certificates)[number]>();
+    for (const c of certificates) {
+      const held = byStudent.get(c.studentId);
+      if (!held || (held.status === "REVOKED" && c.status === "ISSUED")) {
+        byStudent.set(c.studentId, c);
+      }
+    }
+
+    return {
+      sectionSubjectId,
+      students: cohort.students.map((s: (typeof cohort.students)[number]) => {
+        const certificate = byStudent.get(s.studentId);
+        return {
+          studentId: s.studentId,
+          rollNo: s.rollNo,
+          name: s.name,
+          overallPercent: s.overallPercent,
+          attendancePercent: s.attendancePercent,
+          averageGradePercent: s.averageGradePercent,
+          completionMet: s.completionMet,
+          certificate: certificate
+            ? {
+                id: certificate.id,
+                certificateNo: certificate.certificateNo,
+                status: certificate.status,
+                issuedAt: certificate.issuedAt,
+              }
+            : null,
+          // The single question the screen exists to answer.
+          canIssue: s.completionMet && certificate?.status !== "ISSUED",
+        };
+      }),
+      eligible: cohort.students.filter(
+        (s: (typeof cohort.students)[number]) =>
+          s.completionMet && byStudent.get(s.studentId)?.status !== "ISSUED",
+      ).length,
+      issued: [...byStudent.values()].filter((c) => c.status === "ISSUED").length,
+    };
+  }
+
   /** A student's own certificates, including revoked ones (BR-ENR-08). */
   async listForStudent(studentId: string) {
     assertOwnStudent(studentId); // SEC-AUZ-004
