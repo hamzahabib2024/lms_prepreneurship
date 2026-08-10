@@ -22,6 +22,7 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { SecurityPage } from "./pages/SecurityPage";
 import { BulkPage } from "./pages/BulkPage";
 import { FeesPage } from "./pages/FeesPage";
+import { TimetablePage } from "./pages/TimetablePage";
 import { VerifyPage } from "./pages/VerifyPage";
 import { CertificatesPage } from "./pages/CertificatesPage";
 import { AnnouncementsPage } from "./pages/AnnouncementsPage";
@@ -96,6 +97,9 @@ export function App() {
           {hasRole("super_admin", "admin", "teacher") && <NavLink to="/marking">Marking</NavLink>}
           {hasRole("super_admin", "admin", "teacher") && <NavLink to="/rubrics">Rubrics</NavLink>}
           {hasRole("super_admin", "admin", "teacher") && <NavLink to="/content">Content</NavLink>}
+          {/* Everyone has a timetable: a student's classes, a teacher's
+              teaching, an administrator's view of both. */}
+          <NavLink to="/timetable">Timetable</NavLink>
           <NavLink to="/announcements">Announcements</NavLink>
           <NavLink to="/sections">Sections</NavLink>
           {hasRole("super_admin", "admin", "teacher") && <NavLink to="/reports">Reports</NavLink>}
@@ -189,6 +193,7 @@ export function App() {
             path="/audit"
             element={hasRole("super_admin", "admin") ? <AuditPage /> : <Navigate to="/" replace />}
           />
+          <Route path="/timetable" element={<TimetablePage />} />
           {/* A student sees their own statement, staff see the list. A teacher
               has no business in anybody's finances and the server refuses them,
               so the route sends them home rather than to an error. */}
