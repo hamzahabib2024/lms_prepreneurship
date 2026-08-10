@@ -7,6 +7,8 @@ import { SecurityLogService } from "./security-log.service";
 import { SecurityLogController } from "./security-log.controller";
 import { ImpersonationService } from "./impersonation.service";
 import { ImpersonationController } from "./impersonation.controller";
+import { PersonalDataService } from "./personal-data.service";
+import { PersonalDataController } from "./personal-data.controller";
 
 /**
  * §4.5.1 — the accounts of the people who run the Institute.
@@ -15,8 +17,8 @@ import { ImpersonationController } from "./impersonation.controller";
  * and a second implementation would be a second thing to get wrong.
  */
 @Module({
-  controllers: [UserAdminController, AuditViewerController, SecurityLogController, ImpersonationController],
-  providers: [UserAdminService, AuditViewerService, SecurityLogService, ImpersonationService],
+  controllers: [UserAdminController, AuditViewerController, SecurityLogController, ImpersonationController, PersonalDataController],
+  providers: [UserAdminService, AuditViewerService, SecurityLogService, ImpersonationService, PersonalDataService],
   exports: [UserAdminService],
 })
 export class AdminModule {}
