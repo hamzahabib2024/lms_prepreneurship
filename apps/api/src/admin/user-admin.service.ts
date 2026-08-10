@@ -375,6 +375,67 @@ export class UserAdminService {
   }
 
   /**
+   * SEC-AUT-008 — let a locked-out account back in, without changing anything
+   * about it.
+   *
+   * A lockout is time-boxed and clears itself, but "wait twenty minutes" is a
+   * poor answer to a teacher locked out ten minutes before a class. Until this
+   * existed the ONLY way to clear one was resetPassword, which also replaces
+   * their password and forces them to choose a new one at the next sign-in —
+   * three changes to undo one mistyped password.
+   *
+   * The security log raises lockouts as a concern and advises checking the
+   * person is not locked out of something they need today; this is the action
+   * that makes that advice honest.
+   *
+   * Deliberately NOT a password reset. If the concern is that somebody else has
+   * the account, resetPassword is the right tool and this is the wrong one.
+   */
+  async unlock(userId: string) {
+    const user = await this.prisma.scoped.user.findFirst({
+      where: { id: userId, deletedAt: null },
+      select: { id: true, status: true, lockedUntil: true, failedLoginCount: true },
+    });
+    if (!user) throw new AppError("RESOURCE_NOT_FOUND");
+
+    const wasLocked = user.lockedUntil != null && user.lockedUntil > new Date();
+
+    await this.prisma.asSystem((db) =>
+      db.user.update({
+        where: { id: userId },
+        data: {
+          failedLoginCount: 0,
+          lockedUntil: null,
+          // LOCKED is a state the System sets on itself; clearing it returns
+          // the account to ACTIVE. A SUSPENDED account is a different thing —
+          // an administrator suspended it deliberately — and unlocking must
+          // not quietly reinstate it.
+          ...(user.status === "LOCKED" ? { status: "ACTIVE" as const } : {}),
+        },
+      }),
+    );
+
+    await this.audit.record({
+      action: "user.unlocked",
+      entityType: "User",
+      entityId: userId,
+      before: { status: user.status, lockedUntil: user.lockedUntil, failedLoginCount: user.failedLoginCount },
+      after: { status: user.status === "LOCKED" ? "ACTIVE" : user.status, lockedUntil: null },
+    });
+
+    return {
+      id: userId,
+      unlocked: true,
+      // Said plainly, because pressing "unlock" on an account that was not
+      // locked should not imply something was done.
+      wasLocked,
+      message: wasLocked
+        ? "Unlocked. They can sign in with their existing password."
+        : "That account was not locked. The failed-attempt count has been cleared.",
+    };
+  }
+
+  /**
    * FR-RBAC-010 — change what an administrator may do.
    *
    * `role_assignment:configure` is Super Admin only AND demands step-up, which

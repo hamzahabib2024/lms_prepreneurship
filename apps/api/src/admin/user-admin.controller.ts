@@ -103,6 +103,21 @@ export class UserAdminController {
   }
 
   /**
+   * SEC-AUT-008 — clear a lockout, changing nothing else.
+   *
+   * `account_state:update`, which an Admin holds: letting somebody back into
+   * their own account after they mistyped a password is ordinary administration
+   * and should not need a Super Admin. It is not a password reset, and cannot
+   * become one — nothing here touches credentials.
+   */
+  @RequirePermission("account_state", "update")
+  @Post("admin/users/:id/unlock")
+  @HttpCode(200)
+  unlock(@Param("id") id: string) {
+    return this.users.unlock(id);
+  }
+
+  /**
    * FR-RBAC-010 — change what an administrator may do.
    *
    * `role_assignment:configure`: Super Admin only, and requiresStepUp, so the
