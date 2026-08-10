@@ -17,6 +17,13 @@
  * This walks every `prisma.scoped.<model>` create in the API, finds the
  * scope-bearing foreign keys in its data, and fails when the value did not come
  * from the ACTOR and the enclosing method makes no assertion about it.
+ *
+ * WHAT IT DOES NOT COVER: asSystem. That call is an explicit, visible statement
+ * that the caller is bypassing scope on purpose — writing thirty inboxes,
+ * recording an audit row, marking a whole register — and demanding an assertion
+ * inside every one would flag mostly legitimate system work and train people to
+ * add the exemption without thinking. The bypass is the review point; this
+ * guard is for the creates that LOOK scoped and are not.
  */
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
