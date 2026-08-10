@@ -2,12 +2,12 @@
 
 Last updated: 10 August 2026 (quiz authoring added)
 
-**Roughly 58–62% of the SRS scope is built.**
+**Roughly 62–66% of the SRS scope is built.**
 
 That figure is an estimate, not a measurement, and it is worth saying what it
 rests on. The SRS defines around a thousand numbered requirements; nobody has
 walked all of them one by one. What has been counted is: 48 database models, 107
-endpoints across 12 controllers, 18 web pages, 426 automated tests, and 10
+endpoints across 12 controllers, 19 web pages, 426 automated tests, and 10
 end-to-end probes. What the estimate weighs against that is the §4.5 permission
 matrix, which names 85 resources — **41 are reachable by an endpoint today and
 44 are not.**
@@ -17,8 +17,9 @@ The shape of the gap matters more than the number:
 - **The student's journey is essentially complete.** Apply, be admitted, attend,
   watch lectures, submit work, sit a quiz, be marked, be warned when attendance
   slips, earn a certificate, have an employer verify it.
-- **The teacher's journey is mostly complete.** Register, marking, grading, quiz
-  marking, announcements, at-risk list.
+- **The teacher's journey is complete.** Set assignments and quizzes, build
+  course content, take the register, mark, grade, announce, and see who is at
+  risk — all from a screen.
 - **The administrator's journey is thin.** Admissions and certificates have
   screens; user management, settings, audit and governance have neither
   endpoints nor screens.
@@ -86,6 +87,7 @@ The shape of the gap matters more than the number:
 - [x] Submission, per-student files, ownership enforced at the database
 - [x] Grading with System-computed late penalties (BR-ASG-03)
 - [x] Cohort grade release (FR-ASG-028); internal notes never reach a student
+- [x] Assignment builder: windows, late policy, file policy, resubmission
 - [x] Quizzes: attempts, resume with the same paper, auto-marking, manual marking
 - [x] Four result-release policies, all four now honoured
 - [x] **Quiz authoring**: question banks, eight question types with per-type
@@ -134,7 +136,6 @@ The shape of the gap matters more than the number:
 - [ ] Personal data export and permanent deletion (SEC-PRV)
 
 ### Authoring screens (endpoints exist, no interface)
-- [ ] Teacher creating and publishing assignments
 - [ ] Section and offering management beyond the read-only list
 
 ### Not started at all
