@@ -351,7 +351,15 @@ export class AssignmentService {
   async submissionStatus(assignmentId: string) {
     const assignment = await this.prisma.scoped.assignment.findFirst({
       where: { id: assignmentId, deletedAt: null },
-      select: { id: true, sectionSubjectId: true, marksAvailable: true, gradesReleased: true },
+      select: {
+        id: true,
+        title: true,
+        sectionSubjectId: true,
+        marksAvailable: true,
+        gradesReleased: true,
+        dueAt: true,
+        latePolicy: true,
+      },
     });
     if (!assignment) throw new AppError("RESOURCE_NOT_FOUND");
 
@@ -372,22 +380,48 @@ export class AssignmentService {
 
     const rows = enrolled.map((e: (typeof enrolled)[number]) => {
       const sub = byStudent.get(e.studentId);
+      const g = sub?.grade;
       return {
         studentId: e.studentId,
         rollNo: e.student.currentRollNo,
         name: e.student.user.fullName,
+        // The grade endpoint is keyed by submission, so without this a teacher
+        // can see who needs marking and has no way to mark them.
+        submissionId: sub?.id ?? null,
         submitted: !!sub,
         submittedAt: sub?.submittedAt ?? null,
         isLate: sub?.isLate ?? false,
+        minutesLate: sub?.minutesLate ?? 0,
         version: sub?.version ?? 0,
-        fileCount: sub?.files.length ?? 0,
-        graded: !!sub?.grade,
-        finalMarks: sub?.grade ? Number(sub.grade.finalMarks) : null,
+        textResponse: sub?.textResponse ?? null,
+        files: (sub?.files ?? []).map((f: { id: string; originalFilename: string }) => ({
+          id: f.id,
+          filename: f.originalFilename,
+        })),
+        graded: !!g,
+        rawMarks: g ? Number(g.rawMarks) : null,
+        penaltyApplied: g ? Number(g.penaltyApplied) : null,
+        finalMarks: g ? Number(g.finalMarks) : null,
+        feedback: g?.feedback ?? null,
+        // §4.5 keeps internal notes from students, and this endpoint is now
+        // teacher-and-above only, so they belong here: a second marker needs
+        // to see what the first one recorded.
+        internalNotes: g?.internalNotes ?? null,
+        // BR-ASG-11 — a released grade cannot be changed without a reason, and
+        // the interface has to know that before the teacher starts typing.
+        releasedAt: g?.releasedAt ?? null,
       };
     });
 
     return {
-      assignment: { id: assignment.id, marksAvailable: Number(assignment.marksAvailable), gradesReleased: assignment.gradesReleased },
+      assignment: {
+        id: assignment.id,
+        title: assignment.title,
+        marksAvailable: Number(assignment.marksAvailable),
+        gradesReleased: assignment.gradesReleased,
+        dueAt: assignment.dueAt,
+        latePolicy: assignment.latePolicy,
+      },
       summary: {
         enrolled: rows.length,
         submitted: rows.filter((r) => r.submitted).length,
@@ -398,6 +432,59 @@ export class AssignmentService {
       },
       students: rows.sort((a, b) => (a.rollNo ?? 9999) - (b.rollNo ?? 9999)),
     };
+  }
+
+  /**
+   * FR-TCH-018 — a teacher's assignments for one subject-section, with how much
+   * marking each still needs.
+   *
+   * Counted in two grouped queries rather than by loading every submission:
+   * the index needs totals, and pulling the rows to count them would read the
+   * whole cohort's work to render a summary.
+   */
+  async listForTeacher(sectionSubjectId: string) {
+    const assignments = await this.prisma.scoped.assignment.findMany({
+      where: { sectionSubjectId, deletedAt: null },
+      orderBy: { dueAt: "desc" },
+    });
+    if (assignments.length === 0) return [];
+
+    const ids = assignments.map((a: (typeof assignments)[number]) => a.id);
+
+    const submittedCounts = await this.prisma.scoped.assignmentSubmission.groupBy({
+      by: ["assignmentId"],
+      where: { assignmentId: { in: ids }, isLatest: true },
+      _count: { _all: true },
+    });
+    const gradedCounts = await this.prisma.scoped.assignmentSubmission.groupBy({
+      by: ["assignmentId"],
+      where: { assignmentId: { in: ids }, isLatest: true, grade: { isNot: null } },
+      _count: { _all: true },
+    });
+
+    const submitted = new Map(
+      submittedCounts.map((r: (typeof submittedCounts)[number]) => [r.assignmentId, r._count._all]),
+    );
+    const graded = new Map(
+      gradedCounts.map((r: (typeof gradedCounts)[number]) => [r.assignmentId, r._count._all]),
+    );
+
+    return assignments.map((a: (typeof assignments)[number]) => {
+      const submittedCount = submitted.get(a.id) ?? 0;
+      return {
+        id: a.id,
+        title: a.title,
+        dueAt: a.dueAt,
+        marksAvailable: Number(a.marksAvailable),
+        publicationStatus: a.publicationStatus,
+        gradesReleased: a.gradesReleased,
+        submittedCount,
+        gradedCount: graded.get(a.id) ?? 0,
+        // The number that decides what a teacher does next, so it is computed
+        // here rather than left to the interface to subtract.
+        ungradedCount: submittedCount - (graded.get(a.id) ?? 0),
+      };
+    });
   }
 
   /** FR-ASG-025/026 — grade, with the penalty applied by the System. */
@@ -422,6 +509,25 @@ export class AssignmentService {
             field: "revisionReason",
             code: "REQUIRED",
             message: "This grade has been released. Record why it is being changed.",
+          },
+        ],
+      });
+    }
+
+    // A mark above the maximum is a typo, not an intention.
+    //
+    // applyLatePenalty clamps to marksAvailable, so nothing over-awards — but
+    // it clamps SILENTLY. A teacher who types 55 instead of 5.5 on a 20-mark
+    // assignment would see 20/20 recorded and no indication anything was
+    // adjusted. Refusing is the only outcome that gets the intended mark into
+    // the record (NFR-USE-007).
+    if (input.rawMarks > Number(a.marksAvailable)) {
+      throw new AppError("VALIDATION_FAILED", {
+        details: [
+          {
+            field: "rawMarks",
+            code: "ABOVE_MAXIMUM",
+            message: `This assignment is out of ${Number(a.marksAvailable)} marks.`,
           },
         ],
       });
@@ -615,18 +721,23 @@ export class AssignmentService {
         fileCount: submission?.files.length ?? 0,
 
         // BR-ASG-09 — a mark does not exist for the student until released.
-        // The scope policy already withholds an unreleased grade, so reaching
-        // this with a grade present means it IS released; the ternary is here
-        // so an absent grade reads as "not yet", not as zero.
-        grade: grade
-          ? {
-              status: "RELEASED" as const,
-              finalMarks: Number(grade.finalMarks),
-              penaltyApplied: Number(grade.penaltyApplied),
-            }
-          : submission
-            ? { status: "AWAITING_GRADE" as const }
-            : { status: "NOT_SUBMITTED" as const },
+        //
+        // releasedAt is checked HERE, explicitly. The AssignmentGrade scope
+        // policy does withhold unreleased grades, but it does NOT apply to a
+        // nested `include` — the extension rewrites the where of the model
+        // being queried, and a relation loaded alongside it never passes
+        // through the child model's policy. Relying on the predicate here
+        // leaked every unreleased mark to its student.
+        grade:
+          grade?.releasedAt != null
+            ? {
+                status: "RELEASED" as const,
+                finalMarks: Number(grade.finalMarks),
+                penaltyApplied: Number(grade.penaltyApplied),
+              }
+            : submission
+              ? { status: "AWAITING_GRADE" as const }
+              : { status: "NOT_SUBMITTED" as const },
       };
     });
   }

@@ -220,16 +220,34 @@ export class ContentService {
    * happens once, at the data layer, where it cannot be forgotten.
    */
   async subjectContent(subjectId: string) {
+    // BR-CNT-01 restated for the NESTED reads.
+    //
+    // The Module policy filters the top-level query; it does NOT reach lessons
+    // or lectures loaded alongside it (see the note in scope.extension.ts). A
+    // draft lecture inside a PUBLISHED module was therefore visible to
+    // students — a teacher preparing next week's material would have published
+    // it by accident.
+    //
+    // Matching the Lesson and RecordedLecture policies deliberately: those
+    // policies are the specification, this is the restatement the include
+    // requires.
+    const actor = getActor();
+    const isStudent = actor?.roles.includes("student") === true;
+    const lessonVisibility = isStudent ? { publicationStatus: "PUBLISHED" as const } : {};
+    const lectureVisibility = isStudent
+      ? { publicationStatus: "PUBLISHED" as const, availabilityStatus: "AVAILABLE" as const }
+      : {};
+
     const modules = await this.prisma.scoped.module.findMany({
       where: { subjectId, deletedAt: null },
       orderBy: { displayOrder: "asc" },
       include: {
         lessons: {
-          where: { deletedAt: null },
+          where: { deletedAt: null, ...lessonVisibility },
           orderBy: { displayOrder: "asc" },
           include: {
             lectures: {
-              where: { deletedAt: null },
+              where: { deletedAt: null, ...lectureVisibility },
               select: {
                 id: true,
                 title: true,

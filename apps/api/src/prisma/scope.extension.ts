@@ -19,7 +19,32 @@
  * UNSCOPED and is therefore readable by anyone who passes the role check.
  * That default is deliberate for genuinely public reference data (Programme,
  * Subject) but it is WRONG for anything carrying student data. When in doubt,
- * add a policy.
+ * add a policy. scope-coverage.spec.ts fails if a model is neither policed nor
+ * listed in DELIBERATELY_UNSCOPED.
+ *
+ * ---------------------------------------------------------------------------
+ * THE ONE THING THIS DOES NOT COVER: NESTED INCLUDES
+ * ---------------------------------------------------------------------------
+ * A policy applies to the model being QUERIED. It does NOT apply to a relation
+ * loaded alongside it.
+ *
+ *     prisma.scoped.assignmentSubmission.findMany({ include: { grade: true } })
+ *              ^ AssignmentSubmission policy runs      ^ AssignmentGrade policy
+ *                                                        does NOT run
+ *
+ * The extension rewrites `args.where` for the top-level operation; the relation
+ * is resolved by the same database query and never re-enters as its own
+ * operation. So an `include` of a scoped model returns rows the child policy
+ * would have refused.
+ *
+ * This is not hypothetical. The student assignment list included `grade` and
+ * trusted the AssignmentGrade policy to withhold unreleased marks, and it
+ * leaked every unreleased grade to its student in breach of BR-ASG-09.
+ *
+ * WHEN YOU INCLUDE A SCOPED MODEL, restate its restriction — either as a
+ * `where` on the nested read where the relation is to-many, or as an explicit
+ * check on the loaded row where it is to-one. Treat the policy as documentation
+ * of what that restriction must be.
  */
 
 import { Prisma } from "@prisma/client";

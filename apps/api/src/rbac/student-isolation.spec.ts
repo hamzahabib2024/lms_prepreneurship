@@ -110,6 +110,44 @@ describe("a student cannot open the class list", () => {
   });
 });
 
+describe("a student cannot open the grading roster", () => {
+  it("is denied submission_roster", () => {
+    // The seventh instance of one pattern: a resource named after a TOPIC
+    // ("submission") guarding endpoints that serve very different audiences
+    // under it. A student holds submission:read for their own work, and that
+    // was enough to open the class list with every classmate's name, roll
+    // number and marks on it.
+    expect(may("student", "submission_roster", "read")).toBe(false);
+    expect(may("student", "submission_roster", "export")).toBe(false);
+  });
+
+  it("may still read their own submission", () => {
+    expect(may("student", "submission", "read")).toBe(true);
+    expect(may("student", "submission", "create")).toBe(true);
+  });
+
+  it("still lets a teacher mark their cohort (FR-TCH-019)", () => {
+    expect(may("teacher", "submission_roster", "read")).toBe(true);
+  });
+
+  it("lets a student READ their own grade but never write one", () => {
+    // Read is correct and deliberate — it is how a student sees their own
+    // mark, and BR-ASG-09 is enforced separately by the AssignmentGrade scope
+    // policy, which hides a grade until releasedAt is set. Marking is the
+    // write, and that is the teacher's alone.
+    expect(may("student", "grade", "read")).toBe(true);
+    for (const action of ["create", "update", "delete", "approve"] as const) {
+      expect(may("student", "grade", action)).toBe(false);
+    }
+  });
+
+  it("never grants a student internal grading notes (§4.7)", () => {
+    for (const action of ["create", "read", "update", "delete", "approve", "export"] as const) {
+      expect(may("student", "internal_note", action)).toBe(false);
+    }
+  });
+});
+
 describe("matrix invariants that prevented the original defects", () => {
   it("no student grant is wider than OWN or ENROLLED", () => {
     const RESOURCES_TO_CHECK: Resource[] = [

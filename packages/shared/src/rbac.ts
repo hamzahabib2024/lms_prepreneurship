@@ -122,6 +122,7 @@ export const RESOURCES = [
   "assignment",
   "rubric",
   "submission",
+  "submission_roster",
   "grade",
   "internal_note",
   "quiz",
@@ -427,6 +428,20 @@ export const PERMISSION_MATRIX: Record<Resource, ResourcePolicy> = {
     admin: { actions: ["read", "export"], scope: "ALL" },
     teacher: { actions: ["read", "export"], scope: "ASSIGNED" },
     student: { actions: ["create", "read", "update", "export"], scope: "OWN" },
+  },
+  /**
+   * FR-TCH-019 — the grading roster: who submitted, who did not, who was late,
+   * what is still unmarked.
+   *
+   * Separate from `submission` for the same reason `progress_cohort` is
+   * separate from `progress`. A student holds `submission:read` so they can see
+   * their OWN work; that must not also open a list of the whole class with
+   * every classmate's name, roll number and marks on it.
+   */
+  submission_roster: {
+    super_admin: { actions: ["read", "export"], scope: "ALL" },
+    admin: { actions: ["read", "export"], scope: "ALL" },
+    teacher: { actions: ["read", "export"], scope: "ASSIGNED" },
   },
   grade: {
     super_admin: { actions: ["read", "update"], scope: "ALL" },

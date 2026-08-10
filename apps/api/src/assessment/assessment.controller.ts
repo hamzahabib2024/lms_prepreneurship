@@ -110,8 +110,27 @@ export class AssessmentController {
     return this.assignments.listForStudent(id);
   }
 
-  /** FR-TCH-019 — submitted, not submitted, late, ungraded, at a glance. */
-  @RequirePermission("submission", "read")
+  /**
+   * FR-TCH-018 — the teacher's assignments for one subject-section.
+   *
+   * `submission_roster`, because the marking counts on each row are cohort
+   * figures. Guarding it with `assignment:read` would let a student see how
+   * many of their classmates have handed in.
+   */
+  @RequirePermission("submission_roster", "read")
+  @Get("section-subjects/:id/assignments")
+  assignmentsForTeacher(@Param("id") id: string) {
+    return this.assignments.listForTeacher(id);
+  }
+
+  /**
+   * FR-TCH-019 — submitted, not submitted, late, ungraded, at a glance.
+   *
+   * `submission_roster`, not `submission`. This is the whole class with every
+   * name, roll number and mark on it; a student holds `submission:read` for
+   * their OWN work and must not reach a class list with it.
+   */
+  @RequirePermission("submission_roster", "read")
   @Get("assignments/:id/submissions")
   status(@Param("id") id: string) {
     return this.assignments.submissionStatus(id);
