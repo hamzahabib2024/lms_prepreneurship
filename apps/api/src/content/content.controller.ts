@@ -88,6 +88,22 @@ export class ContentController {
     return this.content.setPublication("module", id, dto.status, dto.publishAt);
   }
 
+  /**
+   * FR-CNT-016 — publish a recording.
+   *
+   * Modules and lessons had this and recordings did not, so a catalogued
+   * lecture stayed DRAFT for ever and no student could ever see it. Cataloguing
+   * without publishing is half a feature.
+   */
+  @RequirePermission("content_publication", "update")
+  @Post("recorded-lectures/:id/publication")
+  publishLecture(
+    @Param("id") id: string,
+    @Body(zodBody(publishSchema)) dto: z.infer<typeof publishSchema>,
+  ) {
+    return this.content.setPublication("lecture", id, dto.status, dto.publishAt);
+  }
+
   @RequirePermission("content_publication", "update")
   @Post("lessons/:id/publication")
   publishLesson(@Param("id") id: string, @Body(zodBody(publishSchema)) dto: z.infer<typeof publishSchema>) {
@@ -96,7 +112,20 @@ export class ContentController {
 
   // ---------------------------------------------------------------- lectures
 
-  @RequirePermission("recorded_lecture", "read")
+  /**
+   * FR-VID-003 — browse the configured folders to catalogue a recording.
+   *
+   * `recorded_lecture:CREATE`, not `read`. A student holds `read` so they can
+   * see the lectures on their own subjects, and that let them list the raw
+   * storage tree — folder and file names for everything the Institute keeps
+   * there, INCLUDING the submissions directory where coursework lives. ARC-041
+   * says a storage reference never reaches a student; this handed them the
+   * whole index.
+   *
+   * Browsing exists to catalogue, so it is bounded by the permission to
+   * catalogue.
+   */
+  @RequirePermission("recorded_lecture", "create")
   @Get("storage/browse")
   browse(@Query("folder") folder?: string) {
     return this.content.browseStorage(folder);

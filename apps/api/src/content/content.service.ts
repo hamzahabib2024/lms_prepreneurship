@@ -178,7 +178,7 @@ export class ContentService {
    * It is a visibility change, not a deletion.
    */
   async setPublication(
-    kind: "module" | "lesson",
+    kind: "module" | "lesson" | "lecture",
     id: string,
     status: "DRAFT" | "PUBLISHED" | "UNPUBLISHED" | "SCHEDULED",
     publishAt?: Date,
@@ -191,21 +191,51 @@ export class ContentService {
       });
     }
 
+    // A recording has no publishAt column, so it cannot be scheduled. Saying so
+    // is better than accepting the request and silently publishing at once.
+    if (kind === "lecture" && status === "SCHEDULED") {
+      throw new AppError("VALIDATION_FAILED", {
+        details: [
+          {
+            field: "status",
+            code: "NOT_SUPPORTED",
+            message:
+              "A recording cannot be scheduled. Schedule the lesson it belongs to instead.",
+          },
+        ],
+      });
+    }
+
     const before =
       kind === "module"
         ? await this.prisma.scoped.module.findFirst({ where: { id, deletedAt: null } })
-        : await this.prisma.scoped.lesson.findFirst({ where: { id, deletedAt: null } });
+        : kind === "lesson"
+          ? await this.prisma.scoped.lesson.findFirst({ where: { id, deletedAt: null } })
+          : await this.prisma.scoped.recordedLecture.findFirst({
+              where: { id, deletedAt: null },
+            });
     if (!before) throw new AppError("RESOURCE_NOT_FOUND");
 
-    const data = { publicationStatus: status, publishAt: publishAt ?? null };
     const updated =
       kind === "module"
-        ? await this.prisma.scoped.module.update({ where: { id }, data })
-        : await this.prisma.scoped.lesson.update({ where: { id }, data });
+        ? await this.prisma.scoped.module.update({
+            where: { id },
+            data: { publicationStatus: status, publishAt: publishAt ?? null },
+          })
+        : kind === "lesson"
+          ? await this.prisma.scoped.lesson.update({
+              where: { id },
+              data: { publicationStatus: status, publishAt: publishAt ?? null },
+            })
+          : await this.prisma.scoped.recordedLecture.update({
+              where: { id },
+              data: { publicationStatus: status },
+            });
 
     await this.audit.record({
       action: `${kind}.publication`,
-      entityType: kind === "module" ? "Module" : "Lesson",
+      entityType:
+        kind === "module" ? "Module" : kind === "lesson" ? "Lesson" : "RecordedLecture",
       entityId: id,
       before: { publicationStatus: before.publicationStatus },
       after: { publicationStatus: status, publishAt: publishAt ?? null },
