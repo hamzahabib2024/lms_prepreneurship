@@ -226,6 +226,16 @@ export const CATALOGUE: SettingDefinition[] = [
 
   // ------------------------------------------------------------- institute --
   {
+    key: "institute.timezoneOffsetMinutes",
+    type: "number",
+    default: 300,
+    group: "Institute",
+    min: -720,
+    max: 840,
+    description:
+      "Minutes ahead of UTC where the Institute is. Pakistan is +05:00, so 300. Timetable times are read as local wall-clock and converted with this; it is a fixed offset because Pakistan does not observe daylight saving, and an institute that does would need more than a number here.",
+  },
+  {
     key: "institute.name",
     type: "string",
     default: "The Institute",
