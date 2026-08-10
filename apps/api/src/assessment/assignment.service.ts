@@ -262,10 +262,38 @@ export class AssignmentService {
           },
         });
 
-        if (input.fileIds?.length) {
-          await tx.submissionFile.updateMany({
-            where: { id: { in: input.fileIds } },
-            data: { submissionId: submission.id },
+        // Attaching the student's OWN unattached files for THIS assignment.
+        //
+        // This used to be `updateMany({ where: { id: { in: fileIds } } })` on a
+        // system-scoped client — no owner check, no assignment check. A student
+        // could name a classmate's file id and pull their work into their own
+        // submission, which would also REMOVE it from the classmate's, since a
+        // file has a single parent. Nothing had ever exercised it because there
+        // was no upload endpoint, so no SubmissionFile could exist.
+        //
+        // The three extra predicates are the fix. `submissionId: null` matters
+        // as much as the other two: without it, a student could re-attach a
+        // file from their own EARLIER submission and silently rewrite what they
+        // handed in before the deadline (BR-ASG-07).
+        const attached = input.fileIds?.length
+          ? await tx.submissionFile.updateMany({
+              where: {
+                id: { in: input.fileIds },
+                studentId,
+                assignmentId,
+                submissionId: null,
+              },
+              data: { submissionId: submission.id },
+            })
+          : { count: 0 };
+
+        // Refuse rather than submit a subset. A student who selected four files
+        // and had two accepted would believe all four were handed in, and would
+        // find out when they were marked on half their work.
+        if (input.fileIds?.length && attached.count !== input.fileIds.length) {
+          throw new AppError("VALIDATION_FAILED", {
+            message:
+              "Some of those files are no longer available to attach. Reload the page and try again.",
           });
         }
 
@@ -531,7 +559,15 @@ export class AssignmentService {
       submittedAt: submission.submittedAt,
       isLate: submission.isLate,
       minutesLate: submission.minutesLate,
-      files: submission.files,
+      // sizeBytes is a BigInt, which JSON.stringify throws on rather than
+      // coercing. This returned raw rows and 500'd the moment a submission
+      // actually had a file — invisible until now, because nothing could
+      // create one.
+      files: submission.files.map((f: (typeof submission.files)[number]) => ({
+        id: f.id,
+        filename: f.originalFilename,
+        sizeBytes: Number(f.sizeBytes),
+      })),
       grade: !g
         ? { status: "NOT_YET_GRADED" as const }
         : !isReleased

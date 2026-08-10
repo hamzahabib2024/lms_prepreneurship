@@ -1,8 +1,35 @@
-import { Body, Controller, Get, Param, Post, Query } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Header,
+  HttpCode,
+  Param,
+  Post,
+  Query,
+  Res,
+  UploadedFile,
+  UseInterceptors,
+} from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
+import type { Response } from "express";
 import { z } from "zod";
+import { AppError } from "@lms/shared";
 import { AssignmentService } from "./assignment.service";
+import { SubmissionFileService } from "./submission-file.service";
 import { zodBody } from "../common/zod-validation.pipe";
 import { RequirePermission } from "../rbac/permissions.guard";
+
+/**
+ * The hard ceiling multer will accept, in bytes.
+ *
+ * Appendix H caps a single file at 10 MB and an assignment may narrow that
+ * further, but multer must decide before any policy is loaded. A generous
+ * ceiling here stops a 2 GB request being buffered while the per-assignment
+ * limit does the real work.
+ */
+const UPLOAD_HARD_LIMIT_BYTES = 12 * 1024 * 1024;
 
 const createSchema = z
   .object({
@@ -53,7 +80,10 @@ const gradeSchema = z.object({
 /** SRS §9.8 — assignment endpoints. */
 @Controller()
 export class AssessmentController {
-  constructor(private readonly assignments: AssignmentService) {}
+  constructor(
+    private readonly assignments: AssignmentService,
+    private readonly files: SubmissionFileService,
+  ) {}
 
   @RequirePermission("assignment", "create")
   @Post("assignments")
@@ -89,6 +119,76 @@ export class AssessmentController {
   @Get("assignments/:id/my-submission")
   mine(@Param("id") id: string) {
     return this.assignments.studentView(id);
+  }
+
+  // ----------------------------------------------------------------- files --
+
+  /**
+   * FR-ASG-013 — uploads one file, unattached, before the student submits.
+   *
+   * `submission:create`, because uploading is the first half of submitting.
+   * The interceptor holds the file in memory: the validator has to read the
+   * leading bytes to check the content matches the extension, and a file that
+   * fails must never touch disk (SEC-FIL-005).
+   */
+  @RequirePermission("submission", "create")
+  @Post("assignments/:id/files")
+  @UseInterceptors(
+    FileInterceptor("file", { limits: { fileSize: UPLOAD_HARD_LIMIT_BYTES, files: 1 } }),
+  )
+  upload(@Param("id") id: string, @UploadedFile() file?: Express.Multer.File) {
+    if (!file) {
+      throw new AppError("VALIDATION_FAILED", {
+        message: "No file was received. Choose a file and try again.",
+        details: [{ field: "file", message: "A file is required." }],
+      });
+    }
+    return this.files.upload(id, {
+      originalname: file.originalname,
+      buffer: file.buffer,
+      size: file.size,
+      mimetype: file.mimetype,
+    });
+  }
+
+  /** What the student has uploaded but not yet submitted. */
+  @RequirePermission("submission", "read")
+  @Get("assignments/:id/files")
+  listFiles(@Param("id") id: string) {
+    return this.files.listPending(id);
+  }
+
+  @RequirePermission("submission", "update")
+  @Delete("submission-files/:fileId")
+  @HttpCode(200)
+  removeFile(@Param("fileId") fileId: string) {
+    return this.files.removePending(fileId);
+  }
+
+  /**
+   * Streams a submitted file to whoever may read it.
+   *
+   * Unlike lecture video, these bytes DO pass through the application tier.
+   * ARC-052 forbids proxying video because 150 concurrent streams would consume
+   * the whole capacity budget; a coursework download is a few megabytes read
+   * once by one teacher, and routing it through here keeps the storage
+   * reference out of the browser entirely (ARC-041).
+   */
+  @RequirePermission("submission", "read")
+  @Get("submission-files/:fileId/download")
+  @Header("X-Content-Type-Options", "nosniff")
+  async download(@Param("fileId") fileId: string, @Res() res: Response): Promise<void> {
+    const file = await this.files.download(fileId);
+
+    // `attachment` on purpose. A student-supplied HTML or SVG rendered inline
+    // would execute in the System's origin and read the reader's session.
+    res.setHeader("Content-Type", file.contentType);
+    res.setHeader("Content-Length", String(file.sizeBytes));
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename*=UTF-8''${encodeURIComponent(file.filename)}`,
+    );
+    res.end(file.body);
   }
 
   @RequirePermission("grade", "update")

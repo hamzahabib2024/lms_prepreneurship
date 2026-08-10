@@ -442,6 +442,7 @@ model Student {
   payments       Payment[]
   attendance     AttendanceRecord[]
   watchProgress  WatchProgress[]
+  submissionFiles SubmissionFile[]
   registration   RegistrationRequest?
 
   // FR-REG-057: roll numbers are unique within a section and reusable after
@@ -1084,6 +1085,7 @@ model Assignment {
   rubric      Rubric?                @relation(fields: [rubricId], references: [id], onDelete: SetNull)
   submissions AssignmentSubmission[]
   extensions  AssignmentExtension[]
+  files       SubmissionFile[]
 
   @@index([sectionSubjectId, publicationStatus])
   @@index([dueAt])
@@ -1120,8 +1122,23 @@ model AssignmentSubmission {
 }
 
 model SubmissionFile {
-  id           String @id @default(uuid()) @db.Uuid
-  submissionId String @map("submission_id") @db.Uuid
+  id String @id @default(uuid()) @db.Uuid
+
+  /// NULL until the student presses Submit.
+  ///
+  /// A file is uploaded first and attached second — FR-ASG-013 lets a student
+  /// add files one at a time and see them listed before committing. So an
+  /// uploaded file has to be representable before any submission row exists.
+  submissionId String? @map("submission_id") @db.Uuid
+
+  /// The owner, recorded at upload. Without it there is no way to answer "may
+  /// this caller attach this file?", and attaching by id alone would let one
+  /// student pull another's work into their own submission — which would also
+  /// REMOVE it from the victim's, since a file has one parent.
+  studentId String @map("student_id") @db.Uuid
+  /// What it was uploaded FOR. Stops a file uploaded against one assignment
+  /// being attached to a different one.
+  assignmentId String @map("assignment_id") @db.Uuid
 
   storageKey       String     @map("storage_key") @db.VarChar(500)
   originalFilename String     @map("original_filename") @db.VarChar(255)
@@ -1134,10 +1151,15 @@ model SubmissionFile {
 
   createdAt DateTime @default(now()) @map("created_at")
 
-  submission AssignmentSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  submission AssignmentSubmission? @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  student    Student               @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  assignment Assignment            @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
 
   @@index([submissionId])
   @@index([contentHash])
+  /// Finds a student's not-yet-attached uploads for one assignment, which is
+  /// both the attach path and the orphan sweep.
+  @@index([studentId, assignmentId, submissionId])
   @@map("submission_files")
 }
 

@@ -426,6 +426,76 @@ async function main(): Promise<void> {
   }
   console.log(`  content: ${moduleCount + 1} modules, ${lectureCount} lectures (1 module DRAFT)`);
 
+  // -- assignments (§5.9) ---------------------------------------------------
+  // Two, with different windows, because almost every rule in this module is
+  // about WHEN something was handed in. One assignment can only ever exercise
+  // one side of that.
+  const assignmentPlan = [
+    {
+      title: "Colour palette for a local brand",
+      instructions:
+        "Choose a Pakistani brand and produce a five-colour palette with a short rationale. Submit as a PDF.",
+      marksAvailable: 20,
+      opensOffset: -7,
+      dueOffset: 7,
+      // Open now, due next week. The ordinary case.
+      latePolicy: "PER_DAY_PERCENT" as const,
+      latePenaltyValue: 10,
+      latePenaltyFloor: 40,
+      allowedFileTypes: ["pdf", "png", "jpg"],
+      resubmissionPolicy: "UNLIMITED_UNTIL_DUE" as const,
+    },
+    {
+      title: "Typography exercise",
+      instructions:
+        "Set the same paragraph in three typefaces and explain which you would use for a poster and why.",
+      marksAvailable: 15,
+      opensOffset: -14,
+      dueOffset: -2,
+      // Already overdue, and still accepting work: this is what makes the late
+      // penalty and the isLate flag reachable without waiting a week.
+      latePolicy: "FIXED_DEDUCTION" as const,
+      latePenaltyValue: 3,
+      latePenaltyFloor: null,
+      allowedFileTypes: ["pdf", "docx"],
+      resubmissionPolicy: "NONE" as const,
+    },
+  ];
+
+  let assignmentCount = 0;
+  for (const a of assignmentPlan) {
+    const existing = await db.assignment.findFirst({
+      where: { sectionSubjectId: gdFemaleGd.id, title: a.title },
+    });
+    if (existing) continue;
+
+    await db.assignment.create({
+      data: {
+        sectionSubjectId: gdFemaleGd.id,
+        title: a.title,
+        instructions: a.instructions,
+        marksAvailable: a.marksAvailable,
+        opensAt: at(a.opensOffset, 9),
+        dueAt: at(a.dueOffset, 23),
+        // FR-ASG-002 — a week past the due date, so lateness is penalised but
+        // not impossible. An assignment with no hard close can never be marked.
+        hardCloseAt: at(a.dueOffset + 7, 23),
+        latePolicy: a.latePolicy,
+        latePenaltyValue: a.latePenaltyValue,
+        latePenaltyFloor: a.latePenaltyFloor,
+        submissionType: "BOTH",
+        allowedFileTypes: a.allowedFileTypes,
+        maxFileSizeMb: 10,
+        maxFileCount: 3,
+        resubmissionPolicy: a.resubmissionPolicy,
+        publicationStatus: "PUBLISHED",
+        createdBy: teacherUser.id,
+      },
+    });
+    assignmentCount += 1;
+  }
+  console.log(`  assignments: ${assignmentCount} (1 open, 1 overdue but still accepting)`);
+
   // -- attendance for the sessions that have already happened ---------------
   // Every ENDED session needs a marked register, or the attendance component
   // of progress has an empty denominator and every student silently reports
