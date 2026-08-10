@@ -66,6 +66,9 @@
       "ts"
     ],
     "rootDir": "src",
+    "setupFiles": [
+      "<rootDir>/../jest.setup.js"
+    ],
     "testRegex": ".*\\.(spec|int-spec)\\.ts$",
     "transform": {
       "^.+\\.ts$": "ts-jest"
