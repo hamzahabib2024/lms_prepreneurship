@@ -22,6 +22,9 @@ const REPORT_RESOURCE: Record<string, Resource> = {
   "registration-pipeline": "report_enrolment",
   revenue: "report_financial",
   "acquisition-attribution": "report_marketing",
+  progress: "report_progress",
+  assessment: "report_assessment",
+  "teacher-activity": "report_teacher_activity",
 };
 
 const actor = (
@@ -94,8 +97,63 @@ describe("mapping integrity", () => {
     }
   });
 
+  it("every registered report is listed here", () => {
+    // The list above must not fall behind the service, or a new report goes
+    // unasserted and the next mapping mistake is invisible.
+    expect(Object.keys(REPORT_RESOURCE)).toHaveLength(8);
+  });
+
   it("financial reports map to report_financial, not a weaker resource", () => {
     expect(REPORT_RESOURCE["revenue"]).toBe("report_financial");
     expect(REPORT_RESOURCE["revenue"]).not.toBe("report_attendance");
+  });
+});
+
+describe("§4.5 — teacher activity is about PEOPLE, not students", () => {
+  const teacher = actor("teacher");
+  const admin = actor("admin");
+
+  it("lets a teacher read it — their OWN, per the matrix", () => {
+    expect(may(teacher, "teacher-activity", "read")).toBe(true);
+  });
+
+  it("does NOT let a teacher export it", () => {
+    // A management report on a colleague's productivity is not a file for
+    // whoever fancies one. The matrix grants read at OWN scope and no export;
+    // the service enforces the OWN half, which no per-model predicate can.
+    expect(may(teacher, "teacher-activity", "export")).toBe(false);
+  });
+
+  it("lets an administrator read and export it", () => {
+    expect(may(admin, "teacher-activity", "read")).toBe(true);
+    expect(may(admin, "teacher-activity", "export")).toBe(true);
+  });
+
+  it("never reaches a student", () => {
+    expect(may(actor("student"), "teacher-activity", "read")).toBe(false);
+    expect(may(actor("student"), "teacher-activity", "export")).toBe(false);
+  });
+});
+
+describe("the two new student-facing reports", () => {
+  it("let a student READ their own progress and assessment", () => {
+    expect(may(actor("student"), "progress", "read")).toBe(true);
+    expect(may(actor("student"), "assessment", "read")).toBe(true);
+  });
+
+  it("but never EXPORT them", () => {
+    // §4.1.2 — bulk extraction is a distinct action, and a student's own copy
+    // of their record goes through personal_data_export, which is audited.
+    expect(may(actor("student"), "progress", "export")).toBe(false);
+    expect(may(actor("student"), "assessment", "export")).toBe(false);
+  });
+
+  it("let a teacher run both for their own sections", () => {
+    expect(may(actor("teacher"), "progress", "read")).toBe(true);
+    expect(may(actor("teacher"), "assessment", "export")).toBe(true);
+  });
+
+  it("do not let a teacher reach financial data through them", () => {
+    expect(may(actor("teacher"), "revenue", "read")).toBe(false);
   });
 });

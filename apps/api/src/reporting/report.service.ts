@@ -3,7 +3,10 @@ import { AppError, resolvePermission, type Resource } from "@lms/shared";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { AttendanceService } from "../live/attendance.service";
+import { ProgressService } from "../progress/progress.service";
+import { SettingsService } from "../settings/settings.service";
 import { getActor } from "../prisma/actor-context";
+import type { AttemptStatus } from "@prisma/client";
 import { buildCsv, csvFilename, type CsvColumn } from "./csv";
 
 export interface ReportFilters {
@@ -54,6 +57,8 @@ export class ReportService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly attendance: AttendanceService,
+    private readonly progress: ProgressService,
+    private readonly settings: SettingsService,
   ) {
     this.register({
       key: "student-directory",
@@ -144,6 +149,71 @@ export class ReportService {
         { header: "Approved", value: (r) => r["approved"] },
         { header: "Rejected", value: (r) => r["rejected"] },
         { header: "Conversion %", value: (r) => r["conversionPercent"] },
+      ],
+    });
+
+    this.register({
+      key: "progress",
+      name: "Progress and Completion",
+      resource: "report_progress",
+      description:
+        "Report 5 — who is on course to finish, and what each person still owes. Ordered worst-first.",
+      run: (f) => this.progressReport(f),
+      columns: [
+        { header: "Registration No", value: (r) => r["registrationNo"] },
+        { header: "Name", value: (r) => r["name"] },
+        { header: "Subject", value: (r) => r["subject"] },
+        { header: "Progress %", value: (r) => r["progressPercent"] },
+        { header: "Attendance %", value: (r) => r["attendancePercent"] },
+        { header: "Average Grade %", value: (r) => r["averageGradePercent"] },
+        { header: "Meets Criteria", value: (r) => (r["completionMet"] ? "YES" : "") },
+        // The reason, in words. A percentage says somebody is behind; this says
+        // what they have to do about it.
+        { header: "Outstanding", value: (r) => r["outstanding"] },
+      ],
+    });
+
+    this.register({
+      key: "assessment",
+      name: "Assessment Status",
+      resource: "report_assessment",
+      description:
+        "Report 8 — every assignment and quiz, how many handed in, how many marked, and what is waiting to be released.",
+      run: (f) => this.assessmentReport(f),
+      columns: [
+        { header: "Subject", value: (r) => r["subject"] },
+        { header: "Type", value: (r) => r["type"] },
+        { header: "Title", value: (r) => r["title"] },
+        { header: "Due", value: (r) => r["dueAt"] },
+        { header: "Enrolled", value: (r) => r["enrolled"] },
+        { header: "Submitted", value: (r) => r["submitted"] },
+        { header: "Marked", value: (r) => r["marked"] },
+        // The one a head of department actually looks for.
+        { header: "Awaiting Release", value: (r) => r["awaitingRelease"] },
+        { header: "Average %", value: (r) => r["averagePercent"] },
+      ],
+    });
+
+    this.register({
+      key: "teacher-activity",
+      name: "Teacher Activity",
+      resource: "report_teacher_activity",
+      description:
+        "Report 12 — classes held, registers taken, work set and marking turnaround. A teacher sees only their own.",
+      run: (f) => this.teacherActivity(f),
+      columns: [
+        { header: "Teacher", value: (r) => r["teacher"] },
+        { header: "Subjects Taught", value: (r) => r["subjectsTaught"] },
+        { header: "Classes Held", value: (r) => r["classesHeld"] },
+        { header: "Registers Taken", value: (r) => r["registersTaken"] },
+        { header: "Assignments Set", value: (r) => r["assignmentsSet"] },
+        { header: "Quizzes Set", value: (r) => r["quizzesSet"] },
+        { header: "Submissions Marked", value: (r) => r["submissionsMarked"] },
+        // Alongside the turnaround, ALWAYS. A teacher with two hundred
+        // submissions and a teacher with twenty are not comparable on days
+        // alone, and a management report that implies they are is unfair.
+        { header: "Awaiting Marking", value: (r) => r["awaitingMarking"] },
+        { header: "Median Days to Mark", value: (r) => r["medianDaysToMark"] },
       ],
     });
   }
@@ -307,7 +377,10 @@ export class ReportService {
       },
     });
 
-    const threshold = 75;
+    // The INSTITUTE's threshold, not a constant. Hardcoding 75 here meant an
+    // institute that set 85 got warnings at 85 and a report flagging at 75 —
+    // two answers to one question, neither obviously wrong on its own screen.
+    const threshold = await this.settings.number("attendance.warningThreshold");
     const rows = await Promise.all(
       enrolments.map(async (e: (typeof enrolments)[number]) => {
         const stats = await this.attendance.percentageFor(e.studentId, e.sectionSubjectId);
@@ -421,4 +494,309 @@ export class ReportService {
       }))
       .sort((a, b) => b.approved - a.approved);
   }
+
+  /**
+   * Report 5 — progress and completion.
+   *
+   * Goes through ProgressService per enrolment rather than recomputing the
+   * weighted formula here. A report that calculated progress its own way would
+   * eventually disagree with the student's own screen, and the student would be
+   * right.
+   *
+   * Ordered worst-first for the same reason the attendance report is: it exists
+   * to find who needs help, and registration-number order buries exactly those
+   * students in the middle.
+   */
+  private async progressReport(f: ReportFilters) {
+    const enrolments = await this.prisma.scoped.enrolment.findMany({
+      where: {
+        status: "ACTIVE",
+        ...(f.sectionSubjectId ? { sectionSubjectId: f.sectionSubjectId } : {}),
+        ...(f.sectionId ? { sectionSubject: { sectionId: f.sectionId } } : {}),
+      },
+      include: {
+        student: { include: { user: { select: { fullName: true } } } },
+        sectionSubject: { include: { subject: { select: { code: true, name: true } } } },
+      },
+    });
+
+    const rows = await Promise.all(
+      enrolments.map(async (e: (typeof enrolments)[number]) => {
+        const p = await this.progress.forSubject(e.studentId, e.sectionSubjectId);
+        return {
+          registrationNo: e.student.registrationNo,
+          name: e.student.user.fullName,
+          subject: `${e.sectionSubject.subject.code} ${e.sectionSubject.subject.name}`,
+          progressPercent: p.overallPercent,
+          attendancePercent: p.attendance?.percentage ?? null,
+          averageGradePercent: p.averageGradePercent ?? null,
+          completionMet: p.completionCriteria.met,
+          outstanding: p.completionCriteria.outstanding.join("; "),
+        };
+      }),
+    );
+
+    return rows.sort((a, b) => a.progressPercent - b.progressPercent);
+  }
+
+  /**
+   * Report 8 — assessment status.
+   *
+   * The column somebody is actually looking for is "awaiting release": work
+   * that is marked and that the students cannot see yet (BR-ASG-09). Marking
+   * finished and never released is invisible from every other screen — the
+   * teacher's roster shows it as done, and the student's shows nothing at all.
+   */
+  private async assessmentReport(f: ReportFilters) {
+    const where = {
+      publicationStatus: "PUBLISHED" as const,
+      deletedAt: null,
+      ...(f.sectionSubjectId ? { sectionSubjectId: f.sectionSubjectId } : {}),
+      ...(f.sectionId ? { sectionSubject: { sectionId: f.sectionId } } : {}),
+    };
+
+    const [assignments, quizzes] = await Promise.all([
+      this.prisma.scoped.assignment.findMany({ where }),
+      this.prisma.scoped.quiz.findMany({ where }),
+    ]);
+
+    // Assignment and Quiz name their offering by id only — neither model has a
+    // relation to traverse — so the offerings are read once and joined here.
+    const offeringIds = [
+      ...new Set([
+        ...assignments.map((a: (typeof assignments)[number]) => a.sectionSubjectId),
+        ...quizzes.map((q: (typeof quizzes)[number]) => q.sectionSubjectId),
+      ]),
+    ];
+    const offerings = await this.prisma.asSystem((db) =>
+      db.sectionSubject.findMany({
+        where: { id: { in: offeringIds } },
+        include: {
+          subject: { select: { code: true } },
+          _count: { select: { enrolments: true } },
+        },
+      }),
+    );
+    const offeringOf = new Map(offerings.map((o: (typeof offerings)[number]) => [o.id, o]));
+
+    // COUNTED THROUGH THE SCOPED CLIENT, one aggregate per figure, rather than
+    // by loading submissions as a nested include and counting them here.
+    //
+    // A nested include is not filtered by the scope predicate, and §4.5 grants
+    // a STUDENT this report at OWN scope: the include version loaded every
+    // classmate's grade to compute a cohort average, and would have told a
+    // student the class average before their own mark was released.
+    //
+    // Counting this way, the same code gives staff the cohort figures and a
+    // student their own, because the predicate decides — which is the whole
+    // point of ARC-051. The AssignmentGrade policy also withholds unreleased
+    // marks from a student, so their average is of released work only.
+    const assignmentRows = await Promise.all(
+      assignments.map(async (a: (typeof assignments)[number]) => {
+        const offering = offeringOf.get(a.sectionSubjectId);
+        const [submitted, marked, released, avg] = await Promise.all([
+          this.prisma.scoped.assignmentSubmission.count({
+            where: { assignmentId: a.id, isLatest: true },
+          }),
+          this.prisma.scoped.assignmentGrade.count({
+            where: { submission: { assignmentId: a.id, isLatest: true } },
+          }),
+          this.prisma.scoped.assignmentGrade.count({
+            where: { submission: { assignmentId: a.id, isLatest: true }, releasedAt: { not: null } },
+          }),
+          this.prisma.scoped.assignmentGrade.aggregate({
+            _avg: { finalMarks: true },
+            where: { submission: { assignmentId: a.id, isLatest: true } },
+          }),
+        ]);
+        const mean = avg._avg.finalMarks;
+        return {
+          subject: offering?.subject.code ?? "",
+          type: "Assignment",
+          title: a.title,
+          dueAt: a.dueAt,
+          enrolled: offering?._count.enrolments ?? 0,
+          submitted,
+          marked,
+          awaitingRelease: marked - released,
+          averagePercent: asPercent(mean === null ? null : Number(mean), Number(a.marksAvailable)),
+        };
+      }),
+    );
+
+    const quizRows = await Promise.all(
+      quizzes.map(async (q: (typeof quizzes)[number]) => {
+        const offering = offeringOf.get(q.sectionSubjectId);
+        const done = { quizId: q.id, status: { in: DONE_ATTEMPTS } };
+        const [submitted, released, avg] = await Promise.all([
+          this.prisma.scoped.quizAttempt.count({ where: done }),
+          this.prisma.scoped.quizAttempt.count({
+            where: { ...done, releasedAt: { not: null } },
+          }),
+          this.prisma.scoped.quizAttempt.aggregate({
+            _avg: { finalScore: true },
+            where: { ...done, finalScore: { not: null } },
+          }),
+        ]);
+        const mean = avg._avg.finalScore;
+        return {
+          subject: offering?.subject.code ?? "",
+          type: "Quiz",
+          title: q.title,
+          dueAt: q.closesAt,
+          enrolled: offering?._count.enrolments ?? 0,
+          submitted,
+          marked: submitted,
+          awaitingRelease: submitted - released,
+          averagePercent: asPercent(mean === null ? null : Number(mean), Number(q.totalMarks)),
+        };
+      }),
+    );
+
+    // Most outstanding marking first — the reason to open this report.
+    return [...assignmentRows, ...quizRows].sort(
+      (a, b) => b.awaitingRelease - a.awaitingRelease || b.submitted - a.submitted,
+    );
+  }
+
+  /**
+   * Report 12 — teacher activity.
+   *
+   * A TEACHER SEES ONLY THEMSELVES, and that is enforced here rather than by
+   * the scope predicate. This report aggregates across six models; the
+   * predicate constrains each query it is given, but "which teachers appear in
+   * the output" is a decision about the SHAPE of the report and no per-model
+   * where clause makes it. §4.5 grants a teacher OWN scope on this resource,
+   * and this line is what that means in practice.
+   *
+   * A report on a colleague's productivity is management material. Getting this
+   * wrong would not leak a student's data; it would hand every teacher a league
+   * table of their peers.
+   */
+  private async teacherActivity(f: ReportFilters) {
+    const actor = getActor();
+    if (!actor) throw new AppError("AUTH_TOKEN_INVALID");
+
+    const isStaff = actor.roles.some((r) => r === "admin" || r === "super_admin");
+    const teachers = await this.prisma.asSystem((db) =>
+      db.teacher.findMany({
+        where: isStaff ? { deletedAt: null } : { id: actor.teacherId ?? "__none__" },
+        include: { user: { select: { fullName: true } } },
+      }),
+    );
+
+    const window = {
+      ...(f.from ? { gte: f.from } : {}),
+      ...(f.to ? { lte: f.to } : {}),
+    };
+    const inWindow = f.from || f.to ? window : undefined;
+
+    return Promise.all(
+      teachers.map(async (t: (typeof teachers)[number]) => {
+        const [assignments, sessions, marked, pending, quizzes, subjects] = await Promise.all([
+          this.prisma.asSystem((db) =>
+            db.assignment.count({
+              where: {
+                createdBy: t.userId,
+                deletedAt: null,
+                ...(inWindow ? { createdAt: inWindow } : {}),
+              },
+            }),
+          ),
+          this.prisma.asSystem((db) =>
+            db.liveSession.count({
+              where: {
+                hostTeacherId: t.id,
+                status: "ENDED",
+                ...(inWindow ? { scheduledStart: inWindow } : {}),
+              },
+            }),
+          ),
+          this.prisma.asSystem((db) =>
+            db.assignmentGrade.findMany({
+              where: {
+                gradedBy: t.userId,
+                ...(inWindow ? { gradedAt: inWindow } : {}),
+              },
+              select: { gradedAt: true, submission: { select: { submittedAt: true } } },
+            }),
+          ),
+          // Work handed in to THIS teacher's assignments and not yet marked.
+          // The number that makes the turnaround fair to read.
+          this.prisma.asSystem((db) =>
+            db.assignmentSubmission.count({
+              where: {
+                isLatest: true,
+                grade: null,
+                assignment: { createdBy: t.userId, deletedAt: null },
+              },
+            }),
+          ),
+          this.prisma.asSystem((db) =>
+            db.quiz.count({ where: { createdBy: t.userId, deletedAt: null } }),
+          ),
+          this.prisma.asSystem((db) =>
+            // FR-CRS-025 — a teaching assignment has no status; it LAPSES when
+            // its endDate passes, which is what withdraws the teacher's scope.
+            db.teacherAssignment.count({
+              where: {
+                teacherId: t.id,
+                deletedAt: null,
+                OR: [{ endDate: null }, { endDate: { gte: new Date() } }],
+              },
+            }),
+          ),
+        ]);
+
+        const registersTaken = await this.prisma.asSystem((db) =>
+          db.attendanceRecord.count({
+            where: {
+              markedBy: t.userId,
+              ...(inWindow ? { markedAt: inWindow } : {}),
+            },
+          }),
+        );
+
+        const turnarounds = marked
+          .map((g: (typeof marked)[number]) =>
+            g.gradedAt && g.submission.submittedAt
+              ? (g.gradedAt.getTime() - g.submission.submittedAt.getTime()) / 86_400_000
+              : Number.NaN,
+          )
+          .filter((n: number) => Number.isFinite(n) && n >= 0);
+
+        return {
+          teacher: t.user.fullName,
+          subjectsTaught: subjects,
+          classesHeld: sessions,
+          registersTaken,
+          assignmentsSet: assignments,
+          quizzesSet: quizzes,
+          submissionsMarked: marked.length,
+          awaitingMarking: pending,
+          // MEDIAN, not mean. One submission marked six months late drags a
+          // mean into meaninglessness and says nothing about the habit.
+          medianDaysToMark: median(turnarounds),
+        };
+      }),
+    );
+  }
+}
+
+/** An attempt that is finished, whether or not a human has marked it yet. */
+const DONE_ATTEMPTS: AttemptStatus[] = ["SUBMITTED", "AUTO_SUBMITTED", "GRADING", "GRADED"];
+
+/** A mean mark as a percentage of what was available. */
+function asPercent(mean: number | null, outOf: number): number | null {
+  if (mean === null || !Number.isFinite(mean) || outOf <= 0) return null;
+  return Math.round((mean / outOf) * 1000) / 10;
+}
+
+function median(values: number[]): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  const value =
+    sorted.length % 2 === 0 ? ((sorted[mid - 1] as number) + (sorted[mid] as number)) / 2 : (sorted[mid] as number);
+  return Math.round(value * 10) / 10;
 }
