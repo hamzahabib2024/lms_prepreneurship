@@ -4,6 +4,8 @@ import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { getActor } from "../prisma/actor-context";
 import { applyLatePenalty, assessLateness, type LatePolicy } from "./late-penalty";
+import { NotificationService } from "../notification/notification.service";
+import { assertOwnsSectionSubject } from "../rbac/ownership";
 
 export interface CreateAssignmentInput {
   sectionSubjectId: string;
@@ -60,11 +62,18 @@ export class AssignmentService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly notifications: NotificationService,
   ) {}
 
   // -------------------------------------------------------------- authoring
 
   async create(input: CreateAssignmentInput) {
+    // The scope predicate does not constrain a create (ARC-051 injects a
+    // `where`, and an INSERT has none), so without this a teacher could set
+    // homework for another teacher's class — and those students would see it
+    // and submit to it.
+    assertOwnsSectionSubject(input.sectionSubjectId);
+
     if (input.dueAt <= input.opensAt) {
       throw new AppError("VALIDATION_FAILED", {
         details: [
@@ -632,6 +641,33 @@ export class AssignmentService {
         return count;
       }),
     );
+
+    // DEP-04 — the students whose marks just became visible are told.
+    //
+    // AFTER the transaction, not inside it: a notification is a consequence of
+    // the release, and a messaging failure must not roll back grades that are
+    // already released. The inbox copy is written regardless of any channel.
+    if (released > 0) {
+      const recipients = await this.prisma.asSystem((db) =>
+        db.assignmentSubmission.findMany({
+          where: { assignmentId, isLatest: true, grade: { releasedAt: { not: null } } },
+          select: { student: { select: { userId: true } } },
+        }),
+      );
+
+      await this.notifications.notify({
+        recipientUserIds: recipients.map(
+          (r: { student: { userId: string } }) => r.student.userId,
+        ),
+        kind: "grade.released",
+        title: `Your mark for "${assignment.title}" is available`,
+        // No mark in the message. A grade is between a student and the
+        // Institute, and a WhatsApp preview on a shared phone is not the place
+        // for it (SEC-PRV).
+        body: "Your teacher has released the marks for this assignment.",
+        linkPath: "/subjects",
+      });
+    }
 
     return { assignmentId, gradesReleased: released };
   }

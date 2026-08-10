@@ -41,6 +41,26 @@
  * trusted the AssignmentGrade policy to withhold unreleased marks, and it
  * leaked every unreleased grade to its student in breach of BR-ASG-09.
  *
+ * ---------------------------------------------------------------------------
+ * THE OTHER THING THIS DOES NOT COVER: CREATE
+ * ---------------------------------------------------------------------------
+ * This extension works by injecting a `where`. A create has none.
+ *
+ * READ_OPS and SCOPED_WRITE_OPS below are the whole of what is constrained:
+ * reads, updateMany and deleteMany. `create`, `createMany` and `upsert` name
+ * their own foreign keys and there is nothing to filter, so a caller supplying
+ * a sectionSubjectId writes wherever they like.
+ *
+ * Also not hypothetical. A teacher could post an announcement to a class they
+ * do not teach, and create an ASSIGNMENT in one — setting homework for another
+ * teacher's students, who would see it and submit to it.
+ *
+ * A create that takes a section, subject-section or student id FROM THE CALLER
+ * must check it: see assertOwnsSectionSubject in rbac/ownership.ts. A create
+ * whose ids all come from the actor (a student's own submission, their own
+ * watch progress) needs nothing. An update or delete is safe when it follows a
+ * scoped read, which is the pattern used throughout — the read refuses first.
+ *
  * WHEN YOU INCLUDE A SCOPED MODEL, restate its restriction — either as a
  * `where` on the nested read where the relation is to-many, or as an explicit
  * check on the loaded row where it is to-one. Treat the policy as documentation
@@ -417,6 +437,50 @@ const MODEL_POLICIES: Record<string, PolicyFn> = {
     if (isStudent(a)) return a.studentId ? { studentId: a.studentId } : DENY_ALL;
     return DENY_ALL;
   },
+
+  // ------------------------------------------------------- communication --
+
+  /**
+   * An announcement is visible to its AUDIENCE.
+   *
+   * This policy is also what stops a teacher announcing to a class they do not
+   * teach: it constrains the create as well as the read, so the check lives in
+   * one place rather than in a guard at each call site (ARC-051).
+   */
+  Announcement: (a) => {
+    if (isAdmin(a)) return null;
+    if (isTeacher(a) || isStudent(a)) {
+      return {
+        OR: [
+          { audience: "INSTITUTE" },
+          { sectionSubjectId: { in: [...a.sectionSubjectIds] } },
+          { sectionId: { in: [...a.sectionIds] } },
+        ],
+      };
+    }
+    return DENY_ALL;
+  },
+
+  /**
+   * A notification belongs to exactly one person, and to nobody else — not to
+   * their teacher, and not to an administrator.
+   *
+   * An Admin is NOT given ALL here, unlike almost every other model. An inbox
+   * is correspondence: it carries a student's marks, their attendance warnings
+   * and their admission outcome, and administering the Institute does not
+   * require reading somebody's messages. Support needs the AUDIT LOG, which
+   * records that a notification was raised, not its contents.
+   */
+  Notification: (a) => ({ recipientId: a.userId }),
+
+  NotificationDelivery: (a) => {
+    // The delivery LOG is operational: an administrator diagnosing "students
+    // are not receiving anything" needs it, and it carries no message body.
+    if (isAdmin(a)) return null;
+    return { notification: { recipientId: a.userId } };
+  },
+
+  NotificationPreference: (a) => (isAdmin(a) ? null : { userId: a.userId }),
 
   // ------------------------------------------------------- the answer key --
   // QuestionOption.isCorrect, Question.acceptedAnswers and Question.explanation

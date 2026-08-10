@@ -6,6 +6,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { StorageRegistry } from "./storage/storage.registry";
 import { getActor } from "../prisma/actor-context";
+import { assertOwnsSectionSubject } from "../rbac/ownership";
 import { applyWatchUpdate, type Interval } from "./watch-intervals";
 
 /**
@@ -321,6 +322,10 @@ export class ContentService {
   }) {
     const provider = this.storage.forLectures();
     const meta = await provider.stat(input.storageRef).catch(() => null);
+
+    // The scope predicate does not constrain a create, so the subject-section
+    // the caller named has to be checked here.
+    assertOwnsSectionSubject(input.sectionSubjectId);
 
     const created = await this.prisma.scoped.recordedLecture.create({
       data: {
