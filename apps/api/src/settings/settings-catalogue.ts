@@ -98,6 +98,17 @@ export const CATALOGUE: SettingDefinition[] = [
       "How many classes must have been held before anyone is warned. Missing one of two classes is 50% attendance and means almost nothing; this stops the System alarming students in the first week.",
   },
   {
+    key: "attendance.selfCheckInLateAfterMinutes",
+    type: "number",
+    default: 10,
+    group: "Attendance",
+    min: 0,
+    max: 120,
+    overridableAt: ["PROGRAMME", "SECTION"],
+    description:
+      "A student checking themselves in later than this many minutes after the class starts is recorded as LATE rather than present (FR-ATT-008). Measured from when the class actually started, so a student is not late because the teacher was.",
+  },
+  {
     key: "attendance.lateWeight",
     type: "number",
     default: 1.0,

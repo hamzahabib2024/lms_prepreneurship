@@ -5,7 +5,8 @@ import type { AttendanceStatus } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { getActor } from "../prisma/actor-context";
-import { assertOwnsSectionSubject } from "../rbac/ownership";
+import { assertOwnsSectionSubject, requireOwnStudentId } from "../rbac/ownership";
+import { evaluateCheckIn } from "./self-checkin";
 import { NotificationService } from "../notification/notification.service";
 import { SettingsService } from "../settings/settings.service";
 import {
@@ -638,6 +639,126 @@ export class AttendanceService {
       threshold,
       isBelowThreshold: overall.percentage !== null && overall.percentage < threshold,
       perSubject,
+    };
+  }
+
+  /**
+   * FR-ATT-008 — a student confirms their own presence.
+   *
+   * THE STUDENT COMES FROM THE TOKEN. There is no studentId parameter and there
+   * must never be one: this endpoint is reachable by every student, and a
+   * student id in the body would let any of them check in as any other. That is
+   * the same defect this permission was split out to fix, and it would be
+   * reintroduced by a single convenience parameter.
+   *
+   * The rules live in self-checkin.ts, pure and tested. This method does the
+   * three things a pure function cannot: find the session, prove the student is
+   * enrolled in it, and write the mark.
+   */
+  async selfCheckIn(sessionId: string) {
+    const studentId = requireOwnStudentId();
+
+    const session = await this.prisma.asSystem((db) =>
+      db.liveSession.findFirst({
+        where: { id: sessionId, deletedAt: null },
+        select: {
+          id: true,
+          sectionSubjectId: true,
+          status: true,
+          attendancePolicy: true,
+          scheduledStart: true,
+          scheduledEnd: true,
+          actualStart: true,
+          actualEnd: true,
+          joinWindowMinutesBefore: true,
+        },
+      }),
+    );
+    if (!session) throw new AppError("RESOURCE_NOT_FOUND");
+
+    // Enrolment is checked explicitly rather than relying on the scope
+    // predicate, because the session is read under asSystem — it has to be, as
+    // a student cannot see a LiveSession row's policy fields through their own
+    // scope. Reading widely and then proving access is fine; reading widely and
+    // assuming it is not.
+    const enrolled = await this.prisma.asSystem((db) =>
+      db.enrolment.findFirst({
+        where: { studentId, sectionSubjectId: session.sectionSubjectId, status: "ACTIVE" },
+        select: { id: true },
+      }),
+    );
+    // SEC-AUZ-006 — a class they are not in is not theirs to know about.
+    if (!enrolled) throw new AppError("RESOURCE_NOT_FOUND");
+
+    const existing = await this.prisma.asSystem((db) =>
+      db.attendanceRecord.findFirst({
+        where: { liveSessionId: sessionId, studentId },
+        select: { id: true, status: true, markingSource: true },
+      }),
+    );
+
+    const decision = evaluateCheckIn({
+      now: new Date(),
+      session: session as never,
+      existing: existing ? { status: existing.status, markingSource: existing.markingSource } : null,
+      lateAfterMinutes: await this.settings.number(
+        "attendance.selfCheckInLateAfterMinutes",
+        await this.scopeContextFor(session.sectionSubjectId),
+      ),
+    });
+
+    if (decision.outcome !== "CHECKED_IN") {
+      // A refusal is an answer, not a failure — except for the two that mean
+      // "not now", which are 422 so the screen can say why rather than
+      // rendering a generic error.
+      if (decision.outcome === "ALREADY_CHECKED_IN") {
+        return { checkedIn: true, status: existing?.status ?? "PRESENT", message: decision.message };
+      }
+      throw new AppError("VALIDATION_FAILED", {
+        details: [{ field: "sessionId", code: decision.outcome, message: decision.message }],
+      });
+    }
+
+    const saved = await this.prisma.asSystem((db) =>
+      db.attendanceRecord.upsert({
+        where: { liveSessionId_studentId: { liveSessionId: sessionId, studentId } },
+        create: {
+          liveSessionId: sessionId,
+          studentId,
+          status: decision.status as AttendanceStatus,
+          // NEVER MANUAL. A register that renders a self-reported presence
+          // identically to a teacher's observation has quietly moved the
+          // authority for attendance from the teacher to the student.
+          markingSource: "SELF_CHECKIN",
+          markedBy: getActor()?.userId ?? null,
+          markedAt: new Date(),
+        },
+        update: {
+          status: decision.status as AttendanceStatus,
+          markingSource: "SELF_CHECKIN",
+          markedBy: getActor()?.userId ?? null,
+          markedAt: new Date(),
+        },
+      }),
+    );
+
+    await this.audit.record({
+      action: "attendance.self_checkin",
+      entityType: "AttendanceRecord",
+      entityId: saved.id,
+      before: existing ? { status: existing.status } : null,
+      after: {
+        status: decision.status,
+        markingSource: "SELF_CHECKIN",
+        minutesAfterStart: decision.minutesAfterStart,
+      },
+    });
+
+    return {
+      checkedIn: true,
+      status: decision.status,
+      minutesAfterStart: decision.minutesAfterStart,
+      message: decision.message,
     };
   }
 }

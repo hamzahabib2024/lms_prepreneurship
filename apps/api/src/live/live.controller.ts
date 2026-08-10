@@ -23,6 +23,13 @@ const scheduleSchema = z.object({
   scheduledEnd: z.coerce.date(),
   hostTeacherId: z.string().uuid(),
   sessionType: z.enum(["ONLINE", "OFFLINE"]).default("ONLINE"),
+  // MANUAL by default, which is what an institute expects unless it has
+  // decided otherwise: the teacher takes the register. SELF_CHECKIN hands that
+  // to the students of THIS class, and nothing else changes.
+  attendancePolicy: z
+    .enum(["MANUAL", "SELF_CHECKIN", "PROVIDER_DERIVED", "HYBRID"])
+    .default("MANUAL"),
+  joinWindowMinutesBefore: z.coerce.number().int().min(0).max(120).optional(),
 });
 
 const bulkMarkSchema = z.object({
@@ -178,5 +185,24 @@ export class LiveController {
     // wrong and unhelpful for a teacher who simply has no student record
     // (NFR-USE-007).
     return this.attendance.studentSummary(requireOwnStudentId());
+  }
+
+  /**
+   * FR-ATT-008 — a student confirms their own presence.
+   *
+   * `attendance_self_checkin:update`, which ONLY a student holds. It was split
+   * out of `attendance` while fixing a defect where a student's "update for
+   * self check-in" grant also opened the bulk-marking endpoint and let one
+   * student mark the whole class present. The permission has existed since that
+   * fix with nothing implementing it; this is the implementation.
+   *
+   * There is no student id in the path or the body, deliberately. The endpoint
+   * is reachable by every student, so a student id here would let any of them
+   * check in as any other — the very defect the split was for.
+   */
+  @RequirePermission("attendance_self_checkin", "update")
+  @Post("live-sessions/:id/check-in")
+  checkIn(@Param("id") id: string) {
+    return this.attendance.selfCheckIn(id);
   }
 }

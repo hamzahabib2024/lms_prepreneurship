@@ -15,6 +15,16 @@ export interface ScheduleSessionInput {
   scheduledEnd: Date;
   hostTeacherId: string;
   sessionType?: "ONLINE" | "OFFLINE";
+  /**
+   * FR-ATT-008 — who records attendance for this class.
+   *
+   * The column and its four values have existed since the first migration and
+   * nothing could set them, so every session in the System was MANUAL and self
+   * check-in was unreachable however the permission was granted.
+   */
+  attendancePolicy?: "MANUAL" | "SELF_CHECKIN" | "PROVIDER_DERIVED" | "HYBRID";
+  /** How long before the start a student may join, and check in. */
+  joinWindowMinutesBefore?: number;
 }
 
 /**
@@ -106,6 +116,10 @@ export class LiveSessionService {
         scheduledEnd: input.scheduledEnd,
         hostTeacherId: input.hostTeacherId,
         sessionType: input.sessionType ?? "ONLINE",
+        attendancePolicy: input.attendancePolicy ?? "MANUAL",
+        ...(input.joinWindowMinutesBefore !== undefined
+          ? { joinWindowMinutesBefore: input.joinWindowMinutesBefore }
+          : {}),
         status: "SCHEDULED",
       },
     });
