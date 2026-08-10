@@ -42,3 +42,4 @@ apps/api/src/generated/
 # ADAPTERS at apps/api/src/content/storage.
 /storage/
 /apps/api/storage/
+backups/

@@ -12,6 +12,8 @@ import { PersonalDataController } from "./personal-data.controller";
 import { MaintenanceController } from "./maintenance.controller";
 import { BulkService } from "./bulk.service";
 import { BulkController } from "./bulk.controller";
+import { BackupService } from "./backup.service";
+import { BackupController } from "./backup.controller";
 import { AcademicModule } from "../academic/academic.module";
 
 /**
@@ -25,8 +27,8 @@ import { AcademicModule } from "../academic/academic.module";
   // transfer once per student, so the gender restriction, capacity and roll
   // number rules cannot be bypassed by doing many at once.
   imports: [AcademicModule],
-  controllers: [UserAdminController, AuditViewerController, SecurityLogController, ImpersonationController, PersonalDataController, MaintenanceController, BulkController],
-  providers: [UserAdminService, AuditViewerService, SecurityLogService, ImpersonationService, PersonalDataService, BulkService],
+  controllers: [UserAdminController, AuditViewerController, SecurityLogController, ImpersonationController, PersonalDataController, MaintenanceController, BulkController, BackupController],
+  providers: [UserAdminService, AuditViewerService, SecurityLogService, ImpersonationService, PersonalDataService, BulkService, BackupService],
   exports: [UserAdminService],
 })
 export class AdminModule {}
