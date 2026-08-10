@@ -2,7 +2,7 @@
 
 Last updated: 10 August 2026 (quiz authoring added)
 
-**Roughly 62–66% of the SRS scope is built.**
+**Roughly 66–70% of the SRS scope is built.**
 
 That figure is an estimate, not a measurement, and it is worth saying what it
 rests on. The SRS defines around a thousand numbered requirements; nobody has
@@ -20,9 +20,9 @@ The shape of the gap matters more than the number:
 - **The teacher's journey is complete.** Set assignments and quizzes, build
   course content, take the register, mark, grade, announce, and see who is at
   risk — all from a screen.
-- **The administrator's journey is thin.** Admissions and certificates have
-  screens; user management, settings, audit and governance have neither
-  endpoints nor screens.
+- **The administrator's journey is starting.** Admissions, certificates and now
+  user administration exist; user management still needs a screen, and
+  settings, audit viewing and governance have neither.
 - **The two external integrations are stubs by necessity** — no credentials
   exist yet (DEP-01, DEP-04). Both sit behind adapters, so each is one file when
   the credentials arrive.
@@ -37,6 +37,13 @@ The shape of the gap matters more than the number:
 - [x] Local PostgreSQL with no Docker and no admin rights (`npm run db:start`)
 - [x] 8 migrations, 48 models, hand-written constraints for what Prisma cannot express
 - [x] Deterministic seed: people, structure, content, assignments, a quiz, a marked register
+
+### User administration
+- [x] Directory of every account, with roles and sub-permissions
+- [x] Provision a teacher or an administrator; temporary password shown once
+- [x] Suspend and reactivate — BR-ACC-02 protects the last Super Admin
+- [x] Reset a password; revoke every session
+- [x] Grant sub-permissions (Super Admin, with step-up)
 
 ### Authentication and authorisation
 - [x] RS256 JWT with refresh-token rotation and family invalidation (SEC-AUT-004)
@@ -124,8 +131,8 @@ The shape of the gap matters more than the number:
       sending and never claims success.
 
 ### Administrator surface (the largest gap)
-- [ ] User management: create/suspend/reset teachers, admins, students
-- [ ] Role assignment and sub-permission granting
+- [ ] User management SCREEN (the API is done: directory, provisioning,
+      suspension, password reset, session revocation, sub-permissions)
 - [ ] System settings (thresholds, weights, templates are configurable but have no screen)
 - [ ] Audit log viewer — the log is written and immutable, nothing reads it
 - [ ] Security event log viewer
@@ -165,7 +172,7 @@ The shape of the gap matters more than the number:
 
 Worth recording, because it shapes what to expect from the remainder.
 
-Thirteen security defects have been found and fixed, and **the permission
+Fourteen security defects have been found and fixed, and **the permission
 matrix was correct in every one of them.** What went wrong each time was a resource
 named after a *topic* — "attendance", "progress", "submission" — attached to
 endpoints serving very different audiences under it. Two more came from
