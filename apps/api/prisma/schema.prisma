@@ -1207,8 +1207,14 @@ model SecurityEvent {
 /// Appendix E — every parameter is changeable through the UI without a
 /// deployment (ARC-002, FR-CFG-001).
 model Setting {
-  id    String @id @default(uuid()) @db.Uuid
-  key   String @unique @db.VarChar(60)
+  id String @id @default(uuid()) @db.Uuid
+  /// NOT globally unique. A key exists once per SCOPE — one institute-wide row
+  /// and any number of programme, section or subject overrides beside it. It
+  /// was declared @unique alongside the scope columns and the compound unique
+  /// below, which contradicted both and made an override impossible to insert.
+  /// Uniqueness where scope_id IS NULL is a partial index, because SQL does not
+  /// consider two NULLs equal (01_constraints_and_indexes.sql).
+  key   String @db.VarChar(60)
   value Json
 
   scopeType String? @map("scope_type") @db.VarChar(30) // INSTITUTE | PROGRAMME | SECTION | SUBJECT

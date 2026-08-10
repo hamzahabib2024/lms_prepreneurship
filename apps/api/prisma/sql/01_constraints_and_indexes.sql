@@ -34,6 +34,18 @@ CREATE UNIQUE INDEX IF NOT EXISTS enrolments_active_uq
   ON enrolments (student_id, section_subject_id)
   WHERE status = 'ACTIVE' AND deleted_at IS NULL;
 
+-- CFG-*: one row per setting per scope.
+--
+-- Prisma declares @@unique([key, scope_type, scope_id]), and for a
+-- scope-specific override that is enough. It is NOT enough for an
+-- institute-wide one, where scope_id is NULL: SQL never considers two NULLs
+-- equal, so the constraint permits any number of rows for the same key. Two
+-- institute rows for attendance.warningThreshold would resolve to whichever
+-- the planner returned first, making a policy value nondeterministic.
+CREATE UNIQUE INDEX IF NOT EXISTS settings_institute_scope_uq
+  ON settings (key)
+  WHERE scope_id IS NULL;
+
 -- ---------------------------------------------------------------------------
 -- PARTIAL INDEXES FOR HOT PATHS (section 8.4)
 -- ---------------------------------------------------------------------------
