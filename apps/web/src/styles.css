@@ -296,3 +296,11 @@ kbd {
 /* A 44px target, since a file input is the one control on this page a student
    on a phone must hit reliably (UI-012). */
 .field input[type="file"] { display: block; width: 100%; padding: .55rem 0; min-height: 44px; }
+
+/* A student's typed answer, quoted so it is visibly THEIR words and not the
+   teacher's own notes below it. */
+.response {
+  margin: .5rem 0; padding: .5rem .75rem;
+  border-left: 3px solid var(--line); background: var(--bg);
+  white-space: pre-wrap; font-size: .9rem;
+}
