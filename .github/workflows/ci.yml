@@ -1,0 +1,113 @@
+# Continuous integration.
+#
+# The project has 802 tests, 28 end-to-end probes and FOUR STATIC GUARDS that
+# fail the build rather than trusting review:
+#
+#   every model is policed or explicitly named as reference data
+#   every nested include of a policed model restates its restriction
+#   every create naming a scope-bearing id checks it
+#   every guarded route names a resource/action pair some role can hold
+#
+# Those guards only protect anything if something runs them. Until this file
+# existed, nothing did — they were four security properties enforced by
+# whoever remembered to type `npm test`.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A second push to the same branch cancels the first. A queue of stale runs
+# tells nobody anything and costs minutes somebody is waiting on.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    services:
+      # A REAL PostgreSQL, not a mock. Every defect this project has found came
+      # from running against a database: the scope predicate, the partial
+      # unique indexes, the append-only trigger and the concurrency test for
+      # registration numbers are all things only a real server can refuse.
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: lms
+          POSTGRES_PASSWORD: lms
+          POSTGRES_DB: lms
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U lms"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      DATABASE_URL: postgresql://lms:lms@localhost:5432/lms?schema=public
+      JWT_PRIVATE_KEY_PATH: ./keys/jwt-private.pem
+      JWT_PUBLIC_KEY_PATH: ./keys/jwt-public.pem
+      JWT_ISSUER: lms.local
+      JWT_AUDIENCE: lms-api
+      NODE_ENV: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # Signing keys are generated, never committed (SEC-CRY-008). A fresh pair
+      # per run is correct: nothing in CI should be able to mint a token that
+      # any real environment would accept.
+      - name: Generate signing keys
+        run: npm run keys:generate
+
+      - name: Generate the Prisma client
+        run: npm run db:generate
+
+      - name: Apply migrations
+        run: npx prisma migrate deploy --schema=apps/api/prisma/schema.prisma
+
+      # The constraints Prisma cannot express: partial unique indexes, CHECK
+      # constraints, and the trigger that makes the audit log append-only. The
+      # integration tests depend on them, and so does anything that would
+      # otherwise silently permit a duplicate.
+      - name: Apply constraints and triggers
+        run: npm run db:constraints
+
+      - name: Typecheck and build
+        run: npm run build
+
+      - name: Lint
+        run: npm run lint
+
+      # Runs the whole suite INCLUDING admission.int-spec.ts, which needs a
+      # real database and is skipped without DATABASE_URL. The env above is
+      # what stops that happening here.
+      #
+      # AND FAILS IF ANYTHING WAS SKIPPED. That suite once skipped silently and
+      # jest still reported a pass — seven tests covering concurrent
+      # registration-number allocation quietly did not happen and the run was
+      # green. A green run that tested nothing is worse than a red one.
+      #
+      # One invocation, checked afterwards: running the suite twice to ask two
+      # questions about it wastes minutes somebody is waiting on.
+      - name: Test
+        run: |
+          set -eo pipefail
+          npm test 2>&1 | tee test-output.txt
+          if grep -qE "[0-9]+ skipped" test-output.txt; then
+            echo "::error::Tests were SKIPPED. A green run that tested nothing is worse than a red one."
+            grep -E "Tests:|Test Suites:" test-output.txt
+            exit 1
+          fi
