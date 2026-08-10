@@ -464,6 +464,7 @@ model Student {
   /// Plural now: a student who takes a second course was admitted by a second
   /// request, and both point at the same record.
   registrations   RegistrationRequest[]
+  feeCharges      FeeCharge[]
 
   // FR-REG-057: roll numbers are unique within a section and reusable after
   // withdrawal. Enforced as a partial unique index in raw SQL (live rows only).
@@ -524,6 +525,7 @@ model AcademicSession {
   deletedAt DateTime? @map("deleted_at")
 
   programme Programme @relation(fields: [programmeId], references: [id], onDelete: Restrict)
+  feeCharges FeeCharge[]
   batches   Batch[]
 
   @@unique([programmeId, code])
@@ -1234,6 +1236,44 @@ model Setting {
 /// Application-level "read max then add one" is FORBIDDEN (Appendix B): it
 /// collides under concurrent approval, which is RSK-07. Allocation uses an
 /// UPDATE ... RETURNING inside the approval transaction.
+/// FR-PAY-020 — what a student owes.
+///
+/// The Institute had no ledger: Student.outstandingBalance existed from the
+/// first migration and nothing ever wrote to it, so the personal-data export
+/// told every student they owed nothing and payments were recorded against
+/// nothing at all.
+///
+/// A charge is never deleted (BR-DAT-02). It is WAIVED, which keeps the
+/// decision to write it off in the record where somebody can see who made it.
+model FeeCharge {
+  id        String @id @default(uuid()) @db.Uuid
+  studentId String @map("student_id") @db.Uuid
+
+  description String   @db.VarChar(200)
+  amount      Decimal  @db.Decimal(12, 2)
+  currency    String   @default("PKR") @db.Char(3)
+  dueDate     DateTime @map("due_date") @db.Date
+
+  /// Optional: the session this belongs to, so a statement can be read by term.
+  academicSessionId String? @map("academic_session_id") @db.Uuid
+
+  waivedAt     DateTime? @map("waived_at")
+  waivedBy     String?   @map("waived_by") @db.Uuid
+  waiverReason String?   @map("waiver_reason") @db.Text
+
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  student         Student          @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  academicSession AcademicSession? @relation(fields: [academicSessionId], references: [id], onDelete: SetNull)
+
+  @@index([studentId, dueDate])
+  @@index([dueDate, waivedAt])
+  @@map("fee_charges")
+}
+
 model NumberSeries {
   id  String @id @default(uuid()) @db.Uuid
   key String @unique @db.VarChar(80) // institute|session|programme|campus

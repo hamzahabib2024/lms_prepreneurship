@@ -239,6 +239,21 @@ const MODEL_POLICIES: Record<string, PolicyFn> = {
     return DENY_ALL; // teachers: never
   },
 
+  /**
+   * What a student owes. Exactly the Payment policy, and for the same reasons:
+   * a student sees their own statement, a teacher sees nobody's finances at
+   * all, and an administrator sees everything.
+   *
+   * A teacher having no business in a student's debts is worth being explicit
+   * about — it is the kind of thing that looks like an oversight later, and it
+   * is not.
+   */
+  FeeCharge: (a) => {
+    if (isAdmin(a)) return null;
+    if (isStudent(a)) return a.studentId ? { studentId: a.studentId } : DENY_ALL;
+    return DENY_ALL; // teachers: never
+  },
+
   // ------------------------------------------------------------- academic --
   SectionSubject: (a) => {
     if (isAdmin(a)) return null;
