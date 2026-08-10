@@ -49,12 +49,26 @@ export class ActorContextMiddleware implements NestMiddleware {
         sub: string;
         sid: string;
         sua?: number;
+        /** SEC-AUZ-013 — the real user, when this is an impersonation token. */
+        imp?: string;
       }>(token);
 
+      // `sub` is the TARGET, so everything downstream — scope predicates,
+      // permission checks, every query — behaves exactly as it would for them.
+      // That is the point of impersonation and the reason `imp` must travel
+      // with it: the audit service stamps it on every write, so the record says
+      // who was really acting even though nothing else can tell.
       const actor = await this.actors.resolve(claims.sub, req.correlationId);
       req.sessionId = claims.sid;
 
-      runWithActor({ ...actor, steppedUpAt: claims.sua }, () => next());
+      runWithActor(
+        {
+          ...actor,
+          steppedUpAt: claims.sua,
+          ...(claims.imp ? { impersonatedBy: claims.imp } : {}),
+        },
+        () => next(),
+      );
     } catch (err) {
       const expired = err instanceof Error && err.name === "TokenExpiredError";
       req.authError = expired ? "expired" : "invalid";

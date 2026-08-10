@@ -66,11 +66,13 @@ export class AuthController {
   @RequirePermission("own_password", "update")
   @Post("step-up")
   @HttpCode(200)
-  async stepUp(@Body(zodBody(stepUpSchema)) dto: { password: string }) {
+  async stepUp(@Body(zodBody(stepUpSchema)) dto: { password: string }, @Req() req: Request) {
     const actor = getActor();
     if (!actor) throw new AppError("AUTH_TOKEN_INVALID");
-    const at = await this.auth.stepUp(actor.userId, dto.password);
-    return { steppedUpAt: at, validForSeconds: 600 };
+    // The session id travels with the new token so revoking the session still
+    // revokes it. It is set by the actor-context middleware from the `sid`
+    // claim of the token that got us here.
+    return this.auth.stepUp(actor.userId, dto.password, req.sessionId ?? "");
   }
 
   /**

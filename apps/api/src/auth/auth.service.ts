@@ -400,7 +400,25 @@ export class AuthService {
   }
 
   /** SEC-AUZ-011 — confirm identity immediately before a privileged action. */
-  async stepUp(userId: string, password: string): Promise<number> {
+  /**
+   * SEC-AUZ-011 — re-authenticate, and get a token that PROVES it.
+   *
+   * This used to verify the password, record the event, and return Date.now()
+   * to the caller — a number with nowhere to go. The freshness check reads
+   * `actor.steppedUpAt`, which comes from the `sua` JWT claim; login does not
+   * set it and nothing re-issued a token carrying it, so isStepUpFresh() was
+   * false for everybody, always.
+   *
+   * The effect was that EVERY resource marked requiresStepUp was unreachable by
+   * anyone, permanently: granting sub-permissions, impersonation, restoring a
+   * backup and configuring integration credentials. Each refused with "please
+   * confirm your password", and confirming it changed nothing.
+   *
+   * The new token keeps the SAME session id, so revoking the session still
+   * revokes this, and carries the same roles — stepping up proves who you are,
+   * it does not change what you may do.
+   */
+  async stepUp(userId: string, password: string, sessionId: string) {
     const user = await this.prisma.asSystem((db) =>
       db.user.findUnique({ where: { id: userId } }),
     );
@@ -409,7 +427,32 @@ export class AuthService {
       throw new AppError("AUTH_INVALID_CREDENTIALS");
     }
     await this.recordSecurityEvent("stepup.success", userId, null, undefined, undefined, {});
-    return Date.now();
+
+    const steppedUpAt = Date.now();
+    const accessTtl = this.config.get<string>("JWT_ACCESS_TTL", "15m");
+    const actor = await this.actors.resolve(userId, randomUUID());
+
+    const accessToken = await this.jwt.signAsync(
+      {
+        sub: userId,
+        roles: actor.roles,
+        subPerms: actor.subPermissions,
+        sid: sessionId,
+        sua: steppedUpAt,
+      },
+      { expiresIn: accessTtl },
+    );
+
+    return {
+      accessToken,
+      tokenType: "Bearer" as const,
+      expiresIn: this.ttlToSeconds(accessTtl),
+      steppedUpAt,
+      // The step-up window, which is shorter than the token's own life: the
+      // token stays valid after the window closes, it simply stops satisfying
+      // the freshness check.
+      validForSeconds: 600,
+    };
   }
 
   // ------------------------------------------------------------ helpers ----
