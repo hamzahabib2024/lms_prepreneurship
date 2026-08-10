@@ -8,6 +8,7 @@ import { ProgressService } from "../progress/progress.service";
 import { getActor } from "../prisma/actor-context";
 import { assertOwnStudent } from "../rbac/ownership";
 import { RegistrationNumberService } from "../admission/registration-number.service";
+import { NotificationService } from "../notification/notification.service";
 
 /**
  * Completion certificates — SRS §5.15, FR-CRT-001..020.
@@ -37,6 +38,7 @@ export class CertificateService {
     private readonly progress: ProgressService,
     private readonly config: ConfigService,
     private readonly numbers: RegistrationNumberService,
+    private readonly notifications: NotificationService,
   ) {}
 
   /**
@@ -106,6 +108,22 @@ export class CertificateService {
         progressPercent: standing.overallPercent,
       },
     });
+
+    // DEP-04 — earning a qualification is the one notification a student would
+    // be sorry to miss, so it is URGENT: it reaches them past quiet hours.
+    const student = await this.prisma.asSystem((db) =>
+      db.student.findUnique({ where: { id: studentId }, select: { userId: true } }),
+    );
+    if (student) {
+      await this.notifications.notify({
+        recipientUserIds: [student.userId],
+        kind: "certificate.issued",
+        title: "Your certificate has been issued",
+        body: `Certificate ${certificateNo} is now available, with a link you can give to an employer.`,
+        linkPath: "/subjects",
+        isUrgent: true,
+      });
+    }
 
     return this.present(created, { alreadyIssued: false });
   }

@@ -315,3 +315,24 @@ kbd {
 }
 .option:hover { background: var(--bg); }
 .option input { width: 20px; height: 20px; cursor: pointer; }
+
+/* ------------------------------------------------------------- inbox -- */
+.bell { position: relative; }
+.badge {
+  display: inline-block; min-width: 20px; margin-left: .4rem; padding: 0 .35rem;
+  border-radius: 999px; background: var(--primary); color: var(--primary-ink);
+  font-size: .75rem; font-weight: 700; text-align: center;
+}
+/* Anchored to the bell and scrolling internally, so a long inbox never makes
+   the page itself scroll (UI-011). */
+.bell-panel {
+  position: absolute; right: 0; top: calc(100% + .4rem); z-index: 40;
+  width: min(380px, 90vw); max-height: 70vh; overflow-y: auto;
+  background: #fff; border: 1px solid var(--line);
+  border-radius: var(--radius); padding: .75rem;
+  box-shadow: 0 8px 24px rgba(17, 19, 24, .12);
+}
+.bell-panel .link-button { display: block; width: 100%; }
+
+/* Preserves the author's paragraphs without letting a pasted line overflow. */
+.announcement-body { white-space: pre-wrap; overflow-wrap: anywhere; margin: .5rem 0 0; }

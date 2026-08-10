@@ -4,6 +4,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { getActor } from "../prisma/actor-context";
 import { assertOwnStudent } from "../rbac/ownership";
+import { NotificationService } from "../notification/notification.service";
 import { isResultVisible, shouldStampRelease, type ResultReleasePolicy } from "./result-release";
 import {
   resolveAttemptScore,
@@ -37,6 +38,7 @@ export class QuizService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly notifications: NotificationService,
   ) {}
 
   /**
@@ -289,6 +291,27 @@ export class QuizService {
     const stillMarking = await this.prisma.asSystem((db) =>
       db.quizAttempt.count({ where: { quizId, status: "GRADING" } }),
     );
+
+    // DEP-04 — the students whose results just became visible are told. No
+    // score in the message: a mark is between a student and the Institute, and
+    // a notification preview on a shared phone is not the place for it.
+    if (result.count > 0) {
+      const recipients = await this.prisma.asSystem((db) =>
+        db.quizAttempt.findMany({
+          where: { quizId, releasedAt: now },
+          select: { student: { select: { userId: true } } },
+        }),
+      );
+      await this.notifications.notify({
+        recipientUserIds: recipients.map(
+          (r: { student: { userId: string } }) => r.student.userId,
+        ),
+        kind: "quiz.result_released",
+        title: `Your result for "${quiz.title}" is available`,
+        body: "Your teacher has released the results for this quiz.",
+        linkPath: "/subjects",
+      });
+    }
 
     return { quizId, released: result.count, stillAwaitingMarking: stillMarking };
   }

@@ -224,6 +224,9 @@ model User {
 
   roles    UserRole[]
   sessions UserSession[]
+  announcements          Announcement[]
+  notifications          Notification[]
+  notificationPreference NotificationPreference?
   student  Student?
   teacher  Teacher?
 
@@ -561,6 +564,7 @@ model Section {
   sectionSubjects SectionSubject[]
   students        Student[]
   registrations   RegistrationRequest[]
+  announcements   Announcement[]
 
   @@index([batchId])
   @@index([status])
@@ -609,10 +613,11 @@ model SectionSubject {
 
   section     Section             @relation(fields: [sectionId], references: [id], onDelete: Restrict)
   subject     Subject             @relation(fields: [subjectId], references: [id], onDelete: Restrict)
-  assignments  TeacherAssignment[]
-  enrolments   Enrolment[]
-  sessions     LiveSession[]
-  certificates Certificate[]
+  assignments   TeacherAssignment[]
+  enrolments    Enrolment[]
+  sessions      LiveSession[]
+  certificates  Certificate[]
+  announcements Announcement[]
 
   @@unique([sectionId, subjectId])
   @@index([sectionId])
@@ -856,6 +861,135 @@ model Certificate {
   @@index([studentId])
   @@index([issuedAt])
   @@map("certificates")
+}
+
+/// An announcement — SRS §5.16, FR-COM-001..012.
+///
+/// Addressed to an AUDIENCE, never to a list of people. A teacher announces to
+/// the subject-section they teach; who is enrolled in it at the moment of
+/// sending is a question the System answers, and a student who enrols the next
+/// day sees it too. Storing a resolved recipient list would freeze the audience
+/// at composition time and quietly exclude them.
+model Announcement {
+  id       String               @id @default(uuid()) @db.Uuid
+  audience AnnouncementAudience
+
+  /// Set according to the audience. INSTITUTE leaves both null.
+  sectionId        String? @map("section_id") @db.Uuid
+  sectionSubjectId String? @map("section_subject_id") @db.Uuid
+
+  title String @db.VarChar(200)
+  body  String @db.Text
+
+  /// FR-COM-006 — pinned to the top until the author unpins it.
+  isPinned Boolean @default(false) @map("is_pinned")
+  /// BR-COM-02 — an urgent announcement ignores a quiet-hours suppression.
+  isUrgent Boolean @default(false) @map("is_urgent")
+
+  publishedAt DateTime  @default(now()) @map("published_at")
+  expiresAt   DateTime? @map("expires_at")
+
+  authorUserId String @map("author_user_id") @db.Uuid
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  section        Section?        @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  sectionSubject SectionSubject? @relation(fields: [sectionSubjectId], references: [id], onDelete: Cascade)
+  author         User            @relation(fields: [authorUserId], references: [id], onDelete: Restrict)
+  notifications  Notification[]
+
+  @@index([audience, publishedAt])
+  @@index([sectionSubjectId, publishedAt])
+  @@map("announcements")
+}
+
+/// One person's copy of one thing they need to know — FR-COM-013..020.
+///
+/// Written per RECIPIENT rather than per event, because "have I read it?" and
+/// "was it delivered to me?" are properties of a person, not of the event. It
+/// is also what makes the in-app inbox the system of record: WhatsApp and email
+/// are DELIVERIES of a notification, not the notification itself, so a failed
+/// send never loses the message.
+model Notification {
+  id          String @id @default(uuid()) @db.Uuid
+  recipientId String @map("recipient_id") @db.Uuid
+
+  /// A stable machine key — "assignment.due_soon", "grade.released". The
+  /// interface routes on this; the text below is what a person reads.
+  kind  String @db.VarChar(60)
+  title String @db.VarChar(200)
+  body  String @db.Text
+
+  /// Where reading it should take the recipient. Relative, and never a
+  /// provider URL (ARC-023).
+  linkPath String? @map("link_path") @db.VarChar(500)
+
+  announcementId String? @map("announcement_id") @db.Uuid
+
+  readAt DateTime? @map("read_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  recipient    User          @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  announcement Announcement? @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  deliveries   NotificationDelivery[]
+
+  /// The inbox query: this person's, newest first, unread first.
+  @@index([recipientId, readAt, createdAt])
+  @@map("notifications")
+}
+
+/// An attempt to push a notification down a channel — ARC-046.
+///
+/// Separate from Notification for the same reason storage is separate from the
+/// catalogue: the channel is a configuration choice, not a fact about the
+/// message. Adding WhatsApp means an adapter and a row here, and nothing else
+/// in the System becomes aware of it.
+model NotificationDelivery {
+  id             String              @id @default(uuid()) @db.Uuid
+  notificationId String              @map("notification_id") @db.Uuid
+  channel        NotificationChannel
+  status         DeliveryStatus      @default(PENDING)
+
+  /// Why it did not go. SUPPRESSED is not a failure — it is the System
+  /// honouring a preference or quiet hours, and must not read as an error.
+  detail      String?   @db.Text
+  attemptedAt DateTime? @map("attempted_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
+  @@index([notificationId])
+  @@index([status])
+  @@map("notification_deliveries")
+}
+
+/// What a person wants to be told about, and how — FR-COM-018.
+model NotificationPreference {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @unique @map("user_id") @db.Uuid
+
+  /// Channels the user accepts. IN_APP is not listed because it cannot be
+  /// switched off: the inbox is the record, and a message nobody can retrieve
+  /// has not been delivered.
+  channels String[] @default(["WHATSAPP"])
+
+  /// Kinds the user has muted. A kind absent from this list is delivered.
+  mutedKinds String[] @default([]) @map("muted_kinds")
+
+  /// BR-COM-02 — local time, inclusive start, exclusive end. Suppresses
+  /// non-urgent pushes only; the inbox copy is written regardless.
+  quietHoursStart Int? @map("quiet_hours_start") @db.SmallInt
+  quietHoursEnd   Int? @map("quiet_hours_end") @db.SmallInt
+
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notification_preferences")
 }
 
 // ================================================== live sessions (8.3.4) ==
@@ -1291,6 +1425,26 @@ enum CertificateType {
 enum CertificateStatus {
   ISSUED
   REVOKED
+}
+
+enum AnnouncementAudience {
+  INSTITUTE
+  SECTION
+  SECTION_SUBJECT
+}
+
+enum NotificationChannel {
+  IN_APP
+  WHATSAPP
+  EMAIL
+  SMS
+}
+
+enum DeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+  SUPPRESSED
 }
 
 enum QuestionType {

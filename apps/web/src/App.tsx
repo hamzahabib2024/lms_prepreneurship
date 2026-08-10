@@ -14,6 +14,8 @@ import { GradingPage } from "./pages/GradingPage";
 import { QuizMarkingPage } from "./pages/QuizMarkingPage";
 import { VerifyPage } from "./pages/VerifyPage";
 import { CertificatesPage } from "./pages/CertificatesPage";
+import { AnnouncementsPage } from "./pages/AnnouncementsPage";
+import { NotificationBell } from "./components/NotificationBell";
 
 /**
  * Application shell — SRS §13.1.
@@ -70,10 +72,12 @@ export function App() {
             <NavLink to="/attendance">Attendance</NavLink>
           )}
           {hasRole("super_admin", "admin", "teacher") && <NavLink to="/marking">Marking</NavLink>}
+          <NavLink to="/announcements">Announcements</NavLink>
           <NavLink to="/sections">Sections</NavLink>
           {hasRole("super_admin", "admin", "teacher") && <NavLink to="/reports">Reports</NavLink>}
         </nav>
         <div className="topbar-right">
+          <NotificationBell />
           <span className="muted small">{user.fullName || user.email || user.roles.join(", ")}</span>
           <button className="btn btn-quiet" onClick={() => void signOut()}>
             Sign out
@@ -131,6 +135,9 @@ export function App() {
               hasRole("super_admin", "admin") ? <CertificatesPage /> : <Navigate to="/" replace />
             }
           />
+          {/* Everyone: reading is universal, and the composer inside decides
+              for itself whether this user may post. */}
+          <Route path="/announcements" element={<AnnouncementsPage />} />
           <Route path="/sections" element={<SectionsPage />} />
           <Route path="/change-password" element={<ChangePasswordPage forced={false} />} />
           <Route
