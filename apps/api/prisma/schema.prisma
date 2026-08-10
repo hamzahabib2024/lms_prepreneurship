@@ -736,8 +736,9 @@ model Lesson {
   deletedAt DateTime? @map("deleted_at")
 
   module   Module            @relation(fields: [moduleId], references: [id], onDelete: Restrict)
-  lectures RecordedLecture[]
-  sessions LiveSession[]
+  lectures  RecordedLecture[]
+  sessions  LiveSession[]
+  resources LessonResource[]
 
   @@index([moduleId, displayOrder])
   @@map("lessons")
@@ -788,6 +789,44 @@ model RecordedLecture {
 /// certification (BR-PRG-02). A student has an incentive to inflate it, so the
 /// server merges the intervals itself and never stores a client-sent
 /// percentage.
+/// FR-CRS-035 — a file attached to a lesson: slides, a handout, a worksheet.
+///
+/// Distinct from RecordedLecture, which is the video and lives per OFFERING. A
+/// lesson belongs to a module and a module to a SUBJECT, so a handout is
+/// subject-level and every section studying that subject gets it.
+///
+/// It carries its own publicationStatus as well as sitting under the lesson's.
+/// A teacher uploading next week's worksheet to an already-published lesson
+/// must not have it appear the moment the upload finishes.
+model LessonResource {
+  id       String @id @default(uuid()) @db.Uuid
+  lessonId String @map("lesson_id") @db.Uuid
+
+  title       String  @db.VarChar(255)
+  description String? @db.Text
+
+  /// Never a public URL (SEC-FIL-009). Resolved through the storage adapter.
+  storageKey       String @map("storage_key") @db.VarChar(500)
+  originalFilename String @map("original_filename") @db.VarChar(255)
+  /// Determined by CONTENT, not by the extension (SEC-FIL-003).
+  contentType      String @map("content_type") @db.VarChar(100)
+  sizeBytes        BigInt @map("size_bytes")
+  contentHash      String @map("content_hash") @db.VarChar(64)
+
+  displayOrder      Int               @default(0) @map("display_order")
+  publicationStatus PublicationStatus @default(DRAFT) @map("publication_status")
+
+  createdBy String    @map("created_by") @db.Uuid
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Restrict)
+
+  @@index([lessonId, displayOrder])
+  @@map("lesson_resources")
+}
+
 model WatchProgress {
   id                String @id @default(uuid()) @db.Uuid
   studentId         String @map("student_id") @db.Uuid

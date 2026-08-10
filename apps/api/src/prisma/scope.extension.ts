@@ -154,6 +154,7 @@ const STATE_FILTERED = [
   "RecordedLecture", // publicationStatus + availabilityStatus
   "Quiz", // publicationStatus
   "SubmissionFile", // submissionId — an unsubmitted draft upload
+  "LessonResource", // publicationStatus, AND the lesson's
   "RubricCriterion", // isInternal — a criterion the student must not see
 ] as const;
 
@@ -305,6 +306,40 @@ const MODEL_POLICIES: Record<string, PolicyFn> = {
     };
     if (isTeacher(a)) return reach;
     if (isStudent(a)) return { ...reach, publicationStatus: "PUBLISHED" };
+    return DENY_ALL;
+  },
+
+  /**
+   * FR-CRS-035 — a handout attached to a lesson.
+   *
+   * TWO PUBLICATION GATES, not one. The resource has its own status, so a
+   * teacher can upload next week's worksheet to an already-published lesson
+   * without it appearing the moment the upload finishes — and the LESSON'S
+   * status is checked as well, because a published handout inside a draft
+   * lesson must stay invisible (BR-CNT-01).
+   *
+   * Either gate alone leaks: without the first, uploading publishes; without
+   * the second, publishing a resource smuggles out a lesson nobody has
+   * released yet.
+   */
+  LessonResource: (a) => {
+    if (isAdmin(a)) return null;
+    const reach = {
+      lesson: {
+        module: { subject: { sectionSubjects: { some: { id: { in: [...a.sectionSubjectIds] } } } } },
+      },
+    };
+    if (isTeacher(a)) return reach;
+    if (isStudent(a)) {
+      return {
+        publicationStatus: "PUBLISHED",
+        lesson: {
+          publicationStatus: "PUBLISHED",
+          deletedAt: null,
+          module: { subject: { sectionSubjects: { some: { id: { in: [...a.sectionSubjectIds] } } } } },
+        },
+      };
+    }
     return DENY_ALL;
   },
 
