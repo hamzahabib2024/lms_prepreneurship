@@ -59,6 +59,31 @@ const isTeacher = (a: Actor) => a.roles.includes("teacher");
 const isStudent = (a: Actor) => a.roles.includes("student");
 
 /**
+ * Models with NO policy, and why.
+ *
+ * Kept as an explicit list because "absent" and "deliberately unscoped" look
+ * identical in this map otherwise, and the difference is the whole security
+ * property. Everything here is institute-wide reference data: it describes what
+ * the Institute OFFERS, not what any person has done.
+ *
+ *   Programme, Subject, AcademicSession, Batch   the prospectus
+ *   Role                                          the four fixed roles (§4.2)
+ *   Rubric, RubricCriterion                       marking schemes
+ *
+ * A model carrying a person's work, marks, money or contact details does NOT
+ * belong on this list. If you are adding one, add a policy instead.
+ */
+const DELIBERATELY_UNSCOPED = [
+  "Programme",
+  "Subject",
+  "AcademicSession",
+  "Batch",
+  "Role",
+  "Rubric",
+  "RubricCriterion",
+] as const;
+
+/**
  * Per-model scope policies.
  *
  * The keys are Prisma model names. Each entry is written from the point of view
@@ -210,6 +235,127 @@ const MODEL_POLICIES: Record<string, PolicyFn> = {
     return DENY_ALL;
   },
 
+  // ---------------------------------------------------------- assessment --
+  // Every model below carries a student's work or their marks, and every one
+  // of them was missing from this map. An absent model is UNSCOPED (see the
+  // header), so a student holding `submission:read` could reach anyone's.
+  //
+  // assignment.service.ts even carried a comment saying "Scoped: a student not
+  // enrolled in this subject-section cannot see the assignment at all" — which
+  // was true of the intent and false of the code.
+
+  /// BR-CNT-01 again: a draft assignment is invisible to students, and an
+  /// assignment belonging to another section does not exist for them.
+  Assignment: (a) => {
+    if (isAdmin(a)) return null;
+    if (isTeacher(a)) return { sectionSubjectId: { in: [...a.sectionSubjectIds] } };
+    if (isStudent(a)) {
+      return {
+        sectionSubjectId: { in: [...a.sectionSubjectIds] },
+        publicationStatus: "PUBLISHED",
+      };
+    }
+    return DENY_ALL;
+  },
+
+  AssignmentSubmission: (a) => {
+    if (isAdmin(a)) return null;
+    if (isTeacher(a)) {
+      return { assignment: { sectionSubjectId: { in: [...a.sectionSubjectIds] } } };
+    }
+    if (isStudent(a)) return a.studentId ? { studentId: a.studentId } : DENY_ALL;
+    return DENY_ALL;
+  },
+
+  SubmissionFile: (a) => {
+    if (isAdmin(a)) return null;
+    if (isTeacher(a)) {
+      // Only files that have actually been HANDED IN. A student's uploads sit
+      // unattached until they press Submit, and a teacher reading a draft
+      // before it is submitted would be reading work in progress.
+      return {
+        submissionId: { not: null },
+        assignment: { sectionSubjectId: { in: [...a.sectionSubjectIds] } },
+      };
+    }
+    // Matched on the owner column, NOT through the submission relation. An
+    // unattached file has no submission, so a relation predicate excludes it —
+    // which hid a student's own uploads from them until they submitted, and
+    // therefore made them impossible to list or delete.
+    if (isStudent(a)) return a.studentId ? { studentId: a.studentId } : DENY_ALL;
+    return DENY_ALL;
+  },
+
+  /// BR-ASG-09 — a mark does not exist for the student until it is released.
+  /// Enforcing it here rather than in each response means an unreleased grade
+  /// cannot leak through a path nobody remembered to guard.
+  AssignmentGrade: (a) => {
+    if (isAdmin(a)) return null;
+    if (isTeacher(a)) {
+      return {
+        submission: { assignment: { sectionSubjectId: { in: [...a.sectionSubjectIds] } } },
+      };
+    }
+    if (isStudent(a)) {
+      return a.studentId
+        ? { submission: { studentId: a.studentId }, releasedAt: { not: null } }
+        : DENY_ALL;
+    }
+    return DENY_ALL;
+  },
+
+  AssignmentExtension: (a) => {
+    if (isAdmin(a)) return null;
+    if (isTeacher(a)) {
+      return { assignment: { sectionSubjectId: { in: [...a.sectionSubjectIds] } } };
+    }
+    if (isStudent(a)) return a.studentId ? { studentId: a.studentId } : DENY_ALL;
+    return DENY_ALL;
+  },
+
+  Quiz: (a) => {
+    if (isAdmin(a)) return null;
+    if (isTeacher(a)) return { sectionSubjectId: { in: [...a.sectionSubjectIds] } };
+    if (isStudent(a)) {
+      return {
+        sectionSubjectId: { in: [...a.sectionSubjectIds] },
+        publicationStatus: "PUBLISHED",
+      };
+    }
+    return DENY_ALL;
+  },
+
+  QuizAttempt: (a) => {
+    if (isAdmin(a)) return null;
+    if (isTeacher(a)) return { quiz: { sectionSubjectId: { in: [...a.sectionSubjectIds] } } };
+    if (isStudent(a)) return a.studentId ? { studentId: a.studentId } : DENY_ALL;
+    return DENY_ALL;
+  },
+
+  QuizAnswer: (a) => {
+    if (isAdmin(a)) return null;
+    if (isTeacher(a)) {
+      return { attempt: { quiz: { sectionSubjectId: { in: [...a.sectionSubjectIds] } } } };
+    }
+    if (isStudent(a)) return a.studentId ? { attempt: { studentId: a.studentId } } : DENY_ALL;
+    return DENY_ALL;
+  },
+
+  // ------------------------------------------------------- the answer key --
+  // QuestionOption.isCorrect, Question.acceptedAnswers and Question.explanation
+  // ARE the answer key. Quiz delivery is not built yet, so nothing reads these
+  // today — which is exactly why they are locked now rather than later. Left
+  // unscoped, the first query written against them would inherit read access
+  // and hand students the answers, and it would look like working code.
+  //
+  // Delivery must therefore go through asSystem() deliberately and strip the
+  // key on its way out. That is a visible decision in a reviewable place,
+  // which an accidental default is not.
+  QuestionBank: (a) => (isAdmin(a) || isTeacher(a) ? null : DENY_ALL),
+  Question: (a) => (isAdmin(a) || isTeacher(a) ? null : DENY_ALL),
+  QuestionOption: (a) => (isAdmin(a) || isTeacher(a) ? null : DENY_ALL),
+  QuizQuestion: (a) => (isAdmin(a) || isTeacher(a) ? null : DENY_ALL),
+
   // ----------------------------------------------------------------- live --
   LiveSession: (a) => {
     if (isAdmin(a)) return null;
@@ -332,4 +478,4 @@ export function scopeExtension() {
 }
 
 /** Exported for the negative test suites required by §17.2. */
-export const __testing = { MODEL_POLICIES, DENY_ALL, combine };
+export const __testing = { MODEL_POLICIES, DENY_ALL, combine, DELIBERATELY_UNSCOPED };
