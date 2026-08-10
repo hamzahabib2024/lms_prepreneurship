@@ -51,7 +51,8 @@ export class ProgressService {
     const ss = enrolment.sectionSubject;
     const subjectId = ss.subject.id;
 
-    const [videoTotal, videoDone, asgTotal, asgDone, attendance] = await Promise.all([
+    const [videoTotal, videoDone, asgTotal, asgDone, quizTotal, quizDoneRows, attendance] =
+      await Promise.all([
       // Only PUBLISHED items count. Counting drafts would move a student's
       // progress backwards the moment a teacher starts preparing next week's
       // material (BR-CNT-01).
@@ -91,16 +92,43 @@ export class ProgressService {
           },
         }),
       ),
+      this.prisma.asSystem((db) =>
+        db.quiz.count({
+          where: { sectionSubjectId, publicationStatus: "PUBLISHED", deletedAt: null },
+        }),
+      ),
+      // DISTINCT QUIZZES, not attempts. A quiz may allow several attempts
+      // (maxAttempts), so counting rows would credit a student three times for
+      // sitting one quiz three times and push progress past 100%.
+      //
+      // Submitted counts, graded is not required: progress measures what the
+      // STUDENT has done, and whether a teacher has marked it yet is not their
+      // doing. This matches assignments, which count submissions rather than
+      // grades. IN_PROGRESS and ABANDONED do not count — starting is not
+      // finishing.
+      this.prisma.asSystem((db) =>
+        db.quizAttempt.groupBy({
+          by: ["quizId"],
+          where: {
+            studentId,
+            status: { in: ["SUBMITTED", "AUTO_SUBMITTED", "GRADING", "GRADED"] },
+            quiz: { sectionSubjectId, publicationStatus: "PUBLISHED", deletedAt: null },
+          },
+        }),
+      ),
       this.attendance.percentageFor(studentId, sectionSubjectId),
     ]);
 
     const inputs: ComponentInputs = {
       video: { completed: videoDone, total: videoTotal },
       assignment: { completed: asgDone, total: asgTotal },
-      // Quizzes are not built yet. total: 0 makes BR-PRG-03 exclude the
-      // component and redistribute its weight, which is exactly right — a
-      // student must not be penalised for a component that does not exist.
-      quiz: { completed: 0, total: 0 },
+      // This was hardcoded to { completed: 0, total: 0 } with a comment saying
+      // quizzes were not built yet. They have been for some time, so the
+      // component was silently excluded by BR-PRG-03 and its 25% redistributed
+      // across the other three — a student who had sat every quiz got no credit
+      // for any of them, and the weighting an administrator had configured was
+      // not the weighting being applied.
+      quiz: { completed: quizDoneRows.length, total: quizTotal },
       attendance: {
         completed: attendance.present + attendance.late,
         total: attendance.sessionsInDenominator,
