@@ -25,6 +25,19 @@ export class EnvelopeInterceptor implements NestInterceptor {
 
         if (typeof payload === "object" && payload !== null && "pagination" in payload) {
           const p = payload as { data: unknown; pagination: unknown; appliedFilters?: unknown };
+
+          // A handler that paginated but named its rows something other than
+          // `data` used to get a 200 with the rows silently missing — no error,
+          // nothing in the log, and the mistake only visible to whoever read
+          // the response. Failing here turns a silent data loss into an obvious
+          // programming error.
+          if (p.data === undefined) {
+            throw new Error(
+              "A paginated handler returned `pagination` without `data`. §9.2 names the " +
+                "rows `data`; rename the key.",
+            );
+          }
+
           return {
             data: p.data,
             pagination: p.pagination,

@@ -79,6 +79,7 @@ export const RESOURCES = [
   "admin_account",
   "teacher_account",
   "student_account",
+  "user_directory",
   "own_profile",
   "own_password",
   "own_session",
@@ -218,6 +219,18 @@ export const PERMISSION_MATRIX: Record<Resource, ResourcePolicy> = {
     admin: { actions: FULL, scope: "ALL" },
     teacher: { actions: ["read"], scope: "SECTION" },
     student: { actions: ["read", "update"], scope: "OWN" },
+  },
+  /**
+   * FR-USR-003 — the institute-wide directory of every account.
+   *
+   * Separate from `student_account` for the reason that keeps recurring: that
+   * resource is a TOPIC. A student holds `student_account:read` over their OWN
+   * record and a teacher over the students in their sections, and neither of
+   * those is "every account in the Institute with its roles and permissions".
+   */
+  user_directory: {
+    super_admin: { actions: ["read", "export"], scope: "ALL" },
+    admin: { actions: ["read", "export"], scope: "ALL" },
   },
   own_profile: {
     super_admin: { actions: ["read", "update"], scope: "OWN" },

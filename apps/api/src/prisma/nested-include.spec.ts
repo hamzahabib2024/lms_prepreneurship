@@ -111,6 +111,12 @@ const ACKNOWLEDGED: Record<string, string> = {
     "QuizQuestion is a join row carrying a mark and a display order, and the " +
     "parent Quiz was already scoped. Authoring endpoints only; a student " +
     "holds nothing on quiz_answer_key.",
+  "admin/user-admin.service.ts::User.roles":
+    "Every read here is on an admin-only route (§4.5.1 gives no teacher or " +
+    "student `student_account:read`, `account_state:update` or " +
+    "`role_assignment:configure`), and the UserRole policy returns null — no " +
+    "restriction — for an admin. A non-admin cannot reach these endpoints at " +
+    "all, so there is no narrower set of rows to restate.",
   "progress/progress.service.ts::AssignmentGrade.submission":
     "To-one parent. The query runs under asSystem with an explicit " +
     "releasedAt: { not: null } and a studentId filter, which is stricter than " +

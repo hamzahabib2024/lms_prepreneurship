@@ -214,6 +214,42 @@ describe("certificates", () => {
   });
 });
 
+describe("nobody but an administrator sees the user directory", () => {
+  it("is denied to a student and a teacher", () => {
+    // The fourteenth instance of one pattern, and the first found in code
+    // written the same afternoon. `student_account:read` is a TOPIC: a student
+    // holds it over their OWN record, a teacher over the students in their
+    // sections. Neither is "every account in the Institute, with its roles and
+    // sub-permissions".
+    expect(may("student", "user_directory", "read")).toBe(false);
+    expect(may("teacher", "user_directory", "read")).toBe(false);
+    expect(may("student", "user_directory", "export")).toBe(false);
+  });
+
+  it("still lets each of them read what is genuinely theirs", () => {
+    // The counterpart. A fix that removed student_account:read would satisfy
+    // the assertion above and break a student reading their own profile.
+    expect(may("student", "student_account", "read")).toBe(true);
+    expect(may("teacher", "student_account", "read")).toBe(true);
+    expect(may("admin", "user_directory", "read")).toBe(true);
+  });
+
+  it("never lets a teacher provision or suspend an account", () => {
+    expect(may("teacher", "teacher_account", "create")).toBe(false);
+    expect(may("teacher", "account_state", "update")).toBe(false);
+    expect(may("teacher", "other_user_password", "update")).toBe(false);
+    expect(may("student", "other_user_password", "update")).toBe(false);
+  });
+
+  it("reserves role assignment to a Super Admin", () => {
+    // Sub-permissions are the difference between an administrator who can run
+    // the Institute and one who can also read every student's finances.
+    expect(may("super_admin", "role_assignment", "configure")).toBe(true);
+    expect(may("admin", "role_assignment", "configure")).toBe(false);
+    expect(may("teacher", "role_assignment", "configure")).toBe(false);
+  });
+});
+
 describe("matrix invariants that prevented the original defects", () => {
   it("no student grant is wider than OWN or ENROLLED", () => {
     const RESOURCES_TO_CHECK: Resource[] = [

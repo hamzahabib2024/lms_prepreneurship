@@ -12,6 +12,7 @@ import { AcademicModule } from "./academic/academic.module";
 import { LiveModule } from "./live/live.module";
 import { AssessmentModule } from "./assessment/assessment.module";
 import { NotificationModule } from "./notification/notification.module";
+import { AdminModule } from "./admin/admin.module";
 import { CertificateModule } from "./certificate/certificate.module";
 import { ProgressModule } from "./progress/progress.module";
 import { ContentModule } from "./content/content.module";
@@ -46,6 +47,7 @@ import { PermissionsGuard } from "./rbac/permissions.guard";
     AssessmentModule,
     ProgressModule,
     CertificateModule,
+    AdminModule,
     NotificationModule,
     ContentModule,
     QuizModule,
