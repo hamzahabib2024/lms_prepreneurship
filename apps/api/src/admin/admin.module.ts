@@ -9,6 +9,7 @@ import { ImpersonationService } from "./impersonation.service";
 import { ImpersonationController } from "./impersonation.controller";
 import { PersonalDataService } from "./personal-data.service";
 import { PersonalDataController } from "./personal-data.controller";
+import { MaintenanceController } from "./maintenance.controller";
 
 /**
  * §4.5.1 — the accounts of the people who run the Institute.
@@ -17,7 +18,7 @@ import { PersonalDataController } from "./personal-data.controller";
  * and a second implementation would be a second thing to get wrong.
  */
 @Module({
-  controllers: [UserAdminController, AuditViewerController, SecurityLogController, ImpersonationController, PersonalDataController],
+  controllers: [UserAdminController, AuditViewerController, SecurityLogController, ImpersonationController, PersonalDataController, MaintenanceController],
   providers: [UserAdminService, AuditViewerService, SecurityLogService, ImpersonationService, PersonalDataService],
   exports: [UserAdminService],
 })

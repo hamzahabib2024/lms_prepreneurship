@@ -194,6 +194,36 @@ export const CATALOGUE: SettingDefinition[] = [
       "The institute-wide ceiling (Appendix H). A teacher may narrow this for one assignment, never widen it. Files are checked by CONTENT, so renaming an extension does not get past it.",
   },
 
+  // ----------------------------------------------------------- maintenance --
+  //
+  // Operational state rather than policy, but it lives here for the same
+  // reasons everything else does: it must survive a restart, be audited when it
+  // changes, and be readable without a database round trip on every request.
+  {
+    key: "maintenance.enabled",
+    type: "boolean",
+    default: false,
+    group: "Maintenance",
+    description:
+      "Take the System off the air. Everybody except a Super Admin is shown a notice instead of the application; signing in stays available so a Super Admin can always turn it off again.",
+  },
+  {
+    key: "maintenance.message",
+    type: "string",
+    default: "The System is unavailable for scheduled maintenance. Please try again shortly.",
+    group: "Maintenance",
+    description:
+      "Shown to everybody who is turned away. Say what is happening in a sentence a student would understand.",
+  },
+  {
+    key: "maintenance.expectedEndAt",
+    type: "string",
+    default: "",
+    group: "Maintenance",
+    description:
+      "When the System is expected back, as an ISO date and time. Optional, and worth setting: whether to wait ten minutes or give up for the evening is the question somebody actually has.",
+  },
+
   // ------------------------------------------------------------- institute --
   {
     key: "institute.name",

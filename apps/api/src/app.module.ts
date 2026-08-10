@@ -19,6 +19,7 @@ import { ContentModule } from "./content/content.module";
 import { QuizModule } from "./quiz/quiz.module";
 import { ReportingModule } from "./reporting/reporting.module";
 import { SettingsModule } from "./settings/settings.module";
+import { MaintenanceGuard } from "./admin/maintenance.guard";
 import { HealthController } from "./health.controller";
 
 import { CorrelationMiddleware } from "./common/correlation.middleware";
@@ -66,6 +67,11 @@ import { PermissionsGuard } from "./rbac/permissions.guard";
     // ARC-003 — applied globally so a new route is protected by default. A
     // route without @RequirePermission or @Public is refused, not allowed.
     { provide: APP_GUARD, useClass: PermissionsGuard },
+    // FR-OPS-012 — registered AFTER the permissions guard, so it runs after it.
+    // A request that would be refused anyway should be told it is forbidden
+    // rather than that the System is down: "come back later" is a worse answer
+    // than the true one, and it is the answer an attacker would enjoy most.
+    { provide: APP_GUARD, useClass: MaintenanceGuard },
   ],
 })
 export class AppModule implements NestModule {
