@@ -1113,3 +1113,29 @@ details > summary:hover { text-decoration: underline; }
 }
 .slip-frame { height: 420px; }
 .slip a { display: block; }
+
+/* -------------------------------------------------------- the form ------ */
+.apply-shell { max-width: 720px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+
+/* Where they are and what is left. A form with no visible end is one people
+   abandon at the third question. */
+.steps { list-style: none; margin: 0 0 1.25rem; padding: 0; display: grid; gap: .3rem; }
+.step { display: flex; align-items: center; gap: .6rem; font-size: .875rem; }
+.step-no {
+  display: grid; place-items: center; flex: 0 0 24px;
+  width: 24px; height: 24px; border-radius: 50%;
+  background: var(--surface-2); color: var(--muted);
+  font-size: .75rem; font-weight: 700;
+  border: 1px solid var(--line);
+}
+.step.is-current .step-no { background: var(--brand-700); color: var(--primary-ink); border-color: var(--brand-700); }
+/* Done is a tick AND a colour, never the colour alone (NFR-ACC-007). */
+.step.is-done .step-no { background: var(--ok-bg); color: var(--ok); border-color: var(--ok); }
+.step.is-current .link-button { font-weight: 650; color: var(--ink); text-decoration: none; }
+.step .link-button { color: var(--muted); text-decoration: none; }
+.step .link-button:hover { text-decoration: underline; }
+
+@media (min-width: 700px) {
+  .steps { grid-auto-flow: column; grid-auto-columns: 1fr; gap: .5rem; }
+  .step { flex-direction: column; text-align: center; gap: .35rem; }
+}

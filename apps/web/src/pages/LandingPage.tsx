@@ -70,8 +70,11 @@ export function LandingPage() {
           <a className="btn btn-quiet" href="#programmes">
             Programmes
           </a>
-          <Link className="btn btn-primary" to="/login">
+          <Link className="btn btn-quiet" to="/login">
             Sign in
+          </Link>
+          <Link className="btn btn-primary" to="/apply">
+            Apply
           </Link>
         </nav>
       </header>
@@ -90,12 +93,12 @@ export function LandingPage() {
             end of the term.
           </p>
           <div className="row-actions">
-            <a className="btn btn-primary btn-lg" href="#programmes">
+            <Link className="btn btn-primary btn-lg" to="/apply">
+              Apply now
+            </Link>
+            <a className="btn btn-lg" href="#programmes">
               See what we teach
             </a>
-            <Link className="btn btn-lg" to="/login">
-              I already have an account
-            </Link>
           </div>
         </div>
 
@@ -225,17 +228,14 @@ export function LandingPage() {
           </div>
         )}
 
-        {/*
-          NO "APPLY NOW" BUTTON YET, and that is deliberate rather than an
-          oversight. The public application endpoint exists; the FORM does not,
-          and a button leading nowhere is the exact defect the routing guard was
-          written for. It says what to do in the meantime instead.
-        */}
-        <div className="alert">
-          <p>
-            <strong>To apply,</strong> speak to the office and they will start your admission. The
-            online application form is being built — when it lands, it will appear here.
-          </p>
+        {/* The button exists now, and so does the form behind it. */}
+        <div className="row-actions">
+          <Link className="btn btn-primary btn-lg" to="/apply">
+            Apply now
+          </Link>
+          <span className="muted small">
+            No account needed. About five minutes, and a photo of your payment slip.
+          </span>
         </div>
       </section>
 

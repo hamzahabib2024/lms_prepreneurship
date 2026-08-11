@@ -3,6 +3,7 @@ import { NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom"
 import { useAuth } from "./auth/AuthContext";
 import { LoginPage } from "./pages/LoginPage";
 import { LandingPage } from "./pages/LandingPage";
+import { ApplyPage } from "./pages/ApplyPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { SectionsPage } from "./pages/SectionsPage";
 import { ReportsPage } from "./pages/ReportsPage";
@@ -88,6 +89,9 @@ export function App() {
     return (
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        {/* FR-REG-001 — no account, no login. The whole point of the public
+            application is that the person filling it in cannot have one. */}
+        <Route path="/apply" element={<ApplyPage />} />
         <Route path="*" element={<LandingPage />} />
       </Routes>
     );
