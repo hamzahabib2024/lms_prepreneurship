@@ -20,7 +20,6 @@ const hasDb = !!process.env["DATABASE_URL"];
 const suite = hasDb ? describe : describe.skip;
 
 if (!hasDb) {
-  // eslint-disable-next-line no-console
   console.warn("\n  ⚠  Integration tests skipped: set DATABASE_URL to run them.\n");
 }
 
