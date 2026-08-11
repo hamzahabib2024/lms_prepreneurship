@@ -1,6 +1,7 @@
 import { Global, Module } from "@nestjs/common";
 import { AnnouncementService } from "./announcement.service";
 import { NotificationService } from "./notification.service";
+import { TemplateService } from "./template.service";
 import { NotificationController } from "./notification.controller";
 import { ChannelRegistry } from "./channel/channel.registry";
 import { LoggedWhatsAppChannel } from "./channel/logged.channel";
@@ -16,7 +17,13 @@ import { LoggedWhatsAppChannel } from "./channel/logged.channel";
 @Global()
 @Module({
   controllers: [NotificationController],
-  providers: [AnnouncementService, NotificationService, ChannelRegistry, LoggedWhatsAppChannel],
-  exports: [NotificationService, AnnouncementService],
+  providers: [
+    AnnouncementService,
+    NotificationService,
+    TemplateService,
+    ChannelRegistry,
+    LoggedWhatsAppChannel,
+  ],
+  exports: [NotificationService, AnnouncementService, TemplateService],
 })
 export class NotificationModule {}

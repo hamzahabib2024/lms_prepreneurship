@@ -1,9 +1,18 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query } from "@nestjs/common";
 import { z } from "zod";
 import { AnnouncementService } from "./announcement.service";
 import { NotificationService } from "./notification.service";
+import { TemplateService } from "./template.service";
 import { zodBody } from "../common/zod-validation.pipe";
 import { RequirePermission } from "../rbac/permissions.guard";
+
+// Bounds are deliberately absent here. The template rules say the useful
+// thing — which placeholder is wrong and what is available instead — and a
+// Zod message about string length would shadow it.
+const templateSchema = z.object({
+  title: z.string(),
+  body: z.string(),
+});
 
 const announcementSchema = z
   .object({
@@ -40,6 +49,9 @@ export class NotificationController {
   constructor(
     private readonly announcements: AnnouncementService,
     private readonly notifications: NotificationService,
+    // Named with a trailing underscore because `templates` is also the method
+    // that lists them, and a property shadowing a method reads as a bug.
+    private readonly templates_: TemplateService,
   ) {}
 
   // ------------------------------------------------------- announcements --
@@ -106,5 +118,35 @@ export class NotificationController {
   @Patch("me/notification-preferences")
   updatePreference(@Body(zodBody(preferenceSchema)) dto: z.infer<typeof preferenceSchema>) {
     return this.notifications.updateMyPreference(dto);
+  }
+
+  /**
+   * FR-NOT-020 — the messages the Institute can word itself.
+   *
+   * `notification_config:configure`, which §4.5 grants Super Admin and Admin.
+   * The READ uses `configure` too, deliberately: the matrix grants no `read`
+   * on this resource, so guarding it with one would make the endpoint
+   * unreachable by anybody — the exact defect the reachability guard exists to
+   * catch, and it would have caught this.
+   */
+  @RequirePermission("notification_config", "configure")
+  @Get("notification-templates")
+  templates() {
+    return this.templates_.catalogue();
+  }
+
+  /** FR-NOT-021 — change the wording. Validated on save, not on send. */
+  @RequirePermission("notification_config", "configure")
+  @Put("notification-templates/:kind")
+  setTemplate(@Param("kind") kind: string, @Body() body: unknown) {
+    const input = templateSchema.parse(body);
+    return this.templates_.set(kind, input.title, input.body);
+  }
+
+  /** FR-NOT-022 — back to the System's own wording. */
+  @RequirePermission("notification_config", "configure")
+  @Delete("notification-templates/:kind")
+  resetTemplate(@Param("kind") kind: string) {
+    return this.templates_.reset(kind);
   }
 }

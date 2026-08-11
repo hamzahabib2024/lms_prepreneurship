@@ -165,6 +165,12 @@ const DELIBERATELY_UNSCOPED = [
   "Batch",
   "Role",
   "Rubric",
+  // The Institute's own wording for the messages the System sends. It is
+  // configuration, carries nobody's personal information, and the same text
+  // goes to every recipient — so there is nothing here to scope BY. Reaching
+  // it at all needs notification_config:configure, which only a Super Admin or
+  // an Admin holds.
+  "NotificationTemplate",
 ] as const;
 
 /**

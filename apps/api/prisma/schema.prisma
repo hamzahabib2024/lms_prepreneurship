@@ -1394,6 +1394,26 @@ model PlaybackTicket {
   @@map("playback_tickets")
 }
 
+/// The Institute's own wording for a message the System sends (FR-NOT-020).
+///
+/// Absent means "use the System's default", which is why there is no row per
+/// kind by default: a table pre-filled with the defaults would make every
+/// message look deliberately chosen, and an Institute could not tell which
+/// ones it had actually edited.
+model NotificationTemplate {
+  id   String @id @default(uuid()) @db.Uuid
+  kind String @unique @db.VarChar(60)
+
+  title String @db.VarChar(200)
+  body  String @db.Text
+
+  updatedBy String   @map("updated_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("notification_templates")
+}
+
 model NumberSeries {
   id  String @id @default(uuid()) @db.Uuid
   key String @unique @db.VarChar(80) // institute|session|programme|campus

@@ -9,6 +9,7 @@ import { getActor } from "../prisma/actor-context";
 import { assertOwnStudent } from "../rbac/ownership";
 import { RegistrationNumberService } from "../admission/registration-number.service";
 import { NotificationService } from "../notification/notification.service";
+import { TemplateService } from "../notification/template.service";
 
 /**
  * Completion certificates — SRS §5.15, FR-CRT-001..020.
@@ -39,6 +40,7 @@ export class CertificateService {
     private readonly config: ConfigService,
     private readonly numbers: RegistrationNumberService,
     private readonly notifications: NotificationService,
+    private readonly templates: TemplateService,
   ) {}
 
   /**
@@ -115,17 +117,40 @@ export class CertificateService {
       db.student.findUnique({ where: { id: studentId }, select: { userId: true } }),
     );
     if (student) {
+      // The Institute's own wording if it has set any, and the System's
+      // otherwise (FR-NOT-020). The fallback is the literal that used to be
+      // here, so a kind the catalogue has not adopted still sends what it
+      // always sent rather than nothing.
+      const worded = await this.templates.renderFor("certificate.issued", {
+        certificateNo,
+        subject: (created as { sectionSubjectId?: string | null }).sectionSubjectId
+          ? await this.subjectNameFor(sectionSubjectId)
+          : null,
+      });
+
       await this.notifications.notify({
         recipientUserIds: [student.userId],
         kind: "certificate.issued",
-        title: "Your certificate has been issued",
-        body: `Certificate ${certificateNo} is now available, with a link you can give to an employer.`,
+        title: worded?.title || "Your certificate has been issued",
+        body:
+          worded?.body ||
+          `Certificate ${certificateNo} is now available, with a link you can give to an employer.`,
         linkPath: "/subjects",
         isUrgent: true,
       });
     }
 
     return this.present(created, { alreadyIssued: false });
+  }
+
+  private async subjectNameFor(sectionSubjectId: string): Promise<string | null> {
+    const ss = await this.prisma.asSystem((db) =>
+      db.sectionSubject.findUnique({
+        where: { id: sectionSubjectId },
+        select: { subject: { select: { name: true } } },
+      }),
+    );
+    return ss?.subject.name ?? null;
   }
 
   /**
