@@ -8,6 +8,7 @@ import {
   Post,
   Query,
   Req,
+  Res,
   UploadedFile,
   UseInterceptors,
 } from "@nestjs/common";
@@ -22,7 +23,7 @@ import {
   type RegistrationRejectInput,
   type RegistrationSubmitInput,
 } from "@lms/shared";
-import type { Request } from "express";
+import type { Request, Response } from "express";
 import { AdmissionService } from "./admission.service";
 import { MAX_SLIP_BYTES, SlipService } from "./slip.service";
 import { zodBody } from "../common/zod-validation.pipe";
@@ -143,6 +144,43 @@ export class AdmissionController {
       page: page ? Number(page) : undefined,
       pageSize: pageSize ? Number(pageSize) : undefined,
     });
+  }
+
+  /**
+   * FR-REG-025 — one application, with its payment slips.
+   *
+   * The list deliberately omits documents; without this endpoint the reviewer
+   * could see that an application existed and never see the slip the decision
+   * turns on.
+   */
+  @RequirePermission("registration_queue", "read")
+  @Get("registration-requests/:id")
+  detail(@Param("id") id: string) {
+    return this.admission.detail(id);
+  }
+
+  /**
+   * FR-REG-024 — the slip itself, streamed.
+   *
+   * Never a storage URL (SEC-FIL-009). The object is somebody's bank record,
+   * and a link that works without a session is a link that still works after
+   * the session ends.
+   */
+  @RequirePermission("registration_queue", "read")
+  @Get("registration-requests/:id/documents/:documentId")
+  async slip(
+    @Param("id") id: string,
+    @Param("documentId") documentId: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    const { body, contentType, filename } = await this.admission.slip(id, documentId);
+    res.setHeader("Content-Type", contentType);
+    // INLINE, not attachment: the reviewer wants to look at it beside the
+    // form, not collect a download and open it in another application.
+    res.setHeader("Content-Disposition", `inline; filename="${filename}"`);
+    // A bank slip must not sit in a shared cache (SEC-FIL-009).
+    res.setHeader("Cache-Control", "private, no-store");
+    res.send(body);
   }
 
   /** FR-REG-026 — claim, so two administrators cannot act on one application. */

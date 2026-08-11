@@ -16,6 +16,7 @@ import { AuthService } from "../auth/auth.service";
 import { ActorService } from "../auth/actor.service";
 import { getActor } from "../prisma/actor-context";
 import { RegistrationNumberService } from "./registration-number.service";
+import { StorageRegistry } from "../content/storage/storage.registry";
 
 /** Unambiguous alphabet — no O/0, I/l/1 — because these are read aloud
  *  over WhatsApp and mis-transcribed characters generate support calls. */
@@ -31,6 +32,7 @@ export class AdmissionService {
     private readonly auth: AuthService,
     private readonly actors: ActorService,
     private readonly numbers: RegistrationNumberService,
+    private readonly storage: StorageRegistry,
     private readonly config: ConfigService,
   ) {}
 
@@ -347,6 +349,84 @@ export class AdmissionService {
    * same application. The claim expires, so an administrator who closes their
    * laptop does not block the queue indefinitely.
    */
+  /**
+   * FR-REG-025 — one application, as the reviewer sees it.
+   *
+   * THE QUEUE LIST DELIBERATELY DOES NOT CARRY DOCUMENTS — fifty applications
+   * do not need fifty slips in one payload — so without this the reviewer
+   * could see that an application existed and never see the payment slip it
+   * turns on. That is the whole decision they are being asked to make.
+   */
+  async detail(id: string) {
+    const request = await this.prisma.scoped.registrationRequest.findFirst({
+      where: { id, deletedAt: null },
+      include: {
+        desiredProgramme: { select: { id: true, name: true, code: true } },
+        desiredSection: { select: { id: true, name: true, code: true } },
+        documents: {
+          // The scope predicate does NOT reach into a nested include, so the
+          // child policy is restated here (see scope.extension.ts). It is
+          // redundant in practice — the parent request has already been
+          // scoped, so its documents are by definition ones this caller may
+          // see — but "redundant today" is how a nested include becomes a leak
+          // the day the parent's policy widens.
+          where: { registrationRequestId: id },
+          select: {
+            id: true,
+            documentType: true,
+            originalFilename: true,
+            contentType: true,
+            sizeBytes: true,
+            scanStatus: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: "asc" },
+        },
+      },
+    });
+    if (!request) throw new AppError("RESOURCE_NOT_FOUND");
+
+    return {
+      ...request,
+      // BigInt does not survive JSON, and a slip whose size renders as
+      // "[object Object]" reads as a broken file rather than a large one.
+      documents: request.documents.map((d) => ({
+        ...d,
+        sizeBytes: Number(d.sizeBytes),
+      })),
+    };
+  }
+
+  /**
+   * FR-REG-024 — the slip itself.
+   *
+   * Streamed through the API rather than handed out as a storage URL
+   * (SEC-FIL-009): the object is somebody's bank record, and a URL that works
+   * without a session is a URL that works after it ends.
+   *
+   * Scoped through the request, not the document: asking for a slip you may
+   * not see must fail because the APPLICATION is not yours to read, which is
+   * the same rule the queue is under.
+   */
+  async slip(requestId: string, documentId: string) {
+    const request = await this.prisma.scoped.registrationRequest.findFirst({
+      where: { id: requestId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!request) throw new AppError("RESOURCE_NOT_FOUND");
+
+    const doc = await this.prisma.asSystem((db) =>
+      db.registrationDocument.findFirst({
+        where: { id: documentId, registrationRequestId: request.id },
+        select: { storageKey: true, contentType: true, originalFilename: true },
+      }),
+    );
+    if (!doc) throw new AppError("RESOURCE_NOT_FOUND");
+
+    const body = await this.storage.forDocuments().get(doc.storageKey);
+    return { body, contentType: doc.contentType, filename: doc.originalFilename };
+  }
+
   async claim(id: string) {
     const actor = getActor();
     if (!actor) throw new AppError("AUTH_TOKEN_INVALID");

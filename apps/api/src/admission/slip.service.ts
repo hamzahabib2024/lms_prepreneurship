@@ -126,8 +126,15 @@ export class SlipService {
 
     // The stored NAME IS NEVER THE UPLOADER'S (SEC-FIL-005). The original is
     // kept as a label for the reviewer and never touches a path.
-    const storageKey = `registration-slips/${contentHash}.${kind.ext}`;
-    await this.storage.forDocuments().put(storageKey, file.buffer, kind.mime);
+    // THE KEY PASSED TO put() IS A PREFIX, not the final path: the provider
+    // appends its own generated name (SEC-FIL-005, so an uploader never
+    // chooses where their file lands). Storing the prefix instead of the
+    // returned ref recorded a DIRECTORY, and reading it back failed with
+    // EISDIR the first time a reviewer opened a slip.
+    const stored = await this.storage
+      .forDocuments()
+      .put(`registration-slips/${contentHash}.${kind.ext}`, file.buffer, kind.mime);
+    const storageKey = stored.storageRef;
 
     const created = await this.prisma.asSystem((db) =>
       db.registrationDocument.create({
