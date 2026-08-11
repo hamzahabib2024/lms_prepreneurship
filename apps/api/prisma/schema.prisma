@@ -1360,6 +1360,33 @@ model DiscussionPost {
   @@map("discussion_posts")
 }
 
+/// ARC-039/040/052 — a short-lived, user-bound permit to stream one lecture.
+///
+/// IN THE DATABASE, NOT IN MEMORY. It was a Map on the service, which worked
+/// exactly as long as there was one process: a ticket minted on one node is
+/// invisible to another, so a second instance would refuse roughly half of all
+/// playback with "this link has expired". ARC-049 permits the cache to be
+/// absent; it does not permit two nodes to disagree about who may watch.
+///
+/// Redis would be faster and needs provisioning. A table needs nothing that is
+/// not already running, and these rows are small, short-lived and swept.
+model PlaybackTicket {
+  ticketId String @id @map("ticket_id") @db.VarChar(80)
+
+  studentId         String @map("student_id") @db.Uuid
+  recordedLectureId String @map("recorded_lecture_id") @db.Uuid
+  /// The storage location, which NEVER reaches the client (ARC-041). It lives
+  /// here so redeeming the ticket does not have to look the lecture up again.
+  storageRef        String @map("storage_ref") @db.VarChar(500)
+
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([expiresAt])
+  @@index([studentId, createdAt])
+  @@map("playback_tickets")
+}
+
 model NumberSeries {
   id  String @id @default(uuid()) @db.Uuid
   key String @unique @db.VarChar(80) // institute|session|programme|campus

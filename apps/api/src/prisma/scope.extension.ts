@@ -344,6 +344,25 @@ const MODEL_POLICIES: Record<string, PolicyFn> = {
   },
 
   /**
+   * ARC-039/040 — a permit to stream one lecture.
+   *
+   * A student sees only their own, which is what a ticket IS: naming somebody
+   * else's makes it useless to them, and the redeem path re-checks the actor
+   * against the ticket regardless. Nobody else has any business reading them —
+   * a ticket carries a storage reference, and ARC-041 keeps those inside the
+   * System.
+   *
+   * Redeeming reads under asSystem because the request arrives with a ticket id
+   * and nothing else; the ownership check happens immediately afterwards, in
+   * code, against the actor.
+   */
+  PlaybackTicket: (a) => {
+    if (isAdmin(a)) return null;
+    if (isStudent(a)) return a.studentId ? { studentId: a.studentId } : DENY_ALL;
+    return DENY_ALL; // teachers: never
+  },
+
+  /**
    * FR-DSC-001 — a question thread on an offering.
    *
    * READING IS ENROLLED, NOT OWN, and that is a deliberate reading of §4.5.

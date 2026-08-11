@@ -9,22 +9,6 @@ import { getActor } from "../prisma/actor-context";
 import { assertOwnsSectionSubject } from "../rbac/ownership";
 import { applyWatchUpdate, type Interval } from "./watch-intervals";
 
-/**
- * A playback ticket — ARC-039/040/052.
- *
- * Held in memory here so playback works before Redis is provisioned. It MUST
- * move to Redis before a second instance runs, or a ticket minted on one node
- * will not be recognised by another. ARC-049 permits the cache to be absent;
- * it does not permit two nodes to disagree about who may watch.
- */
-interface PlaybackTicket {
-  ticketId: string;
-  studentId: string;
-  recordedLectureId: string;
-  storageRef: string;
-  expiresAt: Date;
-}
-
 /** What the player needs to render a lecture row and resume it. */
 export interface WatchState {
   watchedPercent: number;
@@ -56,7 +40,6 @@ function parseIntervals(raw: unknown): Interval[] {
 @Injectable()
 export class ContentService {
   private readonly logger = new Logger(ContentService.name);
-  private readonly tickets = new Map<string, PlaybackTicket>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -413,15 +396,20 @@ export class ContentService {
     }
 
     const ttl = Number(this.config.get<string>("PLAYBACK_TICKET_TTL_SECONDS", "900"));
-    const ticket: PlaybackTicket = {
+    const ticket = {
       ticketId: `pt_${randomUUID().replace(/-/g, "")}`,
       studentId: actor.studentId,
       recordedLectureId: lecture.id,
       storageRef: lecture.storageRef,
       expiresAt: new Date(Date.now() + ttl * 1000),
     };
-    this.tickets.set(ticket.ticketId, ticket);
-    this.sweepExpiredTickets();
+    // IN THE DATABASE, not in a Map on this service. It was the latter, which
+    // worked exactly as long as there was one process: a ticket minted on one
+    // node is invisible to another, so a second instance would refuse about
+    // half of all playback with "this link has expired" — and it would read as
+    // an expiry bug rather than a scaling one.
+    await this.prisma.asSystem((db) => db.playbackTicket.create({ data: ticket }));
+    void this.sweepExpiredTickets();
 
     // FR-VID-008 — where this student stopped last time, so the player opens
     // at the resume point rather than restarting a 40-minute lecture.
@@ -462,9 +450,15 @@ export class ContentService {
    * provisioned in §3.8 and breach NFR-PRF-002 for every other user.
    */
   async resolveTicket(ticketId: string) {
-    const ticket = this.tickets.get(ticketId);
+    const ticket = await this.prisma.asSystem((db) =>
+      db.playbackTicket.findUnique({ where: { ticketId } }),
+    );
     if (!ticket || ticket.expiresAt < new Date()) {
-      this.tickets.delete(ticketId);
+      if (ticket) {
+        await this.prisma.asSystem((db) =>
+          db.playbackTicket.delete({ where: { ticketId } }).catch(() => undefined),
+        );
+      }
       throw new AppError("AUTH_TOKEN_EXPIRED", {
         message: "This playback link has expired. Reload the lesson to continue watching.",
       });
@@ -605,10 +599,16 @@ export class ContentService {
     return { lectureId, availabilityStatus: status, checkedAt: new Date() };
   }
 
-  private sweepExpiredTickets(): void {
-    const now = Date.now();
-    for (const [id, t] of this.tickets) {
-      if (t.expiresAt.getTime() < now) this.tickets.delete(id);
-    }
+  /**
+   * Expired tickets are removed on a timer.
+   *
+   * Not strictly required for correctness — redeeming checks the expiry — but
+   * a table nobody prunes grows for ever, and every instance running this is
+   * harmless: deleting rows that are already expired is idempotent.
+   */
+  private async sweepExpiredTickets(): Promise<void> {
+    await this.prisma
+      .asSystem((db) => db.playbackTicket.deleteMany({ where: { expiresAt: { lt: new Date() } } }))
+      .catch(() => undefined);
   }
 }
