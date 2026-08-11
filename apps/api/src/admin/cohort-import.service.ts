@@ -6,7 +6,13 @@ import { AuthService } from "../auth/auth.service";
 import { RegistrationNumberService } from "../admission/registration-number.service";
 import { getActor } from "../prisma/actor-context";
 import { AppError } from "@lms/shared";
-import { describePlan, planImport, type ImportPlan, type ImportRow } from "./cohort-import";
+import {
+  countAgainstSection,
+  describePlan,
+  planImport,
+  type ImportPlan,
+  type ImportRow,
+} from "./cohort-import";
 
 export interface RowOutcome {
   line: number;
@@ -99,7 +105,14 @@ export class CohortImportService {
         .map((u) => [u.email, u.student!.registrationNo] as const),
     );
 
-    const wouldLoad = plan.rows.length - wrongGender.length;
+    // Counted by the pure module, which has the tests. These three are
+    // DISJOINT and the button on the screen is labelled with the sum of the
+    // first two — see countAgainstSection for why that matters.
+    const { wouldLoad, wouldRejoin } = countAgainstSection(
+      plan.rows,
+      section.genderRestriction,
+      (email) => returning.has(email),
+    );
     const room = section.capacity - section.enrolledCount;
 
     return {
@@ -125,15 +138,15 @@ export class CohortImportService {
             : null,
       })),
       wouldLoad,
-      wouldRejoin: plan.rows.filter((r) => returning.has(r.email)).length,
+      wouldRejoin,
       // Said BEFORE the operator commits, because afterwards it is a fact
       // rather than a decision. Capacity is overridable and gender is not.
       capacityWarning:
-        wouldLoad > room
+        wouldLoad + wouldRejoin > room
           ? `${section.name} has room for ${Math.max(0, room)} more (${section.enrolledCount} of ` +
-            `${section.capacity}). Loading ${wouldLoad} needs the capacity override.`
+            `${section.capacity}). Loading ${wouldLoad + wouldRejoin} needs the capacity override.`
           : null,
-      message: this.previewMessage(plan, wouldLoad, wrongGender.length),
+      message: this.previewMessage(plan, wouldLoad, wouldRejoin, wrongGender.length),
     };
   }
 
@@ -472,15 +485,39 @@ export class CohortImportService {
     );
   }
 
-  private previewMessage(plan: ImportPlan, wouldLoad: number, wrongGender: number): string {
+  private previewMessage(
+    plan: ImportPlan,
+    wouldLoad: number,
+    wouldRejoin: number,
+    wrongGender: number,
+  ): string {
     if (plan.fileProblem) return plan.fileProblem.message;
+
+    const parts = [describePlan(plan)];
     if (wrongGender > 0) {
-      return (
-        `${describePlan(plan)} ${wrongGender} of them cannot join this section because of its ` +
-        "gender restriction, which cannot be overridden — put them in another section."
+      parts.push(
+        `${wrongGender} of them cannot join this section because of its gender restriction, ` +
+          "which cannot be overridden — put them in another section.",
       );
     }
-    return `${describePlan(plan)} ${wouldLoad} would be loaded into this section.`;
+    // Stated separately, because they are different events with different
+    // consequences: one creates an account and hands out a password, the other
+    // adds a course to somebody who already has both.
+    if (wouldLoad > 0 && wouldRejoin > 0) {
+      parts.push(
+        `${wouldLoad} new ${wouldLoad === 1 ? "student" : "students"} would be created, and ` +
+          `${wouldRejoin} already here would join this section keeping their registration ` +
+          "number.",
+      );
+    } else if (wouldRejoin > 0) {
+      parts.push(
+        `All ${wouldRejoin} are already here and would join this section keeping the ` +
+          "registration number they hold.",
+      );
+    } else {
+      parts.push(`${wouldLoad} would be created in this section.`);
+    }
+    return parts.join(" ");
   }
 
   private resultMessage(loaded: number, rejoined: number, skipped: number): string {

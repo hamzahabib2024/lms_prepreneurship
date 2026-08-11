@@ -1,5 +1,6 @@
 import {
   MAX_IMPORT,
+  countAgainstSection,
   describePlan,
   parseCsv,
   planImport,
@@ -386,6 +387,91 @@ describe("what the operator is told before anything is written", () => {
 
   it("passes the file's own complaint through when there is one", () => {
     expect(describePlan(planImport(""))).toBe("The file has nothing in it.");
+  });
+});
+
+describe("counting against the section, which the button is labelled with", () => {
+  const rows = (...specs: Array<{ gender: string; email: string }>) =>
+    specs.map((s, i) => ({
+      line: i + 2,
+      fullName: `Student ${i}`,
+      email: s.email,
+      gender: s.gender as "MALE" | "FEMALE",
+      phone: "+923001234567",
+      dateOfBirth: new Date("2004-01-01"),
+      nationalId: String(3520100000000 + i),
+    }));
+  const none = () => false;
+
+  it("counts new students", () => {
+    const c = countAgainstSection(
+      rows({ gender: "FEMALE", email: "a@x.cd" }, { gender: "FEMALE", email: "b@x.cd" }),
+      "FEMALE",
+      none,
+    );
+    expect(c).toEqual({ wouldLoad: 2, wouldRejoin: 0, blocked: 0 });
+  });
+
+  it("counts a returning student as a REJOIN and NOT also as a load", () => {
+    // The defect this function exists for. Counted in both, the button offered
+    // to load somebody twice and the result then disagreed with it.
+    const c = countAgainstSection(
+      rows({ gender: "FEMALE", email: "new@x.cd" }, { gender: "FEMALE", email: "old@x.cd" }),
+      "FEMALE",
+      (e) => e === "old@x.cd",
+    );
+    expect(c).toEqual({ wouldLoad: 1, wouldRejoin: 1, blocked: 0 });
+  });
+
+  it("counts a blocked student as NEITHER", () => {
+    const c = countAgainstSection(
+      rows({ gender: "FEMALE", email: "a@x.cd" }, { gender: "MALE", email: "b@x.cd" }),
+      "FEMALE",
+      none,
+    );
+    expect(c).toEqual({ wouldLoad: 1, wouldRejoin: 0, blocked: 1 });
+  });
+
+  it("counts a blocked RETURNING student as blocked, not as a rejoin", () => {
+    // She is already here, but she still cannot join this section. Counting
+    // her as a rejoin would promise something the restriction refuses.
+    const c = countAgainstSection(
+      rows({ gender: "MALE", email: "old@x.cd" }),
+      "FEMALE",
+      () => true,
+    );
+    expect(c).toEqual({ wouldLoad: 0, wouldRejoin: 0, blocked: 1 });
+  });
+
+  it("blocks nobody in a MIXED section", () => {
+    const c = countAgainstSection(
+      rows({ gender: "FEMALE", email: "a@x.cd" }, { gender: "MALE", email: "b@x.cd" }),
+      "MIXED",
+      none,
+    );
+    expect(c).toEqual({ wouldLoad: 2, wouldRejoin: 0, blocked: 0 });
+  });
+
+  it("the three ALWAYS add up to the rows given", () => {
+    // The property that makes the button's number trustworthy.
+    const all = rows(
+      { gender: "FEMALE", email: "a@x.cd" },
+      { gender: "MALE", email: "b@x.cd" },
+      { gender: "FEMALE", email: "old@x.cd" },
+      { gender: "MALE", email: "d@x.cd" },
+    );
+    for (const restriction of ["MIXED", "MALE", "FEMALE"]) {
+      const c = countAgainstSection(all, restriction, (e) => e === "old@x.cd");
+      expect(c.wouldLoad + c.wouldRejoin + c.blocked).toBe(all.length);
+    }
+  });
+
+  it("counts nothing from an empty file", () => {
+    expect(countAgainstSection([], "FEMALE", none)).toEqual({
+      wouldLoad: 0,
+      wouldRejoin: 0,
+      blocked: 0,
+    });
   });
 });
 

@@ -494,6 +494,52 @@ export function planImport(text: string, limit = MAX_IMPORT): ImportPlan {
   return { rows, rowProblems, fileProblem: null, unknownColumns };
 }
 
+export interface PlanCounts {
+  /** Rows that would create a NEW student. */
+  wouldLoad: number;
+  /** Rows for somebody already here, who keeps their registration number. */
+  wouldRejoin: number;
+  /** Rows the section's gender restriction refuses. */
+  blocked: number;
+}
+
+/**
+ * How many of each, counted against the section they are going into.
+ *
+ * PURE, AND TESTED, BECAUSE IT IS ARITHMETIC THE BUTTON IS LABELLED WITH. This
+ * lived in the service and got it wrong: a returning student was counted both
+ * as somebody to load and as somebody to rejoin, so a file of one new student,
+ * one returning and one blocked offered to "Load 3 students" and then reported
+ * two. A button that promises a number the result contradicts is worse than
+ * one with no number at all.
+ *
+ * The three are DISJOINT. Every row is exactly one of them.
+ */
+export function countAgainstSection(
+  rows: ImportRow[],
+  genderRestriction: string,
+  isAlreadyHere: (email: string) => boolean,
+): PlanCounts {
+  let wouldLoad = 0;
+  let wouldRejoin = 0;
+  let blocked = 0;
+
+  for (const r of rows) {
+    // Checked first, and absolutely: a blocked row is not going to be loaded
+    // or rejoined, so counting it as either would promise something the
+    // gender restriction will refuse (FR-CRS-009).
+    if (genderRestriction !== "MIXED" && genderRestriction !== r.gender) {
+      blocked++;
+    } else if (isAlreadyHere(r.email)) {
+      wouldRejoin++;
+    } else {
+      wouldLoad++;
+    }
+  }
+
+  return { wouldLoad, wouldRejoin, blocked };
+}
+
 /** The heading line for the template offered on the screen. */
 export function templateCsv(): string {
   return (

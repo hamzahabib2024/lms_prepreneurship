@@ -21,6 +21,7 @@ import { RubricsPage } from "./pages/RubricsPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SecurityPage } from "./pages/SecurityPage";
 import { BulkPage } from "./pages/BulkPage";
+import { CohortImportPage } from "./pages/CohortImportPage";
 import { FeesPage } from "./pages/FeesPage";
 import { TimetablePage } from "./pages/TimetablePage";
 import { DiscussionPage } from "./pages/DiscussionPage";
@@ -91,6 +92,7 @@ export function App() {
           {hasRole("super_admin") && <NavLink to="/security">Security</NavLink>}
           {hasRole("super_admin") && <NavLink to="/backups">Backups</NavLink>}
           {hasRole("super_admin", "admin") && <NavLink to="/bulk">Bulk</NavLink>}
+          {hasRole("super_admin", "admin") && <NavLink to="/import">Import</NavLink>}
           {/* Staff and students. A TEACHER holds no `payment` grant at all
               (§4.5) — offering them the page would be offering a 403. */}
           {hasRole("super_admin", "admin", "student") && <NavLink to="/fees">Fees</NavLink>}
@@ -217,6 +219,15 @@ export function App() {
           <Route
             path="/bulk"
             element={hasRole("super_admin", "admin") ? <BulkPage /> : <Navigate to="/" replace />}
+          />
+          {/* Same authority as a bulk change, for the same reason: loading
+              three hundred students is a different kind of act from admitting
+              one, and bulk_operator is what says so. */}
+          <Route
+            path="/import"
+            element={
+              hasRole("super_admin", "admin") ? <CohortImportPage /> : <Navigate to="/" replace />
+            }
           />
           {/* Super Admin alone: `backup` and `restore` reach nobody else. */}
           <Route
