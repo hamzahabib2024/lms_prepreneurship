@@ -8,6 +8,7 @@ import { SettingsService } from "../settings/settings.service";
 import { getActor } from "../prisma/actor-context";
 import type { AttemptStatus } from "@prisma/client";
 import { buildCsv, csvFilename, type CsvColumn } from "./csv";
+import { aging, balanceOf, type Charge, type LedgerPayment } from "../finance/ledger";
 
 export interface ReportFilters {
   sectionId?: string;
@@ -214,6 +215,73 @@ export class ReportService {
         // alone, and a management report that implies they are is unfair.
         { header: "Awaiting Marking", value: (r) => r["awaitingMarking"] },
         { header: "Median Days to Mark", value: (r) => r["medianDaysToMark"] },
+      ],
+    });
+
+    // ---- reports the payment work made possible -------------------------
+    //
+    // Not in the numbered SRS list I have to hand, and named plainly rather
+    // than given a number I would be inventing. All three are asked for by
+    // every institute that keeps a ledger, and two of them could not have
+    // existed a week ago because nothing could record a payment.
+
+    this.register({
+      key: "fee-defaulters",
+      name: "Fee Defaulters by Age of Debt",
+      resource: "report_financial",
+      description:
+        "Who owes what, and for how long. The oldest debt matters more than the largest: a small amount unpaid for ninety days is a different conversation from a large one due last week.",
+      run: (f) => this.feeDefaulters(f),
+      columns: [
+        { header: "Registration No", value: (r) => r["registrationNo"] },
+        { header: "Name", value: (r) => r["name"] },
+        { header: "Section", value: (r) => r["section"] },
+        { header: "Outstanding", value: (r) => r["outstanding"] },
+        // The buckets are exported separately so the total can be reproduced
+        // by hand, exactly as the attendance denominator is (BR-ATT-05).
+        { header: "Not Yet Due", value: (r) => r["current"] },
+        { header: "1-30 Days", value: (r) => r["overdue30"] },
+        { header: "31-60 Days", value: (r) => r["overdue60"] },
+        { header: "60+ Days", value: (r) => r["overdue90Plus"] },
+        { header: "Oldest Overdue (days)", value: (r) => r["oldestOverdueDays"] },
+        { header: "Phone", value: (r) => r["phone"] },
+      ],
+    });
+
+    this.register({
+      key: "collection-summary",
+      name: "Collection Summary by Day",
+      resource: "report_financial",
+      description:
+        "What was received, by day and method, for reconciling against the bank and the cash box. Reversed payments are counted separately rather than netted away, so a day's figure can be checked against the deposit slip.",
+      run: (f) => this.collectionSummary(f),
+      columns: [
+        { header: "Date", value: (r) => r["date"] },
+        { header: "Method", value: (r) => r["method"] },
+        { header: "Payments", value: (r) => r["count"] },
+        { header: "Total Received", value: (r) => r["total"] },
+        { header: "Reversed Since", value: (r) => r["reversedCount"] },
+        { header: "Reversed Amount", value: (r) => r["reversedTotal"] },
+        { header: "Net", value: (r) => r["net"] },
+      ],
+    });
+
+    this.register({
+      key: "section-roster",
+      name: "Section Roster",
+      resource: "report_enrolment",
+      description:
+        "The class list for one section, in roll-number order — the register a teacher prints and carries.",
+      run: (f) => this.sectionRoster(f),
+      columns: [
+        { header: "Roll No", value: (r) => r["rollNo"] },
+        { header: "Registration No", value: (r) => r["registrationNo"] },
+        { header: "Name", value: (r) => r["name"] },
+        { header: "Gender", value: (r) => r["gender"] },
+        { header: "Phone", value: (r) => r["phone"] },
+        { header: "Guardian", value: (r) => r["guardianName"] },
+        { header: "Guardian Phone", value: (r) => r["altPhone"] },
+        { header: "Status", value: (r) => r["status"] },
       ],
     });
   }
@@ -460,6 +528,185 @@ export class ReportService {
       // the total can be reconciled against the bank.
       isReversed: p.isReversed,
     }));
+  }
+
+  /**
+   * Who owes what, and for how long.
+   *
+   * THE AGE MATTERS MORE THAN THE AMOUNT. A small debt unpaid for ninety days
+   * is a different conversation from a large one due next week, and a report
+   * sorted by size puts the second at the top. This sorts by the OLDEST
+   * overdue debt, so the students who need chasing are the ones on page one.
+   *
+   * The arithmetic comes from the ledger module rather than being redone here:
+   * a second implementation of "what does this student owe" is how two screens
+   * come to disagree about one student.
+   */
+  private async feeDefaulters(f: ReportFilters) {
+    const students = await this.prisma.scoped.student.findMany({
+      where: {
+        deletedAt: null,
+        ...(f.sectionId ? { currentSectionId: f.sectionId } : {}),
+      },
+      include: {
+        user: { select: { fullName: true, phone: true } },
+        currentSection: { select: { name: true } },
+      },
+    });
+
+    const now = new Date();
+    const rows = [];
+
+    for (const s of students) {
+      const [charges, payments] = await Promise.all([
+        this.prisma.asSystem((db) =>
+          db.feeCharge.findMany({ where: { studentId: s.id, deletedAt: null } }),
+        ),
+        this.prisma.asSystem((db) => db.payment.findMany({ where: { studentId: s.id } })),
+      ]);
+
+      const asCharges: Charge[] = charges.map((c) => ({
+        id: c.id,
+        description: c.description,
+        amount: Number(c.amount),
+        dueDate: c.dueDate,
+        createdAt: c.createdAt,
+        waivedAt: c.waivedAt,
+        waiverReason: c.waiverReason,
+      }));
+      const asPayments: LedgerPayment[] = payments.map((p) => ({
+        id: p.id,
+        amount: Number(p.verifiedAmount),
+        paidOn: p.paymentDate,
+        method: p.method,
+        reference: p.bankReference,
+        isReversed: p.isReversed,
+        reversedAt: p.reversedAt,
+        reversalReason: p.reversalReason,
+      }));
+
+      const balance = balanceOf(asCharges, asPayments);
+      // Nobody who owes nothing, and nobody in credit. A "defaulters" report
+      // listing students with a zero balance is a list somebody has to filter
+      // by hand every time they run it.
+      if (balance.outstanding <= 0) continue;
+
+      const buckets = aging(asCharges, asPayments, now);
+      rows.push({
+        registrationNo: s.registrationNo,
+        name: s.user.fullName,
+        section: s.currentSection?.name ?? "",
+        outstanding: balance.outstanding,
+        current: buckets.current,
+        overdue30: buckets.overdue30,
+        overdue60: buckets.overdue60,
+        overdue90Plus: buckets.overdue90Plus,
+        oldestOverdueDays: buckets.oldestOverdueDays ?? 0,
+        phone: s.user.phone ?? "",
+      });
+    }
+
+    // Oldest first, then largest within the same age.
+    rows.sort(
+      (a, b) => b.oldestOverdueDays - a.oldestOverdueDays || b.outstanding - a.outstanding,
+    );
+    return rows;
+  }
+
+  /**
+   * What came in, by day and by method.
+   *
+   * FOR RECONCILING AGAINST A DEPOSIT SLIP, which is why reversals are counted
+   * separately rather than subtracted silently. The bank saw the money arrive;
+   * a report that quietly removed a later-reversed payment would disagree with
+   * the slip and the clerk would spend an afternoon on it (BR-RPT-05).
+   *
+   * "Reversed Since" is deliberately worded that way: the reversal usually
+   * happens on a LATER day than the payment, and attributing it back to the
+   * day the money arrived is what makes the two columns reconcilable.
+   */
+  private async collectionSummary(f: ReportFilters) {
+    const payments = await this.prisma.scoped.payment.findMany({
+      where: {
+        ...(f.from || f.to
+          ? { paymentDate: { ...(f.from ? { gte: f.from } : {}), ...(f.to ? { lte: f.to } : {}) } }
+          : {}),
+      },
+      select: {
+        paymentDate: true,
+        method: true,
+        verifiedAmount: true,
+        isReversed: true,
+      },
+    });
+
+    const groups = new Map<
+      string,
+      { date: string; method: string; count: number; total: number; reversedCount: number; reversedTotal: number }
+    >();
+
+    for (const p of payments) {
+      const date = p.paymentDate.toISOString().slice(0, 10);
+      const key = `${date}|${p.method}`;
+      const g =
+        groups.get(key) ??
+        { date, method: p.method, count: 0, total: 0, reversedCount: 0, reversedTotal: 0 };
+      const amount = Number(p.verifiedAmount);
+
+      // Counted in BOTH: it arrived, and it was later reversed. Only the net
+      // column takes it away, which is the column that answers "what does the
+      // Institute actually hold".
+      g.count++;
+      g.total += amount;
+      if (p.isReversed) {
+        g.reversedCount++;
+        g.reversedTotal += amount;
+      }
+      groups.set(key, g);
+    }
+
+    return [...groups.values()]
+      .map((g) => ({ ...g, net: g.total - g.reversedTotal }))
+      .sort((a, b) => b.date.localeCompare(a.date) || a.method.localeCompare(b.method));
+  }
+
+  /**
+   * The class list a teacher prints and carries.
+   *
+   * ROLL-NUMBER ORDER, not alphabetical: the register is called by roll number
+   * and a list in a different order is one the teacher has to re-sort in their
+   * head every session.
+   *
+   * The guardian's number is included because it is the one that gets rung
+   * when a student stops attending, and having to open each record to find it
+   * is why nobody rings.
+   */
+  private async sectionRoster(f: ReportFilters) {
+    const students = await this.prisma.scoped.student.findMany({
+      where: {
+        deletedAt: null,
+        ...(f.sectionId ? { currentSectionId: f.sectionId } : {}),
+      },
+      include: {
+        user: { select: { fullName: true, phone: true, status: true } },
+      },
+    });
+
+    return students
+      .map((s) => ({
+        rollNo: s.currentRollNo ?? 0,
+        registrationNo: s.registrationNo,
+        name: s.user.fullName,
+        gender: s.gender,
+        phone: s.user.phone ?? "",
+        // The GUARDIAN's number, which lives on the student record rather
+        // than the account: it is the one rung when somebody stops
+        // attending, and the account's own number is the student's.
+        altPhone: s.guardianPhone ?? "",
+        guardianName: s.guardianName ?? "",
+        status: s.user.status,
+      }))
+      .sort((a, b) => a.rollNo - b.rollNo);
   }
 
   private async acquisitionAttribution(f: ReportFilters) {
