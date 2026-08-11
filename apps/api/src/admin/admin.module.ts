@@ -14,7 +14,10 @@ import { BulkService } from "./bulk.service";
 import { BulkController } from "./bulk.controller";
 import { BackupService } from "./backup.service";
 import { BackupController } from "./backup.controller";
+import { CohortImportService } from "./cohort-import.service";
+import { CohortImportController } from "./cohort-import.controller";
 import { AcademicModule } from "../academic/academic.module";
+import { AdmissionModule } from "../admission/admission.module";
 
 /**
  * §4.5.1 — the accounts of the people who run the Institute.
@@ -26,9 +29,13 @@ import { AcademicModule } from "../academic/academic.module";
   // AcademicModule for EnrolmentService: a bulk transfer calls the ORDINARY
   // transfer once per student, so the gender restriction, capacity and roll
   // number rules cannot be bypassed by doing many at once.
-  imports: [AcademicModule],
-  controllers: [UserAdminController, AuditViewerController, SecurityLogController, ImpersonationController, PersonalDataController, MaintenanceController, BulkController, BackupController],
-  providers: [UserAdminService, AuditViewerService, SecurityLogService, ImpersonationService, PersonalDataService, BulkService, BackupService],
+  // AdmissionModule for RegistrationNumberService: an import allocates
+  // registration and roll numbers through the SAME service the ordinary
+  // approval uses, so a returning student keeps their number and two
+  // operators cannot claim one roll number.
+  imports: [AcademicModule, AdmissionModule],
+  controllers: [UserAdminController, AuditViewerController, SecurityLogController, ImpersonationController, PersonalDataController, MaintenanceController, BulkController, BackupController, CohortImportController],
+  providers: [UserAdminService, AuditViewerService, SecurityLogService, ImpersonationService, PersonalDataService, BulkService, BackupService, CohortImportService],
   exports: [UserAdminService],
 })
 export class AdminModule {}
