@@ -1,48 +1,114 @@
-# Local development dependencies only. The application itself runs on the host
-# via `npm run dev`. Docker is not currently installed on this machine — see
-# README "Running without Docker" for the managed-service alternative.
+# The whole System: database, API, web.
+#
+# NOT YET RUN — Docker was not available on the machine this was written on.
+# Every command inside the images has been run by hand on the host and every
+# path has been checked, but expect to fix something the first time.
+#
+# For LOCAL DEVELOPMENT you do not need any of this. `npm run db:start` gives
+# you a real PostgreSQL with no Docker at all — see the README.
 
 services:
   postgres:
-    # PostgreSQL 16 is mandated by §3.11: the indexing strategy of §8.4 needs
-    # partial and BRIN indexes, and DB-017 needs native partitioning.
+    # PostgreSQL 16 is mandated by §3.11: §8.4 needs partial and BRIN indexes
+    # and DB-017 needs native partitioning.
     image: postgres:16-alpine
-    container_name: lms-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: lms
-      POSTGRES_PASSWORD: lms
-      POSTGRES_DB: lms
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${POSTGRES_USER:-lms}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-lms}
     volumes:
-      - ./pgdata:/var/lib/postgresql/data
+      # A NAMED VOLUME, not ./pgdata. That directory is where `npm run db:start`
+      # keeps the local embedded database, and pointing a container at the same
+      # files would have two PostgreSQL servers writing one data directory.
+      - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U lms -d lms"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-lms} -d ${POSTGRES_DB:-lms}"]
       interval: 5s
       timeout: 5s
-      retries: 10
+      retries: 20
 
-  redis:
-    image: redis:7-alpine
-    container_name: lms-redis
+  api:
+    build:
+      context: .
+      target: api
     restart: unless-stopped
-    command: redis-server --appendonly yes
-    ports:
-      - "6379:6379"
+    # DO NOT `--scale api=2` YET. ActorService caches each user's resolved
+    # roles and scope in a per-PROCESS Map for 15 minutes (ARC-047). The purge
+    # issued when somebody's roles change reaches only the node that handled
+    # the request, so on a second node a REVOKED PERMISSION KEEPS WORKING for
+    # up to fifteen minutes. That cache has to move to a shared store before
+    # this service runs more than once.
+    depends_on:
+      postgres:
+        # Waits for the database to ANSWER, not merely to exist. Without this
+        # the entrypoint's migrate step races the server's first start.
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-lms}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-lms}?schema=public
+      JWT_PRIVATE_KEY_PATH: /app/keys/jwt-private.pem
+      JWT_PUBLIC_KEY_PATH: /app/keys/jwt-public.pem
+      JWT_ISSUER: ${JWT_ISSUER:-lms.local}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-lms-api}
+      BACKUP_DIR: /app/backups
+      # Not consulted while nginx makes the API same-origin — a browser does
+      # not apply CORS to a same-origin request. Set explicitly anyway, because
+      # the moment the API is served from a different hostname than the app the
+      # default here is a development URL and every request fails CORS with an
+      # error naming nothing anybody can act on.
+      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:8080}
+      LOCAL_STORAGE_ROOT: /app/storage
+      # HMACs the signed download URLs. The code falls back to a string
+      # published in this repository, and anyone holding it can forge a URL for
+      # ANY stored file — every payment slip and submission in the Institute —
+      # so the stack refuses to start without a real one.
+      LOCAL_STORAGE_SECRET: ${LOCAL_STORAGE_SECRET:?set LOCAL_STORAGE_SECRET in .env}
     volumes:
-      - ./redisdata:/data
+      # Keys OUTLIVE the container. Regenerating them on every restart would
+      # invalidate every session and sign out the whole Institute.
+      - api-keys:/app/keys
+      # Backups likewise, and more obviously: a backup inside a container that
+      # is replaced on the next deploy is not a backup.
+      - api-backups:/app/backups
+      # EVERY UPLOADED FILE. Until Google Drive is available (DEP-01) the
+      # storage provider writes to the local disk, so payment slips, assignment
+      # submissions and lesson resources all live here. Without this volume a
+      # rebuild destroys the lot, silently — the rows survive and point at
+      # files that are gone.
+      - api-storage:/app/storage
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
+      # Names the DATABASE check specifically, and deliberately.
+      #
+      # /system/health answers 200 while reporting "degraded", so testing the
+      # HTTP status alone would call an API with a dead database healthy. And
+      # testing status === "healthy" would NEVER pass, because redis and
+      # storage report "not configured" by design and always will until DEP-01
+      # lands. The database is the dependency whose loss makes the container
+      # genuinely unusable, so that is the one the probe reads.
+      #
+      # Sets exitCode and lets the event loop drain rather than calling
+      # process.exit() inside the callback — an abrupt exit mid-promise aborts
+      # on some platforms, which would report a healthy API as unhealthy.
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3000/api/v1/system/health').then(r=>r.json()).then(b=>{if(b?.data?.checks?.database?.status!=='up')process.exitCode=1}).catch(()=>{process.exitCode=1})\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
 
-  # Uncomment once you reach the file-upload work (SEC-FIL-004 requires every
-  # upload to be scanned before it is persisted).
-  # clamav:
-  #   image: clamav/clamav:stable
-  #   container_name: lms-clamav
-  #   restart: unless-stopped
-  #   ports:
-  #     - "3310:3310"
+  web:
+    build:
+      context: .
+      target: web
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "${WEB_PORT:-8080}:80"
+
+volumes:
+  postgres-data:
+  api-keys:
+  api-backups:
+  api-storage:

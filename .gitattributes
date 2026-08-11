@@ -1,0 +1,13 @@
+# This repository is developed on Windows and deployed on Linux.
+#
+# A shell script checked out with CRLF fails inside a container with
+# "bad interpreter: /bin/sh^M" — a message that names neither the file nor the
+# real cause. These stay LF on every platform.
+*.sh            text eol=lf
+Dockerfile      text eol=lf
+*.dockerfile    text eol=lf
+docker/*.conf   text eol=lf
+
+# The SQL that carries the constraints and the audit trigger is applied by
+# splitting on statement boundaries; keeping it LF keeps that deterministic.
+*.sql           text eol=lf

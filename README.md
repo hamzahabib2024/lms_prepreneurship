@@ -125,6 +125,55 @@ Neon, Supabase, RDS — put its connection string in `DATABASE_URL` and run
 
 ---
 
+## Deploying it
+
+> **This section has not been run.** Docker was not installed on the machine
+> the configuration was written on, so unlike everything else here it is
+> reasoned rather than demonstrated. Every command inside the images has been
+> run by hand and every path it copies has been checked to exist, but expect to
+> fix something the first time. Everything above this line was executed.
+
+```bash
+cp .env.example .env
+# POSTGRES_PASSWORD and LOCAL_STORAGE_SECRET have no defaults, and the stack
+# refuses to start without them. Generate each:
+node -e "console.log(require('crypto').randomBytes(24).toString('base64url'))"
+
+docker compose up -d --build
+```
+
+Three containers: PostgreSQL 16, the API, and nginx serving the built web app
+on `WEB_PORT` (8080 by default). nginx proxies `/api` to the API internally, so
+the browser sees one origin — the same arrangement the Vite dev proxy creates,
+which is why CORS behaves identically in development and production.
+
+On first start the API generates its signing keys into a volume, applies the
+migrations, then applies the constraints and triggers. It does **not** seed: a
+seed writes accounts whose passwords are published in this file.
+
+Three things to know before it faces the internet:
+
+- **Put TLS in front of it.** The stack speaks plain HTTP. Every password on it
+  crosses the network in the clear otherwise.
+- **Do not run more than one API container.** `ActorService` caches each user's
+  roles for 15 minutes in a per-process map (ARC-047). The purge issued when
+  somebody's roles change reaches only the node that handled it, so on a second
+  node a revoked permission keeps working for up to fifteen minutes.
+- **The in-app backups are not database dumps.** They hold rows, not schema.
+  Take host-level backups of the `postgres-data` volume as well.
+
+Four named volumes, and all four matter. `postgres-data` is the Institute.
+`api-storage` holds every uploaded file — payment slips, submissions, lesson
+resources — because until DEP-01 lands the storage provider writes to local
+disk; lose it and the rows survive pointing at files that are gone.
+`api-keys` signs the access tokens, and losing it signs everybody out.
+`api-backups` is self-explanatory.
+
+Development does not need any of this — `npm run db:start` is a real
+PostgreSQL with no Docker at all.
+
+---
+
 ## Layout
 
 ```

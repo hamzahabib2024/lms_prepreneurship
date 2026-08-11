@@ -1,0 +1,12 @@
+# Everything the build does not need, and several things it must not have.
+node_modules
+**/node_modules
+**/dist
+pgdata
+backups
+keys
+.env
+.git
+.github
+*.log
+storage
