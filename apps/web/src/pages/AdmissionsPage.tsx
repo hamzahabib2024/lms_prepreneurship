@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, api } from "../api/client";
+import { SlipViewer } from "../components/SlipViewer";
 
 /**
  * Admission queue and review — SRS UC-02, §13.5.
@@ -271,15 +272,11 @@ function ReviewPanel({
         <div><dt>Claimed</dt><dd>PKR {claimed.toLocaleString()}</dd></div>
       </dl>
 
-      <div className="alert alert-warn">
-        {/* The slip preview needs the storage module (DEP-01). Saying so beats
-            a broken image, and beats a reviewer assuming there was no slip. */}
-        <strong>Payment slip preview not available yet</strong>
-        <p className="small">
-          Slip storage is pending the Google Drive credentials (DEP-01). Verify against the bank
-          record as you do today, then record the figures below.
-        </p>
-      </div>
+      {/* The evidence the decision rests on. This said "preview not available,
+          pending the Google Drive credentials" long after that stopped being
+          true — slips are stored and streamed now, and telling a reviewer to
+          go and check the bank instead is telling them to ignore the System. */}
+      <SlipViewer requestId={request.id} />
 
       <h3 className="section-label">Verify payment</h3>
       <div className="field-row">

@@ -1095,3 +1095,21 @@ details > summary:hover { text-decoration: underline; }
     radial-gradient(55% 40% at 50% 0%, color-mix(in srgb, var(--brand-600) 8%, transparent), transparent 70%),
     var(--bg);
 }
+
+/* ------------------------------------------------------- payment slips --- */
+/* The evidence an admission decision rests on, so it is shown at a size
+   somebody can actually read a bank reference from. */
+.slip { margin-bottom: 1rem; }
+.slip-meta {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: .75rem; flex-wrap: wrap; margin-bottom: .4rem;
+}
+.slip-image, .slip-frame {
+  display: block; width: 100%; max-height: 420px;
+  object-fit: contain;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.slip-frame { height: 420px; }
+.slip a { display: block; }
