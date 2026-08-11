@@ -103,6 +103,49 @@ describe("every page the web app defines can actually be reached", () => {
     expect(dangling).toEqual([]);
   });
 
+  /**
+   * Every class a page uses is one the stylesheet defines.
+   *
+   * AN UNKNOWN CLASS IS NOT AN ERROR IN CSS. It is silently nothing, so a page
+   * that asks for `.register` after the rule has gone renders as unstyled rows
+   * and the build is perfectly happy — exactly as it was happy about a page
+   * nobody routed.
+   *
+   * This check found THIRTY-ONE dropped classes across two passes of the
+   * redesign: the attendance register's cursor row, the modals, the
+   * notification panel, the impersonation banner, the video player. It is here
+   * so the next restyle cannot lose them quietly.
+   */
+  it("defines every class the pages use", () => {
+    const css = readFileSync(join(WEB, "styles.css"), "utf8");
+    const defined = new Set([...css.matchAll(/\.([a-zA-Z][\w-]*)/g)].map((m) => m[1]!));
+
+    const used = new Map<string, string>();
+    const files = [
+      ...readdirSync(PAGES).map((f) => join(PAGES, f)),
+      ...readdirSync(join(WEB, "components")).map((f) => join(WEB, "components", f)),
+    ].filter((f) => f.endsWith(".tsx"));
+
+    for (const file of files) {
+      // Only plain string literals. A className built from an expression can
+      // hold anything, and guessing at it would produce false alarms — which
+      // is how a guard gets deleted.
+      for (const m of readFileSync(file, "utf8").matchAll(/className="([^"]+)"/g)) {
+        for (const c of m[1]!.split(/\s+/)) {
+          if (/^[a-zA-Z][\w-]*$/.test(c) && !used.has(c)) used.set(c, file.split(/[\\/]/).pop()!);
+        }
+      }
+    }
+
+    const missing = [...used]
+      .filter(([c]) => !defined.has(c))
+      .map(([c, where]) => `.${c} (used in ${where})`);
+
+    expect(missing).toEqual([]);
+    // And it is genuinely looking at something.
+    expect(used.size).toBeGreaterThan(80);
+  });
+
   it("WOULD catch an unrouted page", () => {
     // Proving the check rather than trusting that an empty result means a
     // clean app.

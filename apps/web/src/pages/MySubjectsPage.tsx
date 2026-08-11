@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ApiError, api } from "../api/client";
 import { CertificatePanel } from "../components/CertificatePanel";
+import { EmptyState, ProgressRing, SkeletonCards } from "../components/Ui";
 
 /**
  * A student's subjects — SRS §13.5, FR-PRG-007.
@@ -53,31 +54,63 @@ export function MySubjectsPage() {
     );
   }
 
-  if (!data) return <p className="muted">Loading…</p>;
+  // A block the shape of what is coming, so the page does not jump when it
+  // lands and the reader does not lose their place.
+  if (!data) return <SkeletonCards count={3} />;
 
   if (data.subjects.length === 0) {
     // NFR-USE-009 — say why it is empty. "No subjects" alone reads like a
     // fault, and a newly admitted student will see this before term starts.
     return (
-      <div className="card">
-        <h1>My subjects</h1>
-        <p className="muted">
-          You are not enrolled in any subjects yet. They appear here once your
-          enrolment is confirmed.
-        </p>
-      </div>
+      <>
+        <header className="page-head">
+          <h1>My subjects</h1>
+        </header>
+        <EmptyState icon="book" title="Nothing here yet">
+          You are not enrolled in any subjects yet. They appear here as soon as your enrolment is
+          confirmed — there is nothing you need to do.
+        </EmptyState>
+      </>
     );
   }
 
   return (
     <>
       <header className="page-head">
-        <h1>My subjects</h1>
-        <span className="muted small">
-          {data.completedCount} of {data.subjectCount} complete · as at{" "}
-          {new Date(data.computedAt).toLocaleTimeString()}
-        </span>
+        <div>
+          <h1>My subjects</h1>
+          {/* ARC-048 — a derived figure carries when it was worked out. */}
+          <p className="muted small">
+            as at {new Date(data.computedAt).toLocaleTimeString()}
+          </p>
+        </div>
       </header>
+
+      {/* The three figures a student actually wants before reading anything:
+          how far through, how many finished, how many left. */}
+      <div className="kpis">
+        <div className="kpi">
+          <span className="kpi-label">Overall</span>
+          <span className="kpi-value">{data.overallPercent}%</span>
+          <span className="kpi-note">across every subject</span>
+        </div>
+        <div className="kpi">
+          <span className="kpi-label">Complete</span>
+          <span className="kpi-value">
+            {data.completedCount} <span className="muted small">of {data.subjectCount}</span>
+          </span>
+          <span className="kpi-note">requirements met</span>
+        </div>
+        <div className={data.subjectCount - data.completedCount > 0 ? "kpi is-warn" : "kpi"}>
+          <span className="kpi-label">Still to finish</span>
+          <span className="kpi-value">{data.subjectCount - data.completedCount}</span>
+          <span className="kpi-note">
+            {data.subjectCount - data.completedCount === 0
+              ? "nothing outstanding"
+              : "shown below with what is left"}
+          </span>
+        </div>
+      </div>
 
       <div className="grid">
         {data.subjects.map((s) => (
@@ -94,35 +127,54 @@ export function MySubjectsPage() {
 
 function SubjectCard({ s }: { s: SubjectProgress }) {
   return (
-    <section className="card widget">
-      <h2>
-        <Link to={`/subjects/${s.sectionSubjectId}`}>{s.subject.name}</Link>
-      </h2>
-      <p className="muted small">{s.subject.code}</p>
-
-      <p className="stat">{s.overallPercent}%</p>
-      <div className="bar">
-        <div className="bar-fill" style={{ width: `${Math.min(100, s.overallPercent)}%` }} />
+    <section className="card widget subject-card">
+      <div className="subject-top">
+        {/* The ring carries the figure; the bar underneath is gone, because two
+            renderings of one number is one more than anybody reads. */}
+        <ProgressRing
+          percent={s.overallPercent}
+          label={`${s.subject.name}: ${s.overallPercent}% complete`}
+        />
+        <div className="subject-title">
+          <h2>
+            <Link to={`/subjects/${s.sectionSubjectId}`}>{s.subject.name}</Link>
+          </h2>
+          <p className="muted small">{s.subject.code}</p>
+        </div>
       </div>
 
-      {s.completionMet ? (
-        // WCAG 2.1 AA (NFR-ACC-003): the tick is accompanied by a word.
-        // Colour alone would carry the whole meaning otherwise.
-        <p className="small">✓ Requirements met</p>
-      ) : (
-        <ul className="list small">
-          {s.outstanding.map((o) => (
-            <li key={o}>
-              <span className="muted">{o}</span>
-            </li>
+      <div className="subject-meta">
+        {/* WCAG 2.1 AA (NFR-ACC-003): the state is a WORD, not a colour. */}
+        {s.completionMet ? (
+          <span className="pill pill-ok">Requirements met</span>
+        ) : (
+          <span className="pill pill-warn">
+            {s.outstanding.length} outstanding
+          </span>
+        )}
+        <span className="pill">
+          Attendance{" "}
+          {s.attendancePercent === null ? "not recorded" : `${s.attendancePercent}%`}
+        </span>
+      </div>
+
+      {/* NFR-USE-004 — a percentage on its own does not say whether the gap is
+          lectures, marks or attendance, and the student needs to know what to
+          DO. Capped at three: a list of nine is a wall nobody reads. */}
+      {!s.completionMet && s.outstanding.length > 0 && (
+        <ul className="subject-todo">
+          {s.outstanding.slice(0, 3).map((o) => (
+            <li key={o}>{o}</li>
           ))}
+          {s.outstanding.length > 3 && (
+            <li>
+              <Link to={`/subjects/${s.sectionSubjectId}`}>
+                and {s.outstanding.length - 3} more
+              </Link>
+            </li>
+          )}
         </ul>
       )}
-
-      <p className="muted small">
-        Attendance{" "}
-        {s.attendancePercent === null ? "not recorded yet" : `${s.attendancePercent}%`}
-      </p>
     </section>
   );
 }

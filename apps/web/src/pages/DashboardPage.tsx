@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ApiError, api } from "../api/client";
+import { ProgressRing, SkeletonCards } from "../components/Ui";
 
 /**
  * The dashboard — SRS §5.18, §13.3, §13.4.
@@ -55,7 +56,7 @@ export function DashboardPage() {
     );
   }
 
-  if (!data) return <p className="muted">Loading…</p>;
+  if (!data) return <SkeletonCards count={4} />;
 
   /**
    * The hour decides the greeting, and the greeting is the point.
@@ -235,28 +236,49 @@ function WidgetBody({ name, v }: { name: string; v: Record<string, unknown> }) {
       }
       const below = Boolean(v["isBelowThreshold"]);
       return (
-        <>
-          <p className={`stat ${below ? "warn" : ""}`}>{overall.percentage}%</p>
-          {/* FR-ATT-021 — the warning states the requirement, not just a colour. */}
-          {below && (
-            <p className="warn small">
-              Below the {String(v["threshold"])}% required. Speak to your teacher.
-            </p>
-          )}
-        </>
+        <div className="subject-top">
+          <div className={below ? "ring" : "ring is-met"}>
+            <ProgressRing
+              percent={overall.percentage}
+              label={`Attendance ${overall.percentage}%`}
+            />
+          </div>
+          <div className="subject-title">
+            {/* FR-ATT-021 — the warning states the REQUIREMENT, not just a
+                colour, and says what to do about it. */}
+            {below ? (
+              <>
+                <span className="pill pill-warn">Below {String(v["threshold"])}%</span>
+                <p className="muted small">
+                  This is below the level required to complete the subject. Speak to your teacher
+                  about catching up.
+                </p>
+              </>
+            ) : (
+              <>
+                <span className="pill pill-ok">Meeting the requirement</span>
+                <p className="muted small">at least {String(v["threshold"])}% is required</p>
+              </>
+            )}
+          </div>
+        </div>
       );
     }
 
     case "progress": {
       const percent = Number(v["overallPercent"] ?? 0);
+      const subjects = Number(v["subjectCount"] ?? 0);
       return (
-        <>
-          <p className="stat">{percent}%</p>
-          <div className="bar">
-            <div className="bar-fill" style={{ width: `${Math.min(100, percent)}%` }} />
+        <div className="subject-top">
+          <ProgressRing percent={percent} label={`Overall progress ${percent}%`} />
+          <div className="subject-title">
+            <p className="muted small">
+              across {subjects} {subjects === 1 ? "subject" : "subjects"}
+            </p>
+            {/* The bar is gone. Two renderings of one number is one more than
+                anybody reads, and the ring already carries it. */}
           </div>
-          <p className="muted small">{String(v["subjectCount"] ?? 0)} subjects</p>
-        </>
+        </div>
       );
     }
 
@@ -292,9 +314,9 @@ function Counter({ n, label, warn }: { n: unknown; label: string; warn?: boolean
   const value = Number(n ?? 0);
   if (value === 0 && warn) return null; // do not shout about zero problems
   return (
-    <li className={warn && value > 0 ? "warn" : ""}>
-      <span>{label}</span>
-      <strong>{value}</strong>
+    <li className="counter-row">
+      <strong className={warn && value > 0 ? "warn" : ""}>{value}</strong>
+      <span className="muted">{label}</span>
     </li>
   );
 }

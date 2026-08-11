@@ -798,3 +798,157 @@ kbd {
   .grid { grid-template-columns: 1fr; }
   .receipt-fields > div { grid-template-columns: 1fr; gap: .15rem; }
 }
+
+/* ---------------------------------------------------------------------------
+   Loading, emptiness, and progress.
+   --------------------------------------------------------------------------- */
+
+/* A block the shape of what is coming, rather than the word "Loading" and a
+   layout that jumps when the data lands. */
+.skeleton-group { display: grid; gap: .55rem; }
+.skeleton {
+  height: 12px; border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    var(--surface-2) 25%,
+    color-mix(in srgb, var(--surface-2) 55%, var(--line-strong)) 37%,
+    var(--surface-2) 63%
+  );
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+.skeleton:first-child { height: 16px; }
+@keyframes shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: 0 0; }
+}
+
+/* NFR-USE-009 — say why it is empty. "No records" reads as a fault. */
+.empty {
+  display: grid; justify-items: center; text-align: center;
+  gap: .5rem; padding: 3rem 1.5rem;
+  background: var(--surface);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius);
+}
+.empty-icon {
+  display: grid; place-items: center;
+  width: 48px; height: 48px; border-radius: 14px;
+  background: var(--brand-050); color: var(--brand-700);
+  margin-bottom: .25rem;
+}
+.empty-icon svg { width: 22px; height: 22px; }
+.empty h2 { margin: 0; }
+.empty p { margin: 0; max-width: 46ch; }
+
+/* THE NUMBER IS IN THE MIDDLE. A ring alone is a shape somebody has to
+   estimate, and this figure decides whether a student gets a certificate. */
+.ring { position: relative; display: inline-grid; place-items: center; flex: none; }
+.ring svg { position: absolute; inset: 0; }
+.ring-track { stroke: var(--surface-2); }
+.ring-value {
+  stroke: var(--brand-600);
+  transition: stroke-dashoffset .6s var(--ease);
+}
+.ring-label {
+  position: relative; font-weight: 700; font-size: .95rem;
+  font-variant-numeric: tabular-nums; letter-spacing: -.02em;
+}
+/* Met is shown by colour AND by the word beside it, never by colour alone. */
+.ring.is-met .ring-value { stroke: var(--ok); }
+
+/* ------------------------------------------------------- subject cards --- */
+/* The student's home screen. A course card is the one piece of an LMS
+   everybody recognises, so it earns the extra space. */
+.subject-card { display: flex; flex-direction: column; gap: .75rem; }
+.subject-top { display: flex; align-items: center; gap: 1rem; }
+.subject-title { flex: 1; min-width: 0; }
+.subject-title h2 { margin: 0 0 .1rem; }
+.subject-title h2 a { color: inherit; text-decoration: none; }
+.subject-title h2 a:hover { color: var(--brand-700); text-decoration: underline; }
+.subject-meta { display: flex; flex-wrap: wrap; gap: .4rem; }
+
+/* A short list of what is outstanding, indented under the bar it explains. */
+.subject-todo { margin: 0; padding: 0; list-style: none; display: grid; gap: .3rem; }
+.subject-todo li {
+  display: flex; gap: .45rem; align-items: flex-start;
+  font-size: .8125rem; color: var(--muted);
+}
+.subject-todo li::before {
+  content: ""; flex: 0 0 5px; width: 5px; height: 5px; margin-top: .5rem;
+  border-radius: 50%; background: var(--warn);
+}
+
+/* --------------------------------------------------------- kpi strip ----- */
+/* Numbers a person scans before reading anything. Deliberately not cards:
+   four boxes with borders around single figures is heavier than the figures. */
+.kpis {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1px; background: var(--line);
+  border: 1px solid var(--line); border-radius: var(--radius);
+  overflow: hidden; margin-bottom: 1rem;
+}
+.kpi { background: var(--surface); padding: .9rem 1rem; }
+.kpi-label {
+  display: block; font-size: .72rem; font-weight: 650; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--muted); margin-bottom: .15rem;
+}
+.kpi-value {
+  display: block; font-size: 1.55rem; font-weight: 700;
+  letter-spacing: -.03em; font-variant-numeric: tabular-nums;
+}
+.kpi-note { display: block; font-size: .78rem; color: var(--muted); }
+.kpi.is-warn .kpi-value { color: var(--warn); }
+
+/* The figure first, then what it counts. "3 registers not marked" is read in
+   that order; a label followed by a right-aligned number is read twice. */
+.counter-row {
+  display: flex; align-items: baseline; gap: .5rem;
+  padding: .4rem 0; border-bottom: none;
+}
+.counter-row strong {
+  font-size: 1.35rem; font-weight: 700; letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums; min-width: 1.6rem;
+}
+
+/* The admissions queue column: a card whose own padding would double the
+   list's, so it gives the rows the edge. */
+.queue { padding: .5rem; }
+.queue > h2 { padding: .5rem .5rem 0; }
+
+/* --------------------------------------------------------- refinements --- */
+
+/* A card that is entirely a list should not pad the list away from its own
+   edge twice. */
+.card > .list:last-child { margin-bottom: -.25rem; }
+
+/* Headings inside a card sit closer to what they label than the card's own
+   padding suggests. */
+.card > h2:first-child { margin-top: -.15rem; }
+
+/* Long content in a table cell wraps rather than forcing the page sideways —
+   except figures, which must never break across lines. */
+.table td { white-space: normal; }
+.table td.num, .table th.num { white-space: nowrap; }
+
+/* A row of buttons at the end of a form gets air above it, so it does not read
+   as part of the last field. */
+.card > .row-actions:last-child { margin-top: .35rem; }
+
+/* Details/summary is used for "show more" in several places and looks like
+   nothing by default. */
+details > summary {
+  cursor: pointer; padding: .35rem 0; font-weight: 550;
+  color: var(--brand-700); list-style: none;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: "▸ "; display: inline-block; transition: transform .15s var(--ease); }
+details[open] > summary::before { content: "▾ "; }
+details > summary:hover { text-decoration: underline; }
+
+/* The sign-in panel's own scroll on a short window, so the form is never cut
+   off on a laptop with a small viewport. */
+.auth-panel { overflow-y: auto; }
+
+/* Anything a page renders directly under the head, before its first card. */
+.page-head + .alert { margin-top: -.25rem; }
