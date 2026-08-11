@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { text } from "../api/text";
 import { ApiError, api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 
@@ -243,7 +244,7 @@ function SettingRow({
 
       {canEdit && (
         <div className="row-actions">
-          <button className="btn btn-primary" onClick={save} disabled={busy || !dirty}>
+          <button className="btn btn-primary" onClick={() => void save()} disabled={busy || !dirty}>
             {busy ? "Saving…" : "Save"}
           </button>
           {setting.isOverridden && (
@@ -291,7 +292,7 @@ function toDraft(setting: Setting): string {
       .join(", ");
   }
   if (Array.isArray(value)) return value.join(", ");
-  return String(value ?? "");
+  return text(value);
 }
 
 /** Back to what the API expects. Throws with a readable message on nonsense. */

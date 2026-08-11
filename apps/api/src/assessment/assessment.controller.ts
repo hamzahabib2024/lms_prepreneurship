@@ -7,7 +7,6 @@ import {
   HttpCode,
   Param,
   Post,
-  Query,
   Res,
   UploadedFile,
   UseInterceptors,

@@ -67,7 +67,7 @@ export function ChangePasswordPage({ forced }: { forced: boolean }) {
 
   return (
     <div className="auth-shell">
-      <form className="card auth-card" onSubmit={onSubmit} noValidate>
+      <form className="card auth-card" onSubmit={(e) => void onSubmit(e)} noValidate>
         <h1 className="auth-title">{forced ? "Set your password" : "Change your password"}</h1>
         <p className="muted">
           {forced

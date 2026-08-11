@@ -50,7 +50,7 @@ export function ImpersonationBanner() {
         {state.realUser.fullName}. This ends by itself and cannot be extended;
         everything you do is recorded against your name.
       </span>
-      <button className="btn btn-quiet" onClick={stop} disabled={leaving}>
+      <button className="btn btn-quiet" onClick={() => void stop()} disabled={leaving}>
         {leaving ? "Stopping…" : "Stop"}
       </button>
     </div>

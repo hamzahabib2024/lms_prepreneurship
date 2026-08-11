@@ -208,10 +208,13 @@ export function CohortImportPage() {
               ref={fileInput}
               type="file"
               accept=".csv,text/csv"
-              onChange={async (e) => {
+              onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (!file) return;
-                changeCsv(await file.text(), file.name);
+                // `void`: reading a local file cannot meaningfully fail, and an
+                // unhandled rejection from a change handler has no stack that
+                // points anywhere useful.
+                void file.text().then((t) => changeCsv(t, file.name));
               }}
             />
           </label>

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { text } from "../api/text";
 import { ApiError, api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 
@@ -228,5 +229,7 @@ function render(value: unknown): string {
   if (value === null) return "none";
   if (typeof value === "string") return value.length > 60 ? `${value.slice(0, 57)}…` : value;
   if (typeof value === "object") return JSON.stringify(value).slice(0, 60);
-  return String(value);
+  // Never String(): an audit entry reading "[object Object]" is a value
+  // somebody has to go to the database to recover.
+  return text(value);
 }

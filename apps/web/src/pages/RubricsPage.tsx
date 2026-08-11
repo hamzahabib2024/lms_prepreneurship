@@ -437,11 +437,11 @@ function RubricEditor({
 
       {!readOnly && (
         <div className="row-actions">
-          <button className="btn btn-primary" onClick={save} disabled={busy || !name.trim()}>
+          <button className="btn btn-primary" onClick={() => void save()} disabled={busy || !name.trim()}>
             {busy ? "Saving…" : rubricId ? "Save changes" : "Create rubric"}
           </button>
           {rubricId && (
-            <button className="btn btn-quiet" onClick={withdraw} disabled={busy}>
+            <button className="btn btn-quiet" onClick={() => void withdraw()} disabled={busy}>
               Withdraw
             </button>
           )}

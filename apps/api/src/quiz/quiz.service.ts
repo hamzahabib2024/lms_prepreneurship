@@ -612,7 +612,7 @@ export class QuizService {
           !result.requiresManualGrading &&
           attempt.quiz.resultReleasePolicy === "IMMEDIATE";
 
-        const updated = await tx.quizAttempt.update({
+        await tx.quizAttempt.update({
           where: { id: attemptId },
           data: {
             status,

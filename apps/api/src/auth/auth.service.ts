@@ -2,7 +2,7 @@ import { Injectable, Logger } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import { ConfigService } from "@nestjs/config";
 import * as argon2 from "argon2";
-import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { AppError, type LoginInput, type Role } from "@lms/shared";
 import { PrismaService } from "../prisma/prisma.service";
 import { ActorService } from "./actor.service";

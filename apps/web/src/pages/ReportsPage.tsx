@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { text } from "../api/text";
 import { ApiError, api } from "../api/client";
 
 interface FilterSpec {
@@ -248,7 +249,7 @@ export function ReportsPage() {
                     {result.rows.slice(0, 50).map((row, i) => (
                       <tr key={i}>
                         {Object.values(row).map((val, j) => (
-                          <td key={j}>{val === null ? "" : String(val)}</td>
+                          <td key={j}>{text(val)}</td>
                         ))}
                       </tr>
                     ))}

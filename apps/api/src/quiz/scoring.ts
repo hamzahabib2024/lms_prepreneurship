@@ -207,7 +207,10 @@ function proportionCorrectFor(key: QuestionKey, response: Response): number {
 
       let hits = 0;
       let wrong = 0;
-      for (const id of chosen) (correct.has(id) ? hits++ : wrong++);
+      for (const id of chosen) {
+        if (correct.has(id)) hits++;
+        else wrong++;
+      }
 
       // Selecting everything must not score well, so wrong choices subtract
       // from the proportion.

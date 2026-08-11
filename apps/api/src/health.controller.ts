@@ -21,7 +21,7 @@ export class HealthController {
     try {
       await this.prisma.$queryRaw`SELECT 1`;
       checks["database"] = { status: "up", latencyMs: Date.now() - started };
-    } catch (err) {
+    } catch {
       checks["database"] = {
         status: "down",
         // Safe to surface here: this endpoint is for operators, and the text

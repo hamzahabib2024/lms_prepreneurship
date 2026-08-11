@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { text } from "../api/text";
 import { ApiError, api } from "../api/client";
 import { ProgressRing, SkeletonCards } from "../components/Ui";
 
@@ -103,7 +104,7 @@ function Widget({ name, value }: { name: string; value: unknown }) {
     return (
       <section className="card widget widget-unavailable">
         <h2>{title}</h2>
-        <p className="muted">{String(v["message"] ?? "Temporarily unavailable.")}</p>
+        <p className="muted">{text(v["message"], "Temporarily unavailable.")}</p>
       </section>
     );
   }

@@ -67,7 +67,7 @@ export function LoginPage() {
       </aside>
 
       <div className="auth-panel">
-        <form className="auth-card" onSubmit={onSubmit} noValidate>
+        <form className="auth-card" onSubmit={(e) => void onSubmit(e)} noValidate>
           <h1 className="auth-title">Welcome back</h1>
           <p className="muted">Sign in to continue</p>
 

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { text as asText } from "../api/text";
 import { Link, useParams } from "react-router-dom";
 import { ApiError, api } from "../api/client";
 
@@ -232,7 +233,7 @@ function AnswerRow({ answer: a, onMarked }: { answer: MarkableAnswer; onMarked: 
 /** A written response is `{ text }`; anything else is shown as-is for safety. */
 function textOf(response: unknown): string {
   if (response && typeof response === "object" && "text" in response) {
-    return String((response as { text: unknown }).text ?? "");
+    return asText((response as { text: unknown }).text);
   }
   return response == null ? "(no answer given)" : JSON.stringify(response);
 }
