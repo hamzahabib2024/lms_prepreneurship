@@ -22,6 +22,8 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { SecurityPage } from "./pages/SecurityPage";
 import { BulkPage } from "./pages/BulkPage";
 import { CohortImportPage } from "./pages/CohortImportPage";
+import { ReceiptPage } from "./pages/ReceiptPage";
+import { TemplatesPage } from "./pages/TemplatesPage";
 import { FeesPage } from "./pages/FeesPage";
 import { TimetablePage } from "./pages/TimetablePage";
 import { DiscussionPage } from "./pages/DiscussionPage";
@@ -89,6 +91,7 @@ export function App() {
           {hasRole("super_admin", "admin") && <NavLink to="/users">People</NavLink>}
           {hasRole("super_admin", "admin") && <NavLink to="/audit">Audit</NavLink>}
           {hasRole("super_admin", "admin") && <NavLink to="/settings">Settings</NavLink>}
+          {hasRole("super_admin", "admin") && <NavLink to="/messages">Messages</NavLink>}
           {hasRole("super_admin") && <NavLink to="/security">Security</NavLink>}
           {hasRole("super_admin") && <NavLink to="/backups">Backups</NavLink>}
           {hasRole("super_admin", "admin") && <NavLink to="/bulk">Bulk</NavLink>}
@@ -227,6 +230,29 @@ export function App() {
             path="/import"
             element={
               hasRole("super_admin", "admin") ? <CohortImportPage /> : <Navigate to="/" replace />
+            }
+          />
+          {/* A receipt is a document with an address, so it can be opened,
+              printed and reopened. A STUDENT reaches their own: they hold
+              payment:read at OWN scope, and the scope predicate is what stops
+              them opening anybody else's rather than a check here. */}
+          <Route
+            path="/receipts/:paymentId"
+            element={
+              hasRole("super_admin", "admin", "student") ? (
+                <ReceiptPage />
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          {/* notification_config:configure, which §4.5 gives Super Admin and
+              Admin. A teacher writes announcements; the Institute's standing
+              wording for what the System says is a different authority. */}
+          <Route
+            path="/messages"
+            element={
+              hasRole("super_admin", "admin") ? <TemplatesPage /> : <Navigate to="/" replace />
             }
           />
           {/* Super Admin alone: `backup` and `restore` reach nobody else. */}

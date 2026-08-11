@@ -162,7 +162,179 @@ export function CertificatesPage() {
           </ul>
         </section>
       )}
+
+      {/* The whole-programme certificate, which needs a student rather than a
+          subject — so it has its own panel rather than a button hidden in the
+          subject list where nobody would look for it. */}
+      {sectionId && <ProgrammePanel sectionId={sectionId} />}
     </>
+  );
+}
+
+interface Standing {
+  programme: { id: string; name: string };
+  subjectCount: number;
+  completedCount: number;
+  eligible: boolean;
+  alreadyIssued: { certificateNo: string; issuedAt: string } | null;
+  subjects: Array<{
+    sectionSubjectId: string;
+    subject: string;
+    overallPercent: number;
+    met: boolean;
+    outstanding: string[];
+  }>;
+  message: string;
+}
+
+/**
+ * A certificate for finishing the whole programme.
+ *
+ * IT SHOWS WHY, NOT ONLY WHETHER. "Not eligible" beside a greyed-out button
+ * leaves an administrator unable to answer the question the student is
+ * actually asking, which is never "am I eligible" but "what is left". So every
+ * subject is listed with what is outstanding on it.
+ */
+function ProgrammePanel({ sectionId }: { sectionId: string }) {
+  const [roster, setRoster] = useState<Array<{ id: string; name: string }>>([]);
+  const [studentId, setStudentId] = useState("");
+  const [programmes, setProgrammes] = useState<Array<{ id: string; name: string }>>([]);
+  const [programmeId, setProgrammeId] = useState("");
+  const [standing, setStanding] = useState<Standing | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    setStudentId("");
+    setStanding(null);
+    api
+      .get<Array<{ studentId?: string; id?: string; name?: string; fullName?: string }>>(
+        `/sections/${sectionId}/roster`,
+      )
+      .then((rows) =>
+        setRoster(
+          rows.map((r) => ({
+            id: (r.studentId ?? r.id) as string,
+            name: r.name ?? r.fullName ?? "",
+          })),
+        ),
+      )
+      .catch(() => setRoster([]));
+    api
+      .get<Array<{ id: string; name: string }>>("/programmes")
+      .then(setProgrammes)
+      .catch(() => setProgrammes([]));
+  }, [sectionId]);
+
+  const load = useCallback(() => {
+    if (!studentId || !programmeId) return setStanding(null);
+    setError(null);
+    api
+      .get<Standing>(`/students/${studentId}/certificates/programme/${programmeId}/standing`)
+      .then(setStanding)
+      .catch((e) =>
+        setError(e instanceof ApiError ? e.message : "Could not read their standing."),
+      );
+  }, [studentId, programmeId]);
+
+  useEffect(load, [load]);
+
+  return (
+    <section className="card">
+      <h2>Programme certificate</h2>
+      <p className="muted small">
+        For finishing a whole programme. Every compulsory subject is rechecked at the moment it is
+        issued, so the certificate says what it means.
+      </p>
+
+      <div className="field-row">
+        <label className="field">
+          <span>Student</span>
+          <select value={studentId} onChange={(e) => setStudentId(e.target.value)}>
+            <option value="">Choose a student…</option>
+            {roster.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
+          <span>Programme</span>
+          <select value={programmeId} onChange={(e) => setProgrammeId(e.target.value)}>
+            <option value="">Choose a programme…</option>
+            {programmes.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      {error && <p className="warn">{error}</p>}
+
+      {standing && (
+        <>
+          <p>{standing.message}</p>
+
+          {standing.alreadyIssued && (
+            <p className="stat">
+              Already issued: <strong>{standing.alreadyIssued.certificateNo}</strong> on{" "}
+              {new Date(standing.alreadyIssued.issuedAt).toLocaleDateString()}
+            </p>
+          )}
+
+          {/* Said plainly rather than shown as an empty list, because zero
+              subjects would otherwise read as "nothing outstanding". */}
+          {standing.subjectCount === 0 ? (
+            <p className="warn">
+              This student takes no compulsory subject in {standing.programme.name}, so there is
+              nothing to certify.
+            </p>
+          ) : (
+            <ul className="list small">
+              {standing.subjects.map((s) => (
+                <li key={s.sectionSubjectId}>
+                  <strong>{s.subject}</strong> — {s.overallPercent}%{" "}
+                  {s.met ? (
+                    <span className="muted">complete</span>
+                  ) : (
+                    <span className="warn">
+                      {s.outstanding.length > 0 ? s.outstanding.join(" ") : "not yet complete"}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {!standing.alreadyIssued && (
+            <button
+              className="btn btn-primary"
+              disabled={busy || !standing.eligible}
+              onClick={() => {
+                setBusy(true);
+                setError(null);
+                api
+                  .post(`/students/${studentId}/certificates/programme/${programmeId}`)
+                  .then(() => load())
+                  .catch((e) =>
+                    setError(
+                      e instanceof ApiError
+                        ? (e.details?.map((d) => d.message).join(" ") ?? e.message)
+                        : "That did not work.",
+                    ),
+                  )
+                  .finally(() => setBusy(false));
+              }}
+            >
+              {busy ? "Issuing…" : "Issue the programme certificate"}
+            </button>
+          )}
+        </>
+      )}
+    </section>
   );
 }
 
