@@ -19,10 +19,30 @@ export interface ReportFilters {
   belowThresholdOnly?: boolean;
 }
 
+/**
+ * A filter a report accepts, DECLARED by the report rather than assumed by the
+ * screen.
+ *
+ * Until this existed the Reports page sent no filters at all, so "Section
+ * Roster" returned every student in the Institute — which is the student
+ * directory under a name that promises a class list. Declaring them means the
+ * screen renders exactly the controls a report understands and cannot offer a
+ * filter that is silently ignored.
+ */
+export interface ReportFilterSpec {
+  key: "sectionId" | "from" | "to" | "status" | "belowThresholdOnly";
+  label: string;
+  type: "section" | "date" | "status" | "boolean";
+  /** A roster with no section is not a roster. */
+  required?: boolean;
+  hint?: string;
+}
+
 interface ReportDefinition {
   key: string;
   name: string;
   description: string;
+  filters?: ReportFilterSpec[];
   /**
    * The resource this report reads, checked PER REPORT.
    *
@@ -63,6 +83,7 @@ export class ReportService {
   ) {
     this.register({
       key: "student-directory",
+      filters: [{ key: "sectionId", label: "Section", type: "section" }],
       name: "Student Directory",
       resource: "report_enrolment",
       description: "Report 1 — the definitive list of students.",
@@ -80,6 +101,15 @@ export class ReportService {
 
     this.register({
       key: "attendance-summary",
+      filters: [
+        { key: "sectionId", label: "Section", type: "section" },
+        {
+          key: "belowThresholdOnly",
+          label: "Only students below the threshold",
+          type: "boolean",
+          hint: "The threshold is the Institute's own setting, not a number fixed in this report.",
+        },
+      ],
       name: "Attendance Summary by Student",
       resource: "report_attendance",
       description: "Report 3 — the principal early-warning report.",
@@ -102,6 +132,7 @@ export class ReportService {
 
     this.register({
       key: "registration-pipeline",
+      filters: [{ key: "from", label: "From", type: "date" }, { key: "to", label: "To", type: "date" }],
       name: "Registration Pipeline",
       resource: "report_enrolment",
       description: "Report 15 — the state of the admission funnel.",
@@ -121,6 +152,7 @@ export class ReportService {
 
     this.register({
       key: "revenue",
+      filters: [{ key: "from", label: "From", type: "date" }, { key: "to", label: "To", type: "date" }],
       name: "Revenue",
       resource: "report_financial",
       description: "Report 13 — verified income by period.",
@@ -140,6 +172,7 @@ export class ReportService {
 
     this.register({
       key: "acquisition-attribution",
+      filters: [{ key: "from", label: "From", type: "date" }, { key: "to", label: "To", type: "date" }],
       name: "Marketing Attribution",
       resource: "report_marketing",
       description: "Report 17 — which channels produce paying students.",
@@ -155,6 +188,7 @@ export class ReportService {
 
     this.register({
       key: "progress",
+      filters: [{ key: "sectionId", label: "Section", type: "section" }],
       name: "Progress and Completion",
       resource: "report_progress",
       description:
@@ -176,6 +210,7 @@ export class ReportService {
 
     this.register({
       key: "assessment",
+      filters: [{ key: "sectionId", label: "Section", type: "section" }],
       name: "Assessment Status",
       resource: "report_assessment",
       description:
@@ -227,6 +262,7 @@ export class ReportService {
 
     this.register({
       key: "fee-defaulters",
+      filters: [{ key: "sectionId", label: "Section", type: "section" }],
       name: "Fee Defaulters by Age of Debt",
       resource: "report_financial",
       description:
@@ -250,6 +286,7 @@ export class ReportService {
 
     this.register({
       key: "collection-summary",
+      filters: [{ key: "from", label: "From", type: "date" }, { key: "to", label: "To", type: "date" }],
       name: "Collection Summary by Day",
       resource: "report_financial",
       description:
@@ -268,6 +305,19 @@ export class ReportService {
 
     this.register({
       key: "section-roster",
+      filters: [
+        {
+          key: "sectionId",
+          label: "Section",
+          type: "section",
+          // The one required filter in the catalogue. Without it this
+          // report is the student directory under a name that promises
+          // a class list, which is how somebody prints 300 rows
+          // expecting 30 and only notices at the photocopier.
+          required: true,
+          hint: "A roster is one section's register. Choose which.",
+        },
+      ],
       name: "Section Roster",
       resource: "report_enrolment",
       description:
@@ -340,6 +390,7 @@ export class ReportService {
       name: d.name,
       description: d.description,
       columns: d.columns.map((c) => c.header),
+      filters: d.filters ?? [],
     }));
   }
 
@@ -348,6 +399,28 @@ export class ReportService {
     const def = this.definitions.get(key);
     if (!def) throw new AppError("RESOURCE_NOT_FOUND", { message: "No such report." });
     this.authorise(def, "read");
+
+    // Refused here rather than in every report body, and refused rather than
+    // quietly returning everything: a roster with no section silently becomes
+    // the whole Institute, which is the wrong answer wearing the right name.
+    for (const spec of def.filters ?? []) {
+      if (!spec.required) continue;
+      const given = filters[spec.key as keyof ReportFilters];
+      if (given === undefined || given === null || given === "") {
+        throw new AppError("VALIDATION_FAILED", {
+          message: `${def.name} needs ${spec.label.toLowerCase()}.`,
+          details: [
+            {
+              field: spec.key,
+              code: "REQUIRED",
+              message:
+                spec.hint ??
+                `Choose ${spec.label.toLowerCase()} — without it this report would cover everything, which is not what it is for.`,
+            },
+          ],
+        });
+      }
+    }
 
     const started = Date.now();
     const rows = await def.run(filters);
