@@ -260,6 +260,33 @@ function RegisterGrid({ sessionId }: { sessionId: string }) {
         </div>
       </div>
 
+      {/*
+        HOW FAR THROUGH THE ROLL. A teacher calling thirty names wants to know
+        they are at nineteen without counting the rows they have already done,
+        and the bar is readable from across a desk while they are looking at
+        the class rather than the screen.
+      */}
+      <div className="card register-progress">
+        <div className="register-progress-head">
+          <strong>
+            {register.students.length - unmarked} of {register.students.length} marked
+          </strong>
+          {unmarked === 0 ? (
+            <span className="pill pill-ok">Every student marked</span>
+          ) : (
+            <span className="pill pill-warn">{unmarked} still to go</span>
+          )}
+        </div>
+        <div className="bar">
+          <div
+            className="bar-fill"
+            style={{
+              width: `${register.students.length === 0 ? 0 : ((register.students.length - unmarked) / register.students.length) * 100}%`,
+            }}
+          />
+        </div>
+      </div>
+
       {error && (
         <div className="alert alert-error" role="alert">
           <strong>Could not save</strong>
@@ -336,13 +363,14 @@ function RegisterGrid({ sessionId }: { sessionId: string }) {
       <div className="card register-foot">
         <div className="tally">
           {tally.map((t) => (
-            <span key={t.key}>
-              {/* NFR-ACC-007 — the letter carries the meaning, not a colour. */}
+            // NFR-ACC-007 — the WORD carries the meaning. The colour is a
+            // second signal for somebody scanning, never the only one.
+            <span key={t.key} className={`tally-item tally-${t.key.toLowerCase()}`}>
               <strong>{t.count}</strong> {t.label.toLowerCase()}
             </span>
           ))}
           {unmarked > 0 && (
-            <span className="warn">
+            <span className="tally-item tally-unmarked">
               <strong>{unmarked}</strong> not yet marked
             </span>
           )}
