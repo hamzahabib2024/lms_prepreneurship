@@ -86,7 +86,8 @@ export class AcademicService {
   // ------------------------------------------------------------- sections --
 
   async createSection(input: SectionCreateInput) {
-    const batch = await this.prisma.scoped.batch.findUnique({
+    // findFirst on the scoped client, always — see scoped-find.spec.ts.
+    const batch = await this.prisma.scoped.batch.findFirst({
       where: { id: input.batchId },
       select: { id: true },
     });

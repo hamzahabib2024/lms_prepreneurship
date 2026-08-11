@@ -1,6 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { AppError } from "@lms/shared";
-import type { Prisma } from "@prisma/client";
+import type { PaymentMethod, Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { getActor } from "../prisma/actor-context";
@@ -96,6 +96,137 @@ export class FeeService {
     });
 
     return this.statementFor(input.studentId);
+  }
+
+  /**
+   * FR-PAY-021 — record a payment the Institute has received.
+   *
+   * UNTIL THIS EXISTED, A PAYMENT COULD ONLY BE CREATED BY APPROVING AN
+   * ADMISSION. Everything after that — a second instalment, a late settlement,
+   * anything at all — had nowhere to go, so the ledger showed every student
+   * owing their full fee forever and the debtors report named people who had
+   * paid. The instalment plans are unusable without this.
+   *
+   * IT IS NOT ATTACHED TO A CHARGE, deliberately. A student hands over 30,000
+   * rupees; they are not paying "instalment 2", they are paying the Institute,
+   * and the balance is charges minus payments. Forcing an allocation would make
+   * somebody guess, and a guess recorded as fact is worse than the arithmetic.
+   */
+  async recordPayment(input: {
+    studentId: string;
+    amount: number;
+    paymentDate: Date;
+    method: PaymentMethod;
+    bankReference?: string;
+    note?: string;
+  }) {
+    const actor = getActor();
+    if (!actor) throw new AppError("AUTH_TOKEN_INVALID");
+
+    if (!(input.amount > 0)) {
+      throw new AppError("VALIDATION_FAILED", {
+        details: [
+          {
+            field: "amount",
+            code: "NOT_POSITIVE",
+            message:
+              "A payment must be for more than zero. To undo one that was recorded in error, " +
+              "reverse it — that keeps both the payment and the correction in the record.",
+          },
+        ],
+      });
+    }
+
+    const student = await this.prisma.scoped.student.findFirst({
+      where: { id: input.studentId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!student) throw new AppError("RESOURCE_NOT_FOUND");
+
+    const created = await this.prisma.asSystem((db) =>
+      db.$transaction(async (tx) => {
+        const payment = await tx.payment.create({
+          data: {
+            studentId: input.studentId,
+            verifiedAmount: input.amount,
+            paymentDate: input.paymentDate,
+            method: input.method,
+            bankReference: input.bankReference ?? null,
+            // BR-REG-10: the amount the Institute verified is the amount, and
+            // whoever recorded it is on the record as having verified it.
+            verifiedBy: actor.userId,
+            ...(input.note ? { varianceReason: input.note } : {}),
+          },
+        });
+        await this.recompute(tx, input.studentId);
+        return payment;
+      }),
+    );
+
+    await this.audit.record({
+      action: "fee.payment.record",
+      entityType: "Payment",
+      entityId: created.id,
+      after: {
+        studentId: input.studentId,
+        amount: input.amount,
+        paymentDate: input.paymentDate,
+        method: input.method,
+        bankReference: input.bankReference ?? null,
+      },
+    });
+
+    return this.statementFor(input.studentId);
+  }
+
+  /**
+   * FR-PAY-023 — undo a payment recorded in error.
+   *
+   * MARKED, NEVER DELETED. A student may be holding a receipt for it, and the
+   * ledger shows reversed payments precisely so that receipt can be reconciled
+   * against the record rather than contradicting it (BR-RPT-05). Deleting the
+   * row would make the Institute look as though the money never arrived, which
+   * is a different claim from "it arrived and we sent it back".
+   */
+  async reversePayment(paymentId: string, reason: string) {
+    const actor = getActor();
+    if (!actor) throw new AppError("AUTH_TOKEN_INVALID");
+
+    const payment = await this.prisma.scoped.payment.findFirst({
+      where: { id: paymentId },
+      select: { id: true, studentId: true, isReversed: true, verifiedAmount: true },
+    });
+    if (!payment) throw new AppError("RESOURCE_NOT_FOUND");
+    if (payment.isReversed) {
+      throw new AppError("RESOURCE_CONFLICT", {
+        message: "That payment has already been reversed.",
+      });
+    }
+
+    await this.prisma.asSystem((db) =>
+      db.$transaction(async (tx) => {
+        await tx.payment.update({
+          where: { id: paymentId },
+          data: {
+            isReversed: true,
+            reversedBy: actor.userId,
+            reversedAt: new Date(),
+            reversalReason: reason,
+          },
+        });
+        await this.recompute(tx, payment.studentId);
+      }),
+    );
+
+    await this.audit.record({
+      action: "fee.payment.reverse",
+      entityType: "Payment",
+      entityId: paymentId,
+      before: { isReversed: false },
+      after: { isReversed: true, reason, amount: Number(payment.verifiedAmount) },
+    });
+
+    return this.statementFor(payment.studentId);
   }
 
   /**
@@ -215,6 +346,22 @@ export class FeeService {
         amount: c.amount,
         dueDate: c.dueDate,
         waived: c.waivedAt != null,
+      })),
+      // The payments themselves, and not only their effect on the balance.
+      // Without this a statement says what a student owes and never what they
+      // have handed over, and nothing on the screen can find a payment to
+      // print a receipt for — which made the receipts unreachable.
+      payments: asPayments.map((p) => ({
+        id: p.id,
+        amount: p.amount,
+        paidOn: p.paidOn,
+        method: p.method,
+        reference: p.reference,
+        // Shown, not netted away (BR-RPT-05): a student holding a receipt for
+        // a reversed payment must find it here rather than nowhere.
+        isReversed: p.isReversed,
+        reversedAt: p.reversedAt,
+        reversalReason: p.reversalReason,
       })),
       // Said in words, because "outstanding: -2000" is not obviously credit.
       note:

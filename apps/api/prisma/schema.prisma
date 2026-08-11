@@ -413,6 +413,13 @@ model Payment {
   reversedAt     DateTime? @map("reversed_at")
   reversalReason String?   @map("reversal_reason") @db.Text
 
+  /// Allocated the first time a receipt is issued, then NEVER changed: a
+  /// student holding a printed receipt and the Institute's copy must show the
+  /// same number. Nullable because payments recorded before receipts existed
+  /// have none until one is asked for (FR-PAY-039).
+  receiptNo       String?   @unique @map("receipt_no") @db.VarChar(50)
+  receiptIssuedAt DateTime? @map("receipt_issued_at")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
