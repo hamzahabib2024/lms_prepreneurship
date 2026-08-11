@@ -377,3 +377,90 @@ kbd {
 /* Handouts sit under the lesson they belong to, indented so the relationship
    is visible without a heading on every lesson that has none. */
 .lesson-resources { margin-top: .5rem; padding-left: .75rem; border-left: 2px solid var(--line); }
+
+/* ---------------------------------------------------------------------------
+   A printed receipt (FR-PAY-039..042).
+
+   The screen styling is deliberately plain: this document's job is to be
+   photocopied, stapled to a file, and read back in two years. The print rules
+   below are the ones that matter.
+   --------------------------------------------------------------------------- */
+.receipt {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 2rem;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.receipt-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; border-bottom: 2px solid var(--ink); padding-bottom: 1rem; }
+.receipt-head h1 { margin: 0; font-size: 1.4rem; }
+.receipt-no { text-align: right; }
+.receipt-no p { margin: 0; }
+
+/* Both stamps are loud on purpose. A duplicate that looks like an original is
+   the problem they exist to prevent. */
+.receipt-stamp {
+  margin: 1rem 0;
+  padding: .5rem .75rem;
+  border: 2px dashed var(--warn);
+  color: var(--warn);
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-align: center;
+}
+.receipt-void { border-color: var(--error); color: var(--error); }
+
+.receipt-fields { margin: 1.5rem 0; display: grid; gap: .75rem; }
+.receipt-fields > div { display: grid; grid-template-columns: 12rem 1fr; gap: 1rem; }
+.receipt-fields dt { color: var(--muted); }
+.receipt-fields dd { margin: 0; font-weight: 600; }
+
+.receipt-amount {
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding: .9rem 1rem; margin-top: 1rem;
+  border: 2px solid var(--ink); border-radius: 4px;
+  font-size: 1.25rem;
+}
+/* Never abbreviated, never right-truncated: the figure is the document. */
+.receipt-amount strong { font-variant-numeric: tabular-nums; }
+
+.receipt-words { margin: .6rem 0 0; font-style: italic; }
+
+.receipt-foot {
+  display: flex; justify-content: space-between; align-items: flex-end;
+  margin-top: 3rem; gap: 2rem;
+}
+.receipt-sign { min-width: 14rem; border-top: 1px solid var(--ink); padding-top: .3rem; text-align: center; }
+
+@media print {
+  /* Everything that is not the document. Printing the navigation and the
+     buttons wastes the top third of the page and looks like a screenshot
+     rather than a receipt. */
+  .topbar, .nav, .no-print, nav, header.page-head { display: none !important; }
+
+  /* Paper is white and ink is black whatever the reader's theme is. A dark
+     theme printed as-is empties a toner cartridge and is unreadable. */
+  :root, body, .receipt {
+    background: #fff !important;
+    color: #000 !important;
+  }
+  .receipt {
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+  }
+  .muted, .receipt-fields dt { color: #444 !important; }
+  .receipt-head { border-bottom-color: #000 !important; }
+  .receipt-amount { border-color: #000 !important; }
+  .receipt-sign { border-top-color: #000 !important; }
+  .receipt-stamp { color: #000 !important; border-color: #000 !important; }
+
+  /* A receipt that breaks across two pages is two half-documents, and the
+     half without the amount proves nothing. */
+  .receipt { page-break-inside: avoid; }
+
+  @page { margin: 18mm; }
+}

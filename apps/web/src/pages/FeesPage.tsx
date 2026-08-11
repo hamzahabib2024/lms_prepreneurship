@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ApiError, api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { StepUpPrompt, needsStepUp } from "../components/StepUpPrompt";
+import { PlanBuilder, RecordPayment, ReverseButton } from "./FeesPanels";
 
 /**
  * Fees — SRS §13.11, FR-PAY-020..032.
@@ -37,7 +38,7 @@ interface Line {
   balance: number;
 }
 
-interface Statement {
+export interface Statement {
   student: { id: string; name: string; registrationNo: string };
   balance: Balance;
   aging: {
@@ -55,6 +56,16 @@ interface Statement {
     dueDate: string;
     waived: boolean;
   }>;
+  payments: Array<{
+    id: string;
+    amount: number;
+    paidOn: string;
+    method: string;
+    reference: string | null;
+    isReversed: boolean;
+    reversedAt: string | null;
+    reversalReason: string | null;
+  }>;
   note: string;
 }
 
@@ -66,6 +77,13 @@ interface Debtor {
   oldestOverdueDays: number | null;
   overdue90Plus: number;
 }
+
+const METHOD: Record<string, string> = {
+  BANK_TRANSFER: "Bank transfer",
+  CASH_DEPOSIT: "Cash deposit",
+  CHEQUE: "Cheque",
+  OTHER: "Other",
+};
 
 /** Exact, grouped, never abbreviated. */
 const money = (n: number) =>
@@ -377,6 +395,61 @@ function StatementView({
           </div>
         )}
       </section>
+
+      {/* Shown to the STUDENT as well as to staff. A student holds
+          `payment:read` at OWN scope, so they can print their own receipt
+          without asking an administrator to do it — which is the difference
+          between a record they hold and a favour they request. */}
+      {s.payments.length > 0 && (
+        <section className="card">
+          <h2>Payments</h2>
+          <ul className="list">
+            {s.payments.map((p) => (
+              <li key={p.id} className="assignment">
+                <div className="assignment-head">
+                  <span>
+                    <strong>{money(p.amount)}</strong>
+                    <br />
+                    <span className="muted small">
+                      {new Date(p.paidOn).toLocaleDateString()} · {METHOD[p.method] ?? p.method}
+                      {p.reference ? ` · ref. ${p.reference}` : ""}
+                    </span>
+                    {/* Shown, never netted away: a student holding a receipt
+                        for this must find it here rather than nowhere. */}
+                    {p.isReversed && (
+                      <>
+                        <br />
+                        <span className="warn small">
+                          Reversed{p.reversedAt ? ` on ${new Date(p.reversedAt).toLocaleDateString()}` : ""}
+                          {p.reversalReason ? ` — ${p.reversalReason}` : ""}
+                        </span>
+                      </>
+                    )}
+                  </span>
+                  <span className="row-actions">
+                    {/* A new tab, because printing a receipt should not lose
+                        the statement the operator was working through. */}
+                    <a
+                      className="btn btn-quiet"
+                      href={`/receipts/${p.id}`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Receipt
+                    </a>
+                    {canEdit && !p.isReversed && (
+                      <ReverseButton paymentId={p.id} busy={busy} onDone={act} />
+                    )}
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {canEdit && <RecordPayment studentId={s.student.id} busy={busy} onDone={act} />}
+      {canEdit && <PlanBuilder studentId={s.student.id} busy={busy} onDone={act} />}
 
       {canEdit && (
         <section className="card">

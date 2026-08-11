@@ -240,7 +240,24 @@ export const CATALOGUE: SettingDefinition[] = [
     type: "string",
     default: "The Institute",
     group: "Institute",
-    description: "Used on certificates, emails and the public verification page.",
+    description:
+      "Used on certificates, receipts, emails and the public verification page. The default is a placeholder — set it before anything is printed.",
+  },
+  {
+    key: "institute.campus",
+    type: "string",
+    default: "",
+    group: "Institute",
+    description:
+      "The campus or address printed under the Institute's name on a receipt. Leave it empty for a single-campus institute; the line is then omitted rather than printed blank.",
+  },
+  {
+    key: "finance.receiptNote",
+    type: "string",
+    default: "Please keep this receipt. It is your proof of payment.",
+    group: "Institute",
+    description:
+      "Printed at the foot of every receipt. A reversed payment ignores this and prints its own notice instead, because a receipt for money the Institute no longer holds must not end with a line telling the student to keep it as proof.",
   },
   {
     key: "certificate.signatoryName",
