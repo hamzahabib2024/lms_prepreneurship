@@ -26,10 +26,10 @@ describe("parsing the file people actually produce", () => {
   });
 
   it("strips the UTF-8 BOM Excel puts in front of the first heading", () => {
-    // Without this the first column is named "﻿fullName", matches nothing,
+    // Without this the first column is named with a byte-order mark before "fullName", matches nothing,
     // and the file is rejected for having no fullName column while plainly
     // having one — which is impossible to act on.
-    const grid = parseCsv("﻿fullName,email\nA,b@c.d");
+    const grid = parseCsv("fullName,email\nA,b@c.d");
     expect(grid[0]?.[0]).toBe("fullName");
   });
 

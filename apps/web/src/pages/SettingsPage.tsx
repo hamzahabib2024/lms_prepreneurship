@@ -248,7 +248,7 @@ function SettingRow({
             {busy ? "Saving…" : "Save"}
           </button>
           {setting.isOverridden && (
-            <button className="btn btn-quiet" onClick={reset} disabled={busy}>
+            <button className="btn btn-quiet" onClick={() => void reset()} disabled={busy}>
               Restore the default
             </button>
           )}

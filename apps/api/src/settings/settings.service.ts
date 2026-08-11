@@ -96,7 +96,12 @@ export class SettingsService {
 
   async text(key: string, context: SettingContext = {}): Promise<string> {
     const value = resolve(key, await this.stored(), context).value;
-    return typeof value === "string" ? value : String(definitionFor(key)?.default ?? "");
+    if (typeof value === "string") return value;
+    // The declared default, only if it is text. A setting whose default is a
+    // number or an object would otherwise be handed back as "[object Object]"
+    // to a caller that asked for a string.
+    const fallback = definitionFor(key)?.default;
+    return typeof fallback === "string" ? fallback : "";
   }
 
   async list(key: string, context: SettingContext = {}): Promise<string[]> {

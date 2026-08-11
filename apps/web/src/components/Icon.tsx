@@ -36,7 +36,7 @@ const PATHS: Record<string, string> = {
   menu: "M3 6h18M3 12h18M3 18h18",
 };
 
-export function Icon({ name, className }: { name: keyof typeof PATHS | string; className?: string }) {
+export function Icon({ name, className }: { name: string; className?: string }) {
   const d = PATHS[name] ?? PATHS["dashboard"]!;
   return (
     <svg

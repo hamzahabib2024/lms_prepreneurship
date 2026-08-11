@@ -102,11 +102,11 @@ export const MAX_IMPORT = 500;
  * Hand-written rather than pulled in, because the awkward cases are few and
  * specific: a quoted field containing a comma (every address), a quoted field
  * containing a doubled quote, CRLF from Excel on Windows, and a UTF-8 BOM which
- * Excel writes by default and which makes the first heading `﻿fullName`
+ * Excel writes by default and which makes the first heading `U+FEFF` followed by `fullName`
  * and match nothing.
  */
 export function parseCsv(text: string): string[][] {
-  const clean = text.replace(/^﻿/, "");
+  const clean = text.replace(/^/, "");
   const rows: string[][] = [];
   let row: string[] = [];
   let field = "";

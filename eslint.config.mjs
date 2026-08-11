@@ -93,6 +93,15 @@ export default tseslint.config(
       // people run without reading the diff.
       "@typescript-eslint/no-unnecessary-type-assertion": "off",
 
+      // OFF, after looking at all six it fired on. It cannot distinguish three
+      // different things: a method that MUST return a Promise because it
+      // implements the storage or classroom provider interface (removing
+      // `async` there breaks the contract); a method doing synchronous file
+      // work today that is async because it reads as I/O and will be; and a
+      // test arrow. None of those is a defect, and rewriting them to satisfy
+      // the rule would make the code worse to read in exchange for nothing.
+      "@typescript-eslint/require-await": "off",
+
       // The `unsafe` family fires at boundaries this System cannot type: a
       // Prisma JSON column, an Express body, a CSV cell. Every one of them is
       // validated by Zod or checked by hand immediately afterwards. Left as

@@ -14,7 +14,11 @@ import type { Statement } from "./FeesPage";
  * alternative, a second copy of the interface, is how the two drift apart
  * until a field the server stopped sending is still being rendered.
  */
-type Act = (run: () => Promise<Statement>, what: string) => void;
+// `void | Promise<void>`, because the page's handler IS async — it awaits
+// the write and then replaces the statement. Typing it as `void` and making
+// every caller wrap the call in `void` would be the type lying about what it
+// accepts, and hiding a rejection nobody handles.
+type Act = (run: () => Promise<Statement>, what: string) => void | Promise<void>;
 
 const money = (n: number) =>
   new Intl.NumberFormat("en-PK", { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(n);
@@ -109,7 +113,7 @@ export function RecordPayment({
           className="btn btn-primary"
           disabled={busy || !valid}
           onClick={() =>
-            onDone(
+            void onDone(
               () =>
                 api.post<Statement>("/fees/payments", {
                   studentId,
@@ -178,7 +182,7 @@ export function ReverseButton({
           className="btn btn-primary"
           disabled={busy || reason.trim().length < 10}
           onClick={() =>
-            onDone(
+            void onDone(
               () => api.post<Statement>(`/fees/payments/${paymentId}/reverse`, { reason: reason.trim() }),
               "reverse a payment",
             )
@@ -380,7 +384,7 @@ export function PlanBuilder({
                 className="btn btn-primary"
                 disabled={busy}
                 onClick={() =>
-                  onDone(async () => {
+                  void onDone(async () => {
                     await api.post("/fees/plans", { ...body, studentId });
                     setOpen(false);
                     setPreview(null);

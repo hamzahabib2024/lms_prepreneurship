@@ -39,7 +39,13 @@ export function escapeCsvField(value: unknown): string {
   } else if (typeof value === "object") {
     s = JSON.stringify(value);
   } else {
-    s = String(value);
+    // Never a bare String(): a cell reading "[object Object]" in an
+    // exported report is a value nobody can recover from the file.
+    s =
+      typeof value === "object"
+        ? JSON.stringify(value)
+        : // eslint-disable-next-line @typescript-eslint/no-base-to-string
+          String(value);
   }
 
   if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
