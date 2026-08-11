@@ -66,8 +66,11 @@ interface ReportDefinition {
  * database cannot return anything else — not because this service remembered
  * to filter.
  *
- * Five of the nineteen reports in §14 are implemented here: the ones the
- * Institute uses weekly. The remainder follow the same shape.
+ * FOURTEEN reports. Eight carry SRS numbers from §14; the other six are named
+ * for what they do rather than numbered, because the SRS's own list is not
+ * available to this repository and inventing numbers for it would put a false
+ * citation in the code. They were chosen by what an institute keeping a ledger
+ * and a register actually asks for.
  */
 @Injectable()
 export class ReportService {
@@ -332,6 +335,87 @@ export class ReportService {
         { header: "Guardian", value: (r) => r["guardianName"] },
         { header: "Guardian Phone", value: (r) => r["altPhone"] },
         { header: "Status", value: (r) => r["status"] },
+      ],
+    });
+
+    this.register({
+      key: "at-risk-students",
+      name: "Students at Risk",
+      // report_ENROLMENT, not report_progress. A student holds report_progress
+      // at OWN scope so they can read their own progress — which meant they
+      // could run this and be shown a report titled "Students at Risk" listing
+      // themselves and what they owe. The scope predicate held, so it was
+      // never a leak; it was the recurring mistake of naming a resource after
+      // a TOPIC when two different audiences read it. This is an operational
+      // list of who to contact, and report_enrolment is the staff-only one a
+      // teacher also holds.
+      resource: "report_enrolment",
+      description:
+        "Who to ring this week. A student is listed with the REASONS they are at risk — poor attendance, an overdue fee, stalled progress — rather than a score, because 'risk 0.62' tells nobody what to say when the call is answered.",
+      filters: [
+        { key: "sectionId", label: "Section", type: "section" },
+      ],
+      run: (f) => this.atRisk(f),
+      columns: [
+        { header: "Registration No", value: (r) => r["registrationNo"] },
+        { header: "Name", value: (r) => r["name"] },
+        { header: "Section", value: (r) => r["section"] },
+        { header: "Reasons", value: (r) => r["reasonCount"] },
+        { header: "What Is Wrong", value: (r) => r["reasons"] },
+        { header: "Attendance %", value: (r) => r["attendance"] },
+        { header: "Progress %", value: (r) => r["progress"] },
+        { header: "Overdue Fees", value: (r) => r["overdue"] },
+        { header: "Phone", value: (r) => r["phone"] },
+        { header: "Guardian Phone", value: (r) => r["guardianPhone"] },
+      ],
+    });
+
+    this.register({
+      key: "certificate-register",
+      name: "Certificate Register",
+      resource: "report_enrolment",
+      description:
+        "Every certificate issued, and every one revoked. A revoked certificate stays on the register — an employer may be holding the document, and a register it had vanished from would answer their question wrongly.",
+      filters: [
+        { key: "from", label: "Issued from", type: "date" },
+        { key: "to", label: "Issued to", type: "date" },
+      ],
+      run: (f) => this.certificateRegister(f),
+      columns: [
+        { header: "Certificate No", value: (r) => r["certificateNo"] },
+        { header: "Issued", value: (r) => r["issuedAt"] },
+        { header: "Registration No", value: (r) => r["registrationNo"] },
+        { header: "Name", value: (r) => r["name"] },
+        { header: "Type", value: (r) => r["type"] },
+        { header: "For", value: (r) => r["subject"] },
+        { header: "Progress at Issue", value: (r) => r["progressPercent"] },
+        { header: "Status", value: (r) => r["status"] },
+        { header: "Revoked", value: (r) => r["revokedAt"] },
+        { header: "Revocation Reason", value: (r) => r["revocationReason"] },
+      ],
+    });
+
+    this.register({
+      key: "enrolment-changes",
+      name: "Enrolment Changes",
+      resource: "report_enrolment",
+      description:
+        "Who left, who moved, and why, over a period. The reason is the column that matters: a section losing six students to one cause is a different problem from six unrelated departures.",
+      filters: [
+        { key: "from", label: "From", type: "date" },
+        { key: "to", label: "To", type: "date" },
+        { key: "sectionId", label: "Section", type: "section" },
+      ],
+      run: (f) => this.enrolmentChanges(f),
+      columns: [
+        { header: "Ended", value: (r) => r["endedAt"] },
+        { header: "Registration No", value: (r) => r["registrationNo"] },
+        { header: "Name", value: (r) => r["name"] },
+        { header: "Section", value: (r) => r["section"] },
+        { header: "Subject", value: (r) => r["subject"] },
+        { header: "Outcome", value: (r) => r["status"] },
+        { header: "Reason", value: (r) => r["reason"] },
+        { header: "Days Enrolled", value: (r) => r["daysEnrolled"] },
       ],
     });
   }
@@ -615,6 +699,225 @@ export class ReportService {
    * a second implementation of "what does this student owe" is how two screens
    * come to disagree about one student.
    */
+  /**
+   * Who to ring this week.
+   *
+   * REASONS, NOT A SCORE. It is tempting to weight attendance, fees and
+   * progress into one number and sort by it — and useless, because "risk 0.62"
+   * tells the person making the call nothing about what to say. Worse, a
+   * composite hides which input moved: a student whose fees came good but whose
+   * attendance collapsed can hold the same score throughout. So each reason is
+   * named, and the sort is by HOW MANY things are wrong.
+   *
+   * The thresholds are the Institute's own settings rather than constants
+   * here. An institute that warns at 85% and a report that flags at 75% is two
+   * answers to one question, and neither looks wrong on its own screen.
+   */
+  private async atRisk(f: ReportFilters) {
+    const students = await this.prisma.scoped.student.findMany({
+      where: {
+        deletedAt: null,
+        ...(f.sectionId ? { currentSectionId: f.sectionId } : {}),
+      },
+      include: {
+        user: { select: { fullName: true, phone: true } },
+        currentSection: { select: { name: true } },
+        enrolments: { where: { status: "ACTIVE" }, select: { sectionSubjectId: true } },
+      },
+    });
+
+    const attendanceThreshold = await this.settings.number("attendance.warningThreshold");
+    const now = new Date();
+    const rows = [];
+
+    for (const s of students) {
+      const reasons: string[] = [];
+
+      // -- attendance, averaged across the subjects they are taking --------
+      let attendance: number | null = null;
+      if (s.enrolments.length > 0) {
+        const each = await Promise.all(
+          s.enrolments.map((e) => this.attendance.percentageFor(s.id, e.sectionSubjectId)),
+        );
+        const known = each.map((x) => x.percentage).filter((x): x is number => x !== null);
+        if (known.length > 0) {
+          attendance = Math.round((known.reduce((a, b) => a + b, 0) / known.length) * 10) / 10;
+          if (attendance < attendanceThreshold) {
+            reasons.push(`attendance ${attendance}% (below ${attendanceThreshold}%)`);
+          }
+        }
+      }
+
+      // -- money -----------------------------------------------------------
+      const [charges, payments] = await Promise.all([
+        this.prisma.asSystem((db) =>
+          db.feeCharge.findMany({ where: { studentId: s.id, deletedAt: null } }),
+        ),
+        this.prisma.asSystem((db) => db.payment.findMany({ where: { studentId: s.id } })),
+      ]);
+      const asCharges: Charge[] = charges.map((c) => ({
+        id: c.id,
+        description: c.description,
+        amount: Number(c.amount),
+        dueDate: c.dueDate,
+        createdAt: c.createdAt,
+        waivedAt: c.waivedAt,
+        waiverReason: c.waiverReason,
+      }));
+      const asPayments: LedgerPayment[] = payments.map((p) => ({
+        id: p.id,
+        amount: Number(p.verifiedAmount),
+        paidOn: p.paymentDate,
+        method: p.method,
+        reference: p.bankReference,
+        isReversed: p.isReversed,
+        reversedAt: p.reversedAt,
+        reversalReason: p.reversalReason,
+      }));
+      const buckets = aging(asCharges, asPayments, now);
+
+      // OVERDUE, not outstanding. A student who owes an instalment due next
+      // month is not in trouble, and putting them on this list is how the list
+      // becomes one nobody reads.
+      const overdue = buckets.overdue30 + buckets.overdue60 + buckets.overdue90Plus;
+      if (overdue > 0) {
+        const age = buckets.oldestOverdueDays ? ` for ${buckets.oldestOverdueDays} days` : "";
+        reasons.push(`owes ${overdue} overdue${age}`);
+      }
+
+      // -- progress --------------------------------------------------------
+      let progress: number | null = null;
+      try {
+        const p = await this.progress.forStudent(s.id);
+        const overall = (p as { overallPercent?: number } | null)?.overallPercent;
+        progress = typeof overall === "number" ? Math.round(overall * 10) / 10 : null;
+        // Deliberately a low bar. This report is for students in trouble, not
+        // for ranking a cohort — flagging everybody below average would list
+        // half the Institute every week until nobody read it.
+        if (progress !== null && progress < 40) reasons.push(`progress ${progress}%`);
+      } catch {
+        // A student with no marks yet has no progress figure, which is not a
+        // risk — it is a student who started last week.
+        progress = null;
+      }
+
+      if (reasons.length === 0) continue;
+
+      rows.push({
+        registrationNo: s.registrationNo,
+        name: s.user.fullName,
+        section: s.currentSection?.name ?? "",
+        reasonCount: reasons.length,
+        reasons: reasons.join("; "),
+        attendance: attendance ?? "",
+        progress: progress ?? "",
+        overdue,
+        phone: s.user.phone ?? "",
+        guardianPhone: s.guardianPhone ?? "",
+      });
+    }
+
+    // Most things wrong first, then worst attendance. Somebody working down
+    // this list from the top is spending their time where it counts.
+    return rows.sort(
+      (a, b) =>
+        b.reasonCount - a.reasonCount ||
+        (typeof a.attendance === "number" ? a.attendance : 101) -
+          (typeof b.attendance === "number" ? b.attendance : 101),
+    );
+  }
+
+  /**
+   * Every certificate issued, and every one revoked.
+   *
+   * A REVOKED CERTIFICATE STAYS ON THE REGISTER (BR-DAT-02). An employer may
+   * be holding the document, and a register it had vanished from would answer
+   * their question wrongly — "no such certificate" rather than "issued, and
+   * withdrawn on this date for this reason".
+   *
+   * THE VERIFICATION CODE IS NOT EXPORTED. It is deliberately unguessable so
+   * that only somebody holding the document can check it (SEC-AUZ-004); a
+   * spreadsheet of every code hands that ability to whoever receives the file.
+   * The printed certificate number is here, which is what a register is for.
+   */
+  private async certificateRegister(f: ReportFilters) {
+    const certificates = await this.prisma.scoped.certificate.findMany({
+      where: {
+        ...(f.from || f.to
+          ? { issuedAt: { ...(f.from ? { gte: f.from } : {}), ...(f.to ? { lte: f.to } : {}) } }
+          : {}),
+      },
+      include: {
+        student: { include: { user: { select: { fullName: true } } } },
+        sectionSubject: { include: { subject: { select: { name: true } } } },
+        programme: { select: { name: true } },
+      },
+      orderBy: { issuedAt: "desc" },
+    });
+
+    return certificates.map((c) => ({
+      certificateNo: c.certificateNo,
+      issuedAt: c.issuedAt,
+      registrationNo: c.student.registrationNo,
+      name: c.student.user.fullName,
+      type: c.type,
+      subject: c.sectionSubject?.subject.name ?? c.programme?.name ?? "",
+      progressPercent: Number(c.progressPercent),
+      status: c.status,
+      revokedAt: c.revokedAt ?? "",
+      revocationReason: c.revocationReason ?? "",
+    }));
+  }
+
+  /**
+   * Who left, who moved, and why.
+   *
+   * THE REASON IS THE COLUMN THAT MATTERS. Six students leaving one section for
+   * one cause is a different problem from six unrelated departures, and a
+   * report giving only counts would make them look identical.
+   *
+   * Days enrolled separates two very different failures: somebody who left
+   * after three days never really started, and somebody who left after three
+   * months was lost.
+   */
+  private async enrolmentChanges(f: ReportFilters) {
+    const enrolments = await this.prisma.scoped.enrolment.findMany({
+      where: {
+        status: { not: "ACTIVE" },
+        endedAt: { not: null },
+        ...(f.from || f.to
+          ? { endedAt: { ...(f.from ? { gte: f.from } : {}), ...(f.to ? { lte: f.to } : {}) } }
+          : {}),
+        ...(f.sectionId ? { sectionSubject: { sectionId: f.sectionId } } : {}),
+      },
+      include: {
+        student: { include: { user: { select: { fullName: true } } } },
+        sectionSubject: {
+          include: {
+            subject: { select: { name: true } },
+            section: { select: { name: true } },
+          },
+        },
+      },
+      orderBy: { endedAt: "desc" },
+    });
+
+    return enrolments.map((e) => ({
+      endedAt: e.endedAt,
+      registrationNo: e.student.registrationNo,
+      name: e.student.user.fullName,
+      section: e.sectionSubject.section.name,
+      subject: e.sectionSubject.subject.name,
+      status: e.status,
+      // Said plainly when it is absent. An empty cell reads as an oversight;
+      // "not recorded" says the System asked and nobody answered.
+      reason: e.statusReason ?? "not recorded",
+      daysEnrolled: e.endedAt
+        ? Math.max(0, Math.round((e.endedAt.getTime() - e.enrolledAt.getTime()) / 86_400_000))
+        : "",
+    }));
+  }
+
   private async feeDefaulters(f: ReportFilters) {
     const students = await this.prisma.scoped.student.findMany({
       where: {
