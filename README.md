@@ -39,42 +39,89 @@ registration numbers that collide or skip, and no record of who approved what.
 - **Node.js 20 LTS or later** (24 works)
 - **PostgreSQL 16** — mandated by §3.11, not interchangeable. §8.4 needs partial
   and BRIN indexes and DB-017 needs native partitioning; MySQL has none of them.
-- **Redis 7** — optional in development
+  `npm run db:start` provides one; nothing needs installing.
+- **Redis** — not required. Playback tickets were the only thing that wanted it
+  and they now live in the database, so the System runs on more than one
+  instance without it.
 
-## Setup
+## Running it
+
+Five commands from a clean checkout. No Docker, no managed database, nothing
+to sign up for — `db:start` downloads a real PostgreSQL 16 on first run and
+keeps its data in `./pgdata`.
 
 ```bash
 npm install
-cp .env.example .env          # then edit DATABASE_URL
+cp .env.example .env          # the defaults work as-is for local development
 npm run keys:generate         # RSA keypair for RS256 (SEC-AUT-005)
-npm run db:generate           # Prisma client
-npm run db:migrate            # create the schema
-npm run db:constraints        # partial indexes, checks, audit trigger — REQUIRED
-npm run db:seed               # development data
-npm run dev                   # http://localhost:3000/api/v1
+npm run db:start              # a real PostgreSQL 16, no Docker required
+npm run db:setup              # migrate + constraints + seed, in that order
 ```
 
-`db:constraints` is not optional. It adds the partial unique indexes that make
+Then two terminals, because they are two processes:
+
+```bash
+npm run dev                   # the API   → http://localhost:3000/api/v1
+npm run dev:web               # the app   → http://localhost:5173
+```
+
+Open <http://localhost:5173> and sign in. The web app proxies `/api` to the API,
+so the browser sees one origin and CORS behaves in development exactly as it
+will in production.
+
+### Signing in
+
+The seed creates one of each role. Every password follows the same pattern and
+they are development credentials — the System forces a change on any account an
+administrator provisions.
+
+| Role | Email | Password |
+| --- | --- | --- |
+| Super Admin | `superadmin@institute.local` | `ChangeMe!SuperAdmin2026` |
+| Admin | `admin@institute.local` | `ChangeMe!Admin2026` |
+| Teacher | `sana@institute.local` | `ChangeMe!Teacher2026` |
+| Student | `ayesha1@student.local` | `ChangeMe!Student2026` |
+
+**Sign in as each of them in turn** — the navigation, the screens and the data
+all change, because what a person may see is decided on the server rather than
+hidden in the interface. A teacher has no Fees entry at all; a student's
+Timetable is their own classes; the Security log is Super Admin alone.
+
+Worth looking at, in roughly this order:
+
+1. **Student** — Timetable, My subjects, a lesson with a handout, Fees.
+2. **Teacher** — Attendance (keyboard-driven register), Marking, Rubrics,
+   Content, and the same Timetable showing what they teach.
+3. **Admin** — Admissions, People, Reports, Bulk changes.
+4. **Super Admin** — Settings, Audit, Security, Backups. Try changing an
+   attendance threshold in Settings and then running the Attendance Summary
+   report: the report moves with it.
+
+### Other commands
+
+```bash
+npm test                      # 803 tests, including four static guards
+npm run build                 # typecheck and build both apps
+npm run db:start -- status    # is the database up?
+npm run db:start -- stop      # stop it
+```
+
+API documentation, generated from the implementation (API-011):
+<http://localhost:3000/docs>
+
+`db:setup` runs migrate, constraints and seed in order. `db:constraints` within
+it is not optional. It adds the partial unique indexes that make
 roll-number reuse correct (FR-REG-057), the check constraints, and the trigger
 that makes the audit log genuinely append-only (FR-LOG-004). Prisma schema
-cannot express any of them. `npm run db:setup` runs migrate, constraints and
-seed together.
+cannot express any of them.
 
 API docs (generated from the implementation, API-011): <http://localhost:3000/docs>
 
-### Running the database
+### Using a different database
 
-**With Docker** (not currently installed on this machine):
-
-```bash
-docker compose up -d
-```
-
-**Without Docker** — use a free managed Postgres such as [Neon](https://neon.tech)
-or [Supabase](https://supabase.com), and paste the connection string into
-`DATABASE_URL`. Nothing else changes. Redis is optional: with `REDIS_URL` unset
-the app falls back to in-memory behaviour, which ARC-049 permits (the cache is a
-performance aid, never a correctness dependency).
+`npm run db:start` is for local development. To point at a managed PostgreSQL —
+Neon, Supabase, RDS — put its connection string in `DATABASE_URL` and run
+`npm run db:setup` against it. Nothing else changes.
 
 ---
 
