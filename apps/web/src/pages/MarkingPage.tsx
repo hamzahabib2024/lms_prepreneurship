@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ApiError, api } from "../api/client";
+import { EmptyState, SkeletonCards } from "../components/Ui";
 import { AtRiskPanel } from "../components/AtRiskPanel";
 
 /**
@@ -65,16 +66,19 @@ export function MarkingPage() {
       </div>
     );
   }
-  if (!sections) return <p className="muted">Loading…</p>;
+  if (!sections) return <SkeletonCards count={2} />;
 
   if (sections.length === 0) {
     return (
-      <div className="card">
-        <h1>Marking</h1>
-        <p className="muted">
-          You are not assigned to any subject-sections, so there is nothing to mark.
-        </p>
-      </div>
+      <>
+        <header className="page-head">
+          <h1>Marking</h1>
+        </header>
+        <EmptyState icon="pen" title="Nothing assigned to you">
+          You are not teaching any subject-sections yet, so there is nothing to mark. It appears
+          here as soon as the office assigns you one.
+        </EmptyState>
+      </>
     );
   }
 
@@ -133,7 +137,7 @@ function SectionAssignments({ section }: { section: TeacherSection }) {
       ) : (
         <ul className="list">
           {items.map((a) => (
-            <li key={a.id} className={a.ungradedCount > 0 ? "warn" : ""}>
+            <li key={a.id} className="work-row">
               <span>
                 <Link to={`/marking/${a.id}`}>{a.title}</Link>{" "}
                 {a.publicationStatus !== "PUBLISHED" && (
@@ -145,15 +149,18 @@ function SectionAssignments({ section }: { section: TeacherSection }) {
                 </span>
               </span>
               <span className="row-actions">
-                {/* Every state is a word, never a colour alone (NFR-ACC-003). */}
+                {/* Every state is a WORD; the colour is a second signal for
+                    somebody scanning a long list (NFR-ACC-003). */}
                 {a.ungradedCount > 0 ? (
-                  <strong className="small">{a.ungradedCount} to mark</strong>
+                  <span className="pill pill-warn">{a.ungradedCount} to mark</span>
                 ) : a.submittedCount === 0 ? (
-                  <span className="muted small">No submissions</span>
+                  <span className="pill">No submissions</span>
                 ) : a.gradesReleased ? (
-                  <span className="small">✓ Released</span>
+                  <span className="pill pill-ok">Released</span>
                 ) : (
-                  <span className="small">Marked, not released</span>
+                  // The state a teacher forgets. Marked work nobody can see is
+                  // work the student is still waiting for.
+                  <span className="pill pill-warn">Marked, not released</span>
                 )}
               </span>
             </li>
@@ -164,7 +171,7 @@ function SectionAssignments({ section }: { section: TeacherSection }) {
       {quizzes.length > 0 && (
         <ul className="list">
           {quizzes.map((q) => (
-            <li key={q.id} className={q.awaitingMarking > 0 ? "warn" : ""}>
+            <li key={q.id} className="work-row">
               <span>
                 <Link to={`/marking/quiz/${q.id}`}>{q.title}</Link>
                 <span className="muted small"> · quiz · {q.attemptCount} attempts</span>

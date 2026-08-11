@@ -1190,3 +1190,14 @@ details > summary:hover { text-decoration: underline; }
   border-radius: var(--radius-sm);
   padding: .5rem .75rem;
 }
+
+/* --------------------------------------------------------- marking ------ */
+/* A row of work: what it is on the left, what state it is in on the right.
+   These were two spans with no layout, so they stacked and a teacher scanning
+   for "what needs marking" read every line twice. */
+.work-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 1rem; flex-wrap: wrap;
+}
+.work-row > span:first-child { min-width: 0; }
+.work-row a { font-weight: 550; }
