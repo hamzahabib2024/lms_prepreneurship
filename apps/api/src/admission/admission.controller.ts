@@ -1,4 +1,17 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Post, Query, Req } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  Post,
+  Query,
+  Req,
+  UploadedFile,
+  UseInterceptors,
+} from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
 import { Throttle } from "@nestjs/throttler";
 import {
   registrationApproveSchema,
@@ -11,23 +24,20 @@ import {
 } from "@lms/shared";
 import type { Request } from "express";
 import { AdmissionService } from "./admission.service";
+import { MAX_SLIP_BYTES, SlipService } from "./slip.service";
 import { zodBody } from "../common/zod-validation.pipe";
 import { Public, RequirePermission } from "../rbac/permissions.guard";
 
 /** SRS §9.4 — registration and admission endpoints. */
 @Controller()
 export class AdmissionController {
-  constructor(private readonly admission: AdmissionService) {}
+  constructor(
+    private readonly admission: AdmissionService,
+    private readonly slips: SlipService,
+  ) {}
 
   // ------------------------------------------------------------ public ----
 
-  /**
-   * FR-REG-001 — no account, no login, no app install.
-   *
-   * SEC-RTL-004: rate-limited to three submissions per hour per address. Tight
-   * enough to stop automated abuse, loose enough that a family sharing a
-   * connection can still apply.
-   */
   /**
    * FR-REG-002 — what a stranger can apply for.
    *
@@ -48,6 +58,40 @@ export class AdmissionController {
     return this.admission.prospectus();
   }
 
+  /**
+   * FR-REG-008 — a payment slip, uploaded BEFORE the application exists.
+   *
+   * The other half of what was missing. The submit schema demands between one
+   * and five slip ids; nothing in the System created a slip, and the column
+   * linking one to an application was NOT NULL, so an unattached slip could
+   * not exist. Between them, the public application could not be submitted by
+   * anybody.
+   *
+   * Rate-limited harder than the application itself, because this writes a
+   * FILE and an unauthenticated endpoint that writes files is the one a
+   * stranger points a script at. Ten an hour is five more than an application
+   * may carry, which is enough for somebody who retries.
+   */
+  @Public()
+  @Throttle({ default: { limit: 10, ttl: 3_600_000 } })
+  @Post("public/registrations/slips")
+  @UseInterceptors(
+    // multer's own ceiling, applied before any of our validation runs. A 900MB
+    // upload must be refused at the socket rather than buffered into memory
+    // and then declined politely.
+    FileInterceptor("file", { limits: { fileSize: MAX_SLIP_BYTES, files: 1 } }),
+  )
+  uploadSlip(@UploadedFile() file?: Express.Multer.File) {
+    return this.slips.upload(file);
+  }
+
+  /**
+   * FR-REG-001 — no account, no login, no app install.
+   *
+   * SEC-RTL-004: rate-limited to three submissions per hour per address. Tight
+   * enough to stop automated abuse, loose enough that a family sharing a
+   * connection can still apply.
+   */
   @Public()
   @Throttle({ default: { limit: 3, ttl: 3_600_000 } })
   @Post("public/registrations")

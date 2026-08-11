@@ -372,8 +372,17 @@ model RegistrationRequest {
 }
 
 model RegistrationDocument {
-  id                    String       @id @default(uuid()) @db.Uuid
-  registrationRequestId String       @map("registration_request_id") @db.Uuid
+  id String @id @default(uuid()) @db.Uuid
+
+  /// NULLABLE, and this is the whole reason the public application never
+  /// worked. A slip is uploaded BEFORE the application exists — the applicant
+  /// attaches it, then fills in the form — so requiring a request id here made
+  /// it impossible to create one. The submit schema demands at least one slip
+  /// id, nothing could produce one, and the endpoint was unreachable.
+  ///
+  /// An unattached row is claimed by the submission that names it, and only
+  /// while it is still unattached (FR-REG-008).
+  registrationRequestId String?      @map("registration_request_id") @db.Uuid
   documentType          DocumentType @default(PAYMENT_SLIP) @map("document_type")
 
   storageKey       String     @map("storage_key") @db.VarChar(500) // never a public URL (SEC-FIL-009)
@@ -385,7 +394,7 @@ model RegistrationDocument {
 
   createdAt DateTime @default(now()) @map("created_at")
 
-  registrationRequest RegistrationRequest @relation(fields: [registrationRequestId], references: [id], onDelete: Cascade)
+  registrationRequest RegistrationRequest? @relation(fields: [registrationRequestId], references: [id], onDelete: Cascade)
 
   @@index([registrationRequestId])
   @@index([contentHash])

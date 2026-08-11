@@ -183,10 +183,38 @@ export class AdmissionService {
       });
 
       // Attach the already-uploaded slips to this application.
-      await db.registrationDocument.updateMany({
-        where: { id: { in: input.documentIds }, registrationRequestId: created.id },
-        data: {},
+      //
+      // THIS PREVIOUSLY DID NOTHING. It matched documents whose
+      // registrationRequestId was ALREADY this request — impossible, the
+      // request had just been created — and then set `data: {}`, which is no
+      // change. Every application was filed with no slips attached, and the
+      // reviewer had nothing to verify the payment against.
+      //
+      // `registrationRequestId: null` is the security half: a slip id is
+      // handed to whoever uploaded it, and claiming only UNATTACHED slips
+      // means a guessed id cannot staple somebody else's bank slip to this
+      // application.
+      const attached = await db.registrationDocument.updateMany({
+        where: { id: { in: input.documentIds }, registrationRequestId: null },
+        data: { registrationRequestId: created.id },
       });
+
+      if (attached.count === 0) {
+        // FR-REG-008 requires at least one. Reaching here means every id named
+        // was already claimed or never existed, and an application with no
+        // proof of payment cannot be reviewed.
+        throw new AppError("VALIDATION_FAILED", {
+          message: "The payment slips could not be attached to this application.",
+          details: [
+            {
+              field: "documentIds",
+              code: "NOT_AVAILABLE",
+              message:
+                "Please upload the slip again — the previous upload has expired or was already used.",
+            },
+          ],
+        });
+      }
 
       await this.audit.record(
         {
