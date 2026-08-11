@@ -2,7 +2,7 @@
   "name": "lms",
   "version": "0.1.0",
   "private": true,
-  "description": "Online Learning Management System — implementation of SRS-LMS-001 v2.1",
+  "description": "Online Learning Management System \u2014 implementation of SRS-LMS-001 v2.1",
   "workspaces": [
     "packages/*",
     "apps/*"
@@ -14,7 +14,7 @@
     "build": "npm run build -w @lms/shared && npm run build -w @lms/api && npm run build -w @lms/web",
     "dev": "npm run dev --workspace=@lms/api",
     "dev:web": "npm run dev --workspace=@lms/web",
-    "lint": "npm run lint --workspaces --if-present",
+    "lint": "npm run lint:types && npm run lint:rules",
     "test": "npm run test --workspaces --if-present",
     "db:generate": "npm run db:generate --workspace=@lms/api",
     "db:migrate": "prisma migrate dev --schema=apps/api/prisma/schema.prisma",
@@ -23,10 +23,15 @@
     "keys:generate": "node scripts/generate-keys.mjs",
     "db:setup": "npm run db:migrate && npm run db:constraints && npm run db:seed",
     "db:constraints": "node -r dotenv/config scripts/apply-sql.mjs apps/api/prisma/sql/01_constraints_and_indexes.sql",
-    "db:start": "node scripts/db-local.mjs start"
+    "db:start": "node scripts/db-local.mjs start",
+    "lint:types": "npm run lint --workspaces --if-present",
+    "lint:rules": "eslint apps/api/src apps/web/src packages/shared/src"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "embedded-postgres": "^18.4.0-beta.17",
-    "typescript": "^5.6.3"
+    "eslint": "^9.39.5",
+    "typescript": "^5.6.3",
+    "typescript-eslint": "^8.67.0"
   }
 }

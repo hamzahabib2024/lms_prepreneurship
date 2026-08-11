@@ -147,8 +147,12 @@ export class ReceiptService {
       note: payment.isReversed
         ? "This payment has been REVERSED. This receipt is kept so the record is complete; " +
           "it is not proof of a payment the Institute holds."
-        : String(resolved["finance.receiptNote"] ?? "") ||
-          "Please keep this receipt. It is your proof of payment.",
+        : // The settings map is loosely typed, and a note that is not a string
+          // would print on the receipt as "[object Object]". A document the
+          // Institute hands to a student does not get to look broken.
+          (typeof resolved["finance.receiptNote"] === "string"
+            ? resolved["finance.receiptNote"]
+            : "") || "Please keep this receipt. It is your proof of payment.",
     };
   }
 

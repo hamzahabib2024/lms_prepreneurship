@@ -1,0 +1,16 @@
+{
+  // The build tsconfig excludes **/*.spec.ts, because tests are not compiled
+  // into dist. The linter still has to SEE them — a floating promise in a
+  // probe is a test that passes without testing — so this project includes
+  // everything and is used only by eslint.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": { "noEmit": true, "allowJs": true },
+  "include": [
+    "apps/api/src/**/*.ts",
+    "apps/web/src/**/*.ts",
+    "apps/web/src/**/*.tsx",
+    "packages/shared/src/**/*.ts",
+    "scripts/**/*.mjs",
+    "eslint.config.mjs"
+  ]
+}

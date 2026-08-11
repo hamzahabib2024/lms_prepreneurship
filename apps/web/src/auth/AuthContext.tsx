@@ -63,7 +63,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
 
-    (async () => {
+    // `void`, deliberately. The work inside handles its own failures, but the
+    // IIFE's own promise was unhandled — so a rejection escaping the try
+    // became an unhandled rejection with no stack pointing here.
+    void (async () => {
       if (!tokens.getRefresh()) {
         setInitialising(false);
         return;

@@ -457,7 +457,11 @@ export class CohortImportService {
     // back to the generic message this method exists to avoid.
     const e = err as { code?: string; meta?: { target?: unknown } };
     if (e?.code === "P2002") {
-      const target = Array.isArray(e.meta?.target) ? e.meta.target.join(", ") : String(e.meta?.target ?? "");
+      // Prisma reports `target` as a string OR an array of strings, and
+      // occasionally as neither. Stringifying an object gives the operator
+      // "[object Object] must be unique", which is worse than saying nothing.
+      const raw = e.meta?.target;
+      const target = Array.isArray(raw) ? raw.join(", ") : typeof raw === "string" ? raw : "";
       const friendly: Record<string, string> = {
         national_id: "Another student already has this CNIC.",
         email: "Another account already uses this email address.",
