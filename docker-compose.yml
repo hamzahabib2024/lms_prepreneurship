@@ -1,8 +1,8 @@
 # The whole System: database, API, web.
 #
-# NOT YET RUN — Docker was not available on the machine this was written on.
-# Every command inside the images has been run by hand on the host and every
-# path has been checked, but expect to fix something the first time.
+# Built and run: both images build, the stack comes up healthy, the entrypoint
+# generates keys and applies all 13 migrations and the constraints, and the app
+# is reachable on one origin with sign-in working end to end.
 #
 # For LOCAL DEVELOPMENT you do not need any of this. `npm run db:start` gives
 # you a real PostgreSQL with no Docker at all — see the README.
@@ -53,6 +53,13 @@ services:
       JWT_ISSUER: ${JWT_ISSUER:-lms.local}
       JWT_AUDIENCE: ${JWT_AUDIENCE:-lms-api}
       BACKUP_DIR: /app/backups
+      # ONE hop: the nginx container, and nothing else. Without this every
+      # request appears to come from nginx, and the throttler — a global guard
+      # keyed on the client address — gives the entire Institute a single
+      # 300-per-minute budget. Raise it only if real proxies are added in
+      # front, and never replace it with a blanket "trust the header": a client
+      # can write anything into X-Forwarded-For and step around the rate limit.
+      TRUST_PROXY_HOPS: 1
       # Not consulted while nginx makes the API same-origin — a browser does
       # not apply CORS to a same-origin request. Set explicitly anyway, because
       # the moment the API is served from a different hostname than the app the

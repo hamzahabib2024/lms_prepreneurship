@@ -127,12 +127,6 @@ Neon, Supabase, RDS — put its connection string in `DATABASE_URL` and run
 
 ## Deploying it
 
-> **This section has not been run.** Docker was not installed on the machine
-> the configuration was written on, so unlike everything else here it is
-> reasoned rather than demonstrated. Every command inside the images has been
-> run by hand and every path it copies has been checked to exist, but expect to
-> fix something the first time. Everything above this line was executed.
-
 ```bash
 cp .env.example .env
 # POSTGRES_PASSWORD and LOCAL_STORAGE_SECRET have no defaults, and the stack
@@ -142,19 +136,35 @@ node -e "console.log(require('crypto').randomBytes(24).toString('base64url'))"
 docker compose up -d --build
 ```
 
+Then open <http://localhost:8080>. The database starts **empty**, which is
+deliberate — see below.
+
 Three containers: PostgreSQL 16, the API, and nginx serving the built web app
 on `WEB_PORT` (8080 by default). nginx proxies `/api` to the API internally, so
 the browser sees one origin — the same arrangement the Vite dev proxy creates,
 which is why CORS behaves identically in development and production.
 
-On first start the API generates its signing keys into a volume, applies the
+On first start the API generates its signing keys into a volume, applies the 13
 migrations, then applies the constraints and triggers. It does **not** seed: a
-seed writes accounts whose passwords are published in this file.
+seed writes accounts whose passwords are published in this file. To get the
+demonstration data anyway — on a machine where that is appropriate, and never
+on the Institute's real server:
 
-Three things to know before it faces the internet:
+```bash
+docker compose exec api npm run db:seed
+```
+
+Four things to know before it faces the internet:
 
 - **Put TLS in front of it.** The stack speaks plain HTTP. Every password on it
   crosses the network in the clear otherwise.
+- **If you add another proxy in front, raise `TRUST_PROXY_HOPS` to match.** It
+  is how many hops the API trusts to report the client's address, and it is set
+  to 1 for the nginx container. Too low and every request looks like it came
+  from the proxy, so the rate limiter gives the whole Institute one shared
+  budget and the security log sees a single client. Never replace it with a
+  blanket "trust the header": a client can write anything into
+  `X-Forwarded-For` and walk around the rate limit.
 - **Do not run more than one API container.** `ActorService` caches each user's
   roles for 15 minutes in a per-process map (ARC-047). The purge issued when
   somebody's roles change reaches only the node that handled it, so on a second

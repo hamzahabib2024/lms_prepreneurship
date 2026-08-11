@@ -2,11 +2,10 @@
 #
 # Two images from one file: the API and the web application.
 #
-# NOT YET RUN. Docker was not available on the machine this was written on, so
-# unlike everything else in this repository it has not been executed. Every
-# command inside it has been run by hand on the host, and every path it copies
-# has been checked to exist — but the first person to run `docker compose up`
-# should expect to fix something, and should read this file before doing so.
+# Both targets build and run. Running them found one defect that reading could
+# not: behind a reverse proxy Express reports the PROXY as the client, which
+# gave the whole Institute a single rate-limit budget and recorded every login
+# against nginx. See TRUST_PROXY_HOPS in docker-compose.yml.
 
 # ---------------------------------------------------------------- build ----
 # Debian rather than Alpine, deliberately. Prisma's query engine links against
