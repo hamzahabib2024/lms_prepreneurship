@@ -31,6 +31,40 @@ export class CertificateController {
   }
 
   /**
+   * FR-CRT-010 — issue for a whole programme.
+   *
+   * Same permission as a subject certificate, and deliberately so: it is a
+   * bigger claim about the student but the same kind of act, and inventing a
+   * second permission for it would be a name nobody could hold. What guards it
+   * is the requirement itself — every compulsory subject complete, recomputed
+   * at the moment of issue.
+   */
+  @RequirePermission("certificate", "create")
+  @Post("students/:studentId/certificates/programme/:programmeId")
+  issueProgramme(
+    @Param("studentId") studentId: string,
+    @Param("programmeId") programmeId: string,
+  ) {
+    return this.certificates.issueForProgramme(studentId, programmeId);
+  }
+
+  /**
+   * FR-CRT-011 — whether they are ready, and what is outstanding if not.
+   *
+   * `read` rather than `create`: it writes nothing, and an administrator
+   * should be able to answer "when will I get my certificate?" without holding
+   * the authority to issue one.
+   */
+  @RequirePermission("certificate", "read")
+  @Get("students/:studentId/certificates/programme/:programmeId/standing")
+  programmeStanding(
+    @Param("studentId") studentId: string,
+    @Param("programmeId") programmeId: string,
+  ) {
+    return this.certificates.programmeStanding(studentId, programmeId);
+  }
+
+  /**
    * FR-CRT-012 — revoke.
    *
    * Guarded by `certificate:delete`, which the §4.5 matrix grants to a Super

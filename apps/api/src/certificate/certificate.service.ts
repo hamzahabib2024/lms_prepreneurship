@@ -129,6 +129,223 @@ export class CertificateService {
   }
 
   /**
+   * FR-CRT-010 — a certificate for the whole programme.
+   *
+   * WHAT "COMPLETED THE PROGRAMME" MEANS is the entire design, and there were
+   * two candidates.
+   *
+   * The first: the student holds an issued SUBJECT certificate for every
+   * compulsory subject. Rejected — an institute that never issues subject
+   * certificates could then never issue a programme one, and the programme
+   * certificate would be attesting to the Institute's paperwork rather than to
+   * the student's work.
+   *
+   * The second, and what this does: recompute completion for every compulsory
+   * subject the student is enrolled in under this programme, exactly as
+   * issueForSubject recomputes for one. The programme certificate then means
+   * what it says — every part was passed — whether or not anybody printed the
+   * parts.
+   *
+   * A STUDENT WITH NO ENROLMENTS IS REFUSED. Zero subjects all vacuously
+   * "complete" is how somebody who never attended anything is handed a
+   * qualification, and `every()` over an empty list is exactly how that
+   * happens.
+   */
+  async issueForProgramme(studentId: string, programmeId: string) {
+    const actor = getActor();
+    if (!actor) throw new AppError("AUTH_TOKEN_INVALID");
+
+    const existing = await this.prisma.scoped.certificate.findFirst({
+      where: { studentId, programmeId, status: "ISSUED" },
+    });
+    if (existing) return this.present(existing, { alreadyIssued: true });
+
+    const programme = await this.prisma.scoped.programme.findFirst({
+      where: { id: programmeId },
+      select: { id: true, name: true },
+    });
+    if (!programme) throw new AppError("RESOURCE_NOT_FOUND");
+
+    // Every enrolment of this student that belongs to this programme, walked
+    // through the structure rather than assumed: a student may hold subjects
+    // in more than one programme at once (they keep one registration number
+    // across courses), and certifying the wrong programme's subjects would
+    // hand out a qualification nobody earned.
+    const enrolments = await this.prisma.scoped.enrolment.findMany({
+      where: {
+        studentId,
+        status: { in: ["ACTIVE", "COMPLETED"] },
+        sectionSubject: {
+          isCompulsory: true,
+          section: { batch: { academicSession: { programmeId } } },
+        },
+      },
+      select: { sectionSubjectId: true },
+    });
+
+    if (enrolments.length === 0) {
+      throw new AppError("VALIDATION_FAILED", {
+        message: `This student is not enrolled in any compulsory subject of ${programme.name}.`,
+        details: [
+          {
+            field: "programmeId",
+            code: "NOT_ENROLLED",
+            // Said explicitly, because the alternative — an empty list passing
+            // an `every()` check — issues a certificate to somebody who never
+            // took the course.
+            message:
+              "A programme certificate cannot be issued to somebody with no subjects in it.",
+          },
+        ],
+      });
+    }
+
+    const perSubject = await Promise.all(
+      enrolments.map((e) => this.progress.forSubject(studentId, e.sectionSubjectId)),
+    );
+
+    const unmet = perSubject.filter((p) => !p.completionCriteria.met);
+    if (unmet.length > 0) {
+      throw new AppError("VALIDATION_FAILED", {
+        message:
+          `${unmet.length} of ${perSubject.length} subjects in ${programme.name} are not complete.`,
+        // Named subject by subject. "Requirements not met" leaves an
+        // administrator with nothing to tell the student (NFR-USE-007).
+        details: unmet.flatMap((p) =>
+          p.completionCriteria.outstanding.map((reason) => ({
+            field: "completion",
+            code: "NOT_MET",
+            message: `${p.subject?.name ?? "A subject"}: ${reason}`,
+          })),
+        ),
+      });
+    }
+
+    // The programme figure is the mean across its subjects, matching how
+    // progress is reported everywhere else. Credit-weighting exists in the
+    // data model but the Institute has not confirmed a credit scheme
+    // (OPN-11), and weighting now would be inventing policy.
+    const mean = (pick: (p: (typeof perSubject)[number]) => number | null) => {
+      const values = perSubject.map(pick).filter((v): v is number => v !== null);
+      if (values.length === 0) return null;
+      return Math.round((values.reduce((a, b) => a + b, 0) / values.length) * 10) / 10;
+    };
+
+    const certificateNo = await this.nextCertificateNo();
+    const created = await this.prisma.scoped.certificate.create({
+      data: {
+        certificateNo,
+        studentId,
+        type: "PROGRAMME",
+        programmeId,
+        progressPercent: mean((p) => p.overallPercent) ?? 0,
+        attendancePercent: mean((p) => p.attendance.percentage),
+        averageGradePercent: mean((p) => p.averageGradePercent),
+        // The rule as applied, and WHICH subjects it was applied to. A
+        // challenge years later is answered with what was actually checked
+        // rather than with today's structure, which may have changed.
+        criteriaApplied: {
+          minProgressPercent: perSubject[0]!.completionCriteria.minProgressPercent,
+          minAttendancePercent: perSubject[0]!.completionCriteria.minAttendancePercent,
+          minAverageGradePercent: perSubject[0]!.completionCriteria.minAverageGradePercent,
+          subjectCount: perSubject.length,
+          subjects: perSubject.map((p) => p.subject?.name ?? p.sectionSubjectId),
+        } as object,
+        status: "ISSUED",
+        issuedBy: actor.userId,
+        verificationCode: this.newVerificationCode(),
+      },
+    });
+
+    await this.audit.record({
+      action: "certificate.issue.programme",
+      entityType: "Certificate",
+      entityId: created.id,
+      after: {
+        certificateNo,
+        studentId,
+        programmeId,
+        subjectCount: perSubject.length,
+        progressPercent: Number(created.progressPercent),
+      },
+    });
+
+    const student = await this.prisma.asSystem((db) =>
+      db.student.findUnique({ where: { id: studentId }, select: { userId: true } }),
+    );
+    if (student) {
+      await this.notifications.notify({
+        recipientUserIds: [student.userId],
+        kind: "certificate.issued",
+        title: `You have completed ${programme.name}`,
+        body: `Certificate ${certificateNo} is now available, with a link you can give to an employer.`,
+        linkPath: "/subjects",
+        isUrgent: true,
+      });
+    }
+
+    return this.present(created, { alreadyIssued: false });
+  }
+
+  /**
+   * FR-CRT-011 — is this student ready for a programme certificate, and if
+   * not, what is outstanding?
+   *
+   * Read-only, so an administrator can see the answer before pressing anything
+   * and can tell the student which subject is holding them up.
+   */
+  async programmeStanding(studentId: string, programmeId: string) {
+    const programme = await this.prisma.scoped.programme.findFirst({
+      where: { id: programmeId },
+      select: { id: true, name: true },
+    });
+    if (!programme) throw new AppError("RESOURCE_NOT_FOUND");
+
+    const enrolments = await this.prisma.scoped.enrolment.findMany({
+      where: {
+        studentId,
+        status: { in: ["ACTIVE", "COMPLETED"] },
+        sectionSubject: {
+          isCompulsory: true,
+          section: { batch: { academicSession: { programmeId } } },
+        },
+      },
+      select: { sectionSubjectId: true },
+    });
+
+    const perSubject = await Promise.all(
+      enrolments.map((e) => this.progress.forSubject(studentId, e.sectionSubjectId)),
+    );
+    const complete = perSubject.filter((p) => p.completionCriteria.met);
+    const issued = await this.prisma.scoped.certificate.findFirst({
+      where: { studentId, programmeId, status: "ISSUED" },
+      select: { certificateNo: true, issuedAt: true },
+    });
+
+    return {
+      programme: { id: programme.id, name: programme.name },
+      subjectCount: perSubject.length,
+      completedCount: complete.length,
+      // Never true for a student with no subjects — see issueForProgramme.
+      eligible: perSubject.length > 0 && complete.length === perSubject.length,
+      alreadyIssued: issued,
+      subjects: perSubject.map((p) => ({
+        sectionSubjectId: p.sectionSubjectId,
+        subject: p.subject?.name ?? "",
+        overallPercent: p.overallPercent,
+        met: p.completionCriteria.met,
+        outstanding: p.completionCriteria.outstanding,
+      })),
+      message:
+        perSubject.length === 0
+          ? `This student has no compulsory subjects in ${programme.name}.`
+          : complete.length === perSubject.length
+            ? `All ${perSubject.length} subjects complete.`
+            : `${complete.length} of ${perSubject.length} subjects complete.`,
+    };
+  }
+
+  /**
    * FR-CRT-012 — revokes, never deletes.
    *
    * A certificate that vanished would leave an employer holding a document the
