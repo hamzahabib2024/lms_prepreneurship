@@ -35,9 +35,41 @@ export function LoginPage() {
 
   return (
     <div className="auth-shell">
-      <form className="card auth-card" onSubmit={onSubmit} noValidate>
-        <h1 className="auth-title">Learning Management System</h1>
-        <p className="muted">Sign in to continue</p>
+      {/*
+        The panel is the brand. For most students this is the only
+        Prepreneurship screen they will ever describe to somebody else, and a
+        sign-in box floating on grey is a form from nowhere.
+
+        What it claims is deliberately modest and TRUE. "Trusted by thousands"
+        on a system with eight seeded students is the kind of copy that makes
+        everything else on the page suspect; these three lines describe what
+        the software actually does.
+      */}
+      <aside className="auth-brand">
+        <div className="auth-logo">
+          <span className="brand-mark" aria-hidden="true">
+            P
+          </span>
+          Prepreneurship
+        </div>
+
+        <h1>Everything your institute runs on, in one place.</h1>
+        <p>
+          Admissions, attendance, coursework, fees and certificates — kept in step, so nobody has
+          to reconcile two spreadsheets at the end of the month.
+        </p>
+
+        <ul className="auth-points">
+          <li>Registers, marking and progress that agree with each other</li>
+          <li>Fees, receipts and instalment plans on one ledger</li>
+          <li>Certificates an employer can verify without an account</li>
+        </ul>
+      </aside>
+
+      <div className="auth-panel">
+        <form className="auth-card" onSubmit={onSubmit} noValidate>
+          <h1 className="auth-title">Welcome back</h1>
+          <p className="muted">Sign in to continue</p>
 
         {error && (
           <div className={`alert ${lockedOut || suspended ? "alert-warn" : "alert-error"}`} role="alert">
@@ -71,16 +103,22 @@ export function LoginPage() {
           />
         </label>
 
-        <button className="btn btn-primary" type="submit" disabled={busy || !email || !password}>
-          {busy ? "Signing in…" : "Sign in"}
-        </button>
+          <button
+            className="btn btn-primary"
+            type="submit"
+            disabled={busy || !email || !password}
+            style={{ width: "100%" }}
+          >
+            {busy ? "Signing in…" : "Sign in"}
+          </button>
 
-        <p className="muted small dev-note">
-          Development accounts: <code>admin@institute.local</code> ·{" "}
-          <code>sana@institute.local</code> — password <code>ChangeMe!Admin2026</code> /{" "}
-          <code>ChangeMe!Teacher2026</code>
-        </p>
-      </form>
+          <p className="muted small dev-note">
+            Development accounts: <code>admin@institute.local</code> ·{" "}
+            <code>sana@institute.local</code> — password <code>ChangeMe!Admin2026</code> /{" "}
+            <code>ChangeMe!Teacher2026</code>
+          </p>
+        </form>
+      </div>
     </div>
   );
 }

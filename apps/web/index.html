@@ -3,7 +3,38 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Learning Management System</title>
+    <title>Prepreneurship — Learning</title>
+    <meta
+      name="description"
+      content="Admissions, attendance, coursework, fees and certificates for Prepreneurship."
+    />
+    <!--
+      The theme colour follows the reader's own setting, so the browser chrome
+      on a phone matches the app rather than fighting it.
+    -->
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#4338ca" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0f172a" />
+
+    <!--
+      The mark, drawn rather than fetched. An external icon file is one more
+      request and one more thing to lose; this one is the same gradient the
+      sidebar and the sign-in panel use.
+    -->
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%234f46e5'/%3E%3Cstop offset='1' stop-color='%233730a3'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='9' fill='url(%23g)'/%3E%3Ctext x='16' y='22' font-family='system-ui,sans-serif' font-size='18' font-weight='700' fill='%23fff' text-anchor='middle'%3EP%3C/text%3E%3C/svg%3E"
+    />
+
+    <!--
+      NO WEBFONT, deliberately.
+
+      Inter was here and has been taken out. It costs a request to a third
+      party on every page load, it means an institute on a poor connection
+      waits for a font before the page settles, and it tells Google every time
+      a student opens the System. The system stack — Segoe UI on Windows, SF on
+      a Mac, Roboto on Android — is what the reader's own device is optimised
+      to render, and the difference is not worth any of that.
+    -->
   </head>
   <body>
     <div id="root"></div>

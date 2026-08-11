@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { useAuth } from "./auth/AuthContext";
 import { LoginPage } from "./pages/LoginPage";
@@ -32,6 +33,7 @@ import { VerifyPage } from "./pages/VerifyPage";
 import { CertificatesPage } from "./pages/CertificatesPage";
 import { AnnouncementsPage } from "./pages/AnnouncementsPage";
 import { NotificationBell } from "./components/NotificationBell";
+import { Icon } from "./components/Icon";
 import { ImpersonationBanner } from "./components/ImpersonationBanner";
 
 /**
@@ -46,6 +48,9 @@ import { ImpersonationBanner } from "./components/ImpersonationBanner";
 export function App() {
   const { user, initialising, mustChangePassword, signOut, hasRole } = useAuth();
   const location = useLocation();
+  // The mobile drawer. Closed on every navigation, because a menu still open
+  // over the page you just chose is a menu you have to dismiss twice.
+  const [navOpen, setNavOpen] = useState(false);
 
   // FR-CRT-015 — certificate verification is PUBLIC, and is checked before the
   // authentication gate below. An employer holding a printed certificate has no
@@ -74,55 +79,221 @@ export function App() {
   // go anywhere else.
   if (mustChangePassword) return <ChangePasswordPage forced />;
 
+  const initials = (user.fullName || user.email || "?")
+    .split(/[\s@.]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]!.toUpperCase())
+    .join("");
+
+  /**
+   * The role, said in words a person uses.
+   *
+   * `super_admin` on screen is a database value leaking into the interface.
+   * The most senior role is shown when somebody holds several, because that is
+   * the one that explains what they can see.
+   */
+  const roleLabel = hasRole("super_admin")
+    ? "Super Admin"
+    : hasRole("admin")
+      ? "Administrator"
+      : hasRole("teacher")
+        ? "Teacher"
+        : "Student";
+
   return (
     <div className="shell">
-      {/* Above the header, so it is the first thing on the page and cannot be
+      {/* Above everything, so it is the first thing on the page and cannot be
           scrolled past (SEC-AUZ-013). */}
       <ImpersonationBanner />
-      <header className="topbar">
-        <div className="brand">LMS</div>
-        <nav className="nav">
-          <NavLink to="/" end>
-            Dashboard
+
+      <div className="layout">
+        {/*
+          GROUPED, because there are twenty-one destinations and a Super Admin
+          sees most of them. Wrapped across the top they were a wall of words in
+          which nothing could be found twice; the group heading is what tells
+          somebody where to look. The groups are by WHAT YOU ARE DOING —
+          teaching, money, running the place — rather than by which permission
+          happens to guard them.
+        */}
+        <aside id="sidebar" className={`sidebar${navOpen ? " open" : ""}`}>
+          <NavLink to="/" end className="brand" onClick={() => setNavOpen(false)}>
+            <span className="brand-mark" aria-hidden="true">
+              P
+            </span>
+            <span>
+              Prepreneurship
+              <span className="brand-sub">Learning</span>
+            </span>
           </NavLink>
-          {hasRole("student") && <NavLink to="/subjects">My subjects</NavLink>}
-          {hasRole("super_admin", "admin") && <NavLink to="/admissions">Admissions</NavLink>}
-          {hasRole("super_admin", "admin") && <NavLink to="/certificates">Certificates</NavLink>}
-          {hasRole("super_admin", "admin") && <NavLink to="/users">People</NavLink>}
-          {hasRole("super_admin", "admin") && <NavLink to="/audit">Audit</NavLink>}
-          {hasRole("super_admin", "admin") && <NavLink to="/settings">Settings</NavLink>}
-          {hasRole("super_admin", "admin") && <NavLink to="/messages">Messages</NavLink>}
-          {hasRole("super_admin") && <NavLink to="/security">Security</NavLink>}
-          {hasRole("super_admin") && <NavLink to="/backups">Backups</NavLink>}
-          {hasRole("super_admin", "admin") && <NavLink to="/bulk">Bulk</NavLink>}
-          {hasRole("super_admin", "admin") && <NavLink to="/import">Import</NavLink>}
-          {/* Staff and students. A TEACHER holds no `payment` grant at all
-              (§4.5) — offering them the page would be offering a 403. */}
-          {hasRole("super_admin", "admin", "student") && <NavLink to="/fees">Fees</NavLink>}
-          {hasRole("super_admin", "admin", "teacher") && (
-            <NavLink to="/attendance">Attendance</NavLink>
-          )}
-          {hasRole("super_admin", "admin", "teacher") && <NavLink to="/marking">Marking</NavLink>}
-          {hasRole("super_admin", "admin", "teacher") && <NavLink to="/rubrics">Rubrics</NavLink>}
-          {hasRole("super_admin", "admin", "teacher") && <NavLink to="/content">Content</NavLink>}
-          {/* Everyone has a timetable: a student's classes, a teacher's
-              teaching, an administrator's view of both. */}
-          <NavLink to="/timetable">Timetable</NavLink>
-          {/* Students and teachers both. An administrator has the grant too,
-              but a forum is not something they need in the navigation. */}
-          {hasRole("student", "teacher") && <NavLink to="/discussions">Discussion</NavLink>}
-          <NavLink to="/announcements">Announcements</NavLink>
-          <NavLink to="/sections">Sections</NavLink>
-          {hasRole("super_admin", "admin", "teacher") && <NavLink to="/reports">Reports</NavLink>}
-        </nav>
-        <div className="topbar-right">
-          <NotificationBell />
-          <span className="muted small">{user.fullName || user.email || user.roles.join(", ")}</span>
-          <button className="btn btn-quiet" onClick={() => void signOut()}>
-            Sign out
-          </button>
-        </div>
-      </header>
+
+          <nav className="nav" onClick={() => setNavOpen(false)}>
+            <NavLink to="/" end>
+              <Icon name="dashboard" />
+              Dashboard
+            </NavLink>
+            <NavLink to="/timetable">
+              <Icon name="calendar" />
+              Timetable
+            </NavLink>
+            <NavLink to="/announcements">
+              <Icon name="megaphone" />
+              Announcements
+            </NavLink>
+
+            {hasRole("student") && (
+              <>
+                <div className="nav-group">Learning</div>
+                <NavLink to="/subjects">
+                  <Icon name="book" />
+                  My subjects
+                </NavLink>
+              </>
+            )}
+            {hasRole("student", "teacher") && (
+              <NavLink to="/discussions">
+                <Icon name="chat" />
+                Discussion
+              </NavLink>
+            )}
+
+            {hasRole("super_admin", "admin", "teacher") && (
+              <>
+                <div className="nav-group">Teaching</div>
+                <NavLink to="/attendance">
+                  <Icon name="check" />
+                  Attendance
+                </NavLink>
+                <NavLink to="/marking">
+                  <Icon name="pen" />
+                  Marking
+                </NavLink>
+                <NavLink to="/rubrics">
+                  <Icon name="clipboard" />
+                  Rubrics
+                </NavLink>
+                <NavLink to="/content">
+                  <Icon name="layers" />
+                  Content
+                </NavLink>
+              </>
+            )}
+
+            {hasRole("super_admin", "admin") && (
+              <>
+                <div className="nav-group">Students</div>
+                <NavLink to="/admissions">
+                  <Icon name="clipboard" />
+                  Admissions
+                </NavLink>
+                <NavLink to="/users">
+                  <Icon name="users" />
+                  People
+                </NavLink>
+                <NavLink to="/certificates">
+                  <Icon name="award" />
+                  Certificates
+                </NavLink>
+                <NavLink to="/import">
+                  <Icon name="upload" />
+                  Import
+                </NavLink>
+                <NavLink to="/bulk">
+                  <Icon name="shuffle" />
+                  Bulk changes
+                </NavLink>
+              </>
+            )}
+
+            <div className="nav-group">Institute</div>
+            <NavLink to="/sections">
+              <Icon name="layers" />
+              Sections
+            </NavLink>
+            {/* A TEACHER holds no `payment` grant at all (§4.5) — offering
+                them the page would be offering a 403. */}
+            {hasRole("super_admin", "admin", "student") && (
+              <NavLink to="/fees">
+                <Icon name="money" />
+                Fees
+              </NavLink>
+            )}
+            {hasRole("super_admin", "admin", "teacher") && (
+              <NavLink to="/reports">
+                <Icon name="chart" />
+                Reports
+              </NavLink>
+            )}
+
+            {hasRole("super_admin", "admin") && (
+              <>
+                <div className="nav-group">Administration</div>
+                <NavLink to="/settings">
+                  <Icon name="settings" />
+                  Settings
+                </NavLink>
+                <NavLink to="/messages">
+                  <Icon name="bell" />
+                  Messages
+                </NavLink>
+                <NavLink to="/audit">
+                  <Icon name="clipboard" />
+                  Audit
+                </NavLink>
+              </>
+            )}
+            {hasRole("super_admin") && (
+              <>
+                <NavLink to="/security">
+                  <Icon name="shield" />
+                  Security
+                </NavLink>
+                <NavLink to="/backups">
+                  <Icon name="database" />
+                  Backups
+                </NavLink>
+              </>
+            )}
+          </nav>
+
+          <div className="sidebar-foot">
+            <span className="avatar" aria-hidden="true">
+              {initials}
+            </span>
+            <span className="who">
+              <strong>{user.fullName || user.email}</strong>
+              <span>{roleLabel}</span>
+            </span>
+            <button
+              className="btn btn-quiet"
+              onClick={() => void signOut()}
+              aria-label="Sign out"
+              title="Sign out"
+            >
+              <Icon name="logout" />
+            </button>
+          </div>
+        </aside>
+
+        {/* Tapping away closes the drawer, which is what every phone user
+            expects and what stops them being trapped in it. */}
+        {navOpen && <div className="scrim" onClick={() => setNavOpen(false)} />}
+
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <header className="topbar">
+            <button
+              className="btn btn-quiet menu-button"
+              onClick={() => setNavOpen((o) => !o)}
+              aria-label="Menu"
+              aria-expanded={navOpen}
+              aria-controls="sidebar"
+            >
+              <Icon name="menu" />
+            </button>
+            <div className="topbar-right">
+              <NotificationBell />
+            </div>
+          </header>
 
       <main className="main">
         <Routes>
@@ -302,7 +473,9 @@ export function App() {
           />
           <Route path="*" element={<NotFound />} />
         </Routes>
-      </main>
+          </main>
+        </div>
+      </div>
     </div>
   );
 }

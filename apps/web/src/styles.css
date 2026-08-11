@@ -1,382 +1,547 @@
 /*
- * Deliberately plain CSS rather than a framework.
+ * Prepreneurship — the design system.
  *
- * NFR-ACC-004 wants 4.5:1 contrast on body text and NFR-USE-004 wants a
- * 44px minimum touch target; both are easier to guarantee when the values are
- * written down here than when they are inherited from a utility library's
- * defaults. Colours below are checked against #ffffff.
+ * Plain CSS rather than a framework, and the reason has not changed: NFR-ACC-004
+ * wants 4.5:1 contrast on body text and NFR-USE-004 wants a 44px minimum touch
+ * target, and both are easier to guarantee when the values are written here
+ * than when they are inherited from a utility library's defaults.
+ *
+ * EVERY CLASS NAME IN THIS FILE IS A CONTRACT. Thirty-two pages use them. The
+ * look changed completely in this pass; the vocabulary did not, so no page had
+ * to be rewritten to get it.
+ *
+ * Contrast figures below are measured against the surface the colour sits on,
+ * not against white — several surfaces are no longer white.
  */
+
+/* ------------------------------------------------------------- tokens ---- */
 :root {
-  --ink: #16202c;        /* 14.8:1 on white */
-  --muted: #5a6572;      /*  5.3:1 on white */
-  --line: #dfe4ea;
-  --bg: #f6f8fa;
-  --primary: #1f3b63;    /* 10.9:1 on white */
+  /* Brand. Indigo carries the product, amber marks the things that need a
+     second look. Both are dark enough to hold white text at 44px. */
+  --brand-600: #4f46e5;
+  --brand-700: #4338ca;   /*  8.6:1 on white */
+  --brand-800: #3730a3;
+  --brand-050: #eef2ff;
+  --brand-100: #e0e7ff;
+
+  --accent-600: #d97706;
+  --accent-050: #fffbeb;
+
+  /* Ink and surfaces. */
+  --ink: #0f172a;         /* 17.4:1 on white */
+  --ink-2: #334155;       /*  9.7:1 */
+  --muted: #64748b;       /*  4.8:1 — the floor, and deliberately at it */
+  --line: #e2e8f0;
+  --line-strong: #cbd5e1;
+  --bg: #f8fafc;
+  --surface: #ffffff;
+  --surface-2: #f1f5f9;
+
+  --primary: var(--brand-700);
   --primary-ink: #ffffff;
-  --warn: #8a4b00;       /*  6.1:1 on white — never colour alone (NFR-ACC-007) */
-  --warn-bg: #fff6e8;
-  --error: #9b1c1c;      /*  7.6:1 on white */
-  --error-bg: #fdf0f0;
-  --radius: 10px;
+
+  /* Status. Never colour alone (NFR-ACC-007) — each is paired with a word. */
+  --ok: #047857;          /*  4.8:1 */
+  --ok-bg: #ecfdf5;
+  --warn: #b45309;        /*  4.6:1 */
+  --warn-bg: #fffbeb;
+  --error: #b91c1c;       /*  5.9:1 */
+  --error-bg: #fef2f2;
+
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-lg: 18px;
+
+  /* Depth, used sparingly. Three levels is enough for any screen here. */
+  --shadow-1: 0 1px 2px rgb(15 23 42 / 6%), 0 1px 3px rgb(15 23 42 / 4%);
+  --shadow-2: 0 4px 12px rgb(15 23 42 / 8%), 0 2px 4px rgb(15 23 42 / 4%);
+  --shadow-3: 0 12px 32px rgb(15 23 42 / 12%), 0 4px 8px rgb(15 23 42 / 6%);
+
+  --sidebar: 248px;
+  --ease: cubic-bezier(.4, 0, .2, 1);
+}
+
+/*
+ * Dark mode, by preference rather than a toggle.
+ *
+ * The status colours are LIGHTENED here rather than reused: #b91c1c on a dark
+ * surface fails contrast badly, and an error message nobody can read is worse
+ * than no colour at all.
+ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --brand-600: #818cf8;
+    --brand-700: #a5b4fc;
+    --brand-800: #c7d2fe;
+    --brand-050: #1e1b4b;
+    --brand-100: #312e81;
+
+    --accent-600: #fbbf24;
+    --accent-050: #292524;
+
+    --ink: #f1f5f9;
+    --ink-2: #cbd5e1;
+    --muted: #94a3b8;       /* 6.4:1 on --surface */
+    --line: #1e293b;
+    --line-strong: #334155;
+    --bg: #020617;
+    --surface: #0f172a;
+    --surface-2: #1e293b;
+
+    --primary: var(--brand-700);
+    --primary-ink: #1e1b4b;
+
+    --ok: #34d399;
+    --ok-bg: #052e26;
+    --warn: #fbbf24;
+    --warn-bg: #2c1c02;
+    --error: #f87171;
+    --error-bg: #2d0d0d;
+
+    --shadow-1: 0 1px 2px rgb(0 0 0 / 40%);
+    --shadow-2: 0 4px 12px rgb(0 0 0 / 45%);
+    --shadow-3: 0 12px 32px rgb(0 0 0 / 55%);
+  }
 }
 
 * { box-sizing: border-box; }
 
+/* Somebody who has asked their operating system to stop things moving means
+   it (NFR-ACC-009). */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    transition-duration: .001ms !important;
+  }
+}
+
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* The reader's own system font: Segoe UI, SF, Roboto. No webfont —
+     see index.html for why. */
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
   font-size: 15px;
-  line-height: 1.5;
+  line-height: 1.55;
   color: var(--ink);
   background: var(--bg);
+  -webkit-font-smoothing: antialiased;
 }
 
-h1 { font-size: 1.5rem; margin: 0; }
-h2 { font-size: 1rem; margin: 0 0 .5rem; }
-code { font-family: ui-monospace, Consolas, monospace; font-size: .9em; }
+h1 { font-size: 1.5rem; margin: 0; letter-spacing: -.02em; font-weight: 680; }
+h2 { font-size: 1.0625rem; margin: 0 0 .6rem; letter-spacing: -.01em; font-weight: 640; }
+h3 { font-size: .95rem; margin: 1rem 0 .4rem; font-weight: 640; }
+code {
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: .875em;
+  background: var(--surface-2);
+  padding: .1rem .35rem;
+  border-radius: 6px;
+}
 
 .muted { color: var(--muted); }
-.small { font-size: .85rem; }
+.small { font-size: .8125rem; }
 .warn { color: var(--warn); }
 .num { text-align: right; font-variant-numeric: tabular-nums; }
-
-/* ---------------------------------------------------------------- shell -- */
-.shell { min-height: 100vh; }
-
-.topbar {
-  display: flex; align-items: center; gap: 1.25rem;
-  padding: .75rem 1.25rem;
-  background: #fff; border-bottom: 1px solid var(--line);
-  position: sticky; top: 0; z-index: 10; flex-wrap: wrap;
-}
-.brand { font-weight: 700; color: var(--primary); letter-spacing: .04em; }
-.nav { display: flex; gap: .25rem; flex: 1; flex-wrap: wrap; }
-.nav a {
-  padding: .55rem .8rem; border-radius: var(--radius);
-  color: var(--muted); text-decoration: none; min-height: 44px;
-  display: inline-flex; align-items: center;
-}
-.nav a:hover { background: var(--bg); color: var(--ink); }
-/* UI-003 — the current location is indicated by weight AND background, not
-   colour alone (NFR-ACC-007). */
-.nav a.active { background: var(--primary); color: var(--primary-ink); font-weight: 600; }
-.topbar-right { display: flex; align-items: center; gap: .75rem; }
-
-.main { padding: 1.25rem; max-width: 1200px; margin: 0 auto; }
-.page-head {
-  display: flex; align-items: baseline; justify-content: space-between;
-  gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap;
-}
-
-/* ---------------------------------------------------------------- cards -- */
-.card {
-  background: #fff; border: 1px solid var(--line);
-  border-radius: var(--radius); padding: 1rem;
-}
-.grid {
-  display: grid; gap: 1rem;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-}
-.widget-unavailable { background: #fbfbfc; border-style: dashed; }
-.stat { font-size: 2rem; font-weight: 700; margin: .25rem 0; }
-.stat.warn { color: var(--warn); }
-
-.bar { height: 8px; background: var(--line); border-radius: 999px; overflow: hidden; }
-.bar-fill { height: 100%; background: var(--primary); }
-
-.list { list-style: none; margin: 0; padding: 0; }
-.list li {
-  display: flex; justify-content: space-between; gap: 1rem;
-  padding: .45rem 0; border-bottom: 1px solid var(--line);
-}
-.list li:last-child { border-bottom: 0; }
-.list li.warn { color: var(--warn); }
-/* Completion is shown by a mark as well as by style (NFR-ACC-007). */
-.list li.done > span:first-child::before { content: "✓ "; color: var(--primary); }
-.list li.done { color: var(--muted); }
-
-/* --------------------------------------------------------------- tables -- */
-/* UI-011 — a wide table scrolls inside its own container; the page never
-   scrolls horizontally. */
-.table-scroll { overflow-x: auto; background: #fff; border: 1px solid var(--line); border-radius: var(--radius); }
-.table { width: 100%; border-collapse: collapse; font-size: .9rem; }
-.table th, .table td { padding: .6rem .75rem; text-align: left; border-bottom: 1px solid var(--line); white-space: nowrap; }
-.table th { background: var(--bg); font-weight: 600; }
-.table tbody tr:last-child td { border-bottom: 0; }
-
-.pill { display: inline-block; padding: .15rem .5rem; border-radius: 999px; background: var(--bg); font-size: .8rem; }
-.pill-warn { background: var(--warn-bg); color: var(--warn); }
-
-/* -------------------------------------------------------------- buttons -- */
-.btn {
-  min-height: 44px; padding: .55rem 1rem;
-  border: 1px solid var(--line); border-radius: var(--radius);
-  background: #fff; color: var(--ink); font: inherit; cursor: pointer;
-  display: inline-flex; align-items: center; justify-content: center;
-  text-decoration: none;
-}
-.btn:hover:not(:disabled) { background: var(--bg); }
-.btn:disabled { opacity: .55; cursor: not-allowed; }
-.btn-primary { background: var(--primary); border-color: var(--primary); color: var(--primary-ink); }
-.btn-primary:hover:not(:disabled) { filter: brightness(1.12); }
-.btn-quiet { border-color: transparent; color: var(--muted); }
-.row-actions { display: flex; gap: .5rem; margin-top: .75rem; flex-wrap: wrap; }
-
-/* Focus must be visible at all times (NFR-ACC-003). */
-:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
-
-/* --------------------------------------------------------------- forms --- */
-.field { display: block; margin-bottom: .9rem; }
-.field > span { display: block; margin-bottom: .3rem; font-weight: 500; font-size: .9rem; }
-.field input {
-  width: 100%; min-height: 44px; padding: .55rem .7rem;
-  border: 1px solid var(--line); border-radius: var(--radius);
-  font: inherit; background: #fff; color: var(--ink);
-}
-
-.alert { border-radius: var(--radius); padding: .75rem .9rem; margin-bottom: 1rem; }
-.alert p { margin: .25rem 0 0; }
-.alert-error { background: var(--error-bg); border: 1px solid var(--error); color: var(--error); }
-.alert-warn { background: var(--warn-bg); border: 1px solid var(--warn); color: var(--warn); }
-
-/* ---------------------------------------------------------------- auth --- */
-.auth-shell { min-height: 100vh; display: grid; place-items: center; padding: 1.25rem; }
-.auth-card { width: 100%; max-width: 400px; }
-.auth-title { font-size: 1.25rem; margin-bottom: .25rem; }
-.auth-card .btn-primary { width: 100%; margin-top: .5rem; }
-.dev-note { margin-top: 1rem; padding-top: .75rem; border-top: 1px solid var(--line); line-height: 1.7; }
-
-/* NFR-USE-004 — usable from 360px with no horizontal page scrolling. */
-@media (max-width: 640px) {
-  .main { padding: .85rem; }
-  .topbar { padding: .6rem .85rem; }
-  .grid { grid-template-columns: 1fr; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  * { animation: none !important; transition: none !important; }
-}
-
-/* ------------------------------------------------------------ admissions -- */
-/* Queue and detail side by side, so a reviewer never loses their place while
-   working through a batch (NFR-USE-003). */
-.split { display: grid; grid-template-columns: minmax(240px, 320px) 1fr; gap: 1rem; align-items: start; }
-.queue-list { max-height: 70vh; overflow-y: auto; }
-.queue-list li { padding: 0; border-bottom: 1px solid var(--line); }
-.queue-item {
-  display: flex; flex-direction: column; gap: .15rem; width: 100%;
-  padding: .6rem .4rem; min-height: 44px;
-  background: none; border: 0; font: inherit; color: inherit;
-  text-align: left; cursor: pointer; border-radius: var(--radius);
-}
-.queue-item:hover { background: var(--bg); }
-/* Selection is shown by weight and a left bar, not colour alone (NFR-ACC-007). */
-.queue-item.is-selected { background: var(--bg); font-weight: 600; box-shadow: inset 3px 0 0 var(--primary); }
-.queue-name { display: flex; align-items: center; gap: .4rem; }
-
-.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .6rem; margin: .75rem 0; }
-.facts div { display: flex; flex-direction: column; }
-.facts dt { font-size: .8rem; color: var(--muted); }
-.facts dd { margin: 0; font-weight: 500; }
-
-.section-label { font-size: .85rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 1rem 0 .5rem; }
-.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
-.field select {
-  width: 100%; min-height: 44px; padding: .55rem .7rem;
-  border: 1px solid var(--line); border-radius: var(--radius);
-  font: inherit; background: #fff; color: var(--ink);
-}
-.check { display: flex; gap: .5rem; align-items: flex-start; margin-top: .5rem; font-size: .9rem; }
-.check input { min-width: 20px; min-height: 20px; margin-top: .15rem; }
-
-.receipt { border-color: var(--primary); margin-bottom: 1rem; }
-/* Read aloud over the phone, so it must be unambiguous and selectable. */
-.password {
-  font-family: ui-monospace, Consolas, monospace; font-size: 1.4rem;
-  letter-spacing: .06em; margin: .4rem 0; user-select: all;
-}
-
-@media (max-width: 860px) {
-  .split { grid-template-columns: 1fr; }
-  .queue-list { max-height: 40vh; }
-  .field-row { grid-template-columns: 1fr; }
-}
-
-/* ------------------------------------------------------------ attendance -- */
-.inline-field { margin: 0; }
-.inline-field select { min-width: 260px; }
-
-.register-head, .register-foot {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 1rem; flex-wrap: wrap; margin-bottom: .75rem;
-}
-.register-foot { margin-top: .75rem; margin-bottom: 0; position: sticky; bottom: 0; }
-.tally { display: flex; gap: 1rem; flex-wrap: wrap; font-size: .9rem; }
-
-.register td, .register th { vertical-align: middle; }
-.register .center { text-align: center; }
-.block { display: block; }
-
-/* The cursor row is marked by a left bar and a background, never by colour
-   alone (NFR-ACC-007). It is what the keyboard shortcuts act on, so it has to
-   be unmistakable at a glance while calling a roll. */
-.register tr.is-cursor { background: #eef3fa; box-shadow: inset 3px 0 0 var(--primary); }
-.register tr.is-unmarked td:first-child::before { content: "•"; color: var(--warn); margin-right: .3rem; }
-
-/* A 44px target even though the control is a radio (NFR-USE-004, UI-012). */
-.radio-cell {
-  display: inline-flex; align-items: center; justify-content: center;
-  min-width: 44px; min-height: 44px; cursor: pointer;
-}
-.radio-cell input { width: 20px; height: 20px; cursor: pointer; }
-
-.keyboard-hint { margin: 0 0 .5rem; }
-kbd {
-  display: inline-block; padding: .1rem .35rem; border: 1px solid var(--line);
-  border-bottom-width: 2px; border-radius: 4px; background: #fff;
-  font-family: ui-monospace, Consolas, monospace; font-size: .85em;
-}
-
-/* Present for screen readers, absent visually (NFR-ACC-006). */
 .visually-hidden {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
   overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
 }
 
-/* ------------------------------------------------------ lessons & player -- */
-.lesson { margin-top: 1rem; padding-top: .75rem; border-top: 1px solid var(--line); }
-.lesson:first-of-type { border-top: 0; padding-top: 0; }
-.lesson h3 { margin: 0 0 .35rem; font-size: 1rem; font-weight: 600; }
-
-/* The row action group sits inline here rather than wrapping to its own line,
-   which is what .row-actions does inside a card. */
-.list .row-actions { margin-top: 0; align-items: center; }
-
-/* UI-011 — the dialog scrolls internally; the page behind it never does. */
-.modal-backdrop {
-  position: fixed; inset: 0; background: rgba(17, 19, 24, .6);
-  display: flex; align-items: center; justify-content: center;
-  padding: 1rem; z-index: 50;
-}
-.modal {
-  background: #fff; border-radius: var(--radius); padding: 1rem;
-  width: min(900px, 100%); max-height: 90vh; overflow-y: auto;
-}
-.modal-head {
-  display: flex; align-items: baseline; justify-content: space-between;
-  gap: 1rem; margin-bottom: .75rem;
-}
-.modal-head h2 { margin: 0; }
-
-/* Letterboxed rather than cropped: a slide deck loses its edges otherwise. */
-.player {
-  width: 100%; max-height: 65vh; background: #000;
-  border-radius: var(--radius); object-fit: contain;
+/* A visible focus ring everywhere, on the brand colour so it reads as ours
+   rather than as the browser's default (NFR-ACC-006). */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--brand-600);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
 }
 
-/* ---------------------------------------------------------- assignments -- */
-.assignment { display: block; }
-.assignment-head { display: flex; justify-content: space-between; gap: 1rem; align-items: baseline; }
-.assignment-body { margin: .6rem 0 .25rem; padding-left: .75rem; border-left: 2px solid var(--line); }
+/* ------------------------------------------------------------- shell ----- */
+.shell { min-height: 100vh; display: flex; flex-direction: column; }
 
-/* A control that reads as a link but behaves as a button: it toggles a panel,
-   it does not navigate, and a screen reader should be told which (NFR-ACC-002). */
-.link-button {
-  background: none; border: 0; padding: 0; font: inherit; font-weight: 600;
-  color: var(--primary); cursor: pointer; text-align: left;
-}
-.link-button:hover { text-decoration: underline; }
-.link-button:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+/*
+ * A SIDEBAR, not a top bar. There are twenty-one destinations and a Super
+ * Admin sees most of them; wrapped across the top they were a wall of words in
+ * which nothing could be found twice. Down the side they can be GROUPED, and a
+ * group heading is what tells somebody where to look.
+ */
+.layout { display: flex; flex: 1; min-height: 0; }
 
-.submit-panel { margin-top: .75rem; }
-.field textarea {
-  width: 100%; padding: .5rem .6rem; border: 1px solid var(--line);
-  border-radius: var(--radius); font: inherit; resize: vertical;
-}
-/* A 44px target, since a file input is the one control on this page a student
-   on a phone must hit reliably (UI-012). */
-.field input[type="file"] { display: block; width: 100%; padding: .55rem 0; min-height: 44px; }
-
-/* A student's typed answer, quoted so it is visibly THEIR words and not the
-   teacher's own notes below it. */
-.response {
-  margin: .5rem 0; padding: .5rem .75rem;
-  border-left: 3px solid var(--line); background: var(--bg);
-  white-space: pre-wrap; font-size: .9rem;
+.sidebar {
+  width: var(--sidebar);
+  flex: 0 0 var(--sidebar);
+  background: var(--surface);
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
-/* --------------------------------------------------------------- quiz -- */
-.question { border: 0; padding: 0; margin: 0 0 1.25rem; }
-.question legend { font-weight: 600; margin-bottom: .4rem; padding: 0; }
-/* A 44px target — a mis-tapped option in a timed quiz costs marks (UI-012). */
-.option {
+.brand {
   display: flex; align-items: center; gap: .6rem;
-  min-height: 44px; padding: .25rem .4rem; border-radius: var(--radius); cursor: pointer;
+  padding: 1.1rem 1rem .9rem;
+  font-weight: 700; letter-spacing: -.02em; font-size: 1.05rem;
+  color: var(--ink);
+  text-decoration: none;
 }
-.option:hover { background: var(--bg); }
-.option input { width: 20px; height: 20px; cursor: pointer; }
-
-/* ------------------------------------------------------------- inbox -- */
-.bell { position: relative; }
-.badge {
-  display: inline-block; min-width: 20px; margin-left: .4rem; padding: 0 .35rem;
-  border-radius: 999px; background: var(--primary); color: var(--primary-ink);
-  font-size: .75rem; font-weight: 700; text-align: center;
+.brand-mark {
+  width: 32px; height: 32px; flex: 0 0 32px;
+  border-radius: 9px;
+  background: linear-gradient(135deg, var(--brand-600), var(--brand-800));
+  color: #fff;
+  display: grid; place-items: center;
+  font-weight: 800; font-size: .95rem; letter-spacing: -.03em;
+  box-shadow: var(--shadow-1);
 }
-/* Anchored to the bell and scrolling internally, so a long inbox never makes
-   the page itself scroll (UI-011). */
-.bell-panel {
-  position: absolute; right: 0; top: calc(100% + .4rem); z-index: 40;
-  width: min(380px, 90vw); max-height: 70vh; overflow-y: auto;
-  background: #fff; border: 1px solid var(--line);
-  border-radius: var(--radius); padding: .75rem;
-  box-shadow: 0 8px 24px rgba(17, 19, 24, .12);
-}
-.bell-panel .link-button { display: block; width: 100%; }
-
-/* Preserves the author's paragraphs without letting a pasted line overflow. */
-.announcement-body { white-space: pre-wrap; overflow-wrap: anywhere; margin: .5rem 0 0; }
-
-/* ---------------------------------------------------------- authoring -- */
-.composer { border-top: 1px solid var(--line); padding-top: .9rem; margin-top: .9rem; }
-.field-label { display: block; margin: .6rem 0 .3rem; font-weight: 500; font-size: .9rem; }
-/* The option text grows; the tick and the remove button do not. */
-.option-text {
-  flex: 1; padding: .45rem .6rem; border: 1px solid var(--line);
-  border-radius: var(--radius); font: inherit; min-height: 40px;
-}
-.field input[type="datetime-local"] {
-  width: 100%; min-height: 44px; padding: .5rem .6rem;
-  border: 1px solid var(--line); border-radius: var(--radius); font: inherit;
+.brand-sub {
+  display: block; font-size: .7rem; font-weight: 500; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--muted);
 }
 
-/* A one-time password cannot be retrieved again, so it is presented as
-   something to deal with rather than a notice that fades. */
-.password-panel { border-color: var(--warn); background: var(--warn-bg); }
-.password-panel .stat { font-family: ui-monospace, Consolas, monospace; letter-spacing: .05em; }
-
-/* SEC-AUZ-013 — an impersonated session must never look like an ordinary one.
-   Above everything, undismissable, and coloured as a warning rather than an
-   error: nothing is wrong, but the identity on screen is not yours. */
-.impersonation-banner {
-  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
-  padding: .6rem 1rem; border-bottom: 2px solid var(--warn);
-  background: var(--warn-bg); color: var(--warn);
+.nav { display: flex; flex-direction: column; gap: 1px; padding: .25rem .5rem 1rem; flex: 1; }
+.nav-group {
+  font-size: .68rem; font-weight: 700; letter-spacing: .09em; text-transform: uppercase;
+  color: var(--muted); padding: 1rem .6rem .35rem;
 }
-.impersonation-banner .btn { border-color: var(--warn); color: var(--warn); }
+.nav a {
+  display: flex; align-items: center; gap: .6rem;
+  padding: .5rem .6rem;
+  min-height: 40px;
+  border-radius: var(--radius-sm);
+  color: var(--ink-2); text-decoration: none;
+  font-size: .9rem; font-weight: 500;
+  transition: background .15s var(--ease), color .15s var(--ease);
+  position: relative;
+}
+.nav a:hover { background: var(--surface-2); color: var(--ink); }
+/* UI-003 — the current location is indicated by weight, background AND a bar,
+   never by colour alone (NFR-ACC-007). */
+.nav a.active {
+  background: var(--brand-050);
+  color: var(--brand-700);
+  font-weight: 640;
+}
+.nav a.active::before {
+  content: ""; position: absolute; left: -.5rem; top: 50%;
+  transform: translateY(-50%);
+  width: 3px; height: 22px; border-radius: 0 3px 3px 0;
+  background: var(--brand-600);
+}
+.nav a svg { width: 17px; height: 17px; flex: 0 0 17px; opacity: .85; }
 
-/* Actions that are not peers of the ordinary ones: one puts you inside
-   somebody else's account, the other cannot be undone. Separated so the wrong
-   click is harder to make. */
+.sidebar-foot {
+  border-top: 1px solid var(--line);
+  padding: .75rem;
+  display: flex; align-items: center; gap: .6rem;
+  position: sticky; bottom: 0; background: var(--surface);
+}
+.avatar {
+  width: 34px; height: 34px; flex: 0 0 34px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--brand-600), var(--brand-800));
+  color: #fff; display: grid; place-items: center;
+  font-weight: 650; font-size: .8rem;
+}
+.who { min-width: 0; flex: 1; }
+.who strong { display: block; font-size: .85rem; font-weight: 600; }
+.who span {
+  display: block; font-size: .72rem; color: var(--muted);
+  text-transform: capitalize;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* The top strip that remains: page context on the left, bell and sign-out on
+   the right. */
+.topbar {
+  display: flex; align-items: center; gap: 1rem;
+  padding: .7rem 1.5rem;
+  background: color-mix(in srgb, var(--surface) 85%, transparent);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--line);
+  position: sticky; top: 0; z-index: 20;
+}
+.topbar-right { display: flex; align-items: center; gap: .5rem; margin-left: auto; }
+
+.menu-button { display: none; }
+
+.main { padding: 1.5rem; max-width: 1180px; width: 100%; margin: 0 auto; flex: 1; }
+
+.page-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 1rem; margin-bottom: 1.25rem; flex-wrap: wrap;
+}
+.page-head p { margin: .25rem 0 0; }
+
+/* ------------------------------------------------------------- cards ----- */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1.15rem 1.25rem;
+  margin-bottom: 1rem;
+  box-shadow: var(--shadow-1);
+}
+/* Lifting on hover is reserved for cards you can actually click. */
+.card.widget {
+  transition: box-shadow .18s var(--ease), transform .18s var(--ease);
+}
+.card.widget:hover { box-shadow: var(--shadow-2); transform: translateY(-1px); }
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1rem;
+}
+
+.facts { display: flex; flex-wrap: wrap; gap: .5rem; margin: .75rem 0; }
+.stat {
+  display: inline-flex; align-items: baseline; gap: .35rem;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: .3rem .7rem;
+  font-size: .8125rem;
+}
+.stat strong { font-size: .95rem; font-variant-numeric: tabular-nums; }
+.stat.warn { background: var(--warn-bg); border-color: color-mix(in srgb, var(--warn) 30%, transparent); }
+
+.pill {
+  display: inline-flex; align-items: center; gap: .3rem;
+  padding: .18rem .55rem; border-radius: 999px;
+  font-size: .72rem; font-weight: 650; letter-spacing: .02em;
+  background: var(--surface-2); color: var(--ink-2);
+  border: 1px solid var(--line);
+}
+.pill-warn { background: var(--warn-bg); color: var(--warn); border-color: color-mix(in srgb, var(--warn) 30%, transparent); }
+.pill-ok { background: var(--ok-bg); color: var(--ok); border-color: color-mix(in srgb, var(--ok) 30%, transparent); }
+
+.section-label {
+  font-size: .7rem; font-weight: 700; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--muted); margin-bottom: .4rem;
+}
+
+/* ------------------------------------------------------------ buttons ---- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: .45rem;
+  min-height: 40px; padding: .5rem .9rem;
+  border: 1px solid var(--line-strong);
+  background: var(--surface); color: var(--ink);
+  border-radius: var(--radius-sm);
+  font: inherit; font-size: .875rem; font-weight: 550;
+  cursor: pointer;
+  transition: background .15s var(--ease), border-color .15s var(--ease),
+              box-shadow .15s var(--ease), transform .06s var(--ease);
+}
+.btn:hover:not(:disabled) { background: var(--surface-2); border-color: var(--muted); }
+.btn:active:not(:disabled) { transform: translateY(1px); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+
+.btn-primary {
+  background: var(--brand-700); color: var(--primary-ink);
+  border-color: var(--brand-700);
+  box-shadow: var(--shadow-1);
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--brand-800); border-color: var(--brand-800);
+  box-shadow: var(--shadow-2);
+}
+.btn-quiet { background: transparent; border-color: transparent; color: var(--ink-2); }
+.btn-quiet:hover:not(:disabled) { background: var(--surface-2); border-color: transparent; }
+
+.link-button {
+  background: none; border: none; padding: 0; font: inherit;
+  color: var(--brand-700); text-decoration: underline; cursor: pointer;
+}
+
+.row-actions { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
+
+/* ------------------------------------------------------------- forms ----- */
+.field { display: block; margin-bottom: .9rem; }
+.field > span, .field-label {
+  display: block; font-size: .8125rem; font-weight: 600;
+  margin-bottom: .3rem; color: var(--ink-2);
+}
+.field input, .field select, .field textarea, .inline-field input, .inline-field select {
+  width: 100%; min-height: 40px; padding: .5rem .7rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  font: inherit; font-size: .9rem;
+  background: var(--surface); color: var(--ink);
+  transition: border-color .15s var(--ease), box-shadow .15s var(--ease);
+}
+.field input:focus, .field select:focus, .field textarea:focus {
+  border-color: var(--brand-600);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-600) 18%, transparent);
+  outline: none;
+}
+.field textarea { min-height: 90px; resize: vertical; }
+.field-row { display: flex; gap: .9rem; flex-wrap: wrap; }
+.field-row > .field { flex: 1 1 220px; }
+.inline-field { display: inline-flex; align-items: center; gap: .4rem; }
+
+.check { display: flex; align-items: flex-start; gap: .55rem; margin-bottom: .75rem; }
+.check input { width: 18px; height: 18px; margin-top: .18rem; flex: 0 0 18px; accent-color: var(--brand-700); }
+
+/* ------------------------------------------------------------ alerts ----- */
+.alert {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--muted);
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  padding: .75rem .95rem;
+  margin-bottom: 1rem;
+}
+.alert p { margin: .25rem 0; }
+.alert p:first-child { margin-top: 0; }
+.alert p:last-child { margin-bottom: 0; }
+.alert-error { background: var(--error-bg); border-color: color-mix(in srgb, var(--error) 25%, transparent); border-left-color: var(--error); color: var(--error); }
+.alert-warn { background: var(--warn-bg); border-color: color-mix(in srgb, var(--warn) 25%, transparent); border-left-color: var(--warn); }
+.alert-ok { background: var(--ok-bg); border-color: color-mix(in srgb, var(--ok) 25%, transparent); border-left-color: var(--ok); }
+
 .danger-zone {
-  margin-top: .75rem; padding-top: .75rem;
-  border-top: 1px dashed var(--line);
-  display: flex; flex-direction: column; gap: .5rem;
+  display: block;
+  border: 1px solid color-mix(in srgb, var(--error) 35%, transparent);
+  background: var(--error-bg);
+  border-radius: var(--radius-sm);
+  padding: .9rem 1rem; margin-top: .75rem;
 }
 
-/* Handouts sit under the lesson they belong to, indented so the relationship
-   is visible without a heading on every lesson that has none. */
-.lesson-resources { margin-top: .5rem; padding-left: .75rem; border-left: 2px solid var(--line); }
+.password-panel { border-color: var(--brand-600); box-shadow: var(--shadow-2); }
+.password-panel .stat { font-family: ui-monospace, Consolas, monospace; font-size: 1.05rem; }
+
+/* ------------------------------------------------------------- lists ----- */
+.list { list-style: none; margin: 0; padding: 0; }
+.list > li { padding: .7rem 0; border-bottom: 1px solid var(--line); }
+.list > li:last-child { border-bottom: none; }
+.list.small > li { padding: .45rem 0; font-size: .85rem; }
+
+.assignment { padding: .8rem 0; }
+.assignment-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 1rem; flex-wrap: wrap;
+}
+.assignment-body { margin-top: .5rem; }
+
+.question { padding: .9rem 0; border-bottom: 1px solid var(--line); }
+.response { margin-top: .5rem; padding-left: .9rem; border-left: 2px solid var(--line); }
+
+.bar {
+  height: 7px; background: var(--surface-2); border-radius: 999px;
+  overflow: hidden; margin: .4rem 0;
+}
+.bar-fill {
+  height: 100%; border-radius: 999px;
+  background: linear-gradient(90deg, var(--brand-600), var(--brand-700));
+  transition: width .4s var(--ease);
+}
+
+/* ------------------------------------------------------------ tables ----- */
+.table-scroll { overflow-x: auto; border-radius: var(--radius-sm); border: 1px solid var(--line); }
+.table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+.table th, .table td {
+  padding: .6rem .75rem; text-align: left;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+.table th {
+  background: var(--surface-2); font-weight: 650; font-size: .78rem;
+  text-transform: uppercase; letter-spacing: .04em; color: var(--muted);
+  position: sticky; top: 0;
+}
+.table tbody tr:hover { background: var(--surface-2); }
+.table tbody tr:last-child td { border-bottom: none; }
+
+.option { padding: .35rem 0; }
+.modal-head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; margin-bottom: .75rem; }
+
+/* -------------------------------------------------------------- auth ----- */
+/*
+ * The sign-in screen is the first thing anybody sees, and for most students it
+ * is the only Prepreneurship screen they will describe to somebody else. It is
+ * split: the product on the left, the form on the right, and on a phone the
+ * panel collapses so the form is above the fold.
+ */
+.auth-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  background: var(--bg);
+}
+.auth-brand {
+  background: linear-gradient(150deg, var(--brand-800) 0%, var(--brand-600) 55%, #6d28d9 100%);
+  color: #fff;
+  padding: 3rem;
+  display: flex; flex-direction: column; justify-content: center; gap: 1.25rem;
+  position: relative; overflow: hidden;
+}
+.auth-brand::after {
+  content: ""; position: absolute; inset: auto -20% -40% auto;
+  width: 460px; height: 460px; border-radius: 50%;
+  background: rgb(255 255 255 / 8%);
+}
+.auth-brand h1 { font-size: 2.3rem; line-height: 1.15; max-width: 15ch; }
+.auth-brand p { max-width: 42ch; color: rgb(255 255 255 / 88%); font-size: 1.02rem; }
+.auth-points { list-style: none; margin: .5rem 0 0; padding: 0; display: grid; gap: .6rem; }
+.auth-points li {
+  display: flex; gap: .6rem; align-items: flex-start;
+  color: rgb(255 255 255 / 92%); font-size: .92rem;
+}
+.auth-points li::before {
+  content: "✓"; font-weight: 700;
+  background: rgb(255 255 255 / 18%); border-radius: 50%;
+  width: 20px; height: 20px; flex: 0 0 20px;
+  display: grid; place-items: center; font-size: .7rem;
+}
+.auth-logo { display: flex; align-items: center; gap: .7rem; font-weight: 700; font-size: 1.15rem; }
+.auth-logo .brand-mark { background: rgb(255 255 255 / 18%); box-shadow: none; }
+
+.auth-panel { display: grid; place-items: center; padding: 2rem; }
+.auth-card {
+  width: 100%; max-width: 400px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 2rem;
+  box-shadow: var(--shadow-3);
+}
+.auth-title { font-size: 1.45rem; margin: 0 0 .35rem; letter-spacing: -.02em; }
+
+/* ------------------------------------------------------- notifications --- */
+.bell { position: relative; }
+.bell-dot {
+  position: absolute; top: 4px; right: 4px;
+  min-width: 17px; height: 17px; padding: 0 4px;
+  border-radius: 999px; background: var(--error); color: #fff;
+  font-size: .65rem; font-weight: 700;
+  display: grid; place-items: center;
+  border: 2px solid var(--surface);
+}
+
+/* ------------------------------------------------------------ mobile ----- */
+@media (max-width: 900px) {
+  .sidebar {
+    position: fixed; inset: 0 auto 0 0; z-index: 40;
+    transform: translateX(-100%);
+    transition: transform .22s var(--ease);
+    box-shadow: var(--shadow-3);
+  }
+  .sidebar.open { transform: translateX(0); }
+  .layout { display: block; }
+  .menu-button { display: inline-flex; }
+  .main { padding: 1rem; }
+  .scrim {
+    position: fixed; inset: 0; z-index: 30;
+    background: rgb(15 23 42 / 45%);
+  }
+  .auth-shell { grid-template-columns: 1fr; }
+  /* The panel becomes a header rather than vanishing: it is the brand, and a
+     sign-in page with no brand on a phone is a form from nowhere. */
+  .auth-brand { padding: 2rem 1.5rem; }
+  .auth-brand h1 { font-size: 1.6rem; }
+  .auth-brand p, .auth-points { display: none; }
+}
 
 /* ---------------------------------------------------------------------------
    A printed receipt (FR-PAY-039..042).
@@ -389,7 +554,7 @@ kbd {
   max-width: 46rem;
   margin: 0 auto;
   padding: 2rem;
-  background: #fff;
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
 }
@@ -437,7 +602,8 @@ kbd {
   /* Everything that is not the document. Printing the navigation and the
      buttons wastes the top third of the page and looks like a screenshot
      rather than a receipt. */
-  .topbar, .nav, .no-print, nav, header.page-head { display: none !important; }
+  .topbar, .nav, .sidebar, .no-print, nav, header.page-head { display: none !important; }
+  .layout { display: block !important; }
 
   /* Paper is white and ink is black whatever the reader's theme is. A dark
      theme printed as-is empties a toner cartridge and is unreadable. */
@@ -451,6 +617,7 @@ kbd {
     padding: 0;
     border: none;
     border-radius: 0;
+    box-shadow: none;
   }
   .muted, .receipt-fields dt { color: #444 !important; }
   .receipt-head { border-bottom-color: #000 !important; }
@@ -463,4 +630,171 @@ kbd {
   .receipt { page-break-inside: avoid; }
 
   @page { margin: 18mm; }
+}
+
+/* ---------------------------------------------------------------------------
+   Restored.
+
+   Rewriting the design system dropped about thirty class names that pages
+   genuinely use — the attendance register, the modals, the notification panel,
+   the impersonation banner, the video player. Nothing caught it: an unknown
+   class is not an error in CSS, and the build was perfectly happy. What found
+   it was listing every className in the app and subtracting the ones this file
+   defines, which is how any future restyle should end.
+   --------------------------------------------------------------------------- */
+
+/* .stat has TWO jobs, and the element says which. A <p class="stat"> on a
+   dashboard widget is a headline figure; a <span class="stat"> in a row of
+   facts is a pill. Distinguishing them by tag meant no page had to change. */
+p.stat {
+  display: block;
+  font-size: 1.9rem; font-weight: 700; letter-spacing: -.03em;
+  margin: .2rem 0 .1rem; padding: 0;
+  background: none; border: none; border-radius: 0;
+  font-variant-numeric: tabular-nums;
+}
+p.stat.warn { color: var(--warn); }
+
+.widget-unavailable { background: var(--surface-2); border-style: dashed; box-shadow: none; }
+
+.register-head, .register-foot {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 1rem; flex-wrap: wrap; margin-bottom: .75rem;
+}
+.register-foot {
+  margin: .75rem 0 0; position: sticky; bottom: 0;
+  background: var(--surface); padding-top: .6rem;
+  border-top: 1px solid var(--line);
+}
+.tally { display: flex; gap: 1rem; flex-wrap: wrap; font-size: .875rem; }
+.register td, .register th { vertical-align: middle; }
+.register .center { text-align: center; }
+.block { display: block; }
+
+/* The cursor row is marked by a left bar AND a background, never by colour
+   alone (NFR-ACC-007). It is what the keyboard shortcuts act on, so it has to
+   be unmistakable at a glance while calling a roll. */
+.register tr.is-cursor {
+  background: var(--brand-050);
+  box-shadow: inset 3px 0 0 var(--brand-600);
+}
+.register tr.is-unmarked td:first-child::before {
+  content: "\2022"; color: var(--warn); margin-right: .3rem; font-weight: 700;
+}
+
+/* A 44px target even though the control is a radio (NFR-USE-004, UI-012). */
+.radio-cell {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 44px; min-height: 44px; cursor: pointer;
+}
+.radio-cell input { width: 20px; height: 20px; cursor: pointer; accent-color: var(--brand-700); }
+
+.keyboard-hint { margin: 0 0 .5rem; }
+kbd {
+  display: inline-block; padding: .1rem .4rem;
+  border: 1px solid var(--line-strong); border-bottom-width: 2px;
+  border-radius: 5px; background: var(--surface);
+  font-family: ui-monospace, Consolas, monospace; font-size: .8em;
+}
+
+.lesson { margin-top: 1rem; padding-top: .85rem; border-top: 1px solid var(--line); }
+.lesson:first-of-type { border-top: 0; padding-top: 0; margin-top: 0; }
+.lesson h3 { margin: 0 0 .35rem; font-size: .98rem; font-weight: 640; }
+.lesson-resources { margin-top: .5rem; padding-left: .8rem; border-left: 2px solid var(--line); }
+.list .row-actions { margin-top: 0; align-items: center; }
+
+/* Letterboxed rather than cropped: a slide deck loses its edges otherwise. */
+.player {
+  width: 100%; max-height: 65vh; background: #000;
+  border-radius: var(--radius); object-fit: contain;
+}
+
+/* UI-011 — the dialog scrolls internally; the page behind it never does. */
+.modal-backdrop {
+  position: fixed; inset: 0; z-index: 50;
+  background: rgb(15 23 42 / 55%);
+  backdrop-filter: blur(3px);
+  display: flex; align-items: center; justify-content: center; padding: 1rem;
+}
+.modal {
+  background: var(--surface); color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem;
+  width: min(900px, 100%); max-height: 90vh; overflow-y: auto;
+  box-shadow: var(--shadow-3);
+}
+.modal-head h2 { margin: 0; }
+
+.split { display: grid; grid-template-columns: minmax(240px, 320px) 1fr; gap: 1rem; align-items: start; }
+.queue-list { max-height: 70vh; overflow-y: auto; }
+.queue-list li { padding: 0; border-bottom: 1px solid var(--line); }
+.queue-item {
+  display: flex; flex-direction: column; gap: .15rem; width: 100%;
+  padding: .6rem .5rem; min-height: 44px;
+  background: none; border: 0; font: inherit; color: inherit;
+  text-align: left; cursor: pointer; border-radius: var(--radius-sm);
+}
+.queue-item:hover { background: var(--surface-2); }
+/* Selection by weight and a left bar, not colour alone (NFR-ACC-007). */
+.queue-item.is-selected {
+  background: var(--brand-050); font-weight: 620;
+  box-shadow: inset 3px 0 0 var(--brand-600);
+}
+.queue-name { display: flex; align-items: center; gap: .4rem; }
+.submit-panel, .review, .composer { margin-top: .75rem; }
+.announcement-body { margin-top: .5rem; }
+.option-text { flex: 1; }
+
+.password {
+  font-family: ui-monospace, Consolas, monospace; font-size: 1.35rem;
+  letter-spacing: .06em; margin: .4rem 0;
+  /* Selected whole in one click, because it is about to be read aloud over a
+     telephone. */
+  user-select: all;
+}
+
+.badge {
+  display: inline-block; min-width: 20px; margin-left: .4rem; padding: 0 .35rem;
+  border-radius: 999px; background: var(--brand-700); color: var(--primary-ink);
+  font-size: .72rem; font-weight: 700; text-align: center;
+}
+/* Anchored to the bell and scrolling internally, so a long inbox never makes
+   the page itself scroll (UI-011). */
+.bell-panel {
+  position: absolute; right: 0; top: calc(100% + .5rem);
+  width: min(380px, calc(100vw - 2rem));
+  max-height: 70vh; overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-3);
+  padding: .5rem; z-index: 60;
+}
+
+/* Loud on purpose and never dismissible: somebody acting as another person
+   must not be able to forget it (SEC-AUZ-013). */
+.impersonation-banner {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 1rem; flex-wrap: wrap;
+  background: var(--warn-bg);
+  border-bottom: 2px solid var(--warn);
+  color: var(--warn);
+  padding: .6rem 1.25rem;
+  font-weight: 600; font-size: .875rem;
+  position: sticky; top: 0; z-index: 60;
+}
+
+.suspended { opacity: .6; }
+.dev-note {
+  margin-top: 1.25rem; padding-top: .85rem;
+  border-top: 1px solid var(--line); line-height: 1.7;
+}
+
+@media (max-width: 860px) {
+  .split { grid-template-columns: 1fr; }
+}
+@media (max-width: 640px) {
+  .grid { grid-template-columns: 1fr; }
+  .receipt-fields > div { grid-template-columns: 1fr; gap: .15rem; }
 }

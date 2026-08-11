@@ -57,12 +57,30 @@ export function DashboardPage() {
 
   if (!data) return <p className="muted">Loading…</p>;
 
+  /**
+   * The hour decides the greeting, and the greeting is the point.
+   *
+   * "Dashboard" is a word about the software. A person opening this at nine in
+   * the morning is opening their day, and naming it as such costs one line and
+   * makes the screen feel like it was built for them rather than for a demo.
+   */
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  const today = new Date().toLocaleDateString(undefined, {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
+
   return (
     <>
       <header className="page-head">
-        <h1>Dashboard</h1>
+        <div>
+          <h1>{greeting}</h1>
+          <p className="muted small">{today}</p>
+        </div>
         {/* ARC-048 — anything that may be stale carries when it was computed. */}
-        <span className="muted small">
+        <span className="pill">
           as at {new Date(data.generatedAt).toLocaleTimeString()}
         </span>
       </header>
