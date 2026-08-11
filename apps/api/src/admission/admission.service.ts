@@ -42,6 +42,81 @@ export class AdmissionService {
    * Unauthenticated by design (SEC-AUT-001): most applicants reach this from a
    * Meta advertisement on a phone and have no account yet.
    */
+  /**
+   * FR-REG-002 — the prospectus a stranger sees.
+   *
+   * Unscoped by necessity: there is no actor. This is one of the four
+   * legitimate bypasses, and the protection is in WHAT IS SELECTED rather than
+   * in who is asking — no counts, no names, no capacity.
+   *
+   * Only sections a person could actually join: PLANNED or ACTIVE, and
+   * belonging to a session that has not finished. Listing a section that
+   * closed last year gives an applicant a choice the approval step will then
+   * refuse, which is a worse experience than not offering it.
+   */
+  async prospectus() {
+    const programmes = await this.prisma.asSystem((db) =>
+      db.programme.findMany({
+        where: { isActive: true, deletedAt: null },
+        select: {
+          id: true,
+          name: true,
+          code: true,
+          description: true,
+          durationWeeks: true,
+          sessions: {
+            where: { deletedAt: null },
+            select: {
+              id: true,
+              name: true,
+              batches: {
+                where: { deletedAt: null },
+                select: {
+                  sections: {
+                    where: { status: { in: ["PLANNED", "ACTIVE"] }, deletedAt: null },
+                    select: {
+                      id: true,
+                      name: true,
+                      code: true,
+                      shift: true,
+                      genderRestriction: true,
+                    },
+                    orderBy: { name: "asc" },
+                  },
+                },
+              },
+            },
+          },
+        },
+        orderBy: { name: "asc" },
+      }),
+    );
+
+    return programmes
+      .map((p) => ({
+        id: p.id,
+        name: p.name,
+        code: p.code,
+        description: p.description,
+        durationWeeks: p.durationWeeks,
+        sections: p.sessions.flatMap((session) =>
+          session.batches.flatMap((batch) =>
+            batch.sections.map((sec) => ({
+              id: sec.id,
+              name: sec.name,
+              code: sec.code,
+              shift: sec.shift,
+              genderRestriction: sec.genderRestriction,
+              session: session.name,
+            })),
+          ),
+        ),
+      }))
+      // A programme with nowhere to enrol is not on offer, whatever the
+      // prospectus says.
+      .filter((p) => p.sections.length > 0);
+  }
+
   async submit(input: RegistrationSubmitInput, campaignRef?: Record<string, unknown>) {
     return this.prisma.asSystem(async (db) => {
       // FR-REG-016 — a probable duplicate returns the EXISTING application's

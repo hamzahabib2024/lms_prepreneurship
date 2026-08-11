@@ -2,6 +2,7 @@ import { useState } from "react";
 import { NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { useAuth } from "./auth/AuthContext";
 import { LoginPage } from "./pages/LoginPage";
+import { LandingPage } from "./pages/LandingPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { SectionsPage } from "./pages/SectionsPage";
 import { ReportsPage } from "./pages/ReportsPage";
@@ -73,7 +74,24 @@ export function App() {
     );
   }
 
-  if (!user) return <LoginPage />;
+  /**
+   * SIGNED OUT, THE ROOT IS THE PUBLIC FRONT — not the sign-in form.
+   *
+   * Most people arriving at this address have no account and are not trying to
+   * get one in the next ten seconds: they want to know what the Institute
+   * teaches. Putting a password box in front of them asks a question they
+   * cannot answer. `/login` is still the form, and everything else a signed-out
+   * visitor asks for lands on the landing page rather than a 404, because a
+   * stale link from anywhere should reach something that explains itself.
+   */
+  if (!user) {
+    return (
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="*" element={<LandingPage />} />
+      </Routes>
+    );
+  }
 
   // FR-REG-040 — a provisioned account sets its own password before it can
   // go anywhere else.

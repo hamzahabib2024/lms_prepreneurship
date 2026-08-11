@@ -28,6 +28,26 @@ export class AdmissionController {
    * enough to stop automated abuse, loose enough that a family sharing a
    * connection can still apply.
    */
+  /**
+   * FR-REG-002 — what a stranger can apply for.
+   *
+   * THE APPLICATION FORM COULD NOT BE BUILT WITHOUT THIS. Submitting one needs
+   * a programme id and a section id, and until now nothing public returned
+   * either — so the public endpoint existed and no member of the public could
+   * reach it. The form had an API and no way to fill it in.
+   *
+   * WHAT IT DELIBERATELY DOES NOT SAY: how many students are enrolled, who
+   * teaches, or anything about anybody. A prospectus is a list of what is on
+   * offer, and capacity is the Institute's business — "3 places left" on a
+   * public page is a pressure tactic, and "0 places left" tells a competitor
+   * more than it tells an applicant. Only whether the section is OPEN.
+   */
+  @Public()
+  @Get("public/prospectus")
+  prospectus() {
+    return this.admission.prospectus();
+  }
+
   @Public()
   @Throttle({ default: { limit: 3, ttl: 3_600_000 } })
   @Post("public/registrations")
