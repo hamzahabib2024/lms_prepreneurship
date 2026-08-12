@@ -68,6 +68,13 @@ async function main(): Promise<void> {
       passwordHash: await hash("ChangeMe!Admin2026"),
       fullName: "Usman Admin",
       phone: "+923001234567",
+      // Every seeded number is a WhatsApp number, because in Pakistan it very
+      // nearly always is and reaching students there is the premise of the
+      // System. Left false, the WhatsApp channel refuses every recipient for
+      // want of a number and the entire messaging path is undemonstrable —
+      // which is how it sat until somebody went looking for why the simulator
+      // outbox was empty.
+      phoneIsWhatsapp: true,
       status: "ACTIVE",
       mustChangePassword: false,
       roles: {
@@ -88,6 +95,7 @@ async function main(): Promise<void> {
       passwordHash: await hash("ChangeMe!Teacher2026"),
       fullName: "Sana Ahmed",
       phone: "+923011234567",
+      phoneIsWhatsapp: true,
       status: "ACTIVE",
       mustChangePassword: false,
       roles: { create: { roleId: roles["teacher"]! } },
@@ -267,6 +275,7 @@ async function main(): Promise<void> {
         passwordHash: studentPassword,
         fullName: name,
         phone: `+9230012345${String(roll).padStart(2, "0")}`,
+        phoneIsWhatsapp: true,
         status: "ACTIVE",
         mustChangePassword: false,
         roles: { create: { roleId: roles["student"]! } },

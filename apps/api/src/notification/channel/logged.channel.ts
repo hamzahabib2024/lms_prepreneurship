@@ -1,5 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { SimulatedOutbox } from "../../integration/simulated-outbox";
 import type {
   DeliveryOutcome,
   NotificationChannelAdapter,
@@ -30,7 +31,10 @@ export class LoggedWhatsAppChannel implements NotificationChannelAdapter {
   readonly channel = "WHATSAPP" as const;
   private readonly logger = new Logger(LoggedWhatsAppChannel.name);
 
-  constructor(private readonly config: ConfigService) {}
+  constructor(
+    private readonly config: ConfigService,
+    private readonly outbox: SimulatedOutbox,
+  ) {}
 
   isConfigured(): boolean {
     // The real adapter will require a token and a phone number id. Until those
@@ -63,10 +67,25 @@ export class LoggedWhatsAppChannel implements NotificationChannelAdapter {
       }),
     );
 
+    // The wording itself goes to the in-memory simulator instead, where an
+    // Admin can read what a student WOULD have received. See SimulatedOutbox
+    // for why that is not a table.
+    this.outbox.record({
+      at: new Date(),
+      channel: this.channel,
+      kind: message.kind,
+      recipientName: recipient.fullName,
+      destination: recipient.phone ?? "(no number)",
+      title: message.title,
+      body: message.body,
+      isUrgent: message.isUrgent,
+    });
+
     return Promise.resolve({
       status: "SUPPRESSED",
       detail:
-        "WhatsApp is not configured yet (DEP-04). The message is in the recipient's inbox.",
+        "WhatsApp is not configured yet (DEP-04). The message is in the recipient's inbox, " +
+        "and its wording is in the simulator outbox.",
     });
   }
 }

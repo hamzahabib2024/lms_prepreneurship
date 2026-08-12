@@ -16,6 +16,7 @@ import { AdminModule } from "./admin/admin.module";
 import { CertificateModule } from "./certificate/certificate.module";
 import { ProgressModule } from "./progress/progress.module";
 import { ContentModule } from "./content/content.module";
+import { IntegrationModule } from "./integration/integration.module";
 import { QuizModule } from "./quiz/quiz.module";
 import { ReportingModule } from "./reporting/reporting.module";
 import { SettingsModule } from "./settings/settings.module";
@@ -55,6 +56,8 @@ import { PermissionsGuard } from "./rbac/permissions.guard";
     ProgressModule,
     CertificateModule,
     AdminModule,
+    // Before NotificationModule: its WhatsApp adapter injects the outbox.
+    IntegrationModule,
     NotificationModule,
     ContentModule,
     QuizModule,

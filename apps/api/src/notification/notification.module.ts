@@ -24,6 +24,10 @@ import { LoggedWhatsAppChannel } from "./channel/logged.channel";
     ChannelRegistry,
     LoggedWhatsAppChannel,
   ],
-  exports: [NotificationService, AnnouncementService, TemplateService],
+  // ChannelRegistry is exported so the integrations screen can ask the adapter
+  // itself whether it is configured, rather than re-deriving that from the
+  // environment. Two copies of "is WhatsApp set up" is how a status screen
+  // starts reporting LIVE for a channel that is not.
+  exports: [NotificationService, AnnouncementService, TemplateService, ChannelRegistry],
 })
 export class NotificationModule {}

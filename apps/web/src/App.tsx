@@ -7,6 +7,7 @@ import { ApplyPage } from "./pages/ApplyPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { SectionsPage } from "./pages/SectionsPage";
 import { StructurePage } from "./pages/StructurePage";
+import { IntegrationsPage } from "./pages/IntegrationsPage";
 import { ReportsPage } from "./pages/ReportsPage";
 import { AdmissionsPage } from "./pages/AdmissionsPage";
 import { AttendancePage } from "./pages/AttendancePage";
@@ -255,6 +256,16 @@ export function App() {
               </NavLink>
             )}
 
+            {/* A teacher holds provider_binding:read and needs it — whether a
+                Meet link is created for them or they must paste one in changes
+                what they do before class. A student holds no such grant. */}
+            {hasRole("super_admin", "admin", "teacher") && (
+              <NavLink to="/integrations">
+                <Icon name="shuffle" />
+                Integrations
+              </NavLink>
+            )}
+
             {hasRole("super_admin", "admin") && (
               <>
                 <div className="nav-group">Administration</div>
@@ -495,6 +506,16 @@ export function App() {
           <Route path="/announcements" element={<AnnouncementsPage />} />
           <Route path="/sections" element={<SectionsPage />} />
           <Route path="/structure" element={<StructurePage />} />
+          <Route
+            path="/integrations"
+            element={
+              hasRole("super_admin", "admin", "teacher") ? (
+                <IntegrationsPage />
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
           <Route path="/change-password" element={<ChangePasswordPage forced={false} />} />
           <Route
             path="/reports"
