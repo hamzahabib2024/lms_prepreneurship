@@ -522,6 +522,87 @@ code {
 .video-card-link .video-play { color: var(--brand-700); }
 .video-meta { display: flex; flex-direction: column; }
 
+/* ------------------------------------------------------ arriving well ---- */
+/*
+ * One short entrance on the hero, and nothing else moves.
+ *
+ * A landing page where every section slides in as you scroll is a page that
+ * feels like it is performing rather than informing, and on the mid-range
+ * phones most applicants arrive on it stutters. So: the headline, the
+ * paragraph and the buttons come up once, staggered by 70ms, and the rest of
+ * the page is simply there.
+ *
+ * The global prefers-reduced-motion rule at the top of this file already
+ * collapses these to nothing — somebody who asked their system to stop things
+ * moving meant it (NFR-ACC-009).
+ */
+@keyframes rise {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: none; }
+}
+.hero-copy > * { animation: rise .5s var(--ease) backwards; }
+.hero-copy > *:nth-child(1) { animation-delay: .02s; }
+.hero-copy > *:nth-child(2) { animation-delay: .09s; }
+.hero-copy > *:nth-child(3) { animation-delay: .16s; }
+.hero-copy > *:nth-child(4) { animation-delay: .23s; }
+.hero-art { animation: rise .6s var(--ease) .18s backwards; }
+
+/* --------------------------------------------------------- stat band ----- */
+/*
+ * Counted figures directly under the hero.
+ *
+ * Set in the display face at a size that reads across a room, because these are
+ * the only hard numbers on the page and they are the ones a person checks
+ * before believing the prose above them. Tabular figures so the row does not
+ * shuffle when the counts change.
+ */
+.stat-band {
+  border-block: 1px solid var(--line);
+  background: color-mix(in srgb, var(--brand-050) 55%, var(--surface));
+}
+.stat-band-inner {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1.25rem; padding-block: 1.6rem;
+}
+.stat-item { display: flex; flex-direction: column; gap: .1rem; }
+.stat-item strong {
+  font-size: 2rem; font-weight: 720; letter-spacing: -.03em;
+  color: var(--brand-700);
+  font-variant-numeric: tabular-nums; line-height: 1.1;
+}
+.stat-item span { font-size: .8125rem; color: var(--ink-2); }
+
+/* ------------------------------------------------------ closing band ----- */
+/*
+ * Inverted, so the page ends on something rather than trailing off into the
+ * footer. The one element on the landing page that fills its width with the
+ * brand — spending the boldness in a single place keeps the rest quiet.
+ */
+.closing-band {
+  background: linear-gradient(135deg, var(--brand-800), var(--brand-600));
+  color: #fff;
+  margin-top: 2rem;
+}
+.closing-inner {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 2rem; flex-wrap: wrap; padding-block: 3rem;
+}
+.closing-inner h2 {
+  margin: 0 0 .4rem; font-size: 1.6rem; letter-spacing: -.02em; color: #fff;
+}
+.closing-inner p { margin: 0; max-width: 46ch; color: rgb(255 255 255 / 82%); }
+/* White on the brand, rather than the brand on white: the button has to win
+   against a saturated ground or it reads as part of the panel. */
+.closing-cta {
+  background: #fff; color: var(--brand-800);
+  border-color: #fff; font-weight: 650;
+  flex-shrink: 0;
+}
+.closing-cta:hover:not(:disabled) {
+  background: var(--brand-050); border-color: var(--brand-050);
+  transform: translateY(-1px);
+}
+
 /* ------------------------------------------------------- photo gallery --- */
 /*
  * A MASONRY-ISH STRIP, not a grid of identical squares.

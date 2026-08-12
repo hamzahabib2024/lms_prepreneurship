@@ -67,6 +67,20 @@ export function App() {
     );
   }
 
+  /**
+   * The public page, viewable while signed in.
+   *
+   * It is what a stranger sees, and until now the only way to look at it was to
+   * sign out — so the person who edits the videos, the photographs and the
+   * public notices could not see the result of any of it without losing their
+   * session. `/home` renders exactly the same component, with no sidebar and no
+   * chrome, so what is being previewed IS the page rather than an approximation
+   * of it.
+   */
+  if (location.pathname === "/home") {
+    return <LandingPage />;
+  }
+
   // Distinguishing "still checking" from "signed out" avoids flashing the
   // login screen at a user who is in fact signed in.
   if (initialising) {
@@ -264,6 +278,17 @@ export function App() {
                 <Icon name="shuffle" />
                 Integrations
               </NavLink>
+            )}
+
+            {/* The public page, as a stranger sees it. An ordinary link rather
+                than a NavLink: it leaves the application shell entirely, which
+                is the point — a preview inside the sidebar would not be a
+                preview of anything. */}
+            {hasRole("super_admin", "admin") && (
+              <a href="/home">
+                <Icon name="megaphone" />
+                Public page
+              </a>
             )}
 
             {hasRole("super_admin", "admin") && (

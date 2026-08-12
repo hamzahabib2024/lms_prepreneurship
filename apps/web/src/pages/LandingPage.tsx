@@ -170,6 +170,39 @@ export function LandingPage() {
         </div>
       </section>
 
+      {/*
+        COUNTED, NOT CLAIMED. Every figure here comes from the prospectus that
+        was just loaded, so it is whatever the Institute actually has today and
+        cannot drift. The band renders only once there is something to count —
+        "0 programmes" on a front page is worse than no band at all.
+      */}
+      {programmes && programmes.length > 0 && (
+        <section className="stat-band">
+          <div className="landing-inner stat-band-inner">
+            <div className="stat-item">
+              <strong>{programmes.length}</strong>
+              <span>{programmes.length === 1 ? "programme" : "programmes"}</span>
+            </div>
+            <div className="stat-item">
+              <strong>{programmes.reduce((n, p) => n + p.sections.length, 0)}</strong>
+              <span>sections open now</span>
+            </div>
+            <div className="stat-item">
+              <strong>
+                {new Set(programmes.flatMap((p) => p.sections.map((s) => s.shift))).size}
+              </strong>
+              <span>shifts to choose from</span>
+            </div>
+            <div className="stat-item">
+              <strong>0</strong>
+              {/* The one figure worth boasting about, and it is true: the
+                  application form needs no account. */}
+              <span>accounts needed to apply</span>
+            </div>
+          </div>
+        </section>
+      )}
+
       <section className="landing-band">
         <div className="landing-inner">
           <div className="feature-grid">
@@ -268,6 +301,27 @@ export function LandingPage() {
           <span className="muted small">
             No account needed. About five minutes, and a photo of your payment slip.
           </span>
+        </div>
+      </section>
+
+      {/*
+        The last thing on the page, because somebody who has read this far has
+        decided and should not have to scroll back up to act on it. It repeats
+        the one instruction that matters and nothing else — a closing band that
+        restates the whole page is a page nobody finished reading.
+      */}
+      <section className="closing-band">
+        <div className="landing-inner closing-inner">
+          <div>
+            <h2>Ready when you are.</h2>
+            <p>
+              Applications are open. Fill the form, attach your slip, and we will write to you with
+              a tracking reference you can check at any time.
+            </p>
+          </div>
+          <Link className="btn btn-lg closing-cta" to="/apply">
+            Start your application
+          </Link>
         </div>
       </section>
 
