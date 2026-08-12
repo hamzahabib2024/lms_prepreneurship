@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ApiError, api } from "../api/client";
+import { EDUCATION_LEVEL, EDUCATION_LEVEL_LABEL } from "@lms/shared";
 
 /**
  * The public application — SRS §13.2, FR-REG-001..010.
@@ -78,6 +79,7 @@ export function ApplyPage() {
     email: "",
     address: "",
     city: "",
+    educationLevel: "",
     qualification: "",
     desiredProgrammeId: "",
     desiredSectionId: "",
@@ -291,11 +293,32 @@ export function ApplyPage() {
                 onChange={set("nationalId")}
                 hint="Thirteen digits, with or without dashes."
               />
+              {/*
+                The LEVEL from a list, and the detail as free text beside it.
+                "FSc", "F.Sc" and "Intermediate" are one answer typed three
+                ways, and a report grouping them is one nobody can trust — so
+                the countable part is a choice and the describable part is not.
+              */}
+              <label className="field">
+                <span>Your education</span>
+                <select
+                  value={f.educationLevel}
+                  onChange={(e) => set("educationLevel")(e.target.value)}
+                  required
+                >
+                  <option value="">Choose one…</option>
+                  {EDUCATION_LEVEL.map((level) => (
+                    <option key={level} value={level}>
+                      {EDUCATION_LEVEL_LABEL[level]}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <Field
-                label="Your last qualification"
+                label="What exactly, and when"
                 value={f.qualification}
                 onChange={set("qualification")}
-                hint="For example: Matric, FSc, BA."
+                hint="For example: FSc Pre-Engineering, 2024 — or the madrasah and year."
               />
             </>
           )}

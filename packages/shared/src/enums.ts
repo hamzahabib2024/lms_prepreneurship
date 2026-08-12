@@ -115,6 +115,43 @@ export const AVAILABILITY_STATUS = ["AVAILABLE", "MISSING", "CHECKING"] as const
 export type AvailabilityStatus = (typeof AVAILABILITY_STATUS)[number];
 
 /**
+ * What an applicant has already studied — FR-REG-003.
+ *
+ * A LIST RATHER THAN FREE TEXT, because this is the field the Institute counts.
+ * "FSc", "F.Sc", "F.Sc.", "fsc pre-eng" and "Intermediate" are one answer typed
+ * five ways, and a report grouping them is a report nobody can trust.
+ *
+ * DARS_E_NIZAMI AND HIFZ_E_QURAN ARE FIRST-CLASS, not folded into OTHER. A
+ * madrasah graduate applying for a web development track is a normal applicant
+ * in Pakistan, and a form that files them under "other" tells them what it
+ * thinks of their education before they have finished applying. They are also
+ * the two the Institute most needs to count honestly, because a programme that
+ * works for them is a different claim from one that works for FSc leavers.
+ *
+ * The free-text `qualification` stays alongside for the detail — the subject,
+ * the board, the year — which is where variation belongs.
+ */
+export const EDUCATION_LEVEL = [
+  "MATRIC",
+  "FSC",
+  "BACHELORS",
+  "DARS_E_NIZAMI",
+  "HIFZ_E_QURAN",
+  "OTHER",
+] as const;
+export type EducationLevel = (typeof EDUCATION_LEVEL)[number];
+
+/** What a person calls it, in the order a form should offer them. */
+export const EDUCATION_LEVEL_LABEL: Record<EducationLevel, string> = {
+  MATRIC: "Matric",
+  FSC: "FSc / Intermediate",
+  BACHELORS: "Bachelor's degree",
+  DARS_E_NIZAMI: "Dars-e-Nizami",
+  HIFZ_E_QURAN: "Hifz-e-Quran",
+  OTHER: "Something else",
+};
+
+/**
  * An academic session — a term, e.g. Spring 2026.
  *
  * NOT the same thing as SESSION_STATUS below, which is a single live class on

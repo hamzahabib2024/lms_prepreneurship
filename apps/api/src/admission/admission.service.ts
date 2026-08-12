@@ -240,6 +240,7 @@ export class AdmissionService {
           email: input.email,
           address: input.address,
           city: input.city,
+          educationLevel: input.educationLevel,
           qualification: input.qualification,
           occupation: input.occupation ?? null,
           desiredProgrammeId: input.desiredProgrammeId,

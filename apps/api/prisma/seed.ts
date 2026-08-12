@@ -147,6 +147,77 @@ async function main(): Promise<void> {
     create: { code: "DM", name: "Diploma in Digital Marketing", durationWeeks: 26 },
   });
 
+  /*
+   * Prepreneurship's own two programmes, from prepreneurship.com.
+   *
+   * MODULE ZERO'S LENGTH IS NOT ON THE SITE. The page calls it "a mandatory
+   * programming pre-requisite for non-technical applicants" that "runs before
+   * main-track entry" and gives no duration; eight weeks is what the Institute
+   * said it is. If that is wrong it is one number here and on the programme
+   * screen, not a rewrite.
+   *
+   * The six tracks are SUBJECTS within the bootcamp rather than six separate
+   * programmes, because that is what they are: one intake, one cohort, one
+   * certificate, and a specialisation chosen inside it. Six programmes would
+   * mean six registration number series and a student who changed track
+   * needing a new one — and a registration number is permanent (BR-REG-07).
+   */
+  const moduleZero = await db.programme.upsert({
+    where: { code: "MZ" },
+    update: {},
+    create: {
+      code: "MZ",
+      name: "Module Zero",
+      description:
+        "The mandatory programming foundation for applicants coming from a non-technical " +
+        "background — basic programming, digital literacy and computational thinking. Runs " +
+        "before main-track entry.",
+      durationWeeks: 8,
+    },
+  });
+
+  const bootcamp = await db.programme.upsert({
+    where: { code: "PREP" },
+    update: {},
+    create: {
+      code: "PREP",
+      name: "Prepreneurship Bootcamp",
+      description:
+        "A residential, facilitator-led, production-driven formation programme built around " +
+        "discipline, market exposure and real income outcomes. Six specialisation tracks, " +
+        "100 seats, entry by performance-based screening.",
+      durationWeeks: 26,
+    },
+  });
+
+  // The six tracks. Subjects, so a student takes one within the cohort.
+  const TRACKS = [
+    ["WEB", "Web Development", "Modern stack engineering — React, Next.js, and deployment."],
+    ["AIP", "AI Productivity Tools", "Agents, automation, and real business workflows."],
+    ["DMK", "Digital Marketing", "Paid acquisition, SEO, and analytics for real budgets."],
+    ["GRD", "Graphic Design", "Brand systems, identity, and digital design."],
+    ["VID", "Video Editing", "Short-form, long-form, motion and post-production."],
+    ["ECM", "E-Commerce", "Storefronts, marketplaces, and online sales systems."],
+  ] as const;
+
+  for (const [code, name, description] of TRACKS) {
+    await db.subject.upsert({
+      where: { code },
+      update: {},
+      create: { code, name, description },
+    });
+  }
+
+  await db.subject.upsert({
+    where: { code: "MZ101" },
+    update: {},
+    create: {
+      code: "MZ101",
+      name: "Programming Foundations",
+      description: "Basic programming, digital literacy and computational thinking.",
+    },
+  });
+
   const session = await db.academicSession.upsert({
     where: { programmeId_code: { programmeId: programme.id, code: "SP26" } },
     update: {},

@@ -3,7 +3,13 @@
  */
 
 import { z } from "zod";
-import { ACQUISITION_SOURCE, GENDER, PAYMENT_METHOD, REJECTION_REASON } from "../enums";
+import {
+  ACQUISITION_SOURCE,
+  EDUCATION_LEVEL,
+  GENDER,
+  PAYMENT_METHOD,
+  REJECTION_REASON,
+} from "../enums";
 
 /** Pakistani CNIC: 13 digits, optionally hyphenated 5-7-1. */
 export const cnicSchema = z
@@ -45,6 +51,9 @@ export const registrationSubmitSchema = z
     email: z.string().trim().toLowerCase().email("Enter a valid email address."),
     address: z.string().trim().min(5, "Enter your address.").max(500),
     city: z.string().trim().min(2).max(100),
+    /** FR-REG-003 — the level, from the fixed list, because it is counted. */
+    educationLevel: z.enum(EDUCATION_LEVEL),
+    /** The detail beside it: the subject, the board, the year. */
     qualification: z.string().trim().min(2).max(120),
     occupation: z.string().trim().max(120).optional(),
 

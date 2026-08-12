@@ -41,6 +41,20 @@ enum Gender {
   FEMALE
 }
 
+/// What an applicant has already studied (FR-REG-003).
+///
+/// Dars-e-Nizami and Hifz-e-Quran are listed rather than folded into OTHER: a
+/// madrasah graduate applying for a web development track is a normal applicant
+/// here, and they are the two the Institute most needs to count honestly.
+enum EducationLevel {
+  MATRIC
+  FSC
+  BACHELORS
+  DARS_E_NIZAMI
+  HIFZ_E_QURAN
+  OTHER
+}
+
 enum RegistrationStatus {
   PENDING_REVIEW
   UNDER_REVIEW
@@ -315,6 +329,10 @@ model RegistrationRequest {
   email           String
   address         String   @db.VarChar(500)
   city            String   @db.VarChar(100)
+  /// The level, from a fixed list, because this is what gets counted.
+  /// Nullable only so applications submitted before it existed still read.
+  educationLevel  EducationLevel? @map("education_level")
+  /// The detail beside it — the subject, the board, the year.
   qualification   String   @db.VarChar(120)
   occupation      String?  @db.VarChar(120)
 
