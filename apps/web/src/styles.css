@@ -713,41 +713,138 @@ code {
  * reading as a contact sheet.
  */
 .photo-strip { padding-block: 1rem 2.5rem; }
-.photo-grid {
-  display: grid; gap: .8rem;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  grid-auto-rows: 180px;
-}
-.photo-tile {
-  position: relative; margin: 0;
-  border-radius: var(--radius); overflow: hidden;
+
+/*
+ * ONE PHOTOGRAPH AT A TIME, LARGE.
+ *
+ * A grid of thumbnails tells somebody nothing about what a place is like; one
+ * big picture of a classroom does. The slides are stacked and cross-faded
+ * rather than slid sideways — a fade cannot cause the horizontal scrollbar
+ * that a transformed row does at the edges, and it is gentler for anybody who
+ * finds sliding motion uncomfortable.
+ */
+.photo-stage {
+  position: relative;
+  aspect-ratio: 16 / 8;
+  border-radius: var(--radius-lg); overflow: hidden;
   background: var(--surface-2);
   border: 1px solid var(--line);
+  box-shadow: var(--shadow-2);
 }
-.photo-tile:first-child { grid-column: span 2; grid-row: span 2; }
-@media (max-width: 700px) {
-  /* On a phone the "hero" tile is the whole width anyway, and a doubled row
-     height just pushes everything else off the screen. */
-  .photo-tile:first-child { grid-column: auto; grid-row: auto; }
+@media (max-width: 700px) { .photo-stage { aspect-ratio: 4 / 3; } }
+
+.photo-slide {
+  position: absolute; inset: 0; margin: 0;
+  opacity: 0; transition: opacity .8s var(--ease);
+  /* Off the stage entirely when hidden, so a pointer cannot land on it. */
+  pointer-events: none;
 }
-.photo-tile img {
+.photo-slide.is-current { opacity: 1; pointer-events: auto; }
+.photo-slide img {
   width: 100%; height: 100%; object-fit: cover; display: block;
-  transition: transform .35s var(--ease);
 }
-.photo-tile:hover img { transform: scale(1.04); }
-.photo-tile figcaption {
+/*
+ * A slow drift across the picture while it is the current one — the effect
+ * that makes a still photograph feel alive. It runs ONLY on the visible slide,
+ * so nothing animates off-screen, and the global reduced-motion rule at the
+ * top of this file collapses it to nothing.
+ */
+@keyframes drift {
+  from { transform: scale(1.02) translate3d(0, 0, 0); }
+  to   { transform: scale(1.09) translate3d(-1.5%, -1%, 0); }
+}
+.photo-slide.is-current img { animation: drift 12s var(--ease) forwards; }
+
+.photo-slide figcaption {
   position: absolute; left: 0; right: 0; bottom: 0;
-  padding: 1.6rem .7rem .5rem;
-  font-size: .78rem; color: #fff;
-  background: linear-gradient(transparent, rgb(15 23 42 / 78%));
+  padding: 3rem 1.1rem .9rem;
+  font-size: .9rem; color: #fff;
+  background: linear-gradient(transparent, rgb(15 23 42 / 82%));
 }
+
+.photo-arrow {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  width: 40px; height: 40px; border-radius: 999px;
+  border: 0; cursor: pointer;
+  background: rgb(255 255 255 / 88%); color: var(--ink);
+  font-size: 1.4rem; line-height: 1;
+  display: grid; place-items: center;
+  opacity: 0; transition: opacity .2s var(--ease), background .2s var(--ease);
+}
+.photo-prev { left: .8rem; }
+.photo-next { right: .8rem; }
+/* Shown on hover, and ALWAYS when focused — a keyboard user cannot hover, and
+   an invisible focused control is a control they cannot find. */
+.photo-stage:hover .photo-arrow,
+.photo-arrow:focus-visible { opacity: 1; }
+.photo-arrow:hover { background: #fff; }
+
+.photo-dots {
+  position: absolute; left: 0; right: 0; bottom: .7rem;
+  display: flex; gap: .4rem; justify-content: center;
+}
+.photo-dot {
+  width: 8px; height: 8px; border-radius: 999px; padding: 0;
+  border: 1px solid rgb(255 255 255 / 70%);
+  background: rgb(255 255 255 / 35%); cursor: pointer;
+  transition: width .25s var(--ease), background .25s var(--ease);
+}
+/* The current one is WIDER as well as brighter, so which photograph you are on
+   does not depend on telling two shades of white apart (NFR-ACC-007). */
+.photo-dot.is-current { width: 22px; background: #fff; }
 
 /* ---------------------------------------------------------------- news --- */
 .news-section { padding-block: 1rem 2.5rem; }
-.news-grid {
-  display: grid; gap: 1rem;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+
+/*
+ * One notice at a time, on a nine-second dwell.
+ *
+ * Slower than the photographs on purpose: these are sentences somebody has to
+ * read, and five seconds is not long enough to finish one and decide whether
+ * it matters. The stack is absolutely positioned over a min-height so the
+ * section does not change height as notices of different lengths come round,
+ * which would push the rest of the page up and down.
+ */
+.news-rotator { position: relative; min-height: 11rem; }
+.news-rotator .news-card {
+  position: absolute; inset: 0;
+  opacity: 0; transform: translateY(8px);
+  transition: opacity .45s var(--ease), transform .45s var(--ease);
+  pointer-events: none;
 }
+.news-rotator .news-card.is-current {
+  opacity: 1; transform: none; pointer-events: auto;
+}
+
+/* The tabs name the notices rather than numbering them: somebody choosing
+   between them needs to know what they are choosing. */
+.news-controls { display: flex; gap: .5rem; margin-top: .9rem; flex-wrap: wrap; }
+.news-tab {
+  position: relative; overflow: hidden;
+  flex: 1 1 12rem; min-width: 0;
+  text-align: left; cursor: pointer;
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: .5rem .7rem .6rem;
+  font-size: .8125rem; color: var(--muted);
+  transition: color .18s var(--ease), border-color .18s var(--ease);
+}
+.news-tab:hover { color: var(--ink-2); }
+.news-tab.is-current { color: var(--ink); border-color: var(--brand-600); }
+.news-tab-label {
+  display: block; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+/* Fills over the dwell, so the panel says what it is about to do rather than
+   surprising anybody — and stops dead when the rotation is paused. */
+.news-progress {
+  position: absolute; left: 0; bottom: 0; height: 2px; width: 0;
+  background: var(--brand-600);
+}
+.news-tab.is-current .news-progress { animation: fill 9s linear forwards; }
+.news-tab.is-current .news-progress.is-still { animation-play-state: paused; }
+@keyframes fill { from { width: 0; } to { width: 100%; } }
+
 .news-card {
   position: relative;
   background: var(--surface);

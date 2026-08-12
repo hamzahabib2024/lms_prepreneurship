@@ -72,6 +72,28 @@ const auth = { "content-type": "application/json", authorization: `Bearer ${toke
  * These are written as an institute would write them and are true of nothing —
  * they are removed by --clear along with the videos.
  */
+/**
+ * Photographs for the carousel — placeholders, and obviously so.
+ *
+ * picsum.photos returns a real random photograph for a given seed, which is
+ * exactly the stock imagery the public page's own notes argue against: a
+ * visitor recognises it and stops believing everything else on the page. They
+ * are here so the carousel can be SEEN working, and the warning below says to
+ * replace them, in the same breath as the videos.
+ *
+ * Every URL was checked before being written down: 200, image/jpeg, and
+ * accepted by parseImageLinks — which refuses http and anything without an
+ * image extension, so a link that merely looks right would be dropped
+ * silently and the carousel would stay empty for no visible reason.
+ */
+const IMAGE_KEY = "public.imageUrls";
+const IMAGES = [
+  "https://picsum.photos/seed/prep-classroom/1400/700.jpg | A morning design class",
+  "https://picsum.photos/seed/prep-studio/1400/700.jpg | The studio, mid-project",
+  "https://picsum.photos/seed/prep-graduation/1400/700.jpg | Graduation, Spring 2026",
+  "https://picsum.photos/seed/prep-lab/1400/700.jpg | The computer lab",
+];
+
 const NEWS = [
   {
     title: "Applications open for the Spring intake",
@@ -90,6 +112,7 @@ const NEWS = [
 
 if (clearing) {
   const res = await fetch(`${BASE}/settings/${KEY}`, { method: "DELETE", headers: auth });
+  await fetch(`${BASE}/settings/${IMAGE_KEY}`, { method: "DELETE", headers: auth });
 
   // The notices too, or --clear would leave half the demo standing.
   const list = await fetch(`${BASE}/announcements`, { headers: auth })
@@ -116,6 +139,11 @@ if (clearing) {
     headers: auth,
     body: JSON.stringify({ value }),
   });
+  await fetch(`${BASE}/settings/${IMAGE_KEY}`, {
+    method: "PUT",
+    headers: auth,
+    body: JSON.stringify({ value: IMAGES }),
+  });
   if (!res.ok) {
     console.error(`\n  The API refused the value (${res.status}).`);
     console.error(`  ${(await res.text()).slice(0, 300)}\n`);
@@ -140,7 +168,7 @@ if (clearing) {
     if (r.ok) posted++;
   }
 
-  console.log(`\n  Added ${DEMO.length} videos and ${posted} public notice(s):\n`);
+  console.log(`\n  Added ${DEMO.length} videos, ${IMAGES.length} photographs and ${posted} public notice(s):\n`);
   for (const [, title] of DEMO) console.log(`    · ${title}`);
   console.log(`
   ⚠  THESE ARE NOT YOURS. They belong to the channels above and are on the

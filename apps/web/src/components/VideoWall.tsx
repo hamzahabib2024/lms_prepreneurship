@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Icon } from "./Icon";
+import { useAutoRotate } from "./useAutoRotate";
 
 export interface VideoLink {
   url: string;
@@ -141,25 +142,64 @@ export interface ImageLink {
 export function PhotoStrip({ images }: { images: ImageLink[] }) {
   const [broken, setBroken] = useState<string[]>([]);
   const usable = images.filter((i) => !broken.includes(i.url));
+  const { index, go, next, previous, holdProps } = useAutoRotate(usable.length, 5000);
 
   if (usable.length === 0) return null;
 
   return (
     <section className="landing-inner photo-strip">
-      <div className="photo-grid">
-        {usable.map((img) => (
-          <figure key={img.url} className="photo-tile">
+      {/*
+        A stage rather than a grid. One picture at a time, large, because a
+        photograph of a classroom is the thing that tells somebody what the
+        place is actually like, and six thumbnails tell them nothing.
+
+        The whole panel holds still on hover and on focus — see useAutoRotate
+        for why focus matters as much as hover.
+      */}
+      <div className="photo-stage" {...holdProps}>
+        {usable.map((img, i) => (
+          <figure
+            key={img.url}
+            className={`photo-slide${i === index ? " is-current" : ""}`}
+            // The ones not showing are hidden from the reading order too, or a
+            // screen reader announces six captions for one visible picture.
+            aria-hidden={i !== index}
+          >
             <img
               src={img.url}
               alt={img.alt}
-              loading="lazy"
+              // The first is what somebody sees immediately; the rest can wait.
+              loading={i === 0 ? "eager" : "lazy"}
               onError={() => setBroken((b) => [...b, img.url])}
             />
-            {/* Only where there is something to say. An empty caption bar
-                under every picture is furniture. */}
             {img.alt && <figcaption>{img.alt}</figcaption>}
           </figure>
         ))}
+
+        {usable.length > 1 && (
+          <>
+            <button className="photo-arrow photo-prev" onClick={previous} aria-label="Previous photograph">
+              ‹
+            </button>
+            <button className="photo-arrow photo-next" onClick={next} aria-label="Next photograph">
+              ›
+            </button>
+            {/* Manual controls, so the automatic part is a convenience rather
+                than the only way through. */}
+            <div className="photo-dots" role="tablist" aria-label="Photographs">
+              {usable.map((img, i) => (
+                <button
+                  key={img.url}
+                  role="tab"
+                  aria-selected={i === index}
+                  aria-label={`Photograph ${i + 1} of ${usable.length}`}
+                  className={`photo-dot${i === index ? " is-current" : ""}`}
+                  onClick={() => go(i)}
+                />
+              ))}
+            </div>
+          </>
+        )}
       </div>
     </section>
   );
@@ -182,6 +222,10 @@ export interface NewsItem {
  * Institute is active and what it is currently saying.
  */
 export function NewsList({ news }: { news: NewsItem[] }) {
+  // Slower than the photographs: these are sentences somebody has to read, and
+  // five seconds is not long enough to finish one and decide it matters.
+  const { index, go, holdProps, isStill } = useAutoRotate(news.length, 9000);
+
   if (news.length === 0) return null;
 
   const when = (iso: string) =>
@@ -200,18 +244,49 @@ export function NewsList({ news }: { news: NewsItem[] }) {
         </div>
       </header>
 
-      <div className="news-grid">
-        {news.map((n) => (
-          <article className="news-card" key={n.id}>
+      {/*
+        THE CURRENT NOTICE IS A LIVE REGION, politely. A panel whose text
+        changes on a timer is invisible to a screen reader unless it is
+        announced — but "assertive" would interrupt whatever the reader is in
+        the middle of, for a marketing notice. Polite waits for a gap.
+      */}
+      <div className="news-rotator" {...holdProps} aria-live="polite" aria-atomic="true">
+        {news.map((n, i) => (
+          <article
+            className={`news-card${i === index ? " is-current" : ""}`}
+            key={n.id}
+            aria-hidden={i !== index}
+          >
             {n.isPinned && <span className="pill pill-warn news-pin">Pinned</span>}
             <time className="news-date" dateTime={n.publishedAt}>
               {when(n.publishedAt)}
             </time>
             <h3>{n.title}</h3>
-            <p>{n.body.length > 220 ? `${n.body.slice(0, 220).trimEnd()}…` : n.body}</p>
+            <p>{n.body.length > 320 ? `${n.body.slice(0, 320).trimEnd()}…` : n.body}</p>
           </article>
         ))}
       </div>
+
+      {news.length > 1 && (
+        <div className="news-controls">
+          {news.map((n, i) => (
+            <button
+              key={n.id}
+              className={`news-tab${i === index ? " is-current" : ""}`}
+              aria-current={i === index}
+              onClick={() => go(i)}
+            >
+              {/* The title, not a number: somebody choosing between notices
+                  needs to know which one they are choosing. */}
+              <span className="news-tab-label">{n.title}</span>
+              {/* The bar fills over the dwell time, so the panel says what it
+                  is about to do rather than surprising anybody — and it stops
+                  dead when the rotation does. */}
+              <span className={`news-progress${isStill ? " is-still" : ""}`} aria-hidden="true" />
+            </button>
+          ))}
+        </div>
+      )}
     </section>
   );
 }
