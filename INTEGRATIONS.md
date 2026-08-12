@@ -87,9 +87,31 @@ reminders arriving and quietly not arriving.
 
 ### Checking it actually works
 
-Post an announcement to a section, then open **Integrations → Simulated
-outbox**. If email is configured, the message will not appear there — it will
-have gone. If it does appear, email is still off and the screen will say so.
+Do not find out by sending to a student. Run:
+
+```bash
+node -r dotenv/config scripts/check-email.mjs
+```
+
+It reads `.env`, checks the settings, connects to the mail server and reports
+whether the credentials were accepted. It does not send anything.
+
+When that passes, send yourself one real message:
+
+```bash
+node -r dotenv/config scripts/check-email.mjs you@example.com
+```
+
+If something fails it names the likely cause rather than printing a stack
+trace. The common one is `EAUTH`, which reads like a wrong password and
+usually is not — it means the App Password is missing, 2-Step Verification is
+off, or `SMTP_USER` is a different account from the one the App Password was
+created on. **Resetting the account password fixes none of those.**
+
+Once that works, post an announcement and open **Integrations → Simulated
+outbox**. If email is live the message will *not* appear there, because it will
+have gone. If it does appear, `MAIL_DRIVER` is still `log` and the screen will
+say so.
 
 ---
 
