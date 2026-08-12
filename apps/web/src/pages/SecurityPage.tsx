@@ -233,7 +233,7 @@ export function SecurityPage() {
             <table className="table">
               <thead>
                 <tr>
-                  <th>When</th>
+                  <th className="when">When</th>
                   <th>What</th>
                   <th>Who</th>
                   <th>From</th>
@@ -242,7 +242,9 @@ export function SecurityPage() {
               <tbody>
                 {events.map((e) => (
                   <tr key={e.id}>
-                    <td className="small">{new Date(e.occurredAt).toLocaleString()}</td>
+                    {/* Fixed width and lining figures, so the column stops
+                        resizing as the data changes and the rows line up. */}
+                    <td className="when small">{new Date(e.occurredAt).toLocaleString()}</td>
                     <td className={e.eventType.includes("failed") ? "warn" : undefined}>
                       {e.eventType}
                     </td>

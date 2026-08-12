@@ -333,9 +333,22 @@ function RegisterGrid({ sessionId }: { sessionId: string }) {
                   </td>
                   {STATUSES.map((s) => (
                     <td key={s.key} className="center">
-                      <label className="radio-cell">
+                      {/*
+                        The status is on the class so a marked cell can be
+                        coloured by WHAT it means. Every checked cell was the
+                        same indigo, so a register of forty read as a wall of
+                        one colour and a teacher scanning for absences had to
+                        read the column headings to tell them apart — on the
+                        screen they use most, in a hurry, half watching the
+                        room. The letter underneath means it is never colour
+                        alone (NFR-ACC-007).
+                      */}
+                      <label className={`radio-cell mark-${s.key.toLowerCase()}`}>
                         <span className="visually-hidden">
                           {s.label} for {student.name}
+                        </span>
+                        <span className="mark-letter" aria-hidden="true">
+                          {s.short}
                         </span>
                         <input
                           type="radio"

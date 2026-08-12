@@ -1370,10 +1370,20 @@ kbd {
   border: 1px dashed var(--line-strong);
   border-radius: var(--radius);
 }
+/* An empty screen is one somebody is looking at for the first time, so it is
+   given the page's colour rather than left grey — it reads as a state of this
+   screen rather than as a failure of it. */
+.empty {
+  background:
+    radial-gradient(28rem 14rem at 50% 0%, color-mix(in srgb, var(--page) 6%, transparent), transparent 70%),
+    var(--surface);
+  border-color: color-mix(in srgb, var(--page) 22%, var(--line-strong));
+}
 .empty-icon {
   display: grid; place-items: center;
   width: 48px; height: 48px; border-radius: 14px;
-  background: var(--brand-050); color: var(--brand-700);
+  background: color-mix(in srgb, var(--page) 12%, var(--surface-2));
+  color: var(--page);
   margin-bottom: .25rem;
 }
 .empty-icon svg { width: 22px; height: 22px; }
@@ -1699,10 +1709,34 @@ details > summary:hover { text-decoration: underline; }
 .radio-cell:hover { background: var(--surface-2); }
 /* The chosen one is filled AND still shows its radio — the fill is a second
    signal for somebody scanning the column, never the only one. */
-.register tr:has(input:checked) .radio-cell:has(input:checked) {
-  background: var(--brand-050);
-  box-shadow: inset 0 0 0 1px var(--brand-600);
+/*
+ * A MARKED CELL IS COLOURED BY WHAT IT MEANS.
+ *
+ * Every checked cell used to be the same indigo, so a register of forty read
+ * as a wall of one colour: to find the absences a teacher had to read the
+ * column headings, on the screen they use most, in a hurry, half watching the
+ * room. Present green, absent red, late amber, excused slate — and the letter
+ * underneath is always there, so it is never colour alone (NFR-ACC-007).
+ */
+.mark-letter {
+  font-size: .8125rem; font-weight: 700; letter-spacing: .01em;
+  color: var(--muted); transition: color .12s var(--ease);
 }
+.radio-cell input { position: absolute; opacity: 0; inset: 0; cursor: pointer; }
+.radio-cell { position: relative; }
+
+.register tr .radio-cell:has(input:checked) {
+  box-shadow: inset 0 0 0 1px currentColor;
+}
+.register tr .radio-cell:has(input:checked) .mark-letter { color: inherit; }
+
+.mark-present:has(input:checked)  { background: var(--ok-bg);    color: var(--ok); }
+.mark-absent:has(input:checked)   { background: var(--error-bg); color: var(--error); }
+.mark-late:has(input:checked)     { background: var(--warn-bg);  color: var(--warn); }
+.mark-excused:has(input:checked)  { background: var(--surface-2); color: var(--ink-2); }
+
+/* Hovering any cell hints at what pressing it would do. */
+.radio-cell:hover .mark-letter { color: var(--ink); }
 
 .tally { gap: .5rem; }
 .tally-item {

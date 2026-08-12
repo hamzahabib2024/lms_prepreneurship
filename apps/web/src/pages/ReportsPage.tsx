@@ -248,9 +248,32 @@ export function ReportsPage() {
                   <tbody>
                     {result.rows.slice(0, 50).map((row, i) => (
                       <tr key={i}>
-                        {Object.values(row).map((val, j) => (
-                          <td key={j}>{text(val)}</td>
-                        ))}
+                        {Object.values(row).map((val, j) => {
+                          const shown = text(val);
+                          return (
+                            <td
+                              key={j}
+                              /*
+                               * A report's columns are whatever the report
+                               * returns, so the cell decides for itself:
+                               * numbers are right-aligned in lining figures so
+                               * a column of marks or amounts can be compared
+                               * down the page, and anything long enough to be
+                               * a sentence is allowed to wrap rather than
+                               * forcing the whole table sideways.
+                               */
+                              className={
+                                shown !== "" && !Number.isNaN(Number(shown))
+                                  ? "num"
+                                  : shown.length > 60
+                                    ? "wrap"
+                                    : undefined
+                              }
+                            >
+                              {shown}
+                            </td>
+                          );
+                        })}
                       </tr>
                     ))}
                   </tbody>
