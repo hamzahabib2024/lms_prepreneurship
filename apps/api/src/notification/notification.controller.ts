@@ -23,6 +23,8 @@ const announcementSchema = z
     body: z.string().trim().min(1).max(20000),
     isPinned: z.boolean().default(false),
     isUrgent: z.boolean().default(false),
+    /** FR-PUB — also shown to people with no account. Off unless asked for. */
+    isPublic: z.boolean().default(false),
     expiresAt: z.coerce.date().optional(),
   })
   .refine((v) => !v.expiresAt || v.expiresAt > new Date(), {
@@ -30,6 +32,14 @@ const announcementSchema = z
     // An expiry in the past would hide the announcement the moment it was made,
     // which reads as the System losing it.
     message: "An expiry must be in the future.",
+  })
+  .refine((v) => !v.isPublic || v.audience === "INSTITUTE", {
+    path: ["isPublic"],
+    // The database refuses this too. Refusing it here as well means the author
+    // is told why while they are still writing, rather than getting a
+    // constraint violation naming a table.
+    message:
+      "Only an announcement to the whole Institute can be shown publicly. One addressed to a section was written for those students.",
   });
 
 const markReadSchema = z.object({

@@ -998,6 +998,19 @@ model Announcement {
   /// BR-COM-02 — an urgent announcement ignores a quiet-hours suppression.
   isUrgent Boolean @default(false) @map("is_urgent")
 
+  /// Also shown on the PUBLIC page, to people with no account.
+  ///
+  /// Defaults to false, and that direction matters: an announcement is written
+  /// for the people inside the Institute, and most of them — a room change, a
+  /// missing assignment, a fee deadline — would be at best meaningless and at
+  /// worst embarrassing on the front page. Publishing is a second, deliberate
+  /// act rather than the absence of a decision.
+  ///
+  /// Only an INSTITUTE announcement may carry it. One addressed to a section
+  /// is addressed to those students, and putting it on a public page tells
+  /// strangers something about a class that was said to a class.
+  isPublic Boolean @default(false) @map("is_public")
+
   publishedAt DateTime  @default(now()) @map("published_at")
   expiresAt   DateTime? @map("expires_at")
 

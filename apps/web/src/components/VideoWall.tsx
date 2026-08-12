@@ -121,6 +121,101 @@ export function VideoWall({ videos }: { videos: VideoLink[] }) {
   );
 }
 
+export interface ImageLink {
+  url: string;
+  alt: string;
+}
+
+/**
+ * Photographs of the Institute.
+ *
+ * A BROKEN IMAGE REMOVES ITSELF. These are links to somewhere else — a CDN, a
+ * Drive folder, a site that reorganised last month — and the failure mode of a
+ * gallery is a grid of broken-image icons, which says "nobody looks at this
+ * page" more loudly than an empty section ever could. On error the tile is
+ * dropped and the grid closes over it.
+ *
+ * `loading="lazy"` because a gallery below three other sections should not
+ * cost a visitor on a phone anything until they scroll to it.
+ */
+export function PhotoStrip({ images }: { images: ImageLink[] }) {
+  const [broken, setBroken] = useState<string[]>([]);
+  const usable = images.filter((i) => !broken.includes(i.url));
+
+  if (usable.length === 0) return null;
+
+  return (
+    <section className="landing-inner photo-strip">
+      <div className="photo-grid">
+        {usable.map((img) => (
+          <figure key={img.url} className="photo-tile">
+            <img
+              src={img.url}
+              alt={img.alt}
+              loading="lazy"
+              onError={() => setBroken((b) => [...b, img.url])}
+            />
+            {/* Only where there is something to say. An empty caption bar
+                under every picture is furniture. */}
+            {img.alt && <figcaption>{img.alt}</figcaption>}
+          </figure>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+export interface NewsItem {
+  id: string;
+  title: string;
+  body: string;
+  publishedAt: string;
+  isPinned: boolean;
+}
+
+/**
+ * The Institute's news — real announcements it chose to publish.
+ *
+ * The body is TRUNCATED rather than rendered in full. An announcement written
+ * for students can run to several paragraphs, and six of those turn a front
+ * page into a noticeboard nobody reads. What a stranger needs is that the
+ * Institute is active and what it is currently saying.
+ */
+export function NewsList({ news }: { news: NewsItem[] }) {
+  if (news.length === 0) return null;
+
+  const when = (iso: string) =>
+    new Date(iso).toLocaleDateString(undefined, {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+
+  return (
+    <section className="landing-inner news-section" id="news">
+      <header className="page-head">
+        <div>
+          <h2 className="landing-h2">Latest from the Institute</h2>
+          <p className="muted">Notices we have published for everyone.</p>
+        </div>
+      </header>
+
+      <div className="news-grid">
+        {news.map((n) => (
+          <article className="news-card" key={n.id}>
+            {n.isPinned && <span className="pill pill-warn news-pin">Pinned</span>}
+            <time className="news-date" dateTime={n.publishedAt}>
+              {when(n.publishedAt)}
+            </time>
+            <h3>{n.title}</h3>
+            <p>{n.body.length > 220 ? `${n.body.slice(0, 220).trimEnd()}…` : n.body}</p>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 /** The Institute's channels, shown only where one is actually set. */
 export function SocialRow({
   social,

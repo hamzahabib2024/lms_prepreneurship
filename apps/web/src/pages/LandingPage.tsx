@@ -2,7 +2,15 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import { Icon } from "../components/Icon";
-import { VideoWall, SocialRow, type VideoLink } from "../components/VideoWall";
+import {
+  VideoWall,
+  PhotoStrip,
+  NewsList,
+  SocialRow,
+  type VideoLink,
+  type ImageLink,
+  type NewsItem,
+} from "../components/VideoWall";
 
 /**
  * The public front of Prepreneurship — SRS §13.2, FR-REG-002.
@@ -50,6 +58,8 @@ interface Showcase {
   instituteName: string;
   tagline: string | null;
   videos: VideoLink[];
+  images: ImageLink[];
+  news: NewsItem[];
   social: { platform: string; url: string }[];
 }
 
@@ -194,6 +204,8 @@ export function LandingPage() {
       {/* Above the programme list on purpose: somebody deciding whether to
           apply wants to see the place before they read a table of shifts. */}
       {showcase && <VideoWall videos={showcase.videos} />}
+      {showcase && <PhotoStrip images={showcase.images} />}
+      {showcase && <NewsList news={showcase.news} />}
 
       <section className="landing-inner" id="programmes">
         <header className="page-head">

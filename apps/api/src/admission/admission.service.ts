@@ -18,7 +18,7 @@ import { getActor } from "../prisma/actor-context";
 import { RegistrationNumberService } from "./registration-number.service";
 import { StorageRegistry } from "../content/storage/storage.registry";
 import { SettingsService } from "../settings/settings.service";
-import { parseVideoLinks } from "./video-links";
+import { parseImageLinks, parseVideoLinks } from "./video-links";
 
 /** Unambiguous alphabet — no O/0, I/l/1 — because these are read aloud
  *  over WhatsApp and mis-transcribed characters generate support calls. */
@@ -48,20 +48,25 @@ export class AdmissionService {
    * test for anything served without an account.
    */
   async showcase() {
-    const [videoUrls, youtube, tiktok, facebook, instagram, tagline, name] = await Promise.all([
-      this.settings.list("public.videoUrls"),
-      this.settings.text("public.youtubeUrl"),
-      this.settings.text("public.tiktokUrl"),
-      this.settings.text("public.facebookUrl"),
-      this.settings.text("public.instagramUrl"),
-      this.settings.text("public.tagline"),
-      this.settings.text("institute.name"),
-    ]);
+    const [videoUrls, imageUrls, youtube, tiktok, facebook, instagram, tagline, name, news] =
+      await Promise.all([
+        this.settings.list("public.videoUrls"),
+        this.settings.list("public.imageUrls"),
+        this.settings.text("public.youtubeUrl"),
+        this.settings.text("public.tiktokUrl"),
+        this.settings.text("public.facebookUrl"),
+        this.settings.text("public.instagramUrl"),
+        this.settings.text("public.tagline"),
+        this.settings.text("institute.name"),
+        this.publicNews(),
+      ]);
 
     return {
       instituteName: name,
       tagline: tagline.trim() || null,
       videos: parseVideoLinks(videoUrls),
+      images: parseImageLinks(imageUrls),
+      news,
       // Only the ones actually set: an icon linking nowhere is worse than no
       // icon, and a row of dead social buttons is the mark of a template.
       social: [
@@ -71,6 +76,38 @@ export class AdmissionService {
         { platform: "instagram", url: instagram.trim() },
       ].filter((s) => s.url !== ""),
     };
+  }
+
+  /**
+   * The Institute's news, for people with no account — FR-PUB.
+   *
+   * REAL ANNOUNCEMENTS, not a second list somebody has to remember to update.
+   * A separate "news" table would drift from what the Institute actually told
+   * its students, and the front page would show last term's notice forever.
+   *
+   * The filter is the whole security of this. isPublic is opt-in per
+   * announcement and the database refuses it on anything but an INSTITUTE
+   * audience, so a notice addressed to one section cannot reach here even by
+   * mistake. Expired ones drop off by themselves, because an event that has
+   * happened is not news and a stale front page is worse than a bare one.
+   */
+  private async publicNews() {
+    const rows = await this.prisma.asSystem((db) =>
+      db.announcement.findMany({
+        where: {
+          isPublic: true,
+          audience: "INSTITUTE",
+          deletedAt: null,
+          OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+        },
+        orderBy: [{ isPinned: "desc" }, { publishedAt: "desc" }],
+        take: 6,
+        // Deliberately narrow. Not the author, not the audience, not the id of
+        // anything — a stranger gets the notice and the date it was posted.
+        select: { id: true, title: true, body: true, publishedAt: true, isPinned: true },
+      }),
+    );
+    return rows;
   }
 
   // ============================================================ UC-01 ======

@@ -281,6 +281,15 @@ export const CATALOGUE: SettingDefinition[] = [
       "Videos shown on the public page — paste the ordinary share link from YouTube, YouTube Shorts, TikTok, Facebook or Instagram, one per line. Anything not recognised is shown as a link rather than a player, so a bad paste never breaks the page. Leave empty and the whole section disappears rather than showing an empty shelf.",
   },
   {
+    key: "public.imageUrls",
+    type: "string[]",
+    default: [],
+    emptyMeansNone: true,
+    group: "Public page",
+    description:
+      "Photographs shown on the public page — a classroom, a graduation, students working. Paste image links, one per line. Use pictures of the Institute rather than stock photography: a visitor recognises a stock image and stops believing the rest of the page. Leave empty and the gallery disappears rather than showing placeholders.",
+  },
+  {
     key: "public.youtubeUrl",
     type: "string",
     default: "",

@@ -66,11 +66,46 @@ async function signIn() {
 const token = await signIn();
 const auth = { "content-type": "application/json", authorization: `Bearer ${token}` };
 
+/**
+ * Two public notices, so the news strip is not an empty promise either.
+ *
+ * These are written as an institute would write them and are true of nothing —
+ * they are removed by --clear along with the videos.
+ */
+const NEWS = [
+  {
+    title: "Applications open for the Spring intake",
+    body:
+      "Applications for Graphic Designing and Digital Marketing are open. Apply online with " +
+      "your CNIC and a payment slip — no account needed, and you will get a tracking reference " +
+      "you can check at any time.",
+  },
+  {
+    title: "Evening sections added for working students",
+    body:
+      "We have opened evening sections on both diplomas after a term of asking. Same syllabus, " +
+      "same certificate, taught between six and nine.",
+  },
+];
+
 if (clearing) {
   const res = await fetch(`${BASE}/settings/${KEY}`, { method: "DELETE", headers: auth });
+
+  // The notices too, or --clear would leave half the demo standing.
+  const list = await fetch(`${BASE}/announcements`, { headers: auth })
+    .then((r) => r.json())
+    .catch(() => null);
+  let withdrawn = 0;
+  for (const a of list?.data ?? []) {
+    if (NEWS.some((n) => n.title === a.title)) {
+      const r = await fetch(`${BASE}/announcements/${a.id}/withdraw`, { method: "POST", headers: auth });
+      if (r.ok) withdrawn++;
+    }
+  }
+
   console.log(
     res.ok
-      ? `\nRemoved the demo videos. The section disappears rather than showing an empty shelf.\n`
+      ? `\nRemoved the demo videos and ${withdrawn} demo notice(s). The sections disappear rather than showing an empty shelf.\n`
       : `\nCould not remove them (${res.status}).\n`,
   );
   process.exit(res.ok ? 0 : 1);
@@ -87,7 +122,25 @@ if (clearing) {
     process.exit(1);
   }
 
-  console.log(`\n  Added ${DEMO.length} videos to the public page:\n`);
+  // Posted rather than written to the table, so they go through the same
+  // validation and audit as a real notice — and so a sectional one would be
+  // refused here exactly as it is on the screen.
+  const existing = await fetch(`${BASE}/announcements`, { headers: auth })
+    .then((r) => r.json())
+    .catch(() => null);
+  const already = new Set((existing?.data ?? []).map((a) => a.title));
+  let posted = 0;
+  for (const n of NEWS) {
+    if (already.has(n.title)) continue;
+    const r = await fetch(`${BASE}/announcements`, {
+      method: "POST",
+      headers: auth,
+      body: JSON.stringify({ audience: "INSTITUTE", isPublic: true, ...n }),
+    });
+    if (r.ok) posted++;
+  }
+
+  console.log(`\n  Added ${DEMO.length} videos and ${posted} public notice(s):\n`);
   for (const [, title] of DEMO) console.log(`    · ${title}`);
   console.log(`
   ⚠  THESE ARE NOT YOURS. They belong to the channels above and are on the

@@ -159,6 +159,50 @@ export function parseVideoLink(raw: string): VideoLink | null {
   };
 }
 
+export interface ImageLink {
+  url: string;
+  /** Shown to a screen reader and while the image loads. */
+  alt: string;
+}
+
+/**
+ * Photographs for the public gallery.
+ *
+ * ONLY https, and only what looks like an image. An http image on an https page
+ * is blocked as mixed content and renders as a hole, and a link to a page
+ * rather than a file renders as a broken image — both look like the Institute's
+ * site is broken rather than like a bad paste.
+ *
+ * An optional caption after a pipe becomes the alt text, because a gallery of
+ * six images announced as "image, image, image" is a gallery a blind visitor
+ * cannot use (NFR-ACC-002).
+ */
+export function parseImageLinks(values: readonly string[] | undefined): ImageLink[] {
+  return (values ?? [])
+    .flatMap((v) => v.split(/[\r\n]+/))
+    .map((raw) => {
+      const [link, ...rest] = raw.split("|");
+      const url = safeUrl((link ?? "").trim());
+      if (!url) return null;
+      if (url.protocol !== "https:") return null;
+      if (!url.hostname.includes(".")) return null;
+      // A query string is normal on a CDN link, so the extension is checked on
+      // the path alone.
+      if (!/\.(jpe?g|png|webp|avif|gif)$/i.test(url.pathname)) return null;
+
+      const caption = rest.join("|").trim();
+      return {
+        url: url.toString(),
+        // Empty rather than invented. A wrong description is worse than none:
+        // a screen reader skips an empty alt, but reads a lie aloud.
+        alt: caption,
+      };
+    })
+    .filter((v): v is ImageLink => v !== null)
+    .filter((v, i, all) => all.findIndex((o) => o.url === v.url) === i)
+    .slice(0, 12);
+}
+
 /** Reads the whole setting, discarding what cannot be read at all. */
 export function parseVideoLinks(values: readonly string[] | undefined): VideoLink[] {
   return (values ?? [])

@@ -522,6 +522,73 @@ code {
 .video-card-link .video-play { color: var(--brand-700); }
 .video-meta { display: flex; flex-direction: column; }
 
+/* ------------------------------------------------------- photo gallery --- */
+/*
+ * A MASONRY-ISH STRIP, not a grid of identical squares.
+ *
+ * Institute photographs arrive in whatever shape the phone took them, and
+ * forcing them all to 1:1 crops the heads off half of them. The first tile is
+ * given two columns on a wide screen so the strip has a focal point instead of
+ * reading as a contact sheet.
+ */
+.photo-strip { padding-block: 1rem 2.5rem; }
+.photo-grid {
+  display: grid; gap: .8rem;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-auto-rows: 180px;
+}
+.photo-tile {
+  position: relative; margin: 0;
+  border-radius: var(--radius); overflow: hidden;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+.photo-tile:first-child { grid-column: span 2; grid-row: span 2; }
+@media (max-width: 700px) {
+  /* On a phone the "hero" tile is the whole width anyway, and a doubled row
+     height just pushes everything else off the screen. */
+  .photo-tile:first-child { grid-column: auto; grid-row: auto; }
+}
+.photo-tile img {
+  width: 100%; height: 100%; object-fit: cover; display: block;
+  transition: transform .35s var(--ease);
+}
+.photo-tile:hover img { transform: scale(1.04); }
+.photo-tile figcaption {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  padding: 1.6rem .7rem .5rem;
+  font-size: .78rem; color: #fff;
+  background: linear-gradient(transparent, rgb(15 23 42 / 78%));
+}
+
+/* ---------------------------------------------------------------- news --- */
+.news-section { padding-block: 1rem 2.5rem; }
+.news-grid {
+  display: grid; gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+.news-card {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1.1rem 1.2rem;
+  display: flex; flex-direction: column; gap: .4rem;
+  box-shadow: var(--shadow-1);
+  /* The brand edge, so a notice reads as the Institute speaking rather than
+     as another card in a row of cards. */
+  border-top: 3px solid var(--brand-600);
+  transition: transform .2s var(--ease), box-shadow .2s var(--ease);
+}
+.news-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-2); }
+.news-card h3 { margin: 0; font-size: 1rem; }
+.news-card p { margin: 0; font-size: .875rem; color: var(--ink-2); }
+.news-date {
+  font-size: .72rem; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--muted); font-variant-numeric: tabular-nums;
+}
+.news-pin { position: absolute; top: .8rem; right: .9rem; }
+
 /* ------------------------------------------------------ social channels --- */
 .social-row { display: flex; gap: .5rem; align-items: center; }
 .social-link {

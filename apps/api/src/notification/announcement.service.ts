@@ -18,6 +18,8 @@ export interface CreateAnnouncementInput {
   body: string;
   isPinned?: boolean;
   isUrgent?: boolean;
+  /** FR-PUB — also shown on the public page. INSTITUTE audience only. */
+  isPublic?: boolean;
   expiresAt?: Date;
 }
 
@@ -72,6 +74,10 @@ export class AnnouncementService {
         body: input.body,
         isPinned: input.isPinned ?? false,
         isUrgent: input.isUrgent ?? false,
+        // Belt and braces with the schema and the CHECK constraint. Three
+        // places agree that a sectional notice is not public, and the cheapest
+        // one to get wrong later is the schema.
+        isPublic: (input.isPublic ?? false) && input.audience === "INSTITUTE",
         expiresAt: input.expiresAt ?? null,
         authorUserId: actor.userId,
       },
