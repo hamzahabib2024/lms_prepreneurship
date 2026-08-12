@@ -244,6 +244,108 @@ async function main(): Promise<void> {
     },
   });
 
+  /*
+   * PREPRENEURSHIP'S OWN INTAKE — the structure that makes the two real
+   * programmes appear everywhere.
+   *
+   * A programme with no section is not on offer, and the prospectus says so by
+   * filtering it out: the two programmes were created and then appeared on
+   * nothing, because nothing could be enrolled in. A term, a batch and
+   * sections are what turn a row in a table into something a person can apply
+   * to, and they are what the sections list, the timetable, the reports and
+   * the certificate screens all hang off.
+   *
+   * GENDER-SEGREGATED SECTIONS, because the Institute is (FR-CRS-009), and
+   * because the restriction cannot be relaxed once students are admitted — so
+   * it has to be right at the point the section is created rather than fixed
+   * later. The bootcamp's 100 seats are split fifty and fifty, which is the
+   * number the site states.
+   */
+  const cohort1 = await db.academicSession.upsert({
+    where: { programmeId_code: { programmeId: bootcamp.id, code: "C1" } },
+    update: {},
+    create: {
+      programmeId: bootcamp.id,
+      code: "C1",
+      name: "Cohort 1 (2026)",
+      startDate: new Date("2026-09-01"),
+      endDate: new Date("2027-02-28"),
+      status: "ACTIVE",
+    },
+  });
+
+  // Module Zero runs BEFORE main-track entry, so its term ends where the
+  // bootcamp's begins rather than overlapping it.
+  const mzIntake = await db.academicSession.upsert({
+    where: { programmeId_code: { programmeId: moduleZero.id, code: "MZ26" } },
+    update: {},
+    create: {
+      programmeId: moduleZero.id,
+      code: "MZ26",
+      name: "Module Zero — 2026 intake",
+      startDate: new Date("2026-07-01"),
+      endDate: new Date("2026-08-31"),
+      status: "ACTIVE",
+    },
+  });
+
+  const cohortBatch = await upsertBatch(cohort1.id, "Cohort 1 — residential", "FULL_TIME");
+  const mzBatch = await upsertBatch(mzIntake.id, "Module Zero — pre-track", "FULL_TIME");
+
+  const prepFemale = await upsertSection({
+    batchId: cohortBatch.id,
+    code: "PREP-C1-F",
+    name: "Prepreneurship Cohort 1 — Female",
+    capacity: 50,
+    genderRestriction: "FEMALE",
+    shift: "MORNING",
+  });
+  const prepMale = await upsertSection({
+    batchId: cohortBatch.id,
+    code: "PREP-C1-M",
+    name: "Prepreneurship Cohort 1 — Male",
+    capacity: 50,
+    genderRestriction: "MALE",
+    shift: "MORNING",
+  });
+
+  const mzFemale = await upsertSection({
+    batchId: mzBatch.id,
+    code: "MZ26-F",
+    name: "Module Zero — Female",
+    capacity: 40,
+    genderRestriction: "FEMALE",
+    shift: "MORNING",
+  });
+  const mzMale = await upsertSection({
+    batchId: mzBatch.id,
+    code: "MZ26-M",
+    name: "Module Zero — Male",
+    capacity: 40,
+    genderRestriction: "MALE",
+    shift: "MORNING",
+  });
+
+  /*
+   * The six tracks are offered in both sections and NONE is compulsory: a
+   * student takes one specialisation, not all six. isCompulsory false is what
+   * says so, and it is what stops the progress calculation demanding six
+   * tracks' work from somebody doing one.
+   */
+  const trackSubjects = await db.subject.findMany({
+    where: { code: { in: ["WEB", "AIP", "DMK", "GRD", "VID", "ECM"] } },
+    select: { id: true },
+  });
+  for (const section of [prepFemale, prepMale]) {
+    for (const subject of trackSubjects) await offer(section.id, subject.id, false);
+  }
+
+  // Module Zero is one compulsory subject — it is the whole programme.
+  const mzSubject = await db.subject.findUnique({ where: { code: "MZ101" }, select: { id: true } });
+  if (mzSubject) {
+    for (const section of [mzFemale, mzMale]) await offer(section.id, mzSubject.id, true);
+  }
+
   const morningBatch = await upsertBatch(session.id, "SP26 Morning", "MORNING");
   const eveningBatch = await upsertBatch(dmSession.id, "SP26 Evening", "EVENING");
 
