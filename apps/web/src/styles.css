@@ -524,8 +524,37 @@ code {
   text-transform: uppercase; letter-spacing: .04em; color: var(--muted);
   position: sticky; top: 0;
 }
+/* The sticky header has to sit ABOVE the rows that scroll under it. Without a
+   stacking context of its own, a cell with a background scrolls over it and
+   the column names disappear halfway down an audit log. */
+.table th { z-index: 2; box-shadow: inset 0 -1px 0 var(--line-strong); }
+
+/*
+ * Zebra striping, which the admin tables specifically needed.
+ *
+ * People, Audit and Security are the long, wide ones — hundreds of rows of
+ * near-identical text where the eye has to carry a value from the first column
+ * to the last without dropping a line. Hover alone helps the row you are
+ * pointing at; it does nothing for the one you are reading. Kept very faint so
+ * it separates rows without drawing a grid.
+ */
+.table tbody tr:nth-child(even) { background: color-mix(in srgb, var(--surface-2) 45%, transparent); }
 .table tbody tr:hover { background: var(--surface-2); }
 .table tbody tr:last-child td { border-bottom: none; }
+
+/* Cells whose content is prose rather than a value — an audit entry's detail,
+   a security event's reason. nowrap on those forces a horizontal scroll across
+   the whole table to read one sentence. */
+.table td.wrap {
+  white-space: normal; min-width: 16rem; max-width: 34rem;
+  line-height: 1.45;
+}
+/* A timestamp column: fixed width and lining figures, so the rows align and
+   the column stops resizing as the data changes. */
+.table td.when, .table th.when {
+  font-variant-numeric: tabular-nums; white-space: nowrap; width: 1%;
+  color: var(--ink-2);
+}
 
 .option { padding: .35rem 0; }
 .modal-head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; margin-bottom: .75rem; }
