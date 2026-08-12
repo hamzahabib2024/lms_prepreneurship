@@ -316,7 +316,28 @@ code {
  * headings on every page is a theme; a 3px rule is an accent, and the text
  * stays at full contrast (NFR-ACC-004).
  */
-.main { --page: var(--brand-600); }
+/*
+ * --page-base is the hue; --page is that hue AS USED, which differs by theme.
+ *
+ * The twelve below were chosen against white and eight of them failed on the
+ * dark ground — a mid-tone that reads well on paper disappears on #0f172a.
+ * Lightening toward white by 30% brings the worst of them from 2.36:1 to
+ * 4.97:1 as a mark and 5.23:1 as a figure, and keeps the hue recognisable;
+ * lightening further starts washing them all toward the same pale.
+ *
+ * Derived once here rather than twelve times in a dark block, so adding a
+ * thirteenth page cannot forget the dark case.
+ */
+.main { --page-base: var(--brand-600); --page: var(--page-base); }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .main {
+    --page: color-mix(in srgb, var(--page-base) 70%, #fff);
+  }
+}
+:root[data-theme="dark"] .main {
+  --page: color-mix(in srgb, var(--page-base) 70%, #fff);
+}
 
 .page-head > div:first-child > h1 { position: relative; padding-bottom: .5rem; }
 .page-head > div:first-child > h1::after {
@@ -325,19 +346,24 @@ code {
   background: var(--page);
 }
 
-.page-attendance, .page-timetable          { --page: #2563eb; }
-.page-subjects, .page-content              { --page: #7c3aed; }
-.page-marking, .page-rubrics               { --page: #c026d3; }
-.page-fees, .page-receipts                 { --page: #059669; }
-.page-reports, .page-dashboard             { --page: #0891b2; }
-.page-admissions, .page-import             { --page: #ea580c; }
-.page-certificates                         { --page: #ca8a04; }
-.page-announcements, .page-discussions     { --page: #db2777; }
-.page-security, .page-audit, .page-backups { --page: #dc2626; }
+.page-attendance, .page-timetable          { --page-base: #2563eb; }
+.page-subjects, .page-content              { --page-base: #7c3aed; }
+.page-marking, .page-rubrics               { --page-base: #c026d3; }
+.page-fees, .page-receipts                 { --page-base: #059669; }
+.page-reports, .page-dashboard             { --page-base: #0891b2; }
+.page-admissions, .page-import             { --page-base: #ea580c; }
+/* Darker than the amber the pills use. #ca8a04 was the obvious "certificate
+   gold" and it measured 2.94:1 against white — below the 3:1 floor for a
+   non-text indicator, and 3.93:1 for the figures, below the 4.5:1 for text.
+   Gold is simply a light hue, and the honest fix is a darker one rather than a
+   note saying it is decorative. */
+.page-certificates                         { --page-base: #a16207; }
+.page-announcements, .page-discussions     { --page-base: #db2777; }
+.page-security, .page-audit, .page-backups { --page-base: #dc2626; }
 .page-settings, .page-integrations,
-.page-messages                             { --page: #4f46e5; }
-.page-sections, .page-structure            { --page: #0d9488; }
-.page-users, .page-bulk                    { --page: #475569; }
+.page-messages                             { --page-base: #4f46e5; }
+.page-sections, .page-structure            { --page-base: #0d9488; }
+.page-users, .page-bulk                    { --page-base: #475569; }
 
 /* ------------------------------------------------------------- cards ----- */
 .card {
@@ -783,7 +809,9 @@ code {
 .nav a[href$="/dashboard"] svg { color: #0891b2; }
 .nav a[href$="/admissions"] svg,
 .nav a[href$="/apply"] svg { color: #ea580c; }
-.nav a[href$="/certificates"] svg { color: #ca8a04; }
+/* Kept in step with --page for the same destination: what a person clicked is
+   what they arrive at, and #ca8a04 failed contrast anyway. */
+.nav a[href$="/certificates"] svg { color: #a16207; }
 .nav a[href$="/announcements"] svg,
 .nav a[href$="/discussions"] svg { color: #db2777; }
 .nav a[href$="/security"] svg,
@@ -1171,6 +1199,31 @@ code {
   /* A receipt that breaks across two pages is two half-documents, and the
      half without the amount proves nothing. */
   .receipt { page-break-inside: avoid; }
+
+  /*
+   * THE DECORATION COMES OFF THE PAPER.
+   *
+   * The screen washes, the card hairlines, the dots beside headings and the
+   * page-tinted figures are all navigation aids — they help somebody find
+   * their way around twenty-one screens, and none of that survives being
+   * printed. A tinted wash in particular is fixed to the viewport, so it would
+   * repeat on every sheet and cost toner to say nothing.
+   *
+   * Added when they were: the print rules above predate all of it, and a
+   * receipt is a document somebody hands to a student.
+   */
+  .layout { background-image: none !important; }
+  .card.widget::before { display: none !important; }
+  .card > h2::before { display: none !important; }
+  .page-head > div:first-child > h1::after { display: none !important; }
+  .stat, .empty {
+    background: #fff !important;
+    border-color: #999 !important;
+  }
+  .stat strong { color: #000 !important; }
+  .list > li:hover { background: transparent !important; }
+  /* Anything that only exists to be looked at. */
+  .video-wall, .photo-strip, .closing-band, .stat-band { display: none !important; }
 
   @page { margin: 18mm; }
 }
