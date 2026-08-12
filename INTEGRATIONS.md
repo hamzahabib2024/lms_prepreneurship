@@ -1,53 +1,75 @@
 # Connecting the outside world
 
-Four things the System talks to. **None of them is required to run it** — every
-one has a working fallback, and the Integrations screen (in the sidebar, under
-Institute) says at any moment which are live and which are not.
+A step-by-step guide to the four services the System can talk to.
 
-Set them in `.env` at the repository root. Restart the API after any change;
-none of these is read again while it is running.
+**None of them is required.** The System runs completely without all four —
+every one has a working fallback. Connect them in the order below: the first is
+easy and valuable, the last is slow and can wait.
 
-| | What it does | Needed from | Without it |
-|---|---|---|---|
-| **Email (SMTP)** | Passwords, receipts, every notification | Any mailbox you already own | Nothing is emailed |
-| **Google Drive** | Lecture video storage | A Google Cloud service account | Video served from the app server |
-| **Google Meet** | Automatic class links | The same service account | Links pasted in by hand |
-| **WhatsApp** | Messages to students | Meta Business account | Nothing is sent; in-app inbox still works |
+## Before you start
 
-Start with email. It is the one that needs nothing from anybody else, and it is
-the one currently costing you the most.
+Run this at any time to see where you are:
+
+```bash
+node -r dotenv/config scripts/check-integrations.mjs
+```
+
+It reads `.env`, tells you what is connected and what each missing one needs.
+It never prints a password or a key, so the output is safe to share.
+
+All settings go in a file called **`.env`** in the project root. If you do not
+have one yet:
+
+```bash
+cp .env.example .env
+```
+
+**Restart the API after every change.** None of these is re-read while it runs.
 
 ---
 
-## 1. Email — do this first
+| Order | Service | Time | Needs |
+|---|---|---|---|
+| 1 | **Email** | 10 min | A mailbox you already own |
+| 2 | **Google Drive** | 30 min | Google Cloud access |
+| 3 | **Google Meet** | 10 min | Step 2 done first |
+| 4 | **WhatsApp** | Days | A Meta Business account and template approval |
 
-### Why it matters more than it looks
+---
 
-When an administrator creates an account, the System generates a temporary
-password and **shows it once on screen**. There is no second chance to see it.
-Today the only way it reaches the person is the administrator reading it out or
-copying it into a chat — which means the password to a student record ends up
-sitting in someone's WhatsApp history for good.
+# 1. Email
 
-With email configured, the System sends it directly.
+**Do this one first.** It is the quickest, it needs nothing from any company,
+and it is the one currently costing you something real.
 
-### Using Gmail
+## Why it matters
 
-You need a **Google Account** and, on it, an **App Password** — a 16-character
-code that lets one program send mail without ever holding your real password.
+When an administrator creates an account, the System shows a temporary password
+**once, on screen**. There is no second chance to see it. Without email, the
+only way it reaches the person is somebody reading it aloud or pasting it into a
+chat — so the password to a student record ends up in a WhatsApp history for
+good.
 
-1. The account must have **2-Step Verification** switched on. Google will not
-   offer App Passwords otherwise.
-   → <https://myaccount.google.com/signinoptions/two-step-verification>
+## Step 1 — Turn on 2-Step Verification
 
-2. Go to **App passwords**, name it something like `Prepreneurship LMS`, and
-   create it.
-   → <https://myaccount.google.com/apppasswords>
+Open **<https://myaccount.google.com/signinoptions/two-step-verification>**
 
-3. Google shows a 16-character code such as `abcd efgh ijkl mnop`. **Copy it
-   now** — it is shown once. The spaces do not matter.
+Turn it on if it is not already.
 
-4. Put it in `.env`:
+> Google **will not offer App Passwords** until this is on — the page will not
+> exist. This is the step people skip and then lose an hour to.
+
+## Step 2 — Create an App Password
+
+Open **<https://myaccount.google.com/apppasswords>**
+
+Type a name — `Prepreneurship LMS` — and create it.
+
+Google shows **16 lowercase letters**, like `abcd efgh ijkl mnop`.
+**Copy it now.** It is shown once and never again. The spaces are only for
+readability; keep them or drop them.
+
+## Step 3 — Put it in `.env`
 
 ```ini
 MAIL_DRIVER=smtp
@@ -57,188 +79,263 @@ SMTP_PORT=587
 SMTP_USER=office@prepreneurship.pk
 SMTP_PASSWORD=abcdefghijklmnop
 
-# Used to turn "/subjects" into a link somebody can click
-PUBLIC_WEB_URL=https://learn.prepreneurship.pk
+PUBLIC_WEB_URL=http://localhost:5173
 INSTITUTE_NAME=Prepreneurship
 ```
 
-5. Restart the API. The Integrations screen should now show **Email — live**.
+`SMTP_USER` must be **the same account** the App Password was created on.
 
-> **`MAIL_DRIVER=log` overrides all of the above.** It is the default, and it
-> means nothing is sent even when the credentials are correct — the wording goes
-> to the simulator outbox instead. Keep it that way on any machine holding a
-> copy of real student data. You will not be caught out silently: the
-> Integrations screen names `MAIL_DRIVER` as the reason rather than telling you
-> email is unconfigured.
-
-### Two things worth knowing before you commit to Gmail
-
-**A free Gmail account sends about 500 messages a day; Google Workspace about
-2,000.** A cohort announcement to 300 students is 300 messages. If the Institute
-grows past that, move to a service built for it — Amazon SES, Postmark,
-Mailgun — which is a change of four lines above and nothing else. Nothing in the
-code names Gmail.
-
-**Mail from a `@gmail.com` address is more likely to land in spam** when it
-claims to be from an institute. If Prepreneurship owns a domain, send from that
-domain and add SPF and DKIM records for it. Your domain registrar or Workspace
-admin can do this in about ten minutes, and it is the difference between fee
-reminders arriving and quietly not arriving.
-
-### Checking it actually works
-
-Do not find out by sending to a student. Run:
+## Step 4 — Check the login, before any student is involved
 
 ```bash
 node -r dotenv/config scripts/check-email.mjs
 ```
 
-It reads `.env`, checks the settings, connects to the mail server and reports
-whether the credentials were accepted. It does not send anything.
+This connects and verifies the credentials. It sends nothing.
 
-When that passes, send yourself one real message:
+## Step 5 — Send yourself one real message
 
 ```bash
 node -r dotenv/config scripts/check-email.mjs you@example.com
 ```
 
-If something fails it names the likely cause rather than printing a stack
-trace. The common one is `EAUTH`, which reads like a wrong password and
-usually is not — it means the App Password is missing, 2-Step Verification is
-off, or `SMTP_USER` is a different account from the one the App Password was
-created on. **Resetting the account password fixes none of those.**
+**Check the spam folder as well.** A first message from a `@gmail.com` address
+claiming to be an institute often lands there.
 
-Once that works, post an announcement and open **Integrations → Simulated
-outbox**. If email is live the message will *not* appear there, because it will
-have gone. If it does appear, `MAIL_DRIVER` is still `log` and the screen will
-say so.
+## Step 6 — Restart, and confirm on screen
+
+Restart the API, then open **Integrations** in the sidebar. Email should read
+**live**.
+
+### ✅ You are done when
+The Integrations screen says *live*, and the test message arrived.
+
+### If it fails
+
+**`EAUTH` — "username and password not accepted".** This reads like a wrong
+password and almost never is. It means one of:
+
+- `SMTP_PASSWORD` is the account's own password, not the 16-letter App Password
+- 2-Step Verification is off, so App Passwords do not exist yet
+- `SMTP_USER` is a different account from the one the App Password was made on
+
+**Resetting your Google password will not fix any of these.**
+
+**Nothing sends, but the check passed.** `MAIL_DRIVER` is still `log`. That is
+the default and it overrides working credentials on purpose — a machine holding
+real student data is one announcement away from mailing all of them. Set
+`MAIL_DRIVER=smtp` when you genuinely want it live.
+
+### Before you rely on it
+
+- A free Gmail account sends about **500 messages a day**; Workspace about
+  2,000. One announcement to 300 students is 300 messages. If you outgrow that,
+  move to Amazon SES, Postmark or Mailgun — four lines of `.env` and no code
+  change. Nothing in the System names Gmail.
+- Mail from `@gmail.com` claiming to be an institute is more likely to be
+  filtered. If Prepreneurship owns a domain, send from it and add **SPF and
+  DKIM** records. Ten minutes with your registrar, and it is the difference
+  between fee reminders arriving and quietly not arriving.
 
 ---
 
-## 2. Google Drive — lecture video
+# 2. Google Drive
 
-Drive is where the Institute's lecture recordings live. The System **catalogues
-and streams** them; it never uploads to Drive, and never deletes from it.
-Teachers upload through Drive itself, exactly as they do now.
+Where lecture recordings live. The System **reads and streams** them — it never
+uploads and never deletes. Teachers keep uploading through Drive exactly as they
+do now.
 
-### What you need
+## Step 1 — Create a project
 
-A **service account** — a Google identity that belongs to the organisation
-rather than to a person, so access does not disappear when a staff member
-leaves.
+Open **<https://console.cloud.google.com>** → **Select a project** → **New
+project**. Name it `prepreneurship-lms`.
 
-1. Go to the **Google Cloud Console** → <https://console.cloud.google.com>
-2. Create a project (or pick an existing one). Call it `prepreneurship-lms`.
-3. **APIs & Services → Library** → enable **Google Drive API**.
-   Enable **Google Calendar API** at the same time — Meet links need it, and
-   doing both now saves a second pass.
-4. **IAM & Admin → Service Accounts → Create service account.**
-   Name: `lms-drive`. No roles are needed at the project level.
-5. Open the account → **Keys → Add key → Create new key → JSON.** A file
-   downloads. **This file is the credential.** Anyone holding it can read
-   whatever the account can read.
-6. In Drive, find the folder holding lecture recordings, **Share** it with the
-   service account's email address (it looks like
-   `lms-drive@prepreneurship-lms.iam.gserviceaccount.com`), as **Viewer**.
+## Step 2 — Turn on both APIs
 
-Viewer, not Editor. The System only ever reads.
+**APIs & Services → Library.** Search for and enable:
 
-7. In `.env`:
+- **Google Drive API**
+- **Google Calendar API** ← enable this now too; Meet needs it in section 3 and
+  doing both saves a second pass
+
+## Step 3 — Create a service account
+
+**IAM & Admin → Service Accounts → Create service account.**
+
+Name it `lms-drive`. When asked for roles, **skip** — none are needed. Click
+through to the end.
+
+> A service account belongs to the organisation, not to a person, so access does
+> not disappear when a staff member leaves.
+
+## Step 4 — Download its key
+
+Open the account you just made → **Keys → Add key → Create new key → JSON**.
+
+A file downloads. **That file is the credential.** Anyone holding it can read
+whatever the account can read.
+
+Move it somewhere outside the project folder, for example
+`C:\prepreneurship\service-account.json` or `/etc/prepreneurship/key.json`.
+
+## Step 5 — Point `.env` at it
 
 ```ini
-GOOGLE_SERVICE_ACCOUNT_JSON=/etc/prepreneurship/service-account.json
-LECTURE_STORAGE=google_drive
-GOOGLE_DRIVE_ROOT_FOLDER_ID=1AbC...    # the folder's id, from its URL
+GOOGLE_SERVICE_ACCOUNT_JSON=C:\prepreneurship\service-account.json
 ```
 
-Keep the JSON file **outside the repository** and readable only by the account
-the server runs as. It is not a password that can be changed if it leaks — it is
-a key, and the only remedy is deleting it in the Console and issuing another.
+Use a **full path**. A relative one is resolved from wherever the server was
+started, which is rarely where you expect.
 
-### Until then
+## Step 6 — Find out who to share with
 
+```bash
+node -r dotenv/config scripts/check-integrations.mjs
+```
+
+It prints the service account's address — something like
+`lms-drive@prepreneurship-lms.iam.gserviceaccount.com`. Copy it.
+
+## Step 7 — Share the lecture folder
+
+In Google Drive, open the folder holding your lecture recordings →
+**Share** → paste that address → set it to **Viewer** → Share.
+
+> **Viewer, not Editor.** The System only ever reads. Giving it Editor grants a
+> permission nothing uses and that nobody would notice being misused.
+
+This step is silently skippable and is the usual reason a correct setup returns
+an empty folder.
+
+## Step 8 — Switch it on
+
+Copy the folder's id from its URL — the long string after `/folders/` — then:
+
+```ini
+LECTURE_STORAGE=google_drive
+GOOGLE_DRIVE_ROOT_FOLDER_ID=1AbCdEf...
+```
+
+Restart the API.
+
+### ✅ You are done when
+`scripts/check-integrations.mjs` says **live**, and the Integrations screen
+agrees.
+
+### While you wait
 `LECTURE_STORAGE=local` (the default) serves video from the application server.
 Cataloguing, publication, playback and the weekly integrity check all work
-normally. The only difference is where the file sits.
+normally. Only the file's location differs.
 
 ---
 
-## 3. Google Meet — class links
+# 3. Google Meet
 
-Same service account, same JSON file. Once `GOOGLE_SERVICE_ACCOUNT_JSON` is set
-and the Calendar API is enabled, scheduling a class creates the meeting link
-automatically.
+Same project, same service account, same key file. Nothing new to download.
 
-**Domain-wide delegation.** A service account cannot create a meeting "as"
-anybody by default. In Google Workspace admin → **Security → API controls →
-Domain-wide delegation**, add the service account's client ID with the scope:
+## Step 1 — Confirm Calendar API is on
 
-```
-https://www.googleapis.com/auth/calendar.events
-```
+You enabled it in section 2, step 2. If you skipped it, do it now.
 
-Without this the System will report the classroom provider as unavailable
-rather than creating broken links.
+## Step 2 — Grant domain-wide delegation
 
-### Until then
+This is the step everyone misses, and without it Meet fails.
 
-Whoever schedules the class pastes the Meet link into the session. Attendance,
-the register, the timetable and the attendance rules all work exactly the same —
-only the link is manual.
+In **Google Workspace Admin** → **Security → Access and data control → API
+controls → Domain-wide delegation → Add new**:
+
+- **Client ID**: the service account's client ID (Cloud Console → the service
+  account → its Unique ID)
+- **OAuth scopes**: `https://www.googleapis.com/auth/calendar.events`
+
+## Step 3 — Restart
+
+Scheduling a class now creates the Meet link automatically.
+
+### ✅ You are done when
+Creating a live session produces a Meet link you did not type.
+
+### While you wait
+Whoever schedules the class pastes the link in. Attendance, the register, the
+timetable and the attendance rules are unaffected — only the link is manual.
 
 ---
 
-## 4. WhatsApp — messages to students
+# 4. WhatsApp
 
-The heaviest of the four, and the only one that needs a business relationship
-with a third party.
+The slowest of the four, and the only one needing a business relationship with a
+third party. Leave it until last.
 
-1. A **Meta Business account** → <https://business.facebook.com>
-2. In **Meta for Developers**, create an app of type **Business**, and add the
-   **WhatsApp** product.
-3. Register a phone number for it. **The number cannot already be in use by the
-   normal WhatsApp or WhatsApp Business app** — this catches most people. Use a
-   dedicated line.
-4. Note the **Phone number ID** and generate a **permanent access token** (a
-   System User token, not the 24-hour test token, which expires and produces a
-   failure the next morning that looks like an outage).
-5. In `.env`:
+## Step 1 — Meta Business account
+
+**<https://business.facebook.com>** — create one for Prepreneurship if it does
+not exist.
+
+## Step 2 — Create an app
+
+**<https://developers.facebook.com>** → **My Apps → Create App** → type
+**Business** → add the **WhatsApp** product.
+
+## Step 3 — Register a phone number
+
+> **The number must not already be in use by the normal WhatsApp or WhatsApp
+> Business app.** This catches most people. Use a dedicated line — a spare SIM
+> is fine.
+
+Note the **Phone number ID** shown beside it. That is an id, not the number.
+
+## Step 4 — Get a permanent token
+
+**Business Settings → System Users → Add**, give it access to the app, then
+**Generate token** with `whatsapp_business_messaging`.
+
+> Do **not** use the temporary token on the dashboard. It works perfectly and
+> expires in 24 hours — so messaging fails overnight and looks exactly like an
+> outage the next morning.
+
+## Step 5 — Put both in `.env`
 
 ```ini
 WHATSAPP_ACCESS_TOKEN=EAAG...
 WHATSAPP_PHONE_NUMBER_ID=123456789012345
 ```
 
-**Message templates.** Meta requires pre-approved templates for anything sent
-outside a 24-hour window of the student writing to you — which is essentially
-every message this System sends. Submit templates matching the wording on the
-**Message wording** screen and wait for approval, typically a day or two.
+## Step 6 — Submit message templates
 
-### Until then
+Meta requires **pre-approved templates** for anything sent outside 24 hours of
+the student writing to you — which is essentially every message this System
+sends.
 
+Open **Message wording** in the sidebar. Submit templates to Meta matching that
+wording. Approval usually takes a day or two.
+
+### ✅ You are done when
+Templates are approved and the Integrations screen says **live**.
+
+### While you wait
 Nothing is sent, and the System says so rather than pretending. Students still
 receive every notification in their in-app inbox, which is the record. Staff can
 read the exact wording that would have gone out under **Integrations →
-Simulated outbox**, which is also the easiest way to proofread the messages
+Simulated outbox** — which is also the easiest way to proofread every message
 before a single one is real.
 
 ---
 
-## Keeping the credentials safe
+# Keeping the credentials safe
 
-`.env` is in `.gitignore` and must stay there. If a credential is ever committed,
-pushed, or pasted into a chat, treat it as public and replace it:
+`.env` is in `.gitignore` and must stay there. If a credential is ever
+committed, pushed, or pasted into a chat, treat it as public and replace it:
 
-- **App Password** — delete it at <https://myaccount.google.com/apppasswords>
-  and make a new one.
-- **Service account key** — delete the key in the Cloud Console. The account
-  survives; only the key changes.
-- **WhatsApp token** — revoke the System User token in Meta Business settings.
+| Credential | How to replace it |
+|---|---|
+| Gmail App Password | Delete it at <https://myaccount.google.com/apppasswords> and create another |
+| Service account key | Delete the key in the Cloud Console. The account survives; only the key changes |
+| WhatsApp token | Revoke the System User token in Meta Business settings |
 
-Rotating any of them is a `.env` edit and a restart. Nothing else in the System
-needs to change, which is the point of keeping every provider behind an adapter.
+Rotating any of them is a `.env` edit and a restart. Nothing else changes —
+which is the point of keeping every provider behind an adapter.
 
-The System will never show you a credential back, on any screen, to anybody —
-including a Super Admin. It reports only whether something is set. That is
-deliberate: a value that can be read can be leaked, and there is no reason for
-the interface to be able to read it.
+**The System will never show you a credential back, on any screen, to anybody —
+including a Super Admin.** It reports only whether something is set. A value
+that can be read can be leaked, and there is no reason for the interface to be
+able to read it.
