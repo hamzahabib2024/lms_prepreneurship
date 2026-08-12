@@ -46,28 +46,45 @@ registration numbers that collide or skip, and no record of who approved what.
 
 ## Running it
 
-Five commands from a clean checkout. No Docker, no managed database, nothing
-to sign up for — `db:start` downloads a real PostgreSQL 16 on first run and
-keeps its data in `./pgdata`.
+**Two commands from a clean checkout.** No Docker, no managed database, nothing
+to sign up for — a real PostgreSQL 16 is downloaded on first run and its data
+kept in `./pgdata`.
 
 ```bash
-npm install
-cp .env.example .env          # the defaults work as-is for local development
-npm run keys:generate         # RSA keypair for RS256 (SEC-AUT-005)
-npm run db:start              # a real PostgreSQL 16, no Docker required
-npm run db:setup              # migrate + constraints + seed, in that order
+npm install && npm run setup   # .env, signing keys, database, schema, sample data
+npm start                      # both servers, in one terminal
 ```
 
-Then two terminals, because they are two processes:
+Then open <http://localhost:5173>.
+
+`npm run setup` is safe to run again — every step checks whether it is already
+done and says so rather than failing. It is deliberately separate from
+`npm start`, so a deployment can set up once and let a process manager own the
+running.
+
+| | |
+|---|---|
+| <http://localhost:5173> | sign in |
+| <http://localhost:5173/home> | the public page, as a visitor sees it |
+| <http://localhost:3000/api/v1> | the API |
+| <http://localhost:3000/docs> | the API reference |
+
+The web app proxies `/api` to the API, so the browser sees one origin and CORS
+behaves in development exactly as it will in production.
+
+<details>
+<summary>Running the pieces separately</summary>
 
 ```bash
-npm run dev                   # the API   → http://localhost:3000/api/v1
-npm run dev:web               # the app   → http://localhost:5173
+npm run db:start    # PostgreSQL only
+npm run dev         # the API  → http://localhost:3000/api/v1
+npm run dev:web     # the app  → http://localhost:5173
 ```
 
-Open <http://localhost:5173> and sign in. The web app proxies `/api` to the API,
-so the browser sees one origin and CORS behaves in development exactly as it
-will in production.
+`npm run setup` is the equivalent of `keys:generate`, `db:start` and
+`db:setup` run in order, with each step skipped if it has already been done.
+
+</details>
 
 ### Signing in
 
