@@ -367,6 +367,10 @@ code {
   opacity: .7;
 }
 
+/* A count beside a card's heading, pushed to the far end. */
+.card > h2:has(.setting-count) { display: flex; align-items: baseline; justify-content: space-between; }
+.setting-count { font-weight: 500; }
+
 /* A card's own heading, given the page hue so a long screen of cards has
    something to navigate by. */
 .card > h2 { color: var(--ink); }

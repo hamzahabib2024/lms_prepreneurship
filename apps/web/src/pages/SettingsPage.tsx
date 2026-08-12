@@ -55,6 +55,7 @@ export function SettingsPage() {
   const [groups, setGroups] = useState<Group[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
+  const [filter, setFilter] = useState("");
 
   const load = useCallback(() => {
     api
@@ -64,6 +65,26 @@ export function SettingsPage() {
   }, []);
 
   useEffect(load, [load]);
+
+  /**
+   * Groups with only the matching settings in them, and empty groups dropped.
+   *
+   * Matching on the key as well as the label and description is the point: an
+   * administrator looking for "how long before a student is warned" does not
+   * know it is called attendance.warningThreshold, but somebody reading a
+   * support message quoting that key needs to find it by name.
+   */
+  const needle = filter.trim().toLowerCase();
+  const visible = (groups ?? [])
+    .map((g) => ({
+      ...g,
+      settings: needle
+        ? g.settings.filter((s) =>
+            [s.key, s.description, g.group].some((t) => t?.toLowerCase().includes(needle)),
+          )
+        : g.settings,
+    }))
+    .filter((g) => g.settings.length > 0);
 
   return (
     <>
@@ -75,6 +96,23 @@ export function SettingsPage() {
             unchanged.
           </p>
         </div>
+        {/*
+          A filter, because there are now forty-odd settings across ten groups
+          and the only way to find one was to scroll and read. It matches the
+          KEY and the DESCRIPTION as well as the label: an administrator
+          looking for "how long before a student is warned" does not know the
+          setting is called attendance.warningThreshold, but the description
+          says what it does.
+        */}
+        <label className="field field-inline">
+          <span className="visually-hidden">Find a setting</span>
+          <input
+            type="search"
+            placeholder="Find a setting…"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+          />
+        </label>
       </header>
 
       {!mayConfigure && (
@@ -100,10 +138,24 @@ export function SettingsPage() {
 
       {!groups ? (
         <p className="muted">Loading…</p>
+      ) : visible.length === 0 ? (
+        <div className="card">
+          <p className="muted">
+            Nothing matches “{filter}”. The search covers the setting's name, its key and its
+            description.
+          </p>
+        </div>
       ) : (
-        groups.map((g) => (
+        visible.map((g) => (
           <section className="card" key={g.group}>
-            <h2>{g.group}</h2>
+            <h2>
+              {g.group}
+              {/* The count moves with the filter, so it always describes what
+                  is on screen rather than what exists. */}
+              <span className="muted small setting-count">
+                {g.settings.length} {g.settings.length === 1 ? "setting" : "settings"}
+              </span>
+            </h2>
             <ul className="list">
               {g.settings.map((s) => (
                 <SettingRow
