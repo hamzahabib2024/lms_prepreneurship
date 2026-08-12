@@ -396,6 +396,22 @@ code {
 .date-pair { display: inline-flex; gap: .4rem; align-items: center; }
 .date-pair input { min-width: 8.5rem; }
 
+/* A row for something archived or closed. Dimmed, NOT hidden — it still holds
+   attendance and marks somebody may need to look up, and .72 keeps it above
+   the 4.5:1 contrast floor rather than fading it to unreadable (NFR-ACC-003). */
+.row-muted td { opacity: .72; }
+
+/* The panel a row expands into. Set apart by its ground rather than by a
+   border, so the nested table inside it does not read as a third grid. */
+.row-detail {
+  background: var(--surface-2);
+  padding: 1rem 1.15rem !important;
+  box-shadow: inset 0 1px 0 var(--line), inset 0 -1px 0 var(--line);
+}
+.row-detail h3 { margin: 0 0 .7rem; font-size: .9375rem; font-weight: 650; }
+.row-detail .table { background: var(--surface); border-radius: var(--radius); }
+.row-detail .field { margin-bottom: 0; }
+
 /* ------------------------------------------------------------- forms ----- */
 .field { display: block; margin-bottom: .9rem; }
 .field > span, .field-label {
