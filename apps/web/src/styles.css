@@ -268,6 +268,35 @@ code {
 
 .main { padding: 1.5rem; max-width: 1180px; width: 100%; margin: 0 auto; flex: 1; }
 
+/*
+ * A ground for every signed-in page, and a restrained one on purpose.
+ *
+ * Two very soft brand-tinted washes in the top corners over the page colour —
+ * enough that a screen is not a white sheet, faint enough that a table of marks
+ * sitting on it still meets 4.5:1 (NFR-ACC-004). It is FIXED, so it does not
+ * slide around as somebody scrolls a long register.
+ *
+ * Anything stronger fails the only test that matters here: these are screens
+ * staff look at for six hours, and a decorative gradient behind a spreadsheet
+ * stops being charming by the second morning.
+ */
+.layout {
+  background-image:
+    radial-gradient(60rem 30rem at 12% -8%, color-mix(in srgb, var(--brand-600) 7%, transparent), transparent 70%),
+    radial-gradient(48rem 26rem at 96% -4%, color-mix(in srgb, var(--accent-600) 6%, transparent), transparent 68%);
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+}
+@media (prefers-color-scheme: dark) {
+  /* The same washes read as grey smears on a dark ground unless they are
+     stronger and warmer. */
+  .layout {
+    background-image:
+      radial-gradient(60rem 30rem at 12% -8%, color-mix(in srgb, var(--brand-600) 14%, transparent), transparent 70%),
+      radial-gradient(48rem 26rem at 96% -4%, color-mix(in srgb, var(--accent-600) 10%, transparent), transparent 68%);
+  }
+}
+
 .page-head {
   display: flex; align-items: flex-start; justify-content: space-between;
   gap: 1rem; margin-bottom: 1.25rem; flex-wrap: wrap;
@@ -411,6 +440,166 @@ code {
 .row-detail h3 { margin: 0 0 .7rem; font-size: .9375rem; font-weight: 650; }
 .row-detail .table { background: var(--surface); border-radius: var(--radius); }
 .row-detail .field { margin-bottom: 0; }
+
+/* ------------------------------------------------------- the video wall --- */
+/*
+ * Posters, not players. Nothing from YouTube or TikTok is loaded until the
+ * visitor presses play — see VideoWall.tsx for why that is the design rather
+ * than an optimisation.
+ */
+.video-wall { padding-block: 2.5rem 1rem; }
+.video-grid {
+  display: grid; gap: 1.1rem;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+.video-card {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-1);
+  transition: transform .2s var(--ease), box-shadow .2s var(--ease);
+}
+/* A vertical video in a 16:9 box is letterboxed twice over. */
+.video-portrait { aspect-ratio: 9 / 16; }
+.video-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-2); }
+
+/* The poster is a button, so it is reachable by keyboard and fires on Enter. */
+.video-face {
+  position: absolute; inset: 0;
+  display: grid; place-items: center;
+  width: 100%; height: 100%;
+  border: 0; padding: 0; margin: 0;
+  cursor: pointer;
+  background-color: var(--surface-2);
+  background-size: cover; background-position: center;
+}
+/* Drawn rather than fetched: TikTok gives no still without an API call, and a
+   grey rectangle reads as a broken image. */
+.video-pattern {
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(circle at 30% 25%, color-mix(in srgb, var(--brand-600) 42%, transparent), transparent 55%),
+    radial-gradient(circle at 75% 70%, color-mix(in srgb, var(--accent-600) 38%, transparent), transparent 55%),
+    linear-gradient(135deg, var(--brand-800), var(--surface-2));
+}
+.video-play-ring {
+  position: relative;
+  width: 58px; height: 58px; border-radius: 999px;
+  display: grid; place-items: center;
+  background: rgb(255 255 255 / 92%);
+  box-shadow: 0 4px 18px rgb(15 23 42 / 35%);
+  transition: transform .2s var(--ease);
+}
+.video-card:hover .video-play-ring { transform: scale(1.08); }
+.video-play { width: 22px; height: 22px; color: var(--brand-800); fill: currentColor; }
+.video-badge {
+  position: absolute; left: .6rem; bottom: .6rem;
+  padding: .2rem .55rem; border-radius: 6px;
+  font-size: .7rem; font-weight: 700; letter-spacing: .03em;
+  color: #fff; background: rgb(15 23 42 / 78%);
+}
+/* Each platform in its own colour — the one place brand colour earns its keep,
+   because it is how somebody recognises where a video lives. */
+.video-badge-youtube   { background: #c4302b; }
+.video-badge-tiktok    { background: #0b0b0b; }
+.video-badge-facebook  { background: #1877f2; }
+.video-badge-instagram { background: linear-gradient(45deg, #f09433, #dc2743 45%, #bc1888); }
+
+.video-frame { width: 100%; height: 100%; border: 0; display: block; }
+
+.video-card-link {
+  display: flex; align-items: center; gap: .8rem;
+  aspect-ratio: auto; padding: 1rem 1.1rem;
+  text-decoration: none; color: var(--ink);
+}
+.video-card-link .video-face {
+  position: static; width: 44px; height: 44px; flex: 0 0 44px;
+  border-radius: 999px; background: var(--brand-050);
+}
+.video-card-link .video-play { color: var(--brand-700); }
+.video-meta { display: flex; flex-direction: column; }
+
+/* ------------------------------------------------------ social channels --- */
+.social-row { display: flex; gap: .5rem; align-items: center; }
+.social-link {
+  width: 38px; height: 38px; border-radius: 10px;
+  display: grid; place-items: center;
+  color: #fff; text-decoration: none;
+  transition: transform .18s var(--ease), filter .18s var(--ease);
+}
+.social-link:hover { transform: translateY(-2px); filter: brightness(1.08); }
+.social-link svg { width: 19px; height: 19px; }
+.social-youtube   { background: #c4302b; }
+.social-tiktok    { background: #0b0b0b; }
+.social-facebook  { background: #1877f2; }
+.social-instagram { background: linear-gradient(45deg, #f09433, #dc2743 45%, #bc1888); }
+
+/* --------------------------------------------------- colour in the nav ---- */
+/*
+ * A colour per section of the sidebar.
+ *
+ * NOT decoration: twenty-one destinations in one indigo column is a list you
+ * read every time, and colour is what turns "somewhere near the bottom" into a
+ * position you remember. The hue is on the ICON only — the label stays ink, so
+ * nothing depends on colour to be legible (NFR-ACC-007), and the active state
+ * still carries its bar and its weight.
+ */
+.nav a svg { color: var(--muted); transition: color .15s var(--ease); }
+.nav a:hover svg, .nav a.active svg { color: currentColor; }
+
+.nav a[href$="/attendance"] svg,
+.nav a[href$="/timetable"] svg { color: #2563eb; }
+.nav a[href$="/subjects"] svg,
+.nav a[href$="/content"] svg { color: #7c3aed; }
+.nav a[href$="/marking"] svg,
+.nav a[href$="/rubrics"] svg { color: #c026d3; }
+.nav a[href$="/fees"] svg { color: #059669; }
+.nav a[href$="/reports"] svg,
+.nav a[href$="/dashboard"] svg { color: #0891b2; }
+.nav a[href$="/admissions"] svg,
+.nav a[href$="/apply"] svg { color: #ea580c; }
+.nav a[href$="/certificates"] svg { color: #ca8a04; }
+.nav a[href$="/announcements"] svg,
+.nav a[href$="/discussions"] svg { color: #db2777; }
+.nav a[href$="/security"] svg,
+.nav a[href$="/audit"] svg { color: #dc2626; }
+.nav a[href$="/integrations"] svg,
+.nav a[href$="/settings"] svg { color: #4f46e5; }
+.nav a[href$="/sections"] svg,
+.nav a[href$="/structure"] svg { color: #0d9488; }
+
+/* --------------------------------------------------- forms with colour ---- */
+/*
+ * The focused field is the one you are typing in, and it should be obvious
+ * without hunting. A tinted ground plus the brand ring does that without the
+ * heavy borders that make a long form look like a tax return.
+ */
+.field input:focus, .field select:focus, .field textarea:focus {
+  background: var(--brand-050);
+  border-color: var(--brand-600);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-600) 18%, transparent);
+}
+/* A required field says so in the label; this is the second, quieter signal. */
+.field input:required:not(:placeholder-shown):invalid {
+  border-color: var(--error);
+}
+/* Somebody has filled this in correctly — a small reassurance on a four-step
+   application form where the alternative is wondering. */
+.field input:required:not(:placeholder-shown):valid {
+  border-color: color-mix(in srgb, var(--ok) 45%, var(--line));
+}
+
+/* The inline form beneath a table, given the brand's edge so it reads as a
+   place to DO something rather than more table. */
+.inline-form { border-top-color: color-mix(in srgb, var(--brand-600) 25%, var(--line)); }
+.inline-form h3 { color: var(--brand-700); }
+
+/* Cards lift a little and warm at the top edge on hover, but only the ones
+   that are actually clickable — see the note on .card.widget. */
+.card.widget:hover { border-color: color-mix(in srgb, var(--brand-600) 30%, var(--line)); }
 
 /* Staff notes about a student (FR-REG-046). Set apart from the marking form
    around it, because what goes in here has a different audience from

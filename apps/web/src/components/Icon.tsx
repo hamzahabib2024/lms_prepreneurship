@@ -34,6 +34,23 @@ const PATHS: Record<string, string> = {
   layers: "m12 2 9 5-9 5-9-5 9-5ZM3 12l9 5 9-5M3 17l9 5 9-5",
   logout: "M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9",
   menu: "M3 6h18M3 12h18M3 18h18",
+  play: "M8 5.5v13l11-6.5-11-6.5Z",
+
+  /*
+   * The four platforms the Institute posts on.
+   *
+   * DRAWN AS RECOGNISABLE SHAPES, not copied logos. A brand mark is somebody
+   * else's trademark with its own usage rules about colour, spacing and
+   * distortion, and shipping a traced copy in a stylesheet breaks all three.
+   * These read as "video", "camera", "the letter f" at the size they are used,
+   * which is what a person scanning a footer needs, and each carries a text
+   * label for a screen reader either way.
+   */
+  youtube: "M2.5 8.2a3 3 0 0 1 2.6-2.6C7.4 5.3 12 5.3 12 5.3s4.6 0 6.9.3a3 3 0 0 1 2.6 2.6c.3 2.5.3 5.1 0 7.6a3 3 0 0 1-2.6 2.6c-2.3.3-6.9.3-6.9.3s-4.6 0-6.9-.3a3 3 0 0 1-2.6-2.6c-.3-2.5-.3-5.1 0-7.6ZM10 9.5v5l4.5-2.5L10 9.5Z",
+  tiktok: "M14 3v11.5a3.5 3.5 0 1 1-3.5-3.5c.35 0 .69.05 1 .15M14 3c.4 2.4 2.2 4.2 4.6 4.6M14 3h.2",
+  facebook: "M14 8.5V7a1.5 1.5 0 0 1 1.5-1.5H17V3h-2.2A3.8 3.8 0 0 0 11 6.8v1.7H9V11h2v10h3V11h2.2l.5-2.5H14Z",
+  instagram:
+    "M7.5 3h9A4.5 4.5 0 0 1 21 7.5v9a4.5 4.5 0 0 1-4.5 4.5h-9A4.5 4.5 0 0 1 3 16.5v-9A4.5 4.5 0 0 1 7.5 3ZM12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7ZM17 6.6h.01",
 };
 
 export function Icon({ name, className }: { name: string; className?: string }) {

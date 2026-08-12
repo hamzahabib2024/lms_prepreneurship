@@ -60,6 +60,19 @@ export class AdmissionController {
   }
 
   /**
+   * The videos and social links the Institute has published — FR-PUB.
+   *
+   * Public for the same reason the prospectus is, and safe for the same
+   * reason: everything it returns is already published by the Institute
+   * elsewhere. There is nothing about any person in it.
+   */
+  @Public()
+  @Get("public/showcase")
+  showcase() {
+    return this.admission.showcase();
+  }
+
+  /**
    * FR-REG-008 — a payment slip, uploaded BEFORE the application exists.
    *
    * The other half of what was missing. The submit schema demands between one

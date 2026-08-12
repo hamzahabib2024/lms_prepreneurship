@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import { Icon } from "../components/Icon";
+import { VideoWall, SocialRow, type VideoLink } from "../components/VideoWall";
 
 /**
  * The public front of Prepreneurship — SRS §13.2, FR-REG-002.
@@ -45,8 +46,16 @@ const SHIFT: Record<string, string> = {
   WEEKEND: "Weekend",
 };
 
+interface Showcase {
+  instituteName: string;
+  tagline: string | null;
+  videos: VideoLink[];
+  social: { platform: string; url: string }[];
+}
+
 export function LandingPage() {
   const [programmes, setProgrammes] = useState<Programme[] | null>(null);
+  const [showcase, setShowcase] = useState<Showcase | null>(null);
 
   useEffect(() => {
     api
@@ -55,6 +64,13 @@ export function LandingPage() {
       // page. The section below simply does not render.
       .then(setProgrammes)
       .catch(() => setProgrammes([]));
+
+    // Same again: videos are the Institute's marketing, not the page's
+    // structure, so a failure here costs a section rather than the page.
+    api
+      .get<Showcase>("/public/showcase")
+      .then(setShowcase)
+      .catch(() => setShowcase(null));
   }, []);
 
   return (
@@ -175,6 +191,10 @@ export function LandingPage() {
         </div>
       </section>
 
+      {/* Above the programme list on purpose: somebody deciding whether to
+          apply wants to see the place before they read a table of shifts. */}
+      {showcase && <VideoWall videos={showcase.videos} />}
+
       <section className="landing-inner" id="programmes">
         <header className="page-head">
           <div>
@@ -247,6 +267,7 @@ export function LandingPage() {
             </span>
             Prepreneurship
           </span>
+          {showcase && <SocialRow social={showcase.social} />}
           <span className="muted small">
             Already enrolled? <Link to="/login">Sign in</Link>
           </span>

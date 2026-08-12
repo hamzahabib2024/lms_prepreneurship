@@ -17,6 +17,8 @@ import { ActorService } from "../auth/actor.service";
 import { getActor } from "../prisma/actor-context";
 import { RegistrationNumberService } from "./registration-number.service";
 import { StorageRegistry } from "../content/storage/storage.registry";
+import { SettingsService } from "../settings/settings.service";
+import { parseVideoLinks } from "./video-links";
 
 /** Unambiguous alphabet — no O/0, I/l/1 — because these are read aloud
  *  over WhatsApp and mis-transcribed characters generate support calls. */
@@ -34,7 +36,42 @@ export class AdmissionService {
     private readonly numbers: RegistrationNumberService,
     private readonly storage: StorageRegistry,
     private readonly config: ConfigService,
+    private readonly settings: SettingsService,
   ) {}
+
+  /**
+   * What the public page shows besides the prospectus — FR-PUB.
+   *
+   * Videos and social links, typed by the Institute into Settings so a new reel
+   * does not need a deployment. Everything here is already published elsewhere
+   * by the Institute; there is nothing about any person in it, which is the
+   * test for anything served without an account.
+   */
+  async showcase() {
+    const [videoUrls, youtube, tiktok, facebook, instagram, tagline, name] = await Promise.all([
+      this.settings.list("public.videoUrls"),
+      this.settings.text("public.youtubeUrl"),
+      this.settings.text("public.tiktokUrl"),
+      this.settings.text("public.facebookUrl"),
+      this.settings.text("public.instagramUrl"),
+      this.settings.text("public.tagline"),
+      this.settings.text("institute.name"),
+    ]);
+
+    return {
+      instituteName: name,
+      tagline: tagline.trim() || null,
+      videos: parseVideoLinks(videoUrls),
+      // Only the ones actually set: an icon linking nowhere is worse than no
+      // icon, and a row of dead social buttons is the mark of a template.
+      social: [
+        { platform: "youtube", url: youtube.trim() },
+        { platform: "tiktok", url: tiktok.trim() },
+        { platform: "facebook", url: facebook.trim() },
+        { platform: "instagram", url: instagram.trim() },
+      ].filter((s) => s.url !== ""),
+    };
+  }
 
   // ============================================================ UC-01 ======
 

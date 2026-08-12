@@ -52,6 +52,12 @@ export interface SettingDefinition {
   max?: number;
   /** For string[], the values allowed. */
   allowed?: string[];
+  /**
+   * For string[]: an empty list is a legitimate value meaning "none", rather
+   * than an allow-list that would refuse everything. Set it only where the
+   * empty case is something the Institute might genuinely want.
+   */
+  emptyMeansNone?: boolean;
 }
 
 /**
@@ -251,6 +257,66 @@ export const CATALOGUE: SettingDefinition[] = [
     description:
       "The campus or address printed under the Institute's name on a receipt. Leave it empty for a single-campus institute; the line is then omitted rather than printed blank.",
   },
+  // ------------------------------------------------------------ the front --
+  /*
+   * What the public page shows — FR-PUB, and the reason these are settings
+   * rather than markup.
+   *
+   * The Institute's YouTube and TikTok are marketing, and marketing changes
+   * weekly. A landing page with video ids compiled into it means a deployment
+   * every time somebody posts a new reel, which in practice means the page
+   * shows last term's video for a year. These are typed here so the Institute
+   * pastes its own links and the page follows.
+   *
+   * They are PUBLIC by construction — served to a stranger with no account —
+   * so nothing here may be anything but a link the Institute publishes anyway.
+   */
+  {
+    key: "public.videoUrls",
+    type: "string[]",
+    default: [],
+    emptyMeansNone: true,
+    group: "Public page",
+    description:
+      "Videos shown on the public page — paste the ordinary share link from YouTube, YouTube Shorts, TikTok, Facebook or Instagram, one per line. Anything not recognised is shown as a link rather than a player, so a bad paste never breaks the page. Leave empty and the whole section disappears rather than showing an empty shelf.",
+  },
+  {
+    key: "public.youtubeUrl",
+    type: "string",
+    default: "",
+    group: "Public page",
+    description: "The Institute's YouTube channel. Shown as a link in the footer.",
+  },
+  {
+    key: "public.tiktokUrl",
+    type: "string",
+    default: "",
+    group: "Public page",
+    description: "The Institute's TikTok profile. Shown as a link in the footer.",
+  },
+  {
+    key: "public.facebookUrl",
+    type: "string",
+    default: "",
+    group: "Public page",
+    description: "The Institute's Facebook page. Shown as a link in the footer.",
+  },
+  {
+    key: "public.instagramUrl",
+    type: "string",
+    default: "",
+    group: "Public page",
+    description: "The Institute's Instagram profile. Shown as a link in the footer.",
+  },
+  {
+    key: "public.tagline",
+    type: "string",
+    default: "",
+    group: "Public page",
+    description:
+      "One line under the Institute's name on the public page. Leave empty to use the System's own wording, which describes what the software does rather than making a claim about the Institute.",
+  },
+
   // -------------------------------------------------- registration numbers --
   /*
    * FR-REG-054, and OPN-01 is why it matters.
@@ -387,10 +453,15 @@ export function validateValue(key: string, value: unknown): SettingProblem[] {
         fail(`${def.key} must be a list of text values.`);
         break;
       }
-      if (value.length === 0) {
+      if (value.length === 0 && !def.emptyMeansNone) {
         // An empty allow-list reads as "no restriction" and means "nothing is
         // permitted". Students would find every upload refused with a message
         // about file types, and the list they were shown would be empty.
+        //
+        // That reasoning is about ALLOW-LISTS, not about lists. A list of
+        // videos to show is empty until somebody records one, and refusing
+        // that would mean the Institute could never turn the section off.
+        // emptyMeansNone marks the second kind.
         fail(`${def.key} cannot be empty — that would refuse every file.`);
       }
       if (def.allowed) {
