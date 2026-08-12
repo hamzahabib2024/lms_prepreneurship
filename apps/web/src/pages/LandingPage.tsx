@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import { Icon } from "../components/Icon";
+import { CourseCover } from "../components/CourseCover";
 import {
   VideoWall,
   PhotoStrip,
@@ -263,12 +264,26 @@ export function LandingPage() {
           <div className="grid">
             {programmes.map((p) => (
               <article className="card widget programme-card" key={p.id}>
-                <span className="pill">{p.code}</span>
-                <h3>{p.name}</h3>
-                {p.description && <p className="muted small">{p.description}</p>}
-                {p.durationWeeks && (
-                  <p className="muted small">{p.durationWeeks} weeks</p>
-                )}
+                {/* Drawn from the course's own code, so it is the same artwork
+                    here, on the apply form and in a student's subject list. */}
+                <CourseCover code={p.code} name={p.name} />
+
+                <div className="programme-body">
+                  <div className="programme-meta">
+                    <span className="pill">{p.code}</span>
+                    {p.durationWeeks && (
+                      <span className="pill pill-ok">
+                        {/* Months, because that is how somebody decides
+                            whether they can commit to it. 4.33 weeks a month. */}
+                        {Math.round(p.durationWeeks / 4.33)} months
+                      </span>
+                    )}
+                    <span className="pill">
+                      {p.sections.length} {p.sections.length === 1 ? "section" : "sections"} open
+                    </span>
+                  </div>
+                  <h3>{p.name}</h3>
+                  {p.description && <p className="muted small">{p.description}</p>}
 
                 <div className="section-label">Sections open</div>
                 <ul className="list small">
@@ -288,6 +303,11 @@ export function LandingPage() {
                     </li>
                   ))}
                 </ul>
+
+                  <Link className="btn btn-primary programme-cta" to="/apply">
+                    Apply for {p.code}
+                  </Link>
+                </div>
               </article>
             ))}
           </div>

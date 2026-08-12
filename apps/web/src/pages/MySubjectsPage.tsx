@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ApiError, api } from "../api/client";
 import { CertificatePanel } from "../components/CertificatePanel";
+import { CourseCover } from "../components/CourseCover";
 import { EmptyState, ProgressRing, SkeletonCards } from "../components/Ui";
 
 /**
@@ -135,6 +136,11 @@ function SubjectCard({ s }: { s: SubjectProgress }) {
           percent={s.overallPercent}
           label={`${s.subject.name}: ${s.overallPercent}% complete`}
         />
+        {/* The chip, not a full cover: the ring is the point of this card and
+            the figure in it is what a student came to see. The chip is the
+            same artwork the course carries on the landing page and the apply
+            form, so it is recognised rather than decorative. */}
+        <CourseCover code={s.subject.code} name={s.subject.name} size="chip" />
         <div className="subject-title">
           <h2>
             <Link to={`/subjects/${s.sectionSubjectId}`}>{s.subject.name}</Link>

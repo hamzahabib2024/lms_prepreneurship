@@ -53,6 +53,30 @@ describe("every page the web app defines can actually be reached", () => {
    * the other, so nothing about reading either one reveals the gap. This
    * compares them.
    */
+  /**
+   * EVERY PAGE APPEARS IN THE STYLING CHECKLIST.
+   *
+   * BEAUTIFICATION.md claims to cover all of them, and a claim like that is
+   * true on the day it is written and quietly false a month later. A page
+   * added afterwards and never styled would look exactly like one that was —
+   * which is the whole thing the document exists to prevent.
+   */
+  it("BEAUTIFICATION.md names every page", () => {
+    const doc = join(WEB, "..", "..", "..", "BEAUTIFICATION.md");
+    if (!existsSync(doc)) throw new Error("BEAUTIFICATION.md is missing.");
+    const text = readFileSync(doc, "utf8");
+
+    const pages = readdirSync(PAGES)
+      .filter((f) => f.endsWith(".tsx"))
+      .map((f) => f.replace(/\.tsx$/, ""));
+
+    // Guards the guard: a wrong path here would find no pages and pass.
+    expect(pages.length).toBeGreaterThan(20);
+
+    const missing = pages.filter((p) => !text.includes(p));
+    expect(missing).toEqual([]);
+  });
+
   it("every address a signed-out visitor can be at also resolves signed in", () => {
     /*
      * SLICED ON THE <Routes> BLOCK, not on a nearby identifier.
