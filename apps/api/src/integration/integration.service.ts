@@ -54,6 +54,10 @@ export class IntegrationService {
     const lectureStore = this.config.get<string>("LECTURE_STORAGE", "local");
     const driveConfigured = this.isSet("GOOGLE_SERVICE_ACCOUNT_JSON");
     const whatsappConfigured = this.channels.get("WHATSAPP")?.isConfigured() ?? false;
+    // Asked of the adapter, not re-derived from the environment here — one
+    // source of truth for "is this set up", so the screen cannot disagree with
+    // what actually happens at send time.
+    const emailConfigured = this.channels.get("EMAIL")?.isConfigured() ?? false;
 
     const storageHealth = await this.storage.listWithHealth();
     const driveHealth = storageHealth.find((s) => s.key === "google_drive");
@@ -106,6 +110,26 @@ export class IntegrationService {
           : "Set WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID from the Meta Business " +
             "account, then restart. No other change is needed — the adapter already " +
             "implements the full contract.",
+      },
+      {
+        key: "email",
+        name: "Email (SMTP)",
+        // Deliberately not blocked on anybody: SMTP needs a mailbox and an app
+        // password, both of which the Institute already has if it has email.
+        dependency: null,
+        mode: emailConfigured ? "LIVE" : "NOT_CONFIGURED",
+        behaviour: emailConfigured
+          ? `Sent through ${this.config.get<string>("SMTP_HOST", "the configured mail server")}. ` +
+            "Delivery outcomes are recorded per recipient."
+          : "NOTHING IS SENT BY EMAIL. This is the channel that needs no third-party account — " +
+            "any mailbox with an app password will do — and until it is set, a new account's " +
+            "temporary password reaches its owner only by an administrator reading it off the " +
+            "screen and telling them.",
+        toGoLive: emailConfigured
+          ? null
+          : "Set SMTP_HOST, SMTP_PORT, SMTP_USER and SMTP_PASSWORD, then restart. For Gmail " +
+            "this is smtp.gmail.com on port 587 with a 16-character App Password — not the " +
+            "account's own password. See INTEGRATIONS.md.",
       },
       {
         key: "live_classroom",

@@ -5,6 +5,7 @@ import { TemplateService } from "./template.service";
 import { NotificationController } from "./notification.controller";
 import { ChannelRegistry } from "./channel/channel.registry";
 import { LoggedWhatsAppChannel } from "./channel/logged.channel";
+import { EmailChannel } from "./channel/email.channel";
 
 /**
  * Global, because notifications are raised from everywhere — admission,
@@ -23,6 +24,7 @@ import { LoggedWhatsAppChannel } from "./channel/logged.channel";
     TemplateService,
     ChannelRegistry,
     LoggedWhatsAppChannel,
+    EmailChannel,
   ],
   // ChannelRegistry is exported so the integrations screen can ask the adapter
   // itself whether it is configured, rather than re-deriving that from the

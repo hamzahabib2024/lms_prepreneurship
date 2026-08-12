@@ -17,8 +17,25 @@ export interface NotifyInput {
   announcementId?: string | null;
 }
 
+/**
+ * What somebody gets before they have chosen anything.
+ *
+ * EMAIL IS ON BY DEFAULT and WhatsApp stays on beside it. An email address is
+ * how an account is identified here — nobody has one without giving it — and a
+ * student who enrolled expects the Institute to write to them about their
+ * marks and their fees. That is the expectation the account was created under,
+ * not a new use of their address.
+ *
+ * THIS OVERRIDES NOBODY'S CHOICE. The default applies only where no preference
+ * row exists; anyone who has been to the preferences screen keeps exactly what
+ * they set, including having turned a channel off. Adding a channel here can
+ * never re-enable one somebody has switched off.
+ *
+ * IN_APP is absent because it is implicit and cannot be withdrawn — the inbox
+ * is the record of what was sent, not a delivery choice.
+ */
 const DEFAULT_PREFERENCE: Preference = {
-  channels: ["WHATSAPP"],
+  channels: ["WHATSAPP", "EMAIL"],
   mutedKinds: [],
   quietHoursStart: null,
   quietHoursEnd: null,

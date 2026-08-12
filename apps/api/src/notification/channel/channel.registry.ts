@@ -1,5 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { LoggedWhatsAppChannel } from "./logged.channel";
+import { EmailChannel } from "./email.channel";
 import type { NotificationChannelAdapter } from "./notification.channel";
 
 /**
@@ -14,8 +15,9 @@ export class ChannelRegistry {
   private readonly logger = new Logger(ChannelRegistry.name);
   private readonly adapters = new Map<string, NotificationChannelAdapter>();
 
-  constructor(whatsapp: LoggedWhatsAppChannel) {
+  constructor(whatsapp: LoggedWhatsAppChannel, email: EmailChannel) {
     this.adapters.set(whatsapp.channel, whatsapp);
+    this.adapters.set(email.channel, email);
   }
 
   get(channel: string): NotificationChannelAdapter | null {
