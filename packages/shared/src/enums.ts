@@ -114,6 +114,21 @@ export type PublicationStatus = (typeof PUBLICATION_STATUS)[number];
 export const AVAILABILITY_STATUS = ["AVAILABLE", "MISSING", "CHECKING"] as const;
 export type AvailabilityStatus = (typeof AVAILABILITY_STATUS)[number];
 
+/**
+ * An academic session — a term, e.g. Spring 2026.
+ *
+ * NOT the same thing as SESSION_STATUS below, which is a single live class on
+ * a single afternoon. Two unrelated concepts arrived at the same English word,
+ * so both are spelled out here rather than left to whichever one a reader
+ * happens to think of first.
+ *
+ * COMPLETED is terminal and does not mean deleted: fee charges and issued
+ * registration numbers still hang off a finished term, so it stays readable
+ * forever (BR-DAT-04).
+ */
+export const ACADEMIC_SESSION_STATUS = ["PLANNED", "ACTIVE", "COMPLETED", "CANCELLED"] as const;
+export type AcademicSessionStatus = (typeof ACADEMIC_SESSION_STATUS)[number];
+
 /** Live session states — Figure 12-3. Provider-agnostic (ARC-023). */
 export const SESSION_STATUS = ["SCHEDULED", "LIVE", "ENDED", "CANCELLED"] as const;
 export type SessionStatus = (typeof SESSION_STATUS)[number];

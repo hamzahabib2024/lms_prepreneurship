@@ -305,6 +305,22 @@ export const PERMISSION_MATRIX: Record<Resource, ResourcePolicy> = {
     teacher: { actions: ["read"], scope: "ASSIGNED" },
     student: { actions: ["read"], scope: "ENROLLED" },
   },
+  /**
+   * A NOTE ON THESE TWO SCOPES, because they do not mean what they appear to.
+   *
+   * scope.extension.ts lists AcademicSession and Batch under
+   * DELIBERATELY_UNSCOPED: they are prospectus data — a name, a code and two
+   * dates, describing what the Institute OFFERS rather than anything a person
+   * has done — so no database predicate narrows them, and in practice a
+   * student listing batches sees them all.
+   *
+   * These entries were briefly widened to ALL to say so plainly, which
+   * student-isolation.spec.ts correctly rejected: a student is never granted
+   * ALL on anything, and weakening that invariant to document one harmless
+   * catalogue is a bad trade. They stay narrow. What the narrow scope buys
+   * here is the invariant itself, not row filtering; the restriction that
+   * actually bites is on writing, which only an Admin holds.
+   */
   academic_session: {
     super_admin: { actions: FULL, scope: "ALL" },
     admin: { actions: FULL, scope: "ALL" },

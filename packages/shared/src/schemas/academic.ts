@@ -4,6 +4,7 @@
 
 import { z } from "zod";
 import {
+  ACADEMIC_SESSION_STATUS,
   ASSIGNMENT_ROLE,
   DELIVERY_MODE,
   GENDER_RESTRICTION,
@@ -40,11 +41,40 @@ export const academicSessionCreateSchema = z
     message: "The end date must be after the start date.",
   });
 
+export type AcademicSessionCreateInput = z.infer<typeof academicSessionCreateSchema>;
+
+/**
+ * The programme is deliberately NOT changeable. A session's code is unique
+ * within its programme and feeds the registration number series, so moving a
+ * session between programmes would either collide with an existing code or
+ * orphan numbers already issued under the old one.
+ */
+export const academicSessionUpdateSchema = z
+  .object({
+    name: z.string().trim().min(3).max(100).optional(),
+    startDate: z.coerce.date().optional(),
+    endDate: z.coerce.date().optional(),
+    status: z.enum(ACADEMIC_SESSION_STATUS).optional(),
+  })
+  .refine((v) => !v.startDate || !v.endDate || v.endDate > v.startDate, {
+    path: ["endDate"],
+    message: "The end date must be after the start date.",
+  });
+export type AcademicSessionUpdateInput = z.infer<typeof academicSessionUpdateSchema>;
+
 export const batchCreateSchema = z.object({
   academicSessionId: z.string().uuid(),
   name: z.string().trim().min(3).max(150),
   deliveryPattern: z.string().trim().min(2).max(50),
 });
+export type BatchCreateInput = z.infer<typeof batchCreateSchema>;
+
+/** The session is fixed for the same reason a session's programme is. */
+export const batchUpdateSchema = z.object({
+  name: z.string().trim().min(3).max(150).optional(),
+  deliveryPattern: z.string().trim().min(2).max(50).optional(),
+});
+export type BatchUpdateInput = z.infer<typeof batchUpdateSchema>;
 
 // -------------------------------------------------------------- sections ---
 

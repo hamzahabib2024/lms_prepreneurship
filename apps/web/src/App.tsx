@@ -6,6 +6,7 @@ import { LandingPage } from "./pages/LandingPage";
 import { ApplyPage } from "./pages/ApplyPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { SectionsPage } from "./pages/SectionsPage";
+import { StructurePage } from "./pages/StructurePage";
 import { ReportsPage } from "./pages/ReportsPage";
 import { AdmissionsPage } from "./pages/AdmissionsPage";
 import { AttendancePage } from "./pages/AttendancePage";
@@ -231,6 +232,13 @@ export function App() {
             <NavLink to="/sections">
               <Icon name="layers" />
               Sections
+            </NavLink>
+            {/* Terms and batches. A teacher and a student may read the
+                structure; only an Admin sees the forms, which the page decides
+                for itself rather than being hidden wholesale here. */}
+            <NavLink to="/structure">
+              <Icon name="calendar" />
+              Structure
             </NavLink>
             {/* A TEACHER holds no `payment` grant at all (§4.5) — offering
                 them the page would be offering a 403. */}
@@ -486,6 +494,7 @@ export function App() {
               for itself whether this user may post. */}
           <Route path="/announcements" element={<AnnouncementsPage />} />
           <Route path="/sections" element={<SectionsPage />} />
+          <Route path="/structure" element={<StructurePage />} />
           <Route path="/change-password" element={<ChangePasswordPage forced={false} />} />
           <Route
             path="/reports"

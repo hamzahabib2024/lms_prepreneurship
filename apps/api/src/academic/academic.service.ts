@@ -3,6 +3,10 @@ import {
   AppError,
   buildPagination,
   clampPageSize,
+  type AcademicSessionCreateInput,
+  type AcademicSessionUpdateInput,
+  type BatchCreateInput,
+  type BatchUpdateInput,
   type OfferingCreateInput,
   type ProgrammeCreateInput,
   type SectionCreateInput,
@@ -81,6 +85,220 @@ export class AcademicService {
       where: { deletedAt: null },
       orderBy: { name: "asc" },
     });
+  }
+
+  // ------------------------------------------------- sessions and batches --
+
+  /**
+   * FR-CRS-005. Until now these existed only in the seed script.
+   *
+   * A section cannot be created without a batchId, a batch cannot be created
+   * without an academicSessionId, and nothing in the running system could
+   * produce either — so `POST /sections` was a door with no handle on this
+   * side. The permission matrix has granted an Admin FULL on both resources
+   * since the day it was written; there were simply no routes behind it.
+   */
+  listSessions(params: { programmeId?: string; status?: string } = {}) {
+    return this.prisma.scoped.academicSession.findMany({
+      where: {
+        deletedAt: null,
+        ...(params.programmeId ? { programmeId: params.programmeId } : {}),
+        ...(params.status ? { status: params.status } : {}),
+      },
+      orderBy: [{ startDate: "desc" }, { code: "asc" }],
+      include: {
+        programme: { select: { id: true, code: true, name: true } },
+        _count: { select: { batches: true } },
+      },
+    });
+  }
+
+  async createSession(input: AcademicSessionCreateInput) {
+    const programme = await this.prisma.scoped.programme.findFirst({
+      where: { id: input.programmeId, deletedAt: null },
+      select: { id: true, code: true },
+    });
+    if (!programme) {
+      throw new AppError("VALIDATION_FAILED", {
+        details: [
+          { field: "programmeId", code: "NOT_FOUND", message: "That programme does not exist." },
+        ],
+      });
+    }
+
+    // (programmeId, code) is UNIQUE. Checked here so the Institute is told
+    // which term already holds the code, rather than being shown a constraint
+    // violation naming a database index.
+    const clash = await this.prisma.scoped.academicSession.findFirst({
+      where: { programmeId: input.programmeId, code: input.code },
+      select: { name: true },
+    });
+    if (clash) {
+      throw new AppError("VALIDATION_FAILED", {
+        details: [
+          {
+            field: "code",
+            code: "DUPLICATE",
+            message: `${programme.code} already has a session coded ${input.code} — "${clash.name}".`,
+          },
+        ],
+      });
+    }
+
+    const created = await this.prisma.scoped.academicSession.create({
+      data: {
+        programmeId: input.programmeId,
+        name: input.name,
+        code: input.code,
+        startDate: input.startDate,
+        endDate: input.endDate,
+        status: "PLANNED",
+      },
+    });
+    await this.audit.record({
+      action: "academic_session.create",
+      entityType: "AcademicSession",
+      entityId: created.id,
+      after: { code: created.code, name: created.name, programmeId: created.programmeId },
+    });
+    return created;
+  }
+
+  async updateSession(id: string, input: AcademicSessionUpdateInput) {
+    const before = await this.prisma.scoped.academicSession.findFirst({
+      where: { id, deletedAt: null },
+      select: { id: true, name: true, status: true, startDate: true, endDate: true },
+    });
+    if (!before) throw new AppError("RESOURCE_NOT_FOUND", { message: "That session does not exist." });
+
+    // Each date may arrive alone, so the range is checked against what is
+    // already stored — otherwise moving the start past a stored end would be
+    // accepted by a schema that only ever sees one of the two.
+    const startDate = input.startDate ?? before.startDate;
+    const endDate = input.endDate ?? before.endDate;
+    if (endDate <= startDate) {
+      throw new AppError("VALIDATION_FAILED", {
+        details: [
+          {
+            field: "endDate",
+            code: "RANGE",
+            message: "The end date must be after the start date.",
+          },
+        ],
+      });
+    }
+
+    const updated = await this.prisma.scoped.academicSession.update({
+      where: { id },
+      data: {
+        ...(input.name !== undefined ? { name: input.name } : {}),
+        ...(input.status !== undefined ? { status: input.status } : {}),
+        startDate,
+        endDate,
+      },
+    });
+    await this.audit.record({
+      action: "academic_session.update",
+      entityType: "AcademicSession",
+      entityId: id,
+      before: { name: before.name, status: before.status },
+      after: { name: updated.name, status: updated.status },
+    });
+    return updated;
+  }
+
+  listBatches(params: { academicSessionId?: string } = {}) {
+    return this.prisma.scoped.batch.findMany({
+      where: {
+        deletedAt: null,
+        ...(params.academicSessionId ? { academicSessionId: params.academicSessionId } : {}),
+      },
+      orderBy: { name: "asc" },
+      include: {
+        academicSession: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            status: true,
+            programme: { select: { id: true, code: true, name: true } },
+          },
+        },
+        _count: { select: { sections: true } },
+      },
+    });
+  }
+
+  async createBatch(input: BatchCreateInput) {
+    const session = await this.prisma.scoped.academicSession.findFirst({
+      where: { id: input.academicSessionId, deletedAt: null },
+      select: { id: true, status: true, code: true },
+    });
+    if (!session) {
+      throw new AppError("VALIDATION_FAILED", {
+        details: [
+          {
+            field: "academicSessionId",
+            code: "NOT_FOUND",
+            message: "That session does not exist.",
+          },
+        ],
+      });
+    }
+    // Adding a batch to a finished or abandoned term is a mistake every time,
+    // and it would carry sections and enrolments in behind it.
+    if (session.status === "COMPLETED" || session.status === "CANCELLED") {
+      throw new AppError("VALIDATION_FAILED", {
+        details: [
+          {
+            field: "academicSessionId",
+            code: "CLOSED",
+            message: `Session ${session.code} is ${session.status.toLowerCase()}, so no new batch can be added to it.`,
+          },
+        ],
+      });
+    }
+
+    const created = await this.prisma.scoped.batch.create({
+      data: {
+        academicSessionId: input.academicSessionId,
+        name: input.name,
+        deliveryPattern: input.deliveryPattern,
+      },
+    });
+    await this.audit.record({
+      action: "batch.create",
+      entityType: "Batch",
+      entityId: created.id,
+      after: { name: created.name, academicSessionId: created.academicSessionId },
+    });
+    return created;
+  }
+
+  async updateBatch(id: string, input: BatchUpdateInput) {
+    const before = await this.prisma.scoped.batch.findFirst({
+      where: { id, deletedAt: null },
+      select: { id: true, name: true, deliveryPattern: true },
+    });
+    if (!before) throw new AppError("RESOURCE_NOT_FOUND", { message: "That batch does not exist." });
+
+    const updated = await this.prisma.scoped.batch.update({
+      where: { id },
+      data: {
+        ...(input.name !== undefined ? { name: input.name } : {}),
+        ...(input.deliveryPattern !== undefined
+          ? { deliveryPattern: input.deliveryPattern }
+          : {}),
+      },
+    });
+    await this.audit.record({
+      action: "batch.update",
+      entityType: "Batch",
+      entityId: id,
+      before: { name: before.name, deliveryPattern: before.deliveryPattern },
+      after: { name: updated.name, deliveryPattern: updated.deliveryPattern },
+    });
+    return updated;
   }
 
   // ------------------------------------------------------------- sections --

@@ -1,7 +1,11 @@
 import { Body, Controller, Get, Param, Patch, Post, Query } from "@nestjs/common";
 import {
+  academicSessionCreateSchema,
+  academicSessionUpdateSchema,
   assignmentCreateSchema,
   assignmentEndSchema,
+  batchCreateSchema,
+  batchUpdateSchema,
   offeringCreateSchema,
   programmeCreateSchema,
   sectionCreateSchema,
@@ -11,7 +15,11 @@ import {
   transferSchema,
   reinstateSchema,
   withdrawSchema,
+  type AcademicSessionCreateInput,
+  type AcademicSessionUpdateInput,
   type AssignmentCreateInput,
+  type BatchCreateInput,
+  type BatchUpdateInput,
   type OfferingCreateInput,
   type ProgrammeCreateInput,
   type SectionCreateInput,
@@ -62,6 +70,50 @@ export class AcademicController {
   @Post("subjects")
   createSubject(@Body(zodBody(subjectCreateSchema)) dto: SubjectCreateInput) {
     return this.academic.createSubject(dto);
+  }
+
+  // ------------------------------------------------- sessions and batches --
+
+  @RequirePermission("academic_session", "read")
+  @Get("academic-sessions")
+  listSessions(@Query("programmeId") programmeId?: string, @Query("status") status?: string) {
+    return this.academic.listSessions({ programmeId, status });
+  }
+
+  @RequirePermission("academic_session", "create")
+  @Post("academic-sessions")
+  createSession(@Body(zodBody(academicSessionCreateSchema)) dto: AcademicSessionCreateInput) {
+    return this.academic.createSession(dto);
+  }
+
+  @RequirePermission("academic_session", "update")
+  @Patch("academic-sessions/:id")
+  updateSession(
+    @Param("id") id: string,
+    @Body(zodBody(academicSessionUpdateSchema)) dto: AcademicSessionUpdateInput,
+  ) {
+    return this.academic.updateSession(id, dto);
+  }
+
+  @RequirePermission("batch", "read")
+  @Get("batches")
+  listBatches(@Query("academicSessionId") academicSessionId?: string) {
+    return this.academic.listBatches({ academicSessionId });
+  }
+
+  @RequirePermission("batch", "create")
+  @Post("batches")
+  createBatch(@Body(zodBody(batchCreateSchema)) dto: BatchCreateInput) {
+    return this.academic.createBatch(dto);
+  }
+
+  @RequirePermission("batch", "update")
+  @Patch("batches/:id")
+  updateBatch(
+    @Param("id") id: string,
+    @Body(zodBody(batchUpdateSchema)) dto: BatchUpdateInput,
+  ) {
+    return this.academic.updateBatch(id, dto);
   }
 
   // ------------------------------------------------------------- sections --
