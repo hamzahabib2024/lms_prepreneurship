@@ -104,7 +104,7 @@ export function TimetablePage() {
       </header>
 
       {error && (
-        <div className="alert alert-error">
+        <div className="alert alert-error" role="alert">
           <p>{error}</p>
         </div>
       )}
@@ -292,7 +292,7 @@ function GeneratePanel({ onGenerated }: { onGenerated: () => void }) {
       </div>
 
       {error && (
-        <div className="alert alert-error">
+        <div className="alert alert-error" role="alert">
           <p>{error}</p>
         </div>
       )}

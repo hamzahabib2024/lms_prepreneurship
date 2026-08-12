@@ -42,7 +42,7 @@ export function CertificatePanel() {
     return (
       <section className="card">
         <h2>Certificates</h2>
-        <div className="alert alert-error">
+        <div className="alert alert-error" role="alert">
           <p>{error}</p>
         </div>
       </section>

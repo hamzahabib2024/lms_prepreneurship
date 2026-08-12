@@ -93,7 +93,7 @@ export function CertificatesPage() {
       </header>
 
       {error && (
-        <div className="alert alert-error">
+        <div className="alert alert-error" role="alert">
           <p>{error}</p>
         </div>
       )}
@@ -402,7 +402,7 @@ function CandidateRow({
       </div>
 
       {error && (
-        <div className="alert alert-error">
+        <div className="alert alert-error" role="alert">
           <ul className="list small">
             {error.map((m) => (
               <li key={m}>

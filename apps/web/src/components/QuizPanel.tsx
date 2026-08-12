@@ -84,7 +84,7 @@ export function QuizPanel({ sectionSubjectId }: { sectionSubjectId: string }) {
     return (
       <section className="card">
         <h2>Quizzes</h2>
-        <div className="alert alert-error">
+        <div className="alert alert-error" role="alert">
           <p>{error}</p>
         </div>
       </section>
@@ -96,7 +96,7 @@ export function QuizPanel({ sectionSubjectId }: { sectionSubjectId: string }) {
     <section className="card">
       <h2>Quizzes</h2>
       {error && (
-        <div className="alert alert-error">
+        <div className="alert alert-error" role="alert">
           <p>{error}</p>
         </div>
       )}
@@ -243,7 +243,7 @@ function AttemptRunner({
         </p>
 
         {error && (
-          <div className="alert alert-error">
+          <div className="alert alert-error" role="alert">
             <p>{error}</p>
           </div>
         )}

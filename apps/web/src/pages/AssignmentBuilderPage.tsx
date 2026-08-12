@@ -338,7 +338,7 @@ export function AssignmentBuilderPage() {
       </section>
 
       {problems.length > 0 && (
-        <div className="alert alert-error">
+        <div className="alert alert-error" role="alert">
           <ul className="list small">
             {problems.map((p) => (
               <li key={p}>

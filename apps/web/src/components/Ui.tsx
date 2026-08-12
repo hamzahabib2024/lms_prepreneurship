@@ -107,7 +107,16 @@ export function ProgressRing({
       role="img"
       aria-label={label ?? `${safe}% complete`}
     >
-      <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size}>
+      {/* The ring draws the number that is already printed beside it, so a
+          screen reader announcing "graphic" here would be reading the same
+          fact twice (NFR-ACC-005). */}
+      <svg
+        viewBox={`0 0 ${size} ${size}`}
+        width={size}
+        height={size}
+        aria-hidden="true"
+        focusable="false"
+      >
         <circle
           cx={size / 2}
           cy={size / 2}

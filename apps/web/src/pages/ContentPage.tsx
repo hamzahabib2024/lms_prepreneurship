@@ -98,7 +98,7 @@ export function ContentPage() {
       </header>
 
       {error && (
-        <div className="alert alert-error">
+        <div className="alert alert-error" role="alert">
           <p>{error}</p>
         </div>
       )}
@@ -187,7 +187,7 @@ function NewModule({ subjectId, onCreated }: { subjectId: string; onCreated: () 
         </div>
       </div>
       {error && (
-        <div className="alert alert-error">
+        <div className="alert alert-error" role="alert">
           <p>{error}</p>
         </div>
       )}
@@ -246,7 +246,7 @@ function ModuleCard({
       )}
 
       {error && (
-        <div className="alert alert-error">
+        <div className="alert alert-error" role="alert">
           <p>{error}</p>
         </div>
       )}
@@ -561,7 +561,7 @@ function AttachLecture({
   return (
     <div className="composer">
       {error && (
-        <div className="alert alert-error">
+        <div className="alert alert-error" role="alert">
           <p>{error}</p>
         </div>
       )}

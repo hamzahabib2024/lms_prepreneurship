@@ -98,7 +98,7 @@ export function SubjectPage() {
 
   if (error) {
     return (
-      <div className="alert alert-error">
+      <div className="alert alert-error" role="alert">
         <strong>Could not load this subject</strong>
         <p>{error.message}</p>
         <Link className="btn" to="/subjects">

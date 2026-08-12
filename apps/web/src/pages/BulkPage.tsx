@@ -111,7 +111,7 @@ export function BulkPage() {
       </header>
 
       {error && (
-        <div className="alert alert-error">
+        <div className="alert alert-error" role="alert">
           <p>{error}</p>
         </div>
       )}

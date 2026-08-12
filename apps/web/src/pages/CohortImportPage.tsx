@@ -161,7 +161,7 @@ export function CohortImportPage() {
       </div>
 
       {error && (
-        <div className="alert alert-error">
+        <div className="alert alert-error" role="alert">
           <p>{error}</p>
         </div>
       )}
@@ -366,7 +366,7 @@ function PreviewPanel({ preview }: { preview: Preview }) {
   if (preview.fileProblem) {
     return (
       <section className="card">
-        <div className="alert alert-error">
+        <div className="alert alert-error" role="alert">
           <p>{preview.fileProblem.message}</p>
         </div>
       </section>

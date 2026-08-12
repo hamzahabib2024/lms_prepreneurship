@@ -47,7 +47,7 @@ export function MySubjectsPage() {
 
   if (error) {
     return (
-      <div className="alert alert-error">
+      <div className="alert alert-error" role="alert">
         <strong>Could not load your subjects</strong>
         <p>{error.message}</p>
       </div>

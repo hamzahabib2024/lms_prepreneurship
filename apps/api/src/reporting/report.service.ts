@@ -254,6 +254,23 @@ export class ReportService {
         { header: "Awaiting Marking", value: (r) => r["awaitingMarking"] },
         { header: "Median Days to Mark", value: (r) => r["medianDaysToMark"] },
       ],
+      /*
+       * DECLARED LATE, and the report was already reading them.
+       *
+       * teacherActivity() has honoured `from` and `to` since it was written —
+       * it builds a window and applies it to every count. It simply never said
+       * so, and the screen renders exactly the filters a report declares, so
+       * the fields were never offered and every run covered all of time.
+       *
+       * That matters most for the marking-turnaround column: a teacher's
+       * median days-to-mark over their whole career is not the number anybody
+       * is asking about, and it is the one column a management report is most
+       * likely to be read as a judgement on.
+       */
+      filters: [
+        { key: "from", label: "From", type: "date" },
+        { key: "to", label: "To", type: "date", hint: "Leave both empty for all time." },
+      ],
     });
 
     // ---- reports the payment work made possible -------------------------

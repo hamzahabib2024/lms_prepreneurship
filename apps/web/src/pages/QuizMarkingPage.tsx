@@ -77,7 +77,7 @@ export function QuizMarkingPage() {
 
   if (error && !queue) {
     return (
-      <div className="alert alert-error">
+      <div className="alert alert-error" role="alert">
         <strong>Could not load this quiz</strong>
         <p>{error}</p>
       </div>
@@ -111,7 +111,7 @@ export function QuizMarkingPage() {
       </header>
 
       {error && (
-        <div className="alert alert-error">
+        <div className="alert alert-error" role="alert">
           <p>{error}</p>
         </div>
       )}
@@ -218,7 +218,7 @@ function AnswerRow({ answer: a, onMarked }: { answer: MarkableAnswer; onMarked: 
       </div>
 
       {error && (
-        <div className="alert alert-error">
+        <div className="alert alert-error" role="alert">
           <p>{error}</p>
         </div>
       )}

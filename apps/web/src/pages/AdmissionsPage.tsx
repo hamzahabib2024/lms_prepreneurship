@@ -77,7 +77,7 @@ export function AdmissionsPage() {
 
   if (error && !queue) {
     return (
-      <div className="alert alert-error">
+      <div className="alert alert-error" role="alert">
         <strong>Could not load the admission queue</strong>
         <p>{error.message}</p>
       </div>
@@ -341,7 +341,7 @@ function ReviewPanel({
       {/* FR-CRS-009 / BR-ENR-05 — absolute. No override exists, so none is
           offered; the approve button simply cannot be used. */}
       {genderBlocked && (
-        <div className="alert alert-error">
+        <div className="alert alert-error" role="alert">
           <strong>This section admits {section?.genderRestriction.toLowerCase()} students only</strong>
           <p className="small">Choose a different section. This restriction cannot be overridden.</p>
         </div>

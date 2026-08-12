@@ -60,7 +60,7 @@ export function MarkingPage() {
 
   if (error) {
     return (
-      <div className="alert alert-error">
+      <div className="alert alert-error" role="alert">
         <strong>Could not load your marking</strong>
         <p>{error}</p>
       </div>

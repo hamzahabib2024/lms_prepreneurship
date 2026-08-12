@@ -43,7 +43,7 @@ export function VerifyPage() {
         <h1>Certificate verification</h1>
 
         {failed && (
-          <div className="alert alert-error">
+          <div className="alert alert-error" role="alert">
             <p>We could not check that certificate just now. Please try again shortly.</p>
           </div>
         )}
@@ -51,7 +51,7 @@ export function VerifyPage() {
         {!result && !failed && <p className="muted">Checking…</p>}
 
         {result && !result.found && (
-          <div className="alert alert-error">
+          <div className="alert alert-error" role="alert">
             <p>
               No certificate matches that code. Check it against the printed document,
               or ask the holder for the link again.

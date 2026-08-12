@@ -50,7 +50,7 @@ export function DashboardPage() {
 
   if (error) {
     return (
-      <div className="alert alert-error">
+      <div className="alert alert-error" role="alert">
         <strong>Could not load your dashboard</strong>
         <p>{error.message}</p>
       </div>

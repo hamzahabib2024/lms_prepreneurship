@@ -52,7 +52,7 @@ export function AnnouncementsPage() {
       </header>
 
       {error && (
-        <div className="alert alert-error">
+        <div className="alert alert-error" role="alert">
           <p>{error}</p>
         </div>
       )}
@@ -211,7 +211,7 @@ function Composer({ onPosted }: { onPosted: () => void }) {
       )}
 
       {error && (
-        <div className="alert alert-error">
+        <div className="alert alert-error" role="alert">
           <p>{error}</p>
         </div>
       )}

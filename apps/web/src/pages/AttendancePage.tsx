@@ -226,7 +226,7 @@ function RegisterGrid({ sessionId }: { sessionId: string }) {
 
   if (error && !register) {
     return (
-      <div className="alert alert-error">
+      <div className="alert alert-error" role="alert">
         <strong>Could not load the register</strong>
         <p>{error.message}</p>
       </div>

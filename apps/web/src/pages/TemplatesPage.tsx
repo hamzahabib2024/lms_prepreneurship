@@ -90,7 +90,7 @@ export function TemplatesPage() {
 
   if (error && !templates) {
     return (
-      <div className="alert alert-error">
+      <div className="alert alert-error" role="alert">
         <p>{error}</p>
       </div>
     );
@@ -113,7 +113,7 @@ export function TemplatesPage() {
       </header>
 
       {error && (
-        <div className="alert alert-error">
+        <div className="alert alert-error" role="alert">
           <p>{error}</p>
         </div>
       )}

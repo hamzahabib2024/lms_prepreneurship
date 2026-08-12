@@ -118,7 +118,7 @@ export function LandingPage() {
               </div>
             </div>
             <div className="hero-ring">
-              <svg viewBox="0 0 84 84" width="84" height="84">
+              <svg viewBox="0 0 84 84" width="84" height="84" aria-hidden="true" focusable="false">
                 <circle cx="42" cy="42" r="38" fill="none" strokeWidth="8" className="ring-track" />
                 <circle
                   cx="42"

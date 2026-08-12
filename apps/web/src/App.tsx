@@ -318,7 +318,21 @@ export function App() {
 
         {/* Tapping away closes the drawer, which is what every phone user
             expects and what stops them being trapped in it. */}
-        {navOpen && <div className="scrim" onClick={() => setNavOpen(false)} />}
+        {/*
+          The backdrop behind the mobile drawer. A real <button> rather than a
+          div with a click handler: a div cannot be tabbed to and does not fire
+          on Enter, so on a phone with a keyboard the menu could be opened and
+          not closed. It carries a name because a button with no text is
+          announced as just "button".
+        */}
+        {navOpen && (
+          <button
+            type="button"
+            className="scrim"
+            aria-label="Close the menu"
+            onClick={() => setNavOpen(false)}
+          />
+        )}
 
         <div style={{ flex: 1, minWidth: 0 }}>
           <header className="topbar">

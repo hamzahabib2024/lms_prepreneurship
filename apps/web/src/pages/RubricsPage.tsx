@@ -70,7 +70,7 @@ export function RubricsPage() {
       </header>
 
       {error && (
-        <div className="alert alert-error">
+        <div className="alert alert-error" role="alert">
           <p>{error}</p>
         </div>
       )}
@@ -282,7 +282,7 @@ function RubricEditor({
       )}
 
       {problems.length > 0 && (
-        <div className="alert alert-error">
+        <div className="alert alert-error" role="alert">
           <ul>
             {problems.map((p) => (
               <li key={p}>{p}</li>

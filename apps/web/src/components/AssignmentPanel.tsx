@@ -67,7 +67,7 @@ export function AssignmentPanel({ sectionSubjectId }: { sectionSubjectId: string
     return (
       <section className="card">
         <h2>Assignments</h2>
-        <div className="alert alert-error">
+        <div className="alert alert-error" role="alert">
           <p>{error}</p>
         </div>
       </section>
@@ -314,7 +314,7 @@ function SubmitPanel({
       )}
 
       {error && (
-        <div className="alert alert-error">
+        <div className="alert alert-error" role="alert">
           <p>{error}</p>
         </div>
       )}

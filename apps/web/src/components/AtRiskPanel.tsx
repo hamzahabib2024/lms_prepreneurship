@@ -155,7 +155,7 @@ function AtRiskRow({
             that happens when their attendance recovers.
           </p>
           {error && (
-            <div className="alert alert-error">
+            <div className="alert alert-error" role="alert">
               <p>{error}</p>
             </div>
           )}

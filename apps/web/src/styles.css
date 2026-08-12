@@ -605,9 +605,14 @@ code {
   .layout { display: block; }
   .menu-button { display: inline-flex; }
   .main { padding: 1rem; }
+  /* A <button>, so it is reachable by keyboard and fires on Enter — hence the
+     resets, which strip the control's own chrome without making it one. */
   .scrim {
     position: fixed; inset: 0; z-index: 30;
     background: rgb(15 23 42 / 45%);
+    border: 0; padding: 0; margin: 0;
+    display: block; width: 100%; cursor: default;
+    -webkit-appearance: none; appearance: none;
   }
   .auth-shell { grid-template-columns: 1fr; }
   /* The panel becomes a header rather than vanishing: it is the brand, and a

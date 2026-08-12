@@ -121,7 +121,7 @@ export function ReportsPage() {
 
   if (error && !defs) {
     return (
-      <div className="alert alert-error">
+      <div className="alert alert-error" role="alert">
         <strong>Could not load reports</strong>
         <p>{error.message}</p>
       </div>
@@ -137,7 +137,7 @@ export function ReportsPage() {
       </header>
 
       {error && (
-        <div className="alert alert-error">
+        <div className="alert alert-error" role="alert">
           <strong>Could not run that report</strong>
           <p>{error.details?.map((x) => x.message).join(" ") ?? error.message}</p>
         </div>

@@ -43,7 +43,7 @@ export function SlipViewer({ requestId }: { requestId: string }) {
 
   if (error) {
     return (
-      <div className="alert alert-error">
+      <div className="alert alert-error" role="alert">
         <p>{error}</p>
       </div>
     );
@@ -118,7 +118,7 @@ function Slip({ requestId, doc }: { requestId: string; doc: SlipDocument }) {
       </div>
 
       {failed ? (
-        <div className="alert alert-error">
+        <div className="alert alert-error" role="alert">
           <p className="small">
             The file could not be loaded. It may have been removed from storage — the record of it
             remains.

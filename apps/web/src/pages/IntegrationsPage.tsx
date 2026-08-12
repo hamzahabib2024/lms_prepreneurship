@@ -83,7 +83,7 @@ export function IntegrationsPage() {
 
   if (error && !rows) {
     return (
-      <div className="alert alert-error">
+      <div className="alert alert-error" role="alert">
         <strong>Could not load integrations</strong>
         <p>{error.message}</p>
       </div>

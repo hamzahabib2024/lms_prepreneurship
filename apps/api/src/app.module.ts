@@ -39,9 +39,29 @@ import { PermissionsGuard } from "./rbac/permissions.guard";
       envFilePath: [join(process.cwd(), ".env"), join(process.cwd(), "../../.env")],
     }),
 
-    // §7.7 — the general authenticated ceiling. Sensitive endpoints add their
-    // own tighter limits (login, registration, certificate verification).
-    ThrottlerModule.forRoot([{ name: "default", ttl: 60_000, limit: 300 }]),
+    /*
+     * §7.7 — the general authenticated ceiling. Sensitive endpoints add their
+     * own tighter limits (login, registration, certificate verification).
+     *
+     * CONFIGURABLE, and a deployment with many users on one connection has to
+     * raise it. The limit is per client address, so an institute whose 150
+     * students sit in a lab behind one NAT shares a single budget — at the
+     * 300 default that is two requests each per minute, and the building goes
+     * down together at nine o'clock. Load testing made this obvious: 43% of
+     * requests came back 429 before any of them reached a query.
+     *
+     * TRUST_PROXY_HOPS is the other half of the same problem and is set
+     * separately: without it every request behind nginx appears to come from
+     * the proxy, and the whole Institute shares one budget no matter what this
+     * number says.
+     */
+    ThrottlerModule.forRoot([
+      {
+        name: "default",
+        ttl: 60_000,
+        limit: Number(process.env["THROTTLE_LIMIT_PER_MINUTE"] ?? 300),
+      },
+    ]),
 
     PrismaModule,
     AuthModule,

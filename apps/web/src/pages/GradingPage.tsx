@@ -91,7 +91,7 @@ export function GradingPage() {
 
   if (error && !roster) {
     return (
-      <div className="alert alert-error">
+      <div className="alert alert-error" role="alert">
         <strong>Could not load this assignment</strong>
         <p>{error}</p>
       </div>
@@ -140,7 +140,7 @@ export function GradingPage() {
         </ul>
 
         {error && (
-          <div className="alert alert-error">
+          <div className="alert alert-error" role="alert">
             <p>{error}</p>
           </div>
         )}
@@ -370,7 +370,7 @@ function GradeForm({
       )}
 
       {error && (
-        <div className="alert alert-error">
+        <div className="alert alert-error" role="alert">
           <p>{error}</p>
         </div>
       )}
