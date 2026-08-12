@@ -512,7 +512,7 @@ export class AdmissionService {
 
     const tempPassword = this.generateTempPassword();
     const passwordHash = await this.auth.hashPassword(tempPassword);
-    const format = this.numbers.getFormat();
+    const format = await this.numbers.resolveFormat();
 
     const result = await this.prisma.asSystem((db) =>
       db.$transaction(async (tx) => {

@@ -70,6 +70,13 @@ const ACKNOWLEDGED: Record<string, string> = {
     "written.",
   "academic/academic.service.ts::offerSubject":
     "Admin-only. §4.5 gives no teacher `section_subject:create`.",
+  "academic/student-note.service.ts::create":
+    "BOTH ids are read back through the scoped client immediately before the " +
+    "write, and both refusals are raised rather than logged: the " +
+    "sectionSubject findFirst returns nothing for a class this teacher does " +
+    "not teach, and the student findFirst returns nothing for somebody outside " +
+    "their sections. The authorUserId is actor.userId. This is a real check " +
+    "the scanner cannot see, not an exemption.",
   "academic/assignment.service.ts::create":
     "Admin-only teacher assignment (FR-CRS-021). A teacher explicitly cannot " +
     "write their own assignment — BR-ACC-04 — and the matrix grants them read " +

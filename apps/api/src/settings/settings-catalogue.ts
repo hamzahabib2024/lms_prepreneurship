@@ -251,6 +251,56 @@ export const CATALOGUE: SettingDefinition[] = [
     description:
       "The campus or address printed under the Institute's name on a receipt. Leave it empty for a single-campus institute; the line is then omitted rather than printed blank.",
   },
+  // -------------------------------------------------- registration numbers --
+  /*
+   * FR-REG-054, and OPN-01 is why it matters.
+   *
+   * The Institute has not confirmed its format or the highest number already
+   * issued. These were readable only from environment variables, which means
+   * the one thing OPN-01 will change could not be changed without a
+   * deployment — the opposite of what FR-REG-054 asks for.
+   *
+   * CHANGING THESE DOES NOT RENUMBER ANYBODY. A registration number is
+   * permanent and public (BR-REG-07); it appears on certificates already
+   * printed and in correspondence already sent. A new format applies to
+   * numbers issued from that point on, which is why the descriptions say so
+   * and the screen shows a worked example before and after.
+   */
+  {
+    key: "registration.instituteCode",
+    type: "string",
+    default: "CIIT",
+    group: "Registration numbers",
+    description:
+      "The {INSTITUTE} part of a registration number. Changing it does NOT renumber anyone — numbers already issued are permanent and appear on printed certificates. It applies to students admitted after the change.",
+  },
+  {
+    key: "registration.campusCode",
+    type: "string",
+    default: "ISB",
+    group: "Registration numbers",
+    description:
+      "The {CAMPUS} part. As above, it affects only numbers issued from now on.",
+  },
+  {
+    key: "registration.padWidth",
+    type: "number",
+    default: 3,
+    min: 1,
+    max: 10,
+    group: "Registration numbers",
+    description:
+      "How many digits the sequence is padded to, so 7 becomes 007. Widening it later does not repad numbers already issued, so the series will contain both forms — set it once, before the first intake, wide enough for the largest cohort you expect.",
+  },
+  {
+    key: "registration.template",
+    type: "string",
+    default: "{INSTITUTE}/{SESSION}-{SEQUENCE}/{CAMPUS}",
+    group: "Registration numbers",
+    description:
+      "The shape of the number. Available: {INSTITUTE}, {SESSION}, {SEQUENCE}, {CAMPUS}. {PROGRAMME} is also substituted but should not be used — one student may enrol in several courses, and a number naming a programme would either have to change or describe them wrongly for good (BR-REG-07).",
+  },
+
   {
     key: "finance.receiptNote",
     type: "string",

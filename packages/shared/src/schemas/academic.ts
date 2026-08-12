@@ -127,6 +127,24 @@ export const offeringCreateSchema = z.object({
 });
 export type OfferingCreateInput = z.infer<typeof offeringCreateSchema>;
 
+// ------------------------------------------------------- internal notes ----
+
+/**
+ * FR-REG-046. The section-subject is required, not optional: a teacher's
+ * authority is a subject WITHIN a section (BR-ACC-04), so a note that did not
+ * record which class it came from could not later be shown to the right people.
+ */
+export const noteCreateSchema = z.object({
+  sectionSubjectId: z.string().uuid(),
+  body: z.string().trim().min(3).max(4000),
+});
+export type NoteCreateInput = z.infer<typeof noteCreateSchema>;
+
+export const noteUpdateSchema = z.object({
+  body: z.string().trim().min(3).max(4000),
+});
+export type NoteUpdateInput = z.infer<typeof noteUpdateSchema>;
+
 // ---------------------------------------------------------- assignments ----
 
 /**

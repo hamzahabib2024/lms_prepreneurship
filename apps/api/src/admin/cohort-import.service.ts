@@ -277,7 +277,7 @@ export class CohortImportService {
 
     const temporaryPassword = this.temporaryPassword();
     const passwordHash = await this.auth.hashPassword(temporaryPassword);
-    const format = this.numbers.getFormat();
+    const format = await this.numbers.resolveFormat();
 
     try {
       return await this.prisma.asSystem((db) =>

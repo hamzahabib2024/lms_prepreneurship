@@ -1,6 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import type { Prisma } from "@prisma/client";
+import { SettingsService } from "../settings/settings.service";
 
 /**
  * Registration and roll number allocation — SRS Appendix B, FR-REG-049..058.
@@ -50,7 +51,10 @@ type Tx = Prisma.TransactionClient;
 export class RegistrationNumberService {
   private readonly logger = new Logger(RegistrationNumberService.name);
 
-  constructor(private readonly config: ConfigService) {}
+  constructor(
+    private readonly config: ConfigService,
+    private readonly settings: SettingsService,
+  ) {}
 
   /**
    * OPN-01 is still open: the Institute has not confirmed the exact format or
@@ -58,6 +62,38 @@ export class RegistrationNumberService {
    * configurable precisely so that this does not block development — the
    * Appendix B default is used until a setting overrides it.
    */
+  /**
+   * FR-REG-054 properly: the format an administrator can actually change.
+   *
+   * Layered over getFormat() rather than replacing it. The environment still
+   * supplies the deployment's starting point, and a settings override — set on
+   * the Settings screen, under "Registration numbers" — wins over it. Until
+   * somebody sets one, this returns exactly what getFormat() always did.
+   *
+   * NOT CACHED, and deliberately. It is read once per admission and once per
+   * cohort import, both of which already do far more work than a settings
+   * lookup; a cache here would mean an administrator changing the format and
+   * watching the next student get the old one.
+   */
+  async resolveFormat(): Promise<NumberFormatConfig> {
+    const fallback = this.getFormat();
+    const [instituteCode, campusCode, template, padWidth] = await Promise.all([
+      this.settings.text("registration.instituteCode"),
+      this.settings.text("registration.campusCode"),
+      this.settings.text("registration.template"),
+      this.settings.number("registration.padWidth"),
+    ]);
+
+    // A blank string is somebody clearing the field, not a considered value —
+    // an empty institute code would silently produce "/SP26-001/ISB".
+    return {
+      instituteCode: instituteCode.trim() || fallback.instituteCode,
+      campusCode: campusCode.trim() || fallback.campusCode,
+      template: template.trim() || fallback.template,
+      padWidth: Number.isFinite(padWidth) && padWidth > 0 ? padWidth : fallback.padWidth,
+    };
+  }
+
   getFormat(): NumberFormatConfig {
     return {
       instituteCode: this.config.get<string>("INSTITUTE_CODE", "CIIT"),

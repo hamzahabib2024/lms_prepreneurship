@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from "@nestjs/common";
 import {
   academicSessionCreateSchema,
   academicSessionUpdateSchema,
@@ -6,6 +6,8 @@ import {
   assignmentEndSchema,
   batchCreateSchema,
   batchUpdateSchema,
+  noteCreateSchema,
+  noteUpdateSchema,
   offeringCreateSchema,
   programmeCreateSchema,
   sectionCreateSchema,
@@ -20,6 +22,8 @@ import {
   type AssignmentCreateInput,
   type BatchCreateInput,
   type BatchUpdateInput,
+  type NoteCreateInput,
+  type NoteUpdateInput,
   type OfferingCreateInput,
   type ProgrammeCreateInput,
   type SectionCreateInput,
@@ -28,6 +32,7 @@ import {
   type TransferInput,
 } from "@lms/shared";
 import { AcademicService } from "./academic.service";
+import { StudentNoteService } from "./student-note.service";
 import { AssignmentService } from "./assignment.service";
 import { EnrolmentService } from "./enrolment.service";
 import { zodBody } from "../common/zod-validation.pipe";
@@ -41,6 +46,7 @@ export class AcademicController {
     private readonly academic: AcademicService,
     private readonly assignments: AssignmentService,
     private readonly enrolments: EnrolmentService,
+    private readonly notes: StudentNoteService,
   ) {}
 
   // ----------------------------------------------------------- programmes --
@@ -181,6 +187,43 @@ export class AcademicController {
     @Body(zodBody(offeringCreateSchema)) dto: OfferingCreateInput,
   ) {
     return this.academic.offerSubject(id, dto);
+  }
+
+  // -------------------------------------------------------------- notes ----
+
+  /**
+   * FR-REG-046. `internal_note` — §4.5 grants Super Admin and Admin `read`,
+   * a Teacher FULL over ASSIGNED scope, and a STUDENT NOTHING.
+   *
+   * There is deliberately no "my notes" route for a student to call. The
+   * absence is the feature: a pastoral note is written so staff can help
+   * someone, and is the text that does harm if its subject reads it.
+   */
+  @RequirePermission("internal_note", "read")
+  @Get("students/:id/notes")
+  listNotes(@Param("id") id: string) {
+    return this.notes.list(id);
+  }
+
+  @RequirePermission("internal_note", "create")
+  @Post("students/:id/notes")
+  createNote(@Param("id") id: string, @Body(zodBody(noteCreateSchema)) dto: NoteCreateInput) {
+    return this.notes.create(id, dto);
+  }
+
+  @RequirePermission("internal_note", "update")
+  @Patch("student-notes/:noteId")
+  updateNote(
+    @Param("noteId") noteId: string,
+    @Body(zodBody(noteUpdateSchema)) dto: NoteUpdateInput,
+  ) {
+    return this.notes.update(noteId, dto.body);
+  }
+
+  @RequirePermission("internal_note", "delete")
+  @Delete("student-notes/:noteId")
+  deleteNote(@Param("noteId") noteId: string) {
+    return this.notes.remove(noteId);
   }
 
   // ---------------------------------------------------------- assignments --

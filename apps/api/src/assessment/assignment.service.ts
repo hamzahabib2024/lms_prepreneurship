@@ -427,6 +427,10 @@ export class AssignmentService {
       assignment: {
         id: assignment.id,
         title: assignment.title,
+        // The class this marking session belongs to. A staff note is anchored
+        // to a section-subject (BR-ACC-04), and marking is where a teacher is
+        // most likely to have something worth recording about a student.
+        sectionSubjectId: assignment.sectionSubjectId,
         marksAvailable: Number(assignment.marksAvailable),
         gradesReleased: assignment.gradesReleased,
         dueAt: assignment.dueAt,

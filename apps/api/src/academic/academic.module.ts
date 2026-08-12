@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { AcademicService } from "./academic.service";
+import { StudentNoteService } from "./student-note.service";
 import { AssignmentService } from "./assignment.service";
 import { EnrolmentService } from "./enrolment.service";
 import { AcademicController } from "./academic.controller";
@@ -11,7 +12,7 @@ import { AdmissionModule } from "../admission/admission.module";
 @Module({
   imports: [AdmissionModule],
   controllers: [AcademicController],
-  providers: [AcademicService, AssignmentService, EnrolmentService],
-  exports: [AcademicService, EnrolmentService],
+  providers: [AcademicService, StudentNoteService, AssignmentService, EnrolmentService],
+  exports: [AcademicService, StudentNoteService, EnrolmentService],
 })
 export class AcademicModule {}

@@ -224,6 +224,7 @@ model User {
 
   roles    UserRole[]
   sessions UserSession[]
+  studentNotes StudentNote[]
   announcements          Announcement[]
   notifications          Notification[]
   notificationPreference NotificationPreference?
@@ -482,12 +483,49 @@ model Student {
   /// request, and both point at the same record.
   registrations   RegistrationRequest[]
   feeCharges      FeeCharge[]
+  notes           StudentNote[]
 
   // FR-REG-057: roll numbers are unique within a section and reusable after
   // withdrawal. Enforced as a partial unique index in raw SQL (live rows only).
   @@index([currentSectionId, currentRollNo])
   @@index([registrationNoPrevious])
   @@map("students")
+}
+
+/// A staff note about a student — FR-REG-046, §4.5 `internal_note`.
+///
+/// THE STUDENT MUST NEVER SEE THIS, and that is the only reason the model
+/// exists separately rather than as a column on Student. A pastoral note
+/// ("struggling since her father's illness — allow extra time") is written so
+/// staff can help, and is exactly the kind of text that causes harm if the
+/// person it describes reads it. §4.5 grants `internal_note` to Super Admin,
+/// Admin and Teacher and to NOBODY ELSE; the scope policy denies students
+/// outright rather than relying on that alone.
+///
+/// ANCHORED TO A SECTION-SUBJECT, not just to a student. A teacher's authority
+/// is ASSIGNED scope (BR-ACC-04) — bound to a subject WITHIN a section — so a
+/// note has to record which of their classes it was written from, otherwise
+/// there is no way to decide which teacher may later read it.
+model StudentNote {
+  id               String @id @default(uuid()) @db.Uuid
+  studentId        String @map("student_id") @db.Uuid
+  sectionSubjectId String @map("section_subject_id") @db.Uuid
+  authorUserId     String @map("author_user_id") @db.Uuid
+
+  body String @db.Text
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  /// Soft, like everything else a person wrote (BR-DAT-04).
+  deletedAt DateTime? @map("deleted_at")
+
+  student        Student        @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  sectionSubject SectionSubject @relation(fields: [sectionSubjectId], references: [id], onDelete: Restrict)
+  author         User           @relation(fields: [authorUserId], references: [id], onDelete: Restrict)
+
+  @@index([studentId, deletedAt])
+  @@index([sectionSubjectId])
+  @@map("student_notes")
 }
 
 model Teacher {
@@ -651,6 +689,7 @@ model SectionSubject {
   certificates  Certificate[]
   announcements Announcement[]
   attendanceWarnings AttendanceWarning[]
+  studentNotes       StudentNote[]
 
   discussionPosts DiscussionPost[]
   @@unique([sectionId, subjectId])

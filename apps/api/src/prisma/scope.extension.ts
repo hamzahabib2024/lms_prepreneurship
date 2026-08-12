@@ -214,6 +214,33 @@ const MODEL_POLICIES: Record<string, PolicyFn> = {
     return DENY_ALL;
   },
 
+  /**
+   * A staff note about a student — and the one model where a student's own id
+   * grants them NOTHING.
+   *
+   * Every other policy here answers "is this row about you, or reachable from
+   * who you are", and for a student that usually means their own record. Here
+   * the opposite holds: a note is written about them, precisely so staff can
+   * discuss them, and a pastoral note read by its subject is the harm the
+   * feature must not cause (FR-REG-046). §4.5 grants a student no action on
+   * `internal_note` at all, so the permission guard already refuses; this is
+   * the second lock, and it is the one that also closes a nested include.
+   *
+   * A teacher sees notes written from a class they actively teach — ASSIGNED
+   * scope is a subject WITHIN a section (BR-ACC-04), not a student globally, so
+   * teaching Ayesha in one subject does not open the note another teacher wrote
+   * about her in a different one.
+   */
+  StudentNote: (a) => {
+    if (isAdmin(a)) return null;
+    if (isTeacher(a)) {
+      return a.sectionSubjectIds.length > 0
+        ? { sectionSubjectId: { in: [...a.sectionSubjectIds] } }
+        : DENY_ALL;
+    }
+    return DENY_ALL;
+  },
+
   Teacher: (a) => {
     if (isAdmin(a)) return null;
     if (isTeacher(a)) return a.teacherId ? { id: a.teacherId } : DENY_ALL;

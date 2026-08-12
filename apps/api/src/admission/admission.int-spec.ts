@@ -15,6 +15,7 @@
 import { ConfigService } from "@nestjs/config";
 import { PrismaClient } from "@prisma/client";
 import { RegistrationNumberService } from "./registration-number.service";
+import type { SettingsService } from "../settings/settings.service";
 
 const hasDb = !!process.env["DATABASE_URL"];
 const suite = hasDb ? describe : describe.skip;
@@ -25,9 +26,20 @@ if (!hasDb) {
 
 const config = { get: (_k: string, d?: string) => d } as unknown as ConfigService;
 
+/**
+ * Sequence allocation never consults the settings store, so this stub answers
+ * as an unconfigured Institute does — a blank string and NaN. If a test ever
+ * did reach it, resolveFormat falls through to the environment defaults rather
+ * than quietly using a value nobody wrote down.
+ */
+const settings = {
+  text: () => Promise.resolve(""),
+  number: () => Promise.resolve(Number.NaN),
+} as unknown as SettingsService;
+
 suite("registration numbering — concurrency (RSK-07)", () => {
   const db = new PrismaClient();
-  const numbers = new RegistrationNumberService(config);
+  const numbers = new RegistrationNumberService(config, settings);
   const seriesKey = `TEST|SP26|GD|ISB|${Date.now()}`;
 
   afterAll(async () => {
@@ -91,7 +103,7 @@ suite("registration numbering — concurrency (RSK-07)", () => {
 
 suite("roll numbers — lowest unused within a section (FR-REG-057)", () => {
   const db = new PrismaClient();
-  const numbers = new RegistrationNumberService(config);
+  const numbers = new RegistrationNumberService(config, settings);
 
   afterAll(async () => {
     await db.$disconnect();

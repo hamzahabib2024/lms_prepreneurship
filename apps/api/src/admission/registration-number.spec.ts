@@ -10,14 +10,26 @@
 
 import { ConfigService } from "@nestjs/config";
 import { RegistrationNumberService } from "./registration-number.service";
+import type { SettingsService } from "../settings/settings.service";
 
 const configWith = (values: Record<string, string> = {}): ConfigService =>
   ({
     get: (key: string, fallback?: string) => values[key] ?? fallback,
   }) as unknown as ConfigService;
 
+/**
+ * An Institute that has set nothing. Blank and NaN are what an untouched
+ * settings store yields, and resolveFormat is required to fall through them to
+ * the environment rather than treat them as chosen values.
+ */
+const settingsWith = (values: Record<string, string | number> = {}): SettingsService =>
+  ({
+    text: (key: string) => Promise.resolve(String(values[key] ?? "")),
+    number: (key: string) => Promise.resolve(Number(values[key] ?? Number.NaN)),
+  }) as unknown as SettingsService;
+
 describe("RegistrationNumberService — format", () => {
-  const svc = new RegistrationNumberService(configWith());
+  const svc = new RegistrationNumberService(configWith(), settingsWith());
   const parts = {
     instituteCode: "CIIT",
     sessionCode: "SP26",
@@ -55,6 +67,7 @@ describe("RegistrationNumberService — format", () => {
   it("honours a configured template and pad width (FR-REG-054)", () => {
     const custom = new RegistrationNumberService(
       configWith({ REG_NO_TEMPLATE: "{SESSION}/{SEQUENCE}", REG_NO_PAD_WIDTH: "5" }),
+      settingsWith(),
     );
     expect(custom.format(parts, 42)).toBe("SP26/00042");
   });
@@ -64,6 +77,7 @@ describe("RegistrationNumberService — format", () => {
     // have it; nothing supplies it by default.
     const custom = new RegistrationNumberService(
       configWith({ REG_NO_TEMPLATE: "{SESSION}-{PROGRAMME}-{SEQUENCE}" }),
+      settingsWith(),
     );
     expect(custom.format({ ...parts, programmeCode: "GD" }, 42)).toBe("SP26-GD-042");
   });
@@ -71,13 +85,96 @@ describe("RegistrationNumberService — format", () => {
   it("leaves {PROGRAMME} empty rather than printing undefined", () => {
     const custom = new RegistrationNumberService(
       configWith({ REG_NO_TEMPLATE: "{SESSION}-{PROGRAMME}{SEQUENCE}" }),
+      settingsWith(),
     );
     expect(custom.format(parts, 42)).toBe("SP26-042");
   });
 });
 
+describe("the format an administrator can change (FR-REG-054)", () => {
+  const env = {
+    INSTITUTE_CODE: "ENVI",
+    CAMPUS_CODE: "ENVC",
+    REG_NO_PAD_WIDTH: "3",
+    REG_NO_TEMPLATE: "{INSTITUTE}/{SESSION}-{SEQUENCE}/{CAMPUS}",
+  };
+
+  it("uses the environment when the Institute has set nothing", async () => {
+    const svc = new RegistrationNumberService(configWith(env), settingsWith());
+    await expect(svc.resolveFormat()).resolves.toEqual({
+      instituteCode: "ENVI",
+      campusCode: "ENVC",
+      padWidth: 3,
+      template: "{INSTITUTE}/{SESSION}-{SEQUENCE}/{CAMPUS}",
+    });
+  });
+
+  it("lets a setting override each part", async () => {
+    const svc = new RegistrationNumberService(
+      configWith(env),
+      settingsWith({
+        "registration.instituteCode": "PREP",
+        "registration.campusCode": "LHR",
+        "registration.padWidth": 5,
+        "registration.template": "{INSTITUTE}-{SESSION}-{SEQUENCE}",
+      }),
+    );
+    const cfg = await svc.resolveFormat();
+    expect(cfg).toEqual({
+      instituteCode: "PREP",
+      campusCode: "LHR",
+      padWidth: 5,
+      template: "{INSTITUTE}-{SESSION}-{SEQUENCE}",
+    });
+    // The point of the setting: the number that comes out actually changes.
+    expect(
+      svc.format({ instituteCode: "PREP", sessionCode: "SP26", campusCode: "LHR" }, 42, cfg),
+    ).toBe("PREP-SP26-00042");
+  });
+
+  it("FALLS BACK rather than accepting a cleared field", async () => {
+    // An administrator emptying the institute code would otherwise produce
+    // "/SP26-001/ISB" — a permanent public identifier starting with a slash.
+    const svc = new RegistrationNumberService(
+      configWith(env),
+      settingsWith({
+        "registration.instituteCode": "   ",
+        "registration.campusCode": "",
+        "registration.template": "",
+      }),
+    );
+    await expect(svc.resolveFormat()).resolves.toEqual({
+      instituteCode: "ENVI",
+      campusCode: "ENVC",
+      padWidth: 3,
+      template: "{INSTITUTE}/{SESSION}-{SEQUENCE}/{CAMPUS}",
+    });
+  });
+
+  it("refuses a pad width that is not a usable number", async () => {
+    for (const bad of [0, -2, Number.NaN]) {
+      const svc = new RegistrationNumberService(
+        configWith(env),
+        settingsWith({ "registration.padWidth": bad }),
+      );
+      expect((await svc.resolveFormat()).padWidth).toBe(3);
+    }
+  });
+
+  it("overrides one part without disturbing the others", async () => {
+    const svc = new RegistrationNumberService(
+      configWith(env),
+      settingsWith({ "registration.campusCode": "KHI" }),
+    );
+    const cfg = await svc.resolveFormat();
+    expect(cfg.campusCode).toBe("KHI");
+    expect(cfg.instituteCode).toBe("ENVI");
+    expect(cfg.padWidth).toBe(3);
+  });
+});
+
 describe("RegistrationNumberService — series key (Appendix B)", () => {
-  const svc = new RegistrationNumberService(configWith());
+  const svc = new RegistrationNumberService(configWith(), settingsWith());
 
   it("is unique over institute, session and campus", () => {
     const base = { instituteCode: "CIIT", sessionCode: "SP26", campusCode: "ISB" };
@@ -139,7 +236,7 @@ describe("RegistrationNumberService — series key (Appendix B)", () => {
 });
 
 describe("RegistrationNumberService — allocation contract", () => {
-  const svc = new RegistrationNumberService(configWith());
+  const svc = new RegistrationNumberService(configWith(), settingsWith());
 
   it("allocates atomically and formats the returned sequence", async () => {
     const queries: string[] = [];

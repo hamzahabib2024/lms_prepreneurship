@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ApiError, api, tokens } from "../api/client";
+import { StudentNotes } from "../components/StudentNotes";
 
 /**
  * Grading — SRS §13.6, FR-ASG-025/026/028, FR-TCH-019.
@@ -41,6 +42,8 @@ interface Roster {
   assignment: {
     id: string;
     title: string;
+    /** The class this marking belongs to — a staff note is anchored to it. */
+    sectionSubjectId: string;
     marksAvailable: number;
     gradesReleased: boolean;
     dueAt: string;
@@ -174,6 +177,7 @@ export function GradingPage() {
               key={s.studentId}
               student={s}
               marksAvailable={a.marksAvailable}
+              sectionSubjectId={a.sectionSubjectId}
               expanded={openId === s.studentId}
               onToggle={() => setOpenId(openId === s.studentId ? null : s.studentId)}
               onGraded={load}
@@ -188,12 +192,14 @@ export function GradingPage() {
 function StudentRow({
   student: s,
   marksAvailable,
+  sectionSubjectId,
   expanded,
   onToggle,
   onGraded,
 }: {
   student: RosterStudent;
   marksAvailable: number;
+  sectionSubjectId: string;
   expanded: boolean;
   onToggle: () => void;
   onGraded: () => void;
@@ -228,6 +234,17 @@ function StudentRow({
           student={s}
           marksAvailable={marksAvailable}
           onGraded={onGraded}
+        />
+      )}
+
+      {/* Separate from the grade form on purpose. Feedback goes TO the
+          student; a staff note is ABOUT them and they never see it, so the two
+          must not read as one box with two labels. */}
+      {expanded && (
+        <StudentNotes
+          studentId={s.studentId}
+          studentName={s.name}
+          sectionSubjectId={sectionSubjectId}
         />
       )}
     </li>
