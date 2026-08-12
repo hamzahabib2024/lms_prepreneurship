@@ -40,6 +40,59 @@ describe("every page the web app defines can actually be reached", () => {
 
   const app = existsSync(APP) ? readFileSync(APP, "utf8") : "";
 
+  /**
+   * EVERY SIGNED-OUT ADDRESS RESOLVES WHEN SIGNED IN TOO.
+   *
+   * The second defect of this shape, and it reached a user. The sign-in form
+   * lives at /login; nothing navigated away from it afterwards, because the
+   * session simply appeared and the signed-in route table took over. That
+   * table had no /login, so its catch-all caught it and showed "page not
+   * found" to somebody who had just successfully signed in.
+   *
+   * The two tables are written hundreds of lines apart and neither mentions
+   * the other, so nothing about reading either one reveals the gap. This
+   * compares them.
+   */
+  it("every address a signed-out visitor can be at also resolves signed in", () => {
+    /*
+     * SLICED ON THE <Routes> BLOCK, not on a nearby identifier.
+     *
+     * The first version cut from `if (!user)` to `mustChangePassword`, which
+     * is destructured from useAuth at the top of the file — hundreds of lines
+     * ABOVE the gate. The slice was therefore empty, no paths were collected,
+     * and the assertion passed against a codebase with the bug still in it.
+     * It was only found by deleting the fix and watching this stay green.
+     */
+    const gate = app.indexOf("if (!user)");
+    const closes = app.indexOf("</Routes>", gate);
+    expect(gate).toBeGreaterThan(-1);
+    expect(closes).toBeGreaterThan(gate);
+
+    const signedOut = app.slice(gate, closes);
+    const publicPaths = [...signedOut.matchAll(/<Route path="([^"*]+)"/g)]
+      .map((m) => m[1] as string)
+      .filter((p) => p !== "/");
+
+    // Guards the guard: if this ever collects nothing, the assertion below
+    // proves nothing and would pass forever.
+    expect(publicPaths.length).toBeGreaterThan(0);
+
+    // Everything after that block is the signed-in table, plus the early
+    // returns above it (/verify/:code, /home) which resolve for anybody.
+    const signedIn = app.slice(closes);
+    const early = [...app.matchAll(/location\.pathname (?:===|\.startsWith\()\s*"([^"]+)"/g)].map(
+      (m) => m[1] as string,
+    );
+
+    const orphaned = publicPaths.filter(
+      (p) =>
+        !signedIn.includes(`path="${p}"`) &&
+        !early.some((e) => p.startsWith(e)),
+    );
+
+    expect(orphaned).toEqual([]);
+  });
+
   /** Components exported from pages/, excluding panels a page composes. */
   const exported = (): Array<{ file: string; component: string }> => {
     const out: Array<{ file: string; component: string }> = [];

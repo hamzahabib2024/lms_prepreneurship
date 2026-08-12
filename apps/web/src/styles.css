@@ -303,6 +303,42 @@ code {
 }
 .page-head p { margin: .25rem 0 0; }
 
+/*
+ * EVERY PAGE KNOWS ITS OWN COLOUR.
+ *
+ * --page is set per screen below and defaults to the brand, so anything that
+ * wants the current page's hue reads one variable rather than repeating a
+ * selector list. The colour is the same one the sidebar icon uses for that
+ * destination: what a person clicked is what they arrive at, which is a small
+ * thing that makes a twenty-one-screen application feel navigable.
+ *
+ * It lands on a RULE UNDER THE HEADING, not on the heading text. Coloured
+ * headings on every page is a theme; a 3px rule is an accent, and the text
+ * stays at full contrast (NFR-ACC-004).
+ */
+.main { --page: var(--brand-600); }
+
+.page-head > div:first-child > h1 { position: relative; padding-bottom: .5rem; }
+.page-head > div:first-child > h1::after {
+  content: ""; position: absolute; left: 0; bottom: 0;
+  width: 2.25rem; height: 3px; border-radius: 3px;
+  background: var(--page);
+}
+
+.page-attendance, .page-timetable          { --page: #2563eb; }
+.page-subjects, .page-content              { --page: #7c3aed; }
+.page-marking, .page-rubrics               { --page: #c026d3; }
+.page-fees, .page-receipts                 { --page: #059669; }
+.page-reports, .page-dashboard             { --page: #0891b2; }
+.page-admissions, .page-import             { --page: #ea580c; }
+.page-certificates                         { --page: #ca8a04; }
+.page-announcements, .page-discussions     { --page: #db2777; }
+.page-security, .page-audit, .page-backups { --page: #dc2626; }
+.page-settings, .page-integrations,
+.page-messages                             { --page: #4f46e5; }
+.page-sections, .page-structure            { --page: #0d9488; }
+.page-users, .page-bulk                    { --page: #475569; }
+
 /* ------------------------------------------------------------- cards ----- */
 .card {
   background: var(--surface);
@@ -315,8 +351,31 @@ code {
 /* Lifting on hover is reserved for cards you can actually click. */
 .card.widget {
   transition: box-shadow .18s var(--ease), transform .18s var(--ease);
+  position: relative; overflow: hidden;
 }
 .card.widget:hover { box-shadow: var(--shadow-2); transform: translateY(-1px); }
+/*
+ * A hairline of the page's colour along the top of each widget.
+ *
+ * One pixel, and only on widgets. It ties a grid of cards to the screen they
+ * are on without the heavy coloured headers that make a dashboard look like a
+ * set of unrelated products stacked together.
+ */
+.card.widget::before {
+  content: ""; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, var(--page), transparent 65%);
+  opacity: .7;
+}
+
+/* A card's own heading, given the page hue so a long screen of cards has
+   something to navigate by. */
+.card > h2 { color: var(--ink); }
+.card > h2::before {
+  content: ""; display: inline-block;
+  width: .35rem; height: .35rem; border-radius: 50%;
+  background: var(--page); vertical-align: middle;
+  margin-right: .5rem; margin-bottom: .12rem;
+}
 
 .grid {
   display: grid;
@@ -335,6 +394,17 @@ code {
 }
 .stat strong { font-size: .95rem; font-variant-numeric: tabular-nums; }
 .stat.warn { background: var(--warn-bg); border-color: color-mix(in srgb, var(--warn) 30%, transparent); }
+/* Tinted with the page's own colour, so a row of figures belongs to the screen
+   it is on rather than floating in grey. */
+.stat {
+  background: color-mix(in srgb, var(--page) 7%, var(--surface-2));
+  border-color: color-mix(in srgb, var(--page) 18%, var(--line));
+}
+.stat strong { color: color-mix(in srgb, var(--page) 75%, var(--ink)); }
+/* The warning variant keeps its own colour: a figure that needs attention must
+   not be repainted by whichever page it happens to sit on. */
+.stat.warn { background: var(--warn-bg); border-color: color-mix(in srgb, var(--warn) 30%, transparent); }
+.stat.warn strong { color: var(--warn); }
 
 .pill {
   display: inline-flex; align-items: center; gap: .3rem;
@@ -826,6 +896,30 @@ code {
 .list { list-style: none; margin: 0; padding: 0; }
 .list > li { padding: .7rem 0; border-bottom: 1px solid var(--line); }
 .list > li:last-child { border-bottom: none; }
+
+/*
+ * A list row that is a label and a value — "Submitted 12 of 40" — is most of
+ * the dashboard. Pushing them apart and setting the value in lining figures
+ * turns a paragraph into something scannable, and the hover marks the row the
+ * eye is on across a wide card.
+ */
+.list > li:has(> span:first-child) {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 1rem;
+}
+.list > li > strong { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.list > li { border-radius: 6px; transition: background .12s var(--ease); }
+.list > li:hover { background: var(--surface-2); }
+/* The padding has to come back inside once the row has a ground, or the
+   highlight sits flush against the text. */
+.list > li { padding-inline: .45rem; margin-inline: -.45rem; }
+
+/* A row that needs attention, marked by a bar rather than by colouring the
+   text — the words stay at full contrast (NFR-ACC-007). */
+.list > li.warn {
+  color: inherit;
+  box-shadow: inset 3px 0 0 var(--warn);
+  background: var(--warn-bg);
+}
 .list.small > li { padding: .45rem 0; font-size: .85rem; }
 
 .assignment { padding: .8rem 0; }

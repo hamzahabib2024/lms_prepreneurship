@@ -375,9 +375,34 @@ export function App() {
             </div>
           </header>
 
-      <main className="main">
+      {/*
+        A class naming the page, so each screen can have its own identity
+        without thirty-five stylesheets that drift apart.
+
+        Derived from the address rather than passed down, because the route
+        already knows where it is and threading a prop through every page would
+        be a second place to keep in step. The hue lands on the page heading and
+        matches the sidebar icon for the same destination, so the colour a
+        person clicked is the colour they arrive at.
+      */}
+      <main className={`main page-${location.pathname.split("/")[1] || "dashboard"}`}>
         <Routes>
           <Route path="/" element={<DashboardPage />} />
+          {/*
+            SIGNING IN LEFT YOU ON A NOT-FOUND PAGE.
+
+            The sign-in form lives at /login, and nothing navigated away from it
+            afterwards — the session simply appeared and this route table took
+            over. /login is not in it, so the catch-all below caught it and
+            showed "page not found" to somebody who had just successfully
+            signed in. The same for /apply, which a signed-in visitor reaches by
+            using the browser's back button.
+
+            Redirecting rather than rendering the dashboard at those addresses,
+            so the URL bar ends up saying / and a reload does the right thing.
+          */}
+          <Route path="/login" element={<Navigate to="/" replace />} />
+          <Route path="/apply" element={<Navigate to="/" replace />} />
           <Route
             path="/admissions"
             element={hasRole("super_admin", "admin") ? <AdmissionsPage /> : <Navigate to="/" replace />}
