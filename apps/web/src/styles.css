@@ -910,17 +910,6 @@ code {
   );
 }
 .lecture-face:disabled { cursor: not-allowed; filter: grayscale(.7); }
-.lecture-art {
-  position: absolute; inset: 0;
-  background: repeating-linear-gradient(
-    -30deg,
-    rgb(255 255 255 / 8%) 0 2px,
-    transparent 2px 16px
-  );
-  transition: opacity .4s var(--ease), transform .6s var(--ease);
-}
-.lecture-card:hover .lecture-art { opacity: .6; transform: scale(1.1) rotate(3deg); }
-
 .lecture-play {
   position: relative; z-index: 1;
   width: 52px; height: 52px; border-radius: 999px;
@@ -933,13 +922,6 @@ code {
 .lecture-play svg { width: 20px; height: 20px; color: var(--ink); fill: currentColor; }
 /* The shield icon on a missing file must not read as a play button. */
 .is-missing .lecture-play svg { fill: none; color: var(--warn); }
-
-.lecture-length {
-  position: absolute; right: .55rem; bottom: .5rem; z-index: 1;
-  padding: .12rem .4rem; border-radius: 5px;
-  background: rgb(15 23 42 / 78%); color: #fff;
-  font-size: .7rem; font-variant-numeric: tabular-nums;
-}
 
 .lecture-body {
   padding: .8rem .9rem 1rem;
@@ -2281,3 +2263,238 @@ details > summary:hover { text-decoration: underline; }
 }
 .work-row > span:first-child { min-width: 0; }
 .work-row a { font-weight: 550; }
+
+/* ── Lecture thumbnails ─────────────────────────────────────────────────────
+   Drawn from the lecture's own title, never fetched. Drive does return a
+   thumbnailLink, and it is not used: those URLs identify the file (ARC-041),
+   they expire quietly — a grid of broken images is the worst-looking failure a
+   catalogue can have — and the first frame of a Meet recording is an empty
+   meeting room anyway. */
+.lecture-thumb {
+  position: relative; display: block; overflow: hidden;
+  border-radius: calc(var(--radius) - 4px);
+  background: var(--ink);
+}
+.lecture-thumb-card { aspect-ratio: 16 / 9; width: 100%; }
+.lecture-thumb-row { aspect-ratio: 16 / 9; width: 108px; flex: none; border-radius: 8px; }
+
+.lecture-thumb-art {
+  position: absolute; inset: 0;
+  display: grid; place-items: center;
+  transition: transform .5s var(--ease);
+}
+.lecture-thumb-art::after {
+  /* A faint rule of light across the artwork, so two lectures with adjacent
+     hues still read as different objects rather than one gradient. */
+  content: ""; position: absolute; inset: 0;
+  background: repeating-linear-gradient(
+    -28deg, rgb(255 255 255 / 7%) 0 2px, transparent 2px 18px
+  );
+}
+.lecture-face:hover .lecture-thumb-art,
+.watch-row:hover .lecture-thumb-art { transform: scale(1.06); }
+
+.lecture-thumb-play {
+  position: relative; z-index: 1;
+  width: 44px; height: 44px; padding: 11px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 92%);
+  color: var(--ink); fill: currentColor;
+  box-shadow: 0 4px 16px rgb(15 23 42 / 35%);
+  transition: transform .22s var(--ease);
+}
+.lecture-thumb-row .lecture-thumb-play { width: 26px; height: 26px; padding: 7px; }
+.lecture-face:hover .lecture-thumb-play { transform: scale(1.12); }
+
+.lecture-thumb-time {
+  position: absolute; right: .4rem; bottom: .35rem; z-index: 2;
+  padding: .1rem .35rem; border-radius: 5px;
+  background: rgb(15 23 42 / 82%); color: #fff;
+  font-size: .7rem; font-variant-numeric: tabular-nums; line-height: 1.5;
+}
+.lecture-thumb-row .lecture-thumb-time { font-size: .62rem; right: .25rem; bottom: .2rem; }
+
+/* The line under something already started. Deliberately the one place in the
+   app that uses this red: it means "you, here, before" and nothing else. */
+.lecture-thumb-progress {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 2;
+  height: 4px; background: rgb(255 255 255 / 28%);
+}
+.lecture-thumb-progress > span { display: block; height: 100%; background: #dc2626; }
+
+/* The card's face is a LINK now, not a button opening a dialog — watching has
+   its own address. A recording whose file has gone is a plain span instead:
+   there is nowhere for it to lead. */
+.lecture-face.is-dead { cursor: not-allowed; filter: grayscale(.75); opacity: .75; }
+.lecture-body h3 a { color: inherit; text-decoration: none; }
+.lecture-body h3 a:hover { text-decoration: underline; }
+
+/* ── The watch page ─────────────────────────────────────────────────────────
+   Video large on the left, the rest of the class down the right. The shape
+   everybody already knows, so nobody has to be taught where the next lecture
+   is. Deliberately NOT autoplaying, and deliberately showing only this class:
+   a recommendation from somebody else's course is not a feature here. */
+.watch {
+  display: grid; gap: 1.5rem;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  align-items: start;
+}
+@media (max-width: 1080px) { .watch { grid-template-columns: 1fr; } }
+
+.watch-main { min-width: 0; }
+
+.watch-crumbs {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 1rem; margin-bottom: .7rem;
+}
+.watch-crumbs a {
+  display: inline-flex; align-items: center; gap: .3rem;
+  font-weight: 600; text-decoration: none; color: var(--ink);
+}
+.watch-crumbs a:hover { color: var(--page); }
+.watch-crumbs svg { width: 16px; height: 16px; }
+
+/* Black, whatever the theme. A video letterboxes against its surround, and a
+   pale surround makes the picture look washed out at every size. */
+.player-stage {
+  background: #000; border-radius: var(--radius); overflow: hidden;
+  box-shadow: var(--shadow-2);
+}
+.player-stage .player { display: block; width: 100%; aspect-ratio: 16 / 9; background: #000; }
+.player-stage > p, .player-stage > .alert { margin: .7rem .9rem; }
+.player-stage > p.muted { color: rgb(255 255 255 / 62%); }
+
+.player-missing {
+  aspect-ratio: 16 / 9; display: grid; place-content: center; gap: .6rem;
+  padding: 2rem; text-align: center; color: rgb(255 255 255 / 82%);
+}
+.player-missing svg { width: 34px; height: 34px; margin: 0 auto; color: var(--warn); }
+
+.watch-head { margin: 1rem 0 .3rem; }
+.watch-head h1 { margin: 0; font-size: 1.35rem; line-height: 1.3; }
+.watch-meta {
+  display: flex; flex-wrap: wrap; align-items: center; gap: .5rem;
+  margin-top: .4rem; color: var(--muted); font-size: .85rem;
+}
+.watch-meta .pill { font-size: .68rem; }
+.watch-description {
+  margin: .8rem 0 0; padding: .8rem .9rem;
+  background: var(--surface-2); border-radius: var(--radius);
+  white-space: pre-wrap;
+}
+
+/* What comes next, placed where a phone reader meets it — above the queue,
+   which on a narrow screen is a long way down. */
+.watch-next {
+  display: flex; align-items: center; gap: .6rem;
+  margin-top: 1rem; padding: .7rem .9rem;
+  border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--surface); text-decoration: none; color: inherit;
+  transition: border-color .2s var(--ease), transform .2s var(--ease);
+}
+.watch-next:hover { border-color: var(--page); transform: translateX(2px); }
+.watch-next svg { width: 18px; height: 18px; margin-left: auto; color: var(--muted); }
+.watch-next-label {
+  font-size: .7rem; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--muted); flex: none;
+}
+.watch-next-title { font-weight: 600; }
+
+.watch-list {
+  border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--surface); overflow: hidden;
+  /* Scrolls on its own so a class with forty recordings does not push the
+     video off the top of the page. */
+  max-height: calc(100vh - 6rem); display: flex; flex-direction: column;
+}
+.watch-list-head {
+  margin: 0; padding: .8rem .9rem; font-size: .95rem;
+  border-bottom: 1px solid var(--line);
+  display: flex; align-items: baseline; justify-content: space-between; gap: .5rem;
+}
+
+.watch-queue { list-style: none; margin: 0; padding: .35rem; overflow-y: auto; }
+
+.watch-row {
+  display: flex; align-items: center; gap: .55rem;
+  padding: .4rem; border-radius: 10px;
+  text-decoration: none; color: inherit;
+  transition: background .18s var(--ease);
+}
+.watch-row:hover { background: var(--surface-2); }
+.watch-row.is-current { background: color-mix(in srgb, var(--page) 14%, transparent); }
+.watch-row-index {
+  width: 1.4rem; flex: none; text-align: center;
+  color: var(--muted); font-size: .78rem; font-variant-numeric: tabular-nums;
+}
+.watch-row.is-current .watch-row-index { color: var(--page); }
+.watch-row-index svg { width: 13px; height: 13px; fill: currentColor; }
+.watch-row-text { display: flex; flex-direction: column; gap: .1rem; min-width: 0; }
+.watch-row-title {
+  font-size: .84rem; font-weight: 600; line-height: 1.3;
+  /* Two lines, then ellipsis. A long class title must not push the row taller
+     than its own thumbnail and break the rhythm of the list. */
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ── The Courses index ──────────────────────────────────────────────────────
+   The two facts an administrator needs are shown as BUTTONS rather than as
+   text: reading "3 classes have no folder" and then having to go and find them
+   is most of the work. */
+.course-summary {
+  display: flex; flex-wrap: wrap; gap: .7rem; margin-bottom: 1.1rem;
+}
+.course-stat {
+  flex: 1 1 150px; min-width: 150px;
+  display: flex; flex-direction: column; gap: .1rem;
+  padding: .7rem .9rem; text-align: left;
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius); cursor: pointer;
+  transition: border-color .2s var(--ease), transform .2s var(--ease);
+}
+.course-stat:hover:not(:disabled) { border-color: var(--page); transform: translateY(-2px); }
+.course-stat.is-on { border-color: var(--page); box-shadow: inset 0 0 0 1px var(--page); }
+/* Nothing to act on is not a warning. A zero here is good news, and colouring
+   it amber would train people to ignore the colour. */
+.course-stat:disabled { cursor: default; opacity: .6; }
+.course-stat.is-warn:not(:disabled) .course-stat-n { color: var(--warn); }
+.course-stat-n { font-size: 1.5rem; font-weight: 700; line-height: 1.1; }
+
+.course-search { margin-bottom: 1rem; }
+.course-search input { width: 100%; max-width: 420px; }
+
+.course-grid {
+  display: grid; gap: 1.1rem;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+
+.course-tile {
+  display: flex; flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden; text-decoration: none; color: inherit;
+  box-shadow: var(--shadow-1);
+  transition: transform .2s var(--ease), box-shadow .2s var(--ease), border-color .2s var(--ease);
+}
+.course-tile:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-2);
+  border-color: color-mix(in srgb, var(--page) 35%, var(--line));
+}
+.course-tile-body {
+  padding: .8rem .9rem 1rem;
+  display: flex; flex-direction: column; gap: .3rem; flex: 1;
+}
+.course-tile-body h2 { margin: 0; font-size: 1rem; line-height: 1.3; }
+.course-tile-who { display: flex; align-items: center; gap: .35rem; }
+.course-tile-who svg { width: 14px; height: 14px; flex: none; }
+.course-tile-facts {
+  display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .2rem;
+}
+.course-tile-facts .pill { display: inline-flex; align-items: center; gap: .25rem; }
+.course-tile-facts .pill svg { width: 12px; height: 12px; }
+/* Pushed to the bottom so every tile's last line sits on the same baseline,
+   whatever the title wrapped to. */
+.course-tile-when { margin-top: auto; padding-top: .4rem; }

@@ -15,6 +15,8 @@ import { ChangePasswordPage } from "./pages/ChangePasswordPage";
 import { MySubjectsPage } from "./pages/MySubjectsPage";
 import { SubjectPage } from "./pages/SubjectPage";
 import { CoursePage } from "./pages/CoursePage";
+import { CoursesPage } from "./pages/CoursesPage";
+import { WatchPage } from "./pages/WatchPage";
 import { MarkingPage } from "./pages/MarkingPage";
 import { GradingPage } from "./pages/GradingPage";
 import { QuizMarkingPage } from "./pages/QuizMarkingPage";
@@ -210,6 +212,17 @@ export function App() {
                 <NavLink to="/rubrics">
                   <Icon name="clipboard" />
                   Rubrics
+                </NavLink>
+                {/* Every class, with the two things visible nowhere else:
+                    which have recordings waiting to be published, and which
+                    have no Drive folder connected at all.
+
+                    section_subject:read is held by all four roles, each at its
+                    own scope, so a teacher lands on their own classes rather
+                    than on a 403 — and the page itself never tests a role. */}
+                <NavLink to="/courses">
+                  <Icon name="play" />
+                  Courses
                 </NavLink>
                 <NavLink to="/content">
                   <Icon name="layers" />
@@ -575,7 +588,16 @@ export function App() {
               ones on classes they are enrolled in and staff see drafts too,
               which the server decides — the scope predicate refuses a class
               somebody is not on either way. */}
+          {/* The index. Without it the course page was reachable only by
+              knowing a UUID, or by drilling three levels into Sections. */}
+          <Route path="/courses" element={<CoursesPage />} />
           <Route path="/courses/:sectionSubjectId" element={<CoursePage />} />
+          {/* Watching has its own address, so it can be bookmarked,
+              opened in a new tab and returned to with the back button. */}
+          <Route
+            path="/courses/:sectionSubjectId/watch/:lectureId"
+            element={<WatchPage />}
+          />
           <Route
             path="/integrations"
             element={

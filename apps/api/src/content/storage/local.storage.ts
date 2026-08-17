@@ -60,6 +60,33 @@ function resolveStorageRoot(configured: string): string {
   return resolve(configured);
 }
 
+/**
+ * The only thing a filesystem can tell you about a file's type.
+ *
+ * Deliberately narrow: the video types the System catalogues, plus the
+ * document types it serves back. Anything else is left null rather than
+ * guessed, because a wrong content type on a download is worse than none —
+ * the browser acts on it.
+ */
+const CONTENT_TYPES: Record<string, string> = {
+  mp4: "video/mp4",
+  m4v: "video/x-m4v",
+  mov: "video/quicktime",
+  webm: "video/webm",
+  mkv: "video/x-matroska",
+  avi: "video/x-msvideo",
+  pdf: "application/pdf",
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  webp: "image/webp",
+};
+
+function guessContentType(name: string): string | null {
+  const ext = name.split(".").pop()?.toLowerCase();
+  return (ext && CONTENT_TYPES[ext]) ?? null;
+}
+
 @Injectable()
 export class LocalStorageProvider implements StorageProvider {
   readonly key = "local";
@@ -103,6 +130,11 @@ export class LocalStorageProvider implements StorageProvider {
             sizeBytes: s && d.isFile() ? s.size : null,
             durationSeconds: null, // needs media probing; not available locally
             modifiedAt: s?.mtime ?? null,
+            // The extension is genuinely all a filesystem knows. Said as a
+            // guess rather than left null, so the caller gets the same shape
+            // from both providers and the difference stays in one place.
+            contentType: d.isFile() ? guessContentType(d.name) : null,
+            thumbnailUrl: null,
           };
         }),
       );
@@ -175,6 +207,20 @@ export class LocalStorageProvider implements StorageProvider {
 
   get(storageRef: string): Promise<Buffer> {
     return readFile(this.safePath(storageRef));
+  }
+
+  /**
+   * The absolute path, for the one caller that must stream rather than read.
+   *
+   * `get()` returns a Buffer, which is right for a payment slip and wrong for
+   * a 363 MB lecture: it would load the whole recording into memory per
+   * viewer. The media route needs a path it can open a read stream on and
+   * serve byte ranges from, so it gets one — through the SAME traversal check
+   * as every other path in this class, which is why this exists at all rather
+   * than the route joining the root itself.
+   */
+  resolvePath(storageRef: string): string {
+    return this.safePath(storageRef);
   }
 
   async delete(storageRef: string): Promise<void> {

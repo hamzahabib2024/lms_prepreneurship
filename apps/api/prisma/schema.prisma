@@ -1467,17 +1467,33 @@ model DiscussionPost {
 model PlaybackTicket {
   ticketId String @id @map("ticket_id") @db.VarChar(80)
 
-  studentId         String @map("student_id") @db.Uuid
-  recordedLectureId String @map("recorded_lecture_id") @db.Uuid
+  /// WHO the ticket was issued to — a USER, not a student.
+  ///
+  /// It was studentId, and required, which meant `issuePlaybackTicket` opened
+  /// with "only a student can watch a lecture" and REFUSED THREE OF THE FOUR
+  /// ROLES that §4.5 grants lecture_playback:read to. A teacher could publish a
+  /// recording to their class and never watch it; an administrator could not
+  /// check a single one. A guard nobody can satisfy, again.
+  ///
+  /// Binding to the user is also what the redemption check wants: it asks
+  /// "are you the person this was issued to", and every role has a userId.
+  userId String @map("user_id") @db.Uuid
+
+  /// Set only when the viewer is a student, because it is what watch progress
+  /// hangs off (FR-VID-008/010). Staff watching a lecture records nothing —
+  /// a teacher checking their own recording is not coursework, and counting it
+  /// would put their viewing into a student's completion figures.
+  studentId         String? @map("student_id") @db.Uuid
+  recordedLectureId String  @map("recorded_lecture_id") @db.Uuid
   /// The storage location, which NEVER reaches the client (ARC-041). It lives
   /// here so redeeming the ticket does not have to look the lecture up again.
-  storageRef        String @map("storage_ref") @db.VarChar(500)
+  storageRef        String  @map("storage_ref") @db.VarChar(500)
 
   expiresAt DateTime @map("expires_at")
   createdAt DateTime @default(now()) @map("created_at")
 
   @@index([expiresAt])
-  @@index([studentId, createdAt])
+  @@index([userId, createdAt])
   @@map("playback_tickets")
 }
 

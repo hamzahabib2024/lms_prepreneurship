@@ -40,6 +40,30 @@ export interface FolderEntry {
   sizeBytes: number | null;
   durationSeconds: number | null;
   modifiedAt: Date | null;
+  /**
+   * WHAT THE FILE IS, which is not the same as what it is called.
+   *
+   * The sync used to decide "is this a video?" from the extension on the name,
+   * and that is wrong against the data it exists to read: a Google Meet
+   * recording arrives in Drive named
+   *
+   *   (Sec D) Graphic & UI/UX Class - 2026/08/13 20:58 PKT - Recording
+   *
+   * with NO EXTENSION AT ALL and `mimeType: "video/mp4"`. Every one of the
+   * Institute's recordings looks like that, so an extension test catalogued
+   * none of them and the course page stayed empty while the folder filled up.
+   *
+   * Null when a provider genuinely cannot tell — local disk infers from the
+   * extension, which is all it has — and the caller then falls back to the
+   * name. Providers that know must say.
+   */
+  contentType: string | null;
+  /**
+   * A still from the video, if the provider makes one. Drive does; local disk
+   * does not. Null is normal and the interface draws its own cover instead —
+   * never a broken image.
+   */
+  thumbnailUrl?: string | null;
 }
 
 export interface StorageHealth {

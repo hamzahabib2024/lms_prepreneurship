@@ -164,6 +164,25 @@ export class ContentController {
     return this.content.lecturesFor(id);
   }
 
+  /**
+   * Every class the caller may see — the Courses screen.
+   *
+   * `section_subject:read`, which ALL FOUR ROLES hold, each with its own scope
+   * (§4.5). That is deliberate: gating this on an administrator-only resource
+   * would make the page a 403 for the teacher whose classes it lists, and
+   * gating it on `recorded_lecture` would name the wrong thing — this is a
+   * list of CLASSES that happens to count recordings, not a list of
+   * recordings.
+   *
+   * No route parameter, so nothing to check ownership of. The scope predicate
+   * decides the rows and is the only thing that does.
+   */
+  @RequirePermission("section_subject", "read")
+  @Get("courses")
+  courses() {
+    return this.content.listCourses();
+  }
+
   @RequirePermission("recorded_lecture", "create")
   @Put("section-subjects/:id/lecture-folder")
   setLectureFolder(

@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { ApiError, api } from "../api/client";
 import { CourseCover } from "../components/CourseCover";
 import { EmptyState } from "../components/Ui";
 import { Icon } from "../components/Icon";
-import { LecturePlayer } from "../components/LecturePlayer";
-import type { Lecture as PlayableLecture } from "./SubjectPage";
+import { LectureThumb } from "../components/LectureThumb";
 
 interface Lecture {
   id: string;
@@ -16,6 +15,7 @@ interface Lecture {
   publicationStatus: "DRAFT" | "PUBLISHED" | "UNPUBLISHED" | "SCHEDULED";
   availabilityStatus: "AVAILABLE" | "MISSING" | "CHECKING";
   lessonId: string | null;
+  watch: { watchedPercent: number; lastPositionSeconds: number; isComplete: boolean } | null;
 }
 
 interface CourseLectures {
@@ -23,6 +23,8 @@ interface CourseLectures {
   section: { code: string; name: string };
   lectureFolderRef: string | null;
   canManage: boolean;
+  /** Whether these recordings actually come from the store configured now. */
+  storage?: { provider: string; live: boolean; mismatchedSources: string[] };
   lectures: Lecture[];
 }
 
@@ -49,7 +51,6 @@ export function CoursePage() {
   const [error, setError] = useState<ApiError | null>(null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
-  const [playing, setPlaying] = useState<PlayableLecture | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -156,15 +157,34 @@ export function CoursePage() {
       {data.canManage && (
         <div className="folder-note">
           <Icon name="database" />
-          {data.lectureFolderRef ? (
-            <span className="muted small">
-              Recordings are read from <code>{data.lectureFolderRef}</code>, checked every hour.
-              Anything new arrives as a draft.
-            </span>
-          ) : (
+          {!data.lectureFolderRef ? (
             <span className="warn small">
               No folder is connected, so nothing arrives on its own. Set one and recordings put in
               it will appear here.
+            </span>
+          ) : data.storage?.live ? (
+            <span className="muted small">
+              Live from{" "}
+              {data.storage.provider === "google_drive" ? "Google Drive" : "local storage"} —
+              folder <code>{data.lectureFolderRef}</code>, checked every hour. Anything new arrives
+              as a draft.
+            </span>
+          ) : (
+            /* THE SCREEN USED TO SAY "checked every hour" REGARDLESS, and that
+               can be flatly untrue: these rows were catalogued from Drive while
+               the System is configured for local storage, so the sweep looks
+               for a local directory named after a Drive folder id, finds
+               nothing, and no new recording ever appears. Silently. Saying so
+               here is the difference between a fault somebody can fix and one
+               they discover when a student complains. */
+            <span className="warn small">
+              <strong>Not live.</strong> These{" "}
+              {data.storage?.mismatchedSources.includes("google_drive")
+                ? "were catalogued from Google Drive"
+                : "came from another store"}
+              , but lecture storage is set to{" "}
+              <code>{data.storage?.provider ?? "local"}</code>. Nothing new will arrive and these
+              will not play until it is connected — see <code>INTEGRATIONS.md</code>, section 2.
             </span>
           )}
         </div>
@@ -181,7 +201,7 @@ export function CoursePage() {
           <div className="lecture-grid">
             {published.map((l) => (
               <LectureCard key={l.id} lecture={l} canManage={data.canManage}
-                onPlay={() => setPlaying({ id: l.id, title: l.title } as PlayableLecture)}
+                sectionSubjectId={sectionSubjectId}
                 onPublish={(s) => void publish(l, s)} busy={busy} />
             ))}
           </div>
@@ -201,7 +221,7 @@ export function CoursePage() {
               <div className="lecture-grid">
                 {drafts.map((l) => (
                   <LectureCard key={l.id} lecture={l} canManage
-                    onPlay={() => setPlaying({ id: l.id, title: l.title } as PlayableLecture)}
+                    sectionSubjectId={sectionSubjectId}
                     onPublish={(s) => void publish(l, s)} busy={busy} />
                 ))}
               </div>
@@ -210,29 +230,20 @@ export function CoursePage() {
         </>
       )}
 
-      {playing && (
-        <LecturePlayer
-          lecture={playing}
-          onClose={() => {
-            setPlaying(null);
-            void load();
-          }}
-        />
-      )}
     </>
   );
 }
 
 function LectureCard({
   lecture,
+  sectionSubjectId,
   canManage,
-  onPlay,
   onPublish,
   busy,
 }: {
   lecture: Lecture;
+  sectionSubjectId: string;
   canManage: boolean;
-  onPlay: () => void;
   onPublish: (status: "PUBLISHED" | "UNPUBLISHED") => void;
   busy: boolean;
 }) {
@@ -240,37 +251,56 @@ function LectureCard({
   // a player that fails.
   const missing = lecture.availabilityStatus !== "AVAILABLE";
   const isDraft = lecture.publicationStatus !== "PUBLISHED";
-
-  const length =
-    lecture.durationSeconds && lecture.durationSeconds > 0
-      ? `${Math.floor(lecture.durationSeconds / 60)} min`
-      : // Honest absence. Local storage does no media probing, and "0 min"
-        // printed on a card is a wrong fact where a dash is an unknown one.
-        "—";
+  const watched = lecture.watch?.watchedPercent ?? 0;
 
   return (
     <article className={`lecture-card${missing ? " is-missing" : ""}`}>
-      <button
-        className="lecture-face"
-        onClick={onPlay}
-        disabled={missing}
-        aria-label={missing ? `${lecture.title} — unavailable` : `Play ${lecture.title}`}
-      >
-        <span className="lecture-art" aria-hidden="true" />
-        <span className="lecture-play">
-          <Icon name={missing ? "shield" : "play"} />
+      {/* A LINK, not a button opening a dialog. Watching a lecture is a place
+          you go: it has its own address, so it can be bookmarked, opened in a
+          new tab, and returned to with the back button — all of which a modal
+          takes away, and all of which students expect from anything that plays
+          video. */}
+      {missing ? (
+        <span className="lecture-face is-dead" aria-label={`${lecture.title} — unavailable`}>
+          <LectureThumb title={lecture.title} durationSeconds={lecture.durationSeconds} />
+          <span className="lecture-play">
+            <Icon name="alert" />
+          </span>
         </span>
-        <span className="lecture-length">{length}</span>
-      </button>
+      ) : (
+        <Link
+          className="lecture-face"
+          to={`/courses/${sectionSubjectId}/watch/${lecture.id}`}
+          aria-label={`Watch ${lecture.title}`}
+        >
+          <LectureThumb
+            title={lecture.title}
+            durationSeconds={lecture.durationSeconds}
+            watchedPercent={watched}
+          />
+        </Link>
+      )}
 
       <div className="lecture-body">
-        <h3>{lecture.title}</h3>
+        <h3>
+          {missing ? (
+            lecture.title
+          ) : (
+            <Link to={`/courses/${sectionSubjectId}/watch/${lecture.id}`}>{lecture.title}</Link>
+          )}
+        </h3>
         <p className="muted small">
           {new Date(lecture.recordedOn).toLocaleDateString(undefined, {
             day: "numeric",
             month: "short",
             year: "numeric",
           })}
+          {/* "Resume", where a student's eye already goes looking for it. */}
+          {lecture.watch?.isComplete
+            ? " · watched"
+            : watched >= 2
+              ? ` · ${Math.round(watched)}% watched`
+              : ""}
         </p>
 
         <div className="lecture-tags">
