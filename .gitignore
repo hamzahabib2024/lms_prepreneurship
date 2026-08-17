@@ -18,6 +18,18 @@ keys/
 *.pem
 *.key
 
+# Google service-account keys. The documented place for one is OUTSIDE this
+# repository, but a file that has to live somewhere ends up next to the code
+# often enough that this is worth having: a JSON key is not a password that can
+# be changed if it leaks — the only remedy is deleting it in the Cloud Console
+# and issuing another.
+service-account*.json
+*service-account.json
+google-credentials*.json
+credentials.json
+gcp-*.json
+client_secret*.json
+
 # Local data
 *.log
 .DS_Store

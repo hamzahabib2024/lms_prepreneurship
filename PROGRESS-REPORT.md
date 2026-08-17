@@ -117,18 +117,27 @@ any moment which are live and which are not. This was deliberate: the dangerous
 failure is not an outage but an administrator assuming a fee reminder reached a
 student when it did not.
 
-| Service | Status | Needed from | Without it |
+| Service | State | Needs | Without it |
 |---|---|---|---|
-| **Email (SMTP)** | Ready — needs a mailbox | Any mailbox Prepreneurship already owns | Nothing is emailed |
-| **Google Drive** | Waiting | A Google Cloud service account | Video served from the app server |
-| **Google Meet** | Waiting | The same service account | Meeting links pasted in by hand |
-| **WhatsApp** | Waiting | Meta Business account | Nothing sent; in-app inbox still works |
+| **Email (SMTP)** | **Built** — needs only a mailbox | A mailbox Prepreneurship already owns | Nothing is emailed |
+| **Google Drive** | Credentials **and** ~2 days' work | A Google Cloud service account, then the Drive API calls written | Video served from the app server |
+| **Google Meet** | Credentials **and** ~1 day's work | The same service account, then the Calendar calls written | Meeting links pasted in by hand |
+| **WhatsApp** | Credentials **and** ~1–2 days' work | Meta Business account, then the send call written | Nothing sent; in-app inbox still works |
 
-**Email is now built and is the one to do first.** It needs nothing from any
-third party beyond a mailbox the Institute already has, and until it is
-configured, a new account's temporary password reaches its owner only by an
-administrator reading it off the screen and telling them — which means the
-password to a student record ends up in somebody's chat history.
+**A correction worth stating plainly.** An earlier version of this report implied
+all four go live by entering a credential. That is true of **email only**. For
+the other three the adapter, the configuration, the fallback and the honest
+"not connected" reporting are all built and tested, but the calls to Google and
+Meta themselves are not written — each currently refuses with a message naming
+the outstanding dependency. Getting the credentials is still the right next
+step, because nothing can be built or tested against them until they exist, but
+they will not switch anything on by themselves.
+
+**Email is the one to do first** and the only one that is finished. It needs
+nothing from any third party beyond a mailbox the Institute already has, and
+until it is configured a new account's temporary password reaches its owner
+only by an administrator reading it off the screen — which means the password
+to a student record ends up in somebody's chat history.
 
 Step-by-step setup for all four, including the Gmail App Password procedure and
 the Google service-account procedure, is in **`INTEGRATIONS.md`**.
