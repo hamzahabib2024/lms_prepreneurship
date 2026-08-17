@@ -1,7 +1,8 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Res } from "@nestjs/common";
+import { Body, Controller, Get, Param, Patch, Post, Put, Query, Res } from "@nestjs/common";
 import { z } from "zod";
 import type { Response } from "express";
 import { ContentService } from "./content.service";
+import { LectureSyncService } from "./lecture-sync.service";
 import { StorageRegistry } from "./storage/storage.registry";
 import { zodBody } from "../common/zod-validation.pipe";
 import { RequirePermission } from "../rbac/permissions.guard";
@@ -26,6 +27,11 @@ const reorderSchema = z.object({
 const publishSchema = z.object({
   status: z.enum(["DRAFT", "PUBLISHED", "UNPUBLISHED", "SCHEDULED"]),
   publishAt: z.coerce.date().optional(),
+});
+
+/** A Drive folder id, or a path under local storage. Empty disconnects it. */
+const lectureFolderSchema = z.object({
+  folderRef: z.string().trim().max(255),
 });
 
 const catalogueSchema = z.object({
@@ -54,6 +60,7 @@ export class ContentController {
   constructor(
     private readonly content: ContentService,
     private readonly storage: StorageRegistry,
+    private readonly lectureSync: LectureSyncService,
   ) {}
 
   // -------------------------------------------------------------- structure
@@ -135,6 +142,48 @@ export class ContentController {
   @Post("recorded-lectures")
   catalogue(@Body(zodBody(catalogueSchema)) dto: z.infer<typeof catalogueSchema>) {
     return this.content.catalogueLecture(dto);
+  }
+
+  /**
+   * Connect a class to the folder its recordings are put in — FR-VID-003.
+   *
+   * `recorded_lecture:create`, for the same reason browsing is: choosing which
+   * folder feeds a class is the act of cataloguing, and it decides what a
+   * whole cohort will be shown.
+   */
+  /**
+   * The recordings for one class — the course page's card list.
+   *
+   * `recorded_lecture:read`, which a student holds over their own enrolments,
+   * so this is the one lecture route they may call. The service decides what
+   * they get back: published only, and never a storage reference (ARC-041).
+   */
+  @RequirePermission("recorded_lecture", "read")
+  @Get("section-subjects/:id/lectures")
+  lectures(@Param("id") id: string) {
+    return this.content.lecturesFor(id);
+  }
+
+  @RequirePermission("recorded_lecture", "create")
+  @Put("section-subjects/:id/lecture-folder")
+  setLectureFolder(
+    @Param("id") id: string,
+    @Body(zodBody(lectureFolderSchema)) dto: z.infer<typeof lectureFolderSchema>,
+  ) {
+    return this.content.setLectureFolder(id, dto.folderRef);
+  }
+
+  /**
+   * Read the folder now, rather than waiting for the hourly sweep.
+   *
+   * A teacher who has just uploaded a recording and wants to see the card is
+   * the whole reason this is a button as well as a schedule. It creates
+   * DRAFTS, so pressing it cannot put anything in front of a class.
+   */
+  @RequirePermission("recorded_lecture", "create")
+  @Post("section-subjects/:id/sync-lectures")
+  syncLectures(@Param("id") id: string) {
+    return this.lectureSync.sync(id);
   }
 
   /** ARC-039/040 — a short-lived, user-bound ticket. Never a storage link. */

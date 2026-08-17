@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { ContentService } from "./content.service";
+import { LectureSyncService } from "./lecture-sync.service";
 import { ContentController } from "./content.controller";
 import { LessonResourceService } from "./lesson-resource.service";
 import { LessonResourceController } from "./lesson-resource.controller";
@@ -15,6 +16,7 @@ import { GoogleDriveStorageProvider } from "./storage/google-drive.storage";
   controllers: [ContentController, LessonResourceController],
   providers: [
     ContentService,
+    LectureSyncService,
     StorageRegistry,
     LocalStorageProvider,
     GoogleDriveStorageProvider,

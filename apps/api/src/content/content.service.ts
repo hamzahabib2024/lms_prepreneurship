@@ -312,6 +312,106 @@ export class ContentService {
   // ---------------------------------------------------------- lecture catalogue
 
   /** FR-VID-003 — browse the configured storage folders from the interface. */
+  /**
+   * Every recording for one class — FR-VID-005.
+   *
+   * THE SYNC MADE LECTURES NOBODY COULD SEE. A recording arrives from the
+   * folder with no lesson attached, and the content tree is modules → lessons
+   * → lectures — so a synced lecture existed in the database and appeared on
+   * no screen at all until somebody bound it to a lesson by hand. The whole
+   * point of the sweep is that a recording put in the folder turns up; a row
+   * only a database client can see is not turning up.
+   *
+   * WHAT EACH ROLE SEES IS THE POINT. A student gets PUBLISHED recordings on a
+   * class they are enrolled in — the scope predicate decides the second part
+   * and this decides the first. Staff get everything including drafts, because
+   * a draft they cannot see is one they cannot publish.
+   */
+  async lecturesFor(sectionSubjectId: string) {
+    const actor = getActor();
+    if (!actor) throw new AppError("AUTH_TOKEN_INVALID");
+    const isStudent = actor.roles.includes("student") && !actor.roles.some((r) => r !== "student");
+
+    // findFirst on the SCOPED client: a student asking about a class they are
+    // not enrolled in gets nothing, and so does a teacher asking about one
+    // they do not teach. The authorisation and the lookup are one query.
+    const offering = await this.prisma.scoped.sectionSubject.findFirst({
+      where: { id: sectionSubjectId, deletedAt: null },
+      select: {
+        id: true,
+        lectureFolderRef: true,
+        subject: { select: { id: true, code: true, name: true } },
+        section: { select: { code: true, name: true } },
+      },
+    });
+    if (!offering) throw new AppError("RESOURCE_NOT_FOUND");
+
+    const lectures = await this.prisma.asSystem((db) =>
+      db.recordedLecture.findMany({
+        where: {
+          sectionSubjectId,
+          deletedAt: null,
+          ...(isStudent ? { publicationStatus: "PUBLISHED" } : {}),
+        },
+        orderBy: [{ recordedOn: "desc" }, { createdAt: "desc" }],
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          durationSeconds: true,
+          recordedOn: true,
+          publicationStatus: true,
+          availabilityStatus: true,
+          lessonId: true,
+          // NEVER storageRef. ARC-041 — a storage reference does not reach a
+          // student, and this list is read by students.
+        },
+      }),
+    );
+
+    return {
+      subject: offering.subject,
+      section: offering.section,
+      // Staff only: a student has no business knowing where the files live.
+      lectureFolderRef: isStudent ? null : offering.lectureFolderRef,
+      canManage: !isStudent,
+      lectures,
+    };
+  }
+
+  /**
+   * Connect a class to the folder its recordings arrive in — FR-VID-003.
+   *
+   * An empty string disconnects it, which is why the field is not a UUID and
+   * not optional: "" is a decision to stop syncing, and undefined would be
+   * indistinguishable from a caller that forgot the field.
+   */
+  async setLectureFolder(sectionSubjectId: string, folderRef: string) {
+    // findFirst on the scoped client — a teacher naming a class they do not
+    // teach gets nothing back, so the check and the authorisation are one query.
+    const offering = await this.prisma.scoped.sectionSubject.findFirst({
+      where: { id: sectionSubjectId, deletedAt: null },
+      select: { id: true, lectureFolderRef: true },
+    });
+    if (!offering) throw new AppError("RESOURCE_NOT_FOUND");
+
+    const value = folderRef.trim() === "" ? null : folderRef.trim();
+    const updated = await this.prisma.scoped.sectionSubject.update({
+      where: { id: sectionSubjectId },
+      data: { lectureFolderRef: value },
+      select: { id: true, lectureFolderRef: true },
+    });
+
+    await this.audit.record({
+      action: value ? "lecture_folder.set" : "lecture_folder.cleared",
+      entityType: "SectionSubject",
+      entityId: sectionSubjectId,
+      before: { lectureFolderRef: offering.lectureFolderRef },
+      after: { lectureFolderRef: value },
+    });
+    return updated;
+  }
+
   async browseStorage(folderRef?: string) {
     const provider = this.storage.forLectures();
     try {

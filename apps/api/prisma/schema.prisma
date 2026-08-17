@@ -692,6 +692,14 @@ model SectionSubject {
   endDate   DateTime? @map("end_date") @db.Date
   status    String    @default("PLANNED") @db.VarChar(20)
 
+  /// The folder recordings for this class are put in — a Drive folder id, or a
+  /// path under local storage. When it is set, a lecture appears on the course
+  /// page as soon as the file appears in the folder (LectureSyncService).
+  ///
+  /// Null means nobody has connected one, and the sweep skips the class
+  /// entirely rather than guessing at a folder.
+  lectureFolderRef String? @map("lecture_folder_ref") @db.VarChar(255)
+
   progressWeights    Json? @map("progress_weights") // per-subject override of Figure 5-3
   completionCriteria Json? @map("completion_criteria") // FR-PRG-009
 
