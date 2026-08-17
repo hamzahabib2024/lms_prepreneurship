@@ -23,6 +23,8 @@ interface CourseLectures {
   section: { code: string; name: string };
   lectureFolderRef: string | null;
   canManage: boolean;
+  /** Whether these recordings actually come from the store configured now. */
+  storage?: { provider: string; live: boolean; mismatchedSources: string[] };
   lectures: Lecture[];
 }
 
@@ -155,15 +157,34 @@ export function CoursePage() {
       {data.canManage && (
         <div className="folder-note">
           <Icon name="database" />
-          {data.lectureFolderRef ? (
-            <span className="muted small">
-              Recordings are read from <code>{data.lectureFolderRef}</code>, checked every hour.
-              Anything new arrives as a draft.
-            </span>
-          ) : (
+          {!data.lectureFolderRef ? (
             <span className="warn small">
               No folder is connected, so nothing arrives on its own. Set one and recordings put in
               it will appear here.
+            </span>
+          ) : data.storage?.live ? (
+            <span className="muted small">
+              Live from{" "}
+              {data.storage.provider === "google_drive" ? "Google Drive" : "local storage"} —
+              folder <code>{data.lectureFolderRef}</code>, checked every hour. Anything new arrives
+              as a draft.
+            </span>
+          ) : (
+            /* THE SCREEN USED TO SAY "checked every hour" REGARDLESS, and that
+               can be flatly untrue: these rows were catalogued from Drive while
+               the System is configured for local storage, so the sweep looks
+               for a local directory named after a Drive folder id, finds
+               nothing, and no new recording ever appears. Silently. Saying so
+               here is the difference between a fault somebody can fix and one
+               they discover when a student complains. */
+            <span className="warn small">
+              <strong>Not live.</strong> These{" "}
+              {data.storage?.mismatchedSources.includes("google_drive")
+                ? "were catalogued from Google Drive"
+                : "came from another store"}
+              , but lecture storage is set to{" "}
+              <code>{data.storage?.provider ?? "local"}</code>. Nothing new will arrive and these
+              will not play until it is connected — see <code>INTEGRATIONS.md</code>, section 2.
             </span>
           )}
         </div>

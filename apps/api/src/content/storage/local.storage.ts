@@ -209,6 +209,20 @@ export class LocalStorageProvider implements StorageProvider {
     return readFile(this.safePath(storageRef));
   }
 
+  /**
+   * The absolute path, for the one caller that must stream rather than read.
+   *
+   * `get()` returns a Buffer, which is right for a payment slip and wrong for
+   * a 363 MB lecture: it would load the whole recording into memory per
+   * viewer. The media route needs a path it can open a read stream on and
+   * serve byte ranges from, so it gets one — through the SAME traversal check
+   * as every other path in this class, which is why this exists at all rather
+   * than the route joining the root itself.
+   */
+  resolvePath(storageRef: string): string {
+    return this.safePath(storageRef);
+  }
+
   async delete(storageRef: string): Promise<void> {
     await unlink(this.safePath(storageRef)).catch(() => undefined);
   }

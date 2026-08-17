@@ -474,8 +474,13 @@ export class ContentService {
           publicationStatus: true,
           availabilityStatus: true,
           lessonId: true,
-          // NEVER storageRef. ARC-041 — a storage reference does not reach a
-          // student, and this list is read by students.
+          // WHICH provider it was catalogued from — "google_drive" or "local".
+          // Not a reference to anything and not secret; it is the name of a
+          // mechanism, and it is what lets the screen say honestly whether
+          // these came from Drive. NEVER storageRef: that is the permanent
+          // identifier ARC-041 keeps away from students, and this list is read
+          // by students.
+          storageProvider: true,
         },
       }),
     );
@@ -486,12 +491,42 @@ export class ContentService {
     // of their own, and the field is then simply absent.
     const watch = await this.watchStateFor(lectures.map((l) => l.id));
 
+    /*
+     * WHERE THESE ACTUALLY COME FROM, said plainly.
+     *
+     * The screen used to state "read from <folder>, checked every hour" no
+     * matter what, and that can be flatly untrue: the rows can say
+     * google_drive while LECTURE_STORAGE is local, in which case the sweep
+     * looks for a local directory named after a Drive folder id, finds
+     * nothing, and NOTHING NEW EVER ARRIVES — silently, with the screen still
+     * promising hourly updates.
+     *
+     * That mismatch is exactly the question anybody asks about a catalogue
+     * like this — "is this live?" — and it should be answerable by looking at
+     * the page rather than by asking whoever built it.
+     *
+     * No network call: this compares what the lectures were catalogued from
+     * against what is configured now. A health check per page load would cost
+     * a round trip to Google to render a list.
+     */
+    const configured = this.storage.forLectures().key;
+    const sources = [...new Set(lectures.map((l) => l.storageProvider))];
+    const stale = sources.filter((s) => s !== configured);
+
     return {
       subject: offering.subject,
       section: offering.section,
       // Staff only: a student has no business knowing where the files live.
       lectureFolderRef: isStudent ? null : offering.lectureFolderRef,
       canManage: !isStudent,
+      storage: {
+        provider: configured,
+        // True only when every catalogued recording came from the provider
+        // that is configured now — which is what "these will play, and new
+        // ones will appear" actually requires.
+        live: offering.lectureFolderRef !== null && stale.length === 0,
+        mismatchedSources: stale,
+      },
       lectures: lectures.map((l) => ({ ...l, watch: watch.get(l.id) ?? null })),
     };
   }
@@ -594,9 +629,24 @@ export class ContentService {
    */
   async issuePlaybackTicket(lectureId: string) {
     const actor = getActor();
-    if (!actor?.studentId) {
-      throw new AppError("AUTH_FORBIDDEN", { message: "Only a student can watch a lecture." });
-    }
+    /*
+     * ANYONE THE MATRIX LETS WATCH, CAN WATCH.
+     *
+     * This used to read `if (!actor?.studentId) throw AUTH_FORBIDDEN` — "only
+     * a student can watch a lecture" — which refused THREE OF THE FOUR ROLES
+     * that §4.5 grants lecture_playback:read to. A teacher could publish a
+     * recording to thirty students and never once watch it back to check it;
+     * an administrator could not open a single one. The permission existed and
+     * nothing could satisfy it.
+     *
+     * The only test needed here is that somebody is signed in. WHICH lectures
+     * they may open is not decided in this method and must not be: the scoped
+     * query below is the whole of it, and it already answers correctly for
+     * every role — ALL for an administrator, ASSIGNED for a teacher, ENROLLED
+     * for a student. A role test here would be a second opinion that can
+     * disagree with the matrix.
+     */
+    if (!actor?.userId) throw new AppError("AUTH_TOKEN_INVALID");
 
     // Scoped: an unenrolled student cannot see the lecture at all, so this
     // returns nothing rather than disclosing that it exists.
@@ -615,7 +665,11 @@ export class ContentService {
     const ttl = Number(this.config.get<string>("PLAYBACK_TICKET_TTL_SECONDS", "900"));
     const ticket = {
       ticketId: `pt_${randomUUID().replace(/-/g, "")}`,
-      studentId: actor.studentId,
+      userId: actor.userId,
+      // Null for staff. It is what watch progress hangs off, and a teacher
+      // checking their own recording is not coursework — counting it would put
+      // their viewing into a student's completion figures (BR-PRG-02).
+      studentId: actor.studentId ?? null,
       recordedLectureId: lecture.id,
       storageRef: lecture.storageRef,
       expiresAt: new Date(Date.now() + ttl * 1000),
@@ -628,18 +682,31 @@ export class ContentService {
     await this.prisma.asSystem((db) => db.playbackTicket.create({ data: ticket }));
     void this.sweepExpiredTickets();
 
-    // FR-VID-008 — where this student stopped last time, so the player opens
-    // at the resume point rather than restarting a 40-minute lecture.
-    const progress = await this.prisma.scoped.watchProgress.findFirst({
-      where: { studentId: actor.studentId, recordedLectureId: lecture.id },
-      select: { lastPositionSeconds: true, watchedPercent: true },
-    });
+    /*
+     * FR-VID-008 — where THIS student stopped, so the player opens at the
+     * resume point rather than restarting a 40-minute lecture.
+     *
+     * SKIPPED ENTIRELY FOR STAFF, and that is a privacy fix rather than an
+     * optimisation. Prisma treats `studentId: undefined` as "do not filter on
+     * studentId", and WatchProgress is unscoped for an administrator — so the
+     * moment staff were allowed to watch, this query would have returned SOME
+     * STUDENT'S row. An administrator's player would open at a named student's
+     * resume position and announce "43% watched previously", which is that
+     * student's study record shown to somebody who never asked for it.
+     */
+    const progress = actor.studentId
+      ? await this.prisma.scoped.watchProgress.findFirst({
+          where: { studentId: actor.studentId, recordedLectureId: lecture.id },
+          select: { lastPositionSeconds: true, watchedPercent: true },
+        })
+      : null;
 
-    // SEC-LOG-008 — every ticket issue is logged with student and lecture.
+    // SEC-LOG-008 — every ticket issue is logged with who and which lecture.
     this.logger.log(
       JSON.stringify({
         event: "playback.ticket_issued",
-        studentId: actor.studentId,
+        userId: actor.userId,
+        studentId: actor.studentId ?? null,
         lectureId: lecture.id,
         correlationId: actor.correlationId,
       }),
@@ -656,6 +723,23 @@ export class ContentService {
       durationSeconds: lecture.durationSeconds,
       resumePositionSeconds: progress?.lastPositionSeconds ?? 0,
       watchedPercent: Number(progress?.watchedPercent ?? 0),
+      /*
+       * Whether watching this counts towards anything — and therefore whether
+       * the player should report at all.
+       *
+       * `watch_progress:update` is a STUDENT-ONLY grant in §4.5, correctly:
+       * progress feeds the video component of completion, which decides
+       * certification (BR-PRG-02), and a teacher reviewing their own recording
+       * is not coursework. So staff reporting would be refused — and the
+       * player retries what it could not save, so a teacher watching a lecture
+       * would loop a 403 every fifteen seconds for as long as they watched,
+       * accumulating intervals it can never flush.
+       *
+       * Told here rather than inferred from a role in the browser: the server
+       * already knows, and a client-side role test is a second opinion that
+       * can disagree with the matrix.
+       */
+      recordsProgress: actor.studentId !== undefined && actor.studentId !== null,
     };
   }
 
@@ -682,8 +766,11 @@ export class ContentService {
     }
 
     const actor = getActor();
-    // Bound to the student it was issued to, so a shared link is useless.
-    if (!actor?.studentId || actor.studentId !== ticket.studentId) {
+    // Bound to the PERSON it was issued to, so a shared link is useless — the
+    // same check as before, asked of the user rather than of the student,
+    // because a teacher and an administrator have no studentId and the old
+    // form refused them outright (ARC-039).
+    if (!actor?.userId || actor.userId !== ticket.userId) {
       throw new AppError("AUTH_FORBIDDEN");
     }
 

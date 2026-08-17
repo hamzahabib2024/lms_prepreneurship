@@ -25,6 +25,8 @@ interface Ticket {
   durationSeconds: number | null;
   resumePositionSeconds: number;
   watchedPercent: number;
+  /** False for staff: watch_progress:update is a student-only grant (BR-PRG-02). */
+  recordsProgress?: boolean;
 }
 
 /** How often the played range is flushed to the server. */
@@ -90,6 +92,11 @@ export function LecturePlayer({
   }, []);
 
   const report = useCallback(async () => {
+    // Nothing to report for staff, and reporting anyway is not harmless: the
+    // server refuses it (student-only grant), the catch below puts the
+    // intervals back, and a teacher watching a lecture would loop a 403 every
+    // fifteen seconds while the pending list grew for as long as they watched.
+    if (ticket && ticket.recordsProgress === false) return;
     const intervals = drain();
     if (intervals.length === 0) return;
     try {
@@ -103,7 +110,7 @@ export function LecturePlayer({
       // the minutes they actually watched; the next flush retries them.
       pending.current = [...intervals, ...pending.current];
     }
-  }, [drain, lecture.id]);
+  }, [drain, lecture.id, ticket]);
 
   useEffect(() => {
     if (!ticket) return;
@@ -188,11 +195,16 @@ export function LecturePlayer({
             </video>
 
             <p className="muted small">
-              {saved !== null
-                ? `Progress saved — ${Math.round(saved)}% watched.`
-                : ticket.watchedPercent > 0
-                  ? `${Math.round(ticket.watchedPercent)}% watched previously.`
-                  : "Your progress saves automatically."}
+              {ticket.recordsProgress === false
+                ? // Staff. Saying "your progress saves automatically" to a
+                  // teacher checking their own recording would be a plain
+                  // untruth — nothing is saved, deliberately (BR-PRG-02).
+                  "You are watching as staff. Nothing here is recorded against anyone's progress."
+                : saved !== null
+                  ? `Progress saved — ${Math.round(saved)}% watched.`
+                  : ticket.watchedPercent > 0
+                    ? `${Math.round(ticket.watchedPercent)}% watched previously.`
+                    : "Your progress saves automatically."}
             </p>
           </>
         )}
