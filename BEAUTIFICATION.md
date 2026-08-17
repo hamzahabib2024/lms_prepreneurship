@@ -55,6 +55,7 @@ Four things reach every screen without any page being edited:
 | **AttendancePage** | **A real defect fixed** — present, absent, late and excused were all the same indigo. Now green, red, amber and slate, with the letter drawn in each cell |
 | **MySubjectsPage** | Course cover chip beside each subject, so a course is the same artwork here as on the landing page. Progress ring kept as the focal point |
 | **SubjectPage** | Inherits the card, list and figure treatment |
+| **CoursePage** | One class's recordings as cards: drawn thumbnail in the page's own colour, play ring that grows on hover, duration, date, and a state as a word. Drafts on a separate shelf rather than mixed in with a badge — a teacher scanning for "what have I not published" should not have to read every card |
 | **AnnouncementsPage** | Pink page colour, calm diagonal texture |
 | **DiscussionPage** | As above |
 

@@ -14,6 +14,7 @@ import { AttendancePage } from "./pages/AttendancePage";
 import { ChangePasswordPage } from "./pages/ChangePasswordPage";
 import { MySubjectsPage } from "./pages/MySubjectsPage";
 import { SubjectPage } from "./pages/SubjectPage";
+import { CoursePage } from "./pages/CoursePage";
 import { MarkingPage } from "./pages/MarkingPage";
 import { GradingPage } from "./pages/GradingPage";
 import { QuizMarkingPage } from "./pages/QuizMarkingPage";
@@ -570,6 +571,11 @@ export function App() {
           <Route path="/announcements" element={<AnnouncementsPage />} />
           <Route path="/sections" element={<SectionsPage />} />
           <Route path="/structure" element={<StructurePage />} />
+          {/* One class's recordings. Everyone: a student sees the published
+              ones on classes they are enrolled in and staff see drafts too,
+              which the server decides — the scope predicate refuses a class
+              somebody is not on either way. */}
+          <Route path="/courses/:sectionSubjectId" element={<CoursePage />} />
           <Route
             path="/integrations"
             element={

@@ -145,7 +145,14 @@ function SubjectCard({ s }: { s: SubjectProgress }) {
           <h2>
             <Link to={`/subjects/${s.sectionSubjectId}`}>{s.subject.name}</Link>
           </h2>
-          <p className="muted small">{s.subject.code}</p>
+          <p className="muted small">
+            {s.subject.code}
+            {" · "}
+            {/* The recordings on their own, as cards. The subject page is
+                modules and lessons; a student looking for "last Tuesday's
+                class" wants the recordings, not the syllabus. */}
+            <Link to={`/courses/${s.sectionSubjectId}`}>Recordings</Link>
+          </p>
         </div>
       </div>
 

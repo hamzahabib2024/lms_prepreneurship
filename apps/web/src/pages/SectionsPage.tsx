@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useState, type FormEvent } from "react";
+import { Link } from "react-router-dom";
 import { ApiError, api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { EmptyState } from "../components/Ui";
@@ -559,6 +560,7 @@ export function SectionsPage() {
                                 <thead>
                                   <tr>
                                     <th>Subject</th>
+                                    <th />
                                     <th>Required</th>
                                     <th>Teacher</th>
                                     <th className="num">Enrolled</th>
@@ -569,6 +571,12 @@ export function SectionsPage() {
                                     <tr key={o.id}>
                                       <td>
                                         <code>{o.subject.code}</code> {o.subject.name}
+                                      </td>
+                                      <td>
+                                        {/* Straight to the recordings for this
+                                            class — where the folder is
+                                            connected and drafts are published. */}
+                                        <Link to={`/courses/${o.id}`}>Recordings</Link>
                                       </td>
                                       <td>{o.isCompulsory ? "compulsory" : "elective"}</td>
                                       <td>
