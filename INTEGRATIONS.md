@@ -251,9 +251,23 @@ It prints the service account's address — something like
 In Google Drive, open **each class's recording folder** → **Share** → paste that
 address → set it to **Viewer** → Share.
 
-> **Viewer, not Editor.** The System only ever reads, and the key it holds asks
-> Google for a read-only scope. Editor would grant a permission nothing uses and
-> that nobody would notice being misused.
+> **Viewer is enough — UNLESS you have turned downloading off.** The System
+> only ever reads, and the key it holds asks Google for a read-only scope.
+>
+> But if the folder has **"Viewers and commenters can't download, print, or
+> copy"** switched on, Google refuses to release the file to *any* viewer —
+> including the System — and playback fails with
+> `403 cannotDownloadFile`. Nothing here can work around that; it is Google
+> enforcing your setting, correctly.
+>
+> If you want students unable to download from Drive itself, keep that setting
+> and give the **service account Editor** instead. A writer is exempt from the
+> restriction, so the System can stream, while every human viewer stays
+> restricted. Students never touch Drive at all — they watch inside the LMS —
+> so nothing is loosened for them by this.
+>
+> Either way, **press "Check the folder" afterwards**: the reply says how many
+> recordings are catalogued but blocked, and that number should be zero.
 
 This step is silently skippable and is the usual reason a correct setup returns
 an empty folder.

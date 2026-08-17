@@ -159,6 +159,43 @@ export function LecturePlayer({
     }
   };
 
+  /**
+   * ASK WHY, rather than guessing.
+   *
+   * A <video> element reports failure as a single opaque event: no status, no
+   * body, nothing. So this said "it may have been moved" whatever had actually
+   * happened — and it was usually wrong. The real reasons are specific and
+   * fixable, and the System already knows them:
+   *
+   *   the storage folder forbids downloading (a Drive sharing setting)
+   *   the ticket expired while the page sat open
+   *   the recording really was moved or deleted
+   *
+   * One extra request, only on failure, to fetch the same URL the element was
+   * given — this time reading the answer.
+   */
+  const explainFailure = useCallback(async () => {
+    const fallback =
+      "This recording could not be played. Please tell your teacher, and mention the title.";
+    if (!ticket) return setError(fallback);
+    try {
+      const res = await fetch(ticket.streamUrl, { redirect: "follow" });
+      if (res.ok) {
+        // The bytes are being served and the element still failed — a codec
+        // the browser cannot decode, which is a different problem entirely and
+        // must not be reported as a missing file.
+        return setError(
+          "This recording downloaded, but your browser could not play it. Try a different " +
+            "browser, and tell your teacher which one you used.",
+        );
+      }
+      const body = (await res.json()) as { error?: { message?: string } };
+      setError(body.error?.message ?? fallback);
+    } catch {
+      setError(fallback);
+    }
+  }, [ticket]);
+
   const close = () => {
     void report();
     onClose();
@@ -183,13 +220,7 @@ export function LecturePlayer({
               controls
               onTimeUpdate={onTimeUpdate}
               onLoadedMetadata={onLoaded}
-              onError={() =>
-                // FR-VID-022 — say so plainly. A dead <video> element with no
-                // explanation is the worst possible outcome here.
-                setError(
-                  "This recording could not be played. It may have been moved. Please tell your teacher.",
-                )
-              }
+              onError={() => void explainFailure()}
             >
               Your browser cannot play this video.
             </video>

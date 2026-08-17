@@ -5,7 +5,7 @@ import { ContentService } from "./content.service";
 import { LectureSyncService } from "./lecture-sync.service";
 import { StorageRegistry } from "./storage/storage.registry";
 import { zodBody } from "../common/zod-validation.pipe";
-import { RequirePermission } from "../rbac/permissions.guard";
+import { Public, RequirePermission } from "../rbac/permissions.guard";
 
 const moduleSchema = z.object({
   subjectId: z.string().uuid(),
@@ -246,8 +246,35 @@ export class ContentController {
    * The bytes flow storage → browser directly. Streaming them through here
    * would consume the capacity provisioned for the whole System (§3.8) and
    * breach NFR-PRF-002 for every other user.
+   *
+   * ─────────────────────────────────────────────────────────────────────────
+   * PUBLIC, BECAUSE A <video> ELEMENT CANNOT SIGN IN.
+   *
+   * This carried @RequirePermission, and the actor is resolved from an
+   * Authorization header — which a media element never sends. The browser
+   * requests `<video src>` as a plain GET with cookies and nothing else, so
+   * every playback in a browser answered 401 and the player reported
+   *
+   *   "This recording could not be played. It may have been moved."
+   *
+   * — which reads as a missing file. NO VIDEO COULD EVER PLAY, on any storage,
+   * for any role. It passed every test because every test sent the header.
+   *
+   * THE TICKET IS THE CREDENTIAL, which is what ARC-039 intends by "a
+   * short-lived, user-bound ticket": 128 bits of randomness, valid fifteen
+   * minutes, naming exactly one lecture, and issued only after ROLE ∩ ACTION ∩
+   * SCOPE has already been checked. It is the same arrangement as the signed
+   * media URL it redirects to, which has always been public for the same
+   * reason and cannot be otherwise.
+   *
+   * The residual exposure is stated rather than glossed: somebody who passes
+   * their ticket URL to another person within those fifteen minutes lets them
+   * watch that one lecture. That exposure already exists on the signed URL at
+   * the end of this redirect and cannot be closed while the browser fetches
+   * media directly (ARC-052). The ticket still records who it was issued to,
+   * so the audit answers "whose link was it".
    */
-  @RequirePermission("lecture_playback", "read")
+  @Public()
   @Get("lectures/stream/:ticketId")
   async stream(@Param("ticketId") ticketId: string, @Res() res: Response): Promise<void> {
     const { redirectTo } = await this.content.resolveTicket(ticketId);

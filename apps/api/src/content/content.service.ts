@@ -765,12 +765,25 @@ export class ContentService {
       });
     }
 
+    /*
+     * THE TICKET IS THE CREDENTIAL. This route is reached by a <video> element,
+     * which sends no Authorization header — so there is usually no actor here
+     * at all, and requiring one refused every playback in every browser.
+     *
+     * What protects it: 128 bits of unguessable id, fifteen minutes, one
+     * lecture, and issue only after ROLE ∩ ACTION ∩ SCOPE was checked. That is
+     * the same protection the signed media URL at the end of this redirect has
+     * always relied on, and it cannot be stronger while the browser fetches
+     * media directly (ARC-052).
+     *
+     * The identity check below is kept but it is NOT the protection, and
+     * pretending otherwise would be worse than not having it: it only fires
+     * for a caller that troubled to send a token, which the real playback path
+     * never does. What it does buy is the obvious misuse — a link pasted to a
+     * classmate whose browser is signed in as themselves.
+     */
     const actor = getActor();
-    // Bound to the PERSON it was issued to, so a shared link is useless — the
-    // same check as before, asked of the user rather than of the student,
-    // because a teacher and an administrator have no studentId and the old
-    // form refused them outright (ARC-039).
-    if (!actor?.userId || actor.userId !== ticket.userId) {
+    if (actor?.userId && actor.userId !== ticket.userId) {
       throw new AppError("AUTH_FORBIDDEN");
     }
 
@@ -778,7 +791,29 @@ export class ContentService {
       60,
       Math.floor((ticket.expiresAt.getTime() - Date.now()) / 1000),
     );
-    const signed = await this.storage.forLectures().signUrl(ticket.storageRef, ttl);
+
+    /*
+     * THE PROVIDER THE RECORDING CAME FROM, not the one configured today.
+     *
+     * This asked the registry for the CURRENT lecture provider, so the moment
+     * LECTURE_STORAGE changed, every recording catalogued under the previous
+     * one became unplayable — a Drive file id handed to the local disk, or a
+     * local path handed to Drive. Both answer "not found", and the student is
+     * told the recording was moved, which is a lie about their teacher's work.
+     *
+     * `storageProvider` is recorded on every lecture for exactly this reason.
+     * Using it means the two stores can coexist: recordings catalogued before
+     * the switch keep playing, and new ones come from Drive.
+     */
+    const lecture = await this.prisma.asSystem((db) =>
+      db.recordedLecture.findUnique({
+        where: { id: ticket.recordedLectureId },
+        select: { storageProvider: true },
+      }),
+    );
+    const provider = this.storage.get(lecture?.storageProvider ?? this.storage.forLectures().key);
+
+    const signed = await provider.signUrl(ticket.storageRef, ttl);
     return { redirectTo: signed.url, expiresAt: signed.expiresAt };
   }
 
