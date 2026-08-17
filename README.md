@@ -51,9 +51,13 @@ to sign up for — a real PostgreSQL 16 is downloaded on first run and its data
 kept in `./pgdata`.
 
 ```bash
-npm ci && npm run setup   # .env, signing keys, database, schema, sample data
-npm start                 # both servers, in one terminal
+npm ci             # exactly what the lockfile says — see the note below
+npm run setup      # .env, signing keys, database, schema, sample data
+npm start          # both servers, in one terminal
 ```
+
+One per line on purpose: **Windows PowerShell 5.1 does not accept `&&`**, so
+`npm ci && npm run setup` fails there with a parser error rather than running.
 
 Then open <http://localhost:5173>.
 

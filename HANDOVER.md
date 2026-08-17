@@ -193,9 +193,25 @@ Neither can see the other's data. That is on purpose: pointing a container at
 `./pgdata` would put two PostgreSQL servers on one data directory.
 
 ```bash
-docker compose build
-docker compose up -d
-# then http://localhost:8080
+npm run docker:up      # build, then recreate — then http://localhost:8080
+```
+
+| | |
+|---|---|
+| `npm run docker:up` | build and recreate. **The one to use after changing code** |
+| `npm run docker:ps` | what is running |
+| `npm run docker:logs` | follow the logs |
+| `npm run docker:down` | stop, keeping the database |
+| `npm run docker:reset` | stop and **delete the database volume** |
+
+These exist because the raw commands are two joined with `&&`, and **Windows
+PowerShell 5.1 does not accept `&&`** — it fails with *"The token '&&' is not a
+valid statement separator in this version"*. npm runs its scripts through
+`cmd.exe`, where `&&` is fine, so one command works in PowerShell, bash and
+cmd alike. The PowerShell equivalent, if you would rather type it:
+
+```powershell
+docker compose build; if ($?) { docker compose up -d --force-recreate }
 ```
 
 The stack is three services — `postgres`, `api`, `web` — and nginx serves the
@@ -217,18 +233,15 @@ docker compose exec api npx prisma db seed
 
 **`docker compose up -d` does not rebuild.** If containers are already running
 it reports `Running` and leaves them alone — serving whatever image they
-started with. That happened here: the stack was answering from a six-day-old
-build. After changing code:
-
-```bash
-docker compose build && docker compose up -d --force-recreate
-```
+started with. That has now happened twice here, once with a six-day-old build
+and once with a fix that was in the working tree but not in the image, which
+looks exactly like the fix not working. `npm run docker:up` does both steps.
 
 **The database volume outlives everything.** `docker compose down` keeps it;
 containers are replaced and the data stays. To genuinely start over:
 
 ```bash
-docker compose down -v      # -v removes the volumes, including the database
+npm run docker:reset        # down -v — removes the volumes, database included
 ```
 
 ### What it needs in `.env`
@@ -275,7 +288,16 @@ node -r dotenv/config scripts/check-email.mjs          # email specifically
 ## When something is wrong
 
 **`Cannot find package '.../node_modules/pg/index.js'`** — an incomplete
-install. `rm -rf node_modules && npm ci`.
+install. Delete `node_modules` and run `npm ci`:
+
+```powershell
+Remove-Item node_modules -Recurse -Force    # Windows
+npm ci
+```
+```bash
+rm -rf node_modules                          # Linux / macOS
+npm ci
+```
 
 **`P1001: Can't reach database server`** — PostgreSQL is not running.
 `npm run db:start`. On Windows, killing Node processes broadly can take the
