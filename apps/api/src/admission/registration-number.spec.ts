@@ -245,6 +245,10 @@ describe("RegistrationNumberService — allocation contract", () => {
         queries.push(strings.join("?"));
         return Promise.resolve([{ next_value: 34 }]);
       },
+      // An empty students table: allocate() checks that the number it was
+      // handed is genuinely free before returning it. See the block at the
+      // end of this file for why.
+      student: { findFirst: () => Promise.resolve(null) },
     } as never;
 
     const result = await svc.allocate(tx, {
@@ -303,5 +307,76 @@ describe("RegistrationNumberService — allocation contract", () => {
 
     await svc.seedSeries(tx, "CIIT|SP26|GD|ISB", 120);
     expect(executed).toContain("GREATEST");
+  });
+});
+
+/**
+ * When the counter and the students table disagree — OPN-01, and the bug this
+ * was written for.
+ *
+ * The seed writes eight students with their numbers spelled out. Nothing
+ * advanced the series, so the counter said "next is 1" while CIIT/SP26-001/ISB
+ * was already on a student, and the first real approval on a seeded database
+ * came back as:
+ *
+ *   409  DUPLICATE_RESOURCE — unique constraint on ["registration_no"]
+ *
+ * The same disagreement is what OPN-01 describes on the Institute's real data:
+ * numbers issued by hand for years, and a new deployment starting at 1.
+ */
+describe("allocating a number when some are already taken", () => {
+  const svc = new RegistrationNumberService(configWith(), settingsWith());
+  const parts = { instituteCode: "CIIT", sessionCode: "SP26", campusCode: "ISB" };
+
+  /** A transaction whose students table already holds `taken`. */
+  const txWith = (taken: string[], counterStartsAt = 0) => {
+    let counter = counterStartsAt;
+    const lookedUp: string[] = [];
+    const tx = {
+      $queryRaw: () => Promise.resolve([{ next_value: ++counter }]),
+      student: {
+        findFirst: ({ where }: { where: { registrationNo: string } }) => {
+          lookedUp.push(where.registrationNo);
+          return Promise.resolve(taken.includes(where.registrationNo) ? { id: "x" } : null);
+        },
+      },
+    } as never;
+    return { tx, lookedUp, counter: () => counter };
+  };
+
+  it("steps over numbers already in use and issues the first free one", async () => {
+    const taken = Array.from(
+      { length: 8 },
+      (_, i) => `CIIT/SP26-${String(i + 1).padStart(3, "0")}/ISB`,
+    );
+    const { tx, lookedUp, counter } = txWith(taken);
+
+    const result = await svc.allocate(tx, parts);
+
+    expect(result.registrationNo).toBe("CIIT/SP26-009/ISB");
+    expect(result.sequence).toBe(9);
+    // It checked each one rather than guessing where the block ended.
+    expect(lookedUp).toHaveLength(9);
+    // And the COUNTER moved past them, so the walk happens once. A
+    // read-then-write that rewound would reintroduce RSK-07.
+    expect(counter()).toBe(9);
+  });
+
+  it("costs one lookup when nothing is taken", async () => {
+    const { tx, lookedUp } = txWith([]);
+
+    const result = await svc.allocate(tx, parts);
+
+    expect(result.registrationNo).toBe("CIIT/SP26-001/ISB");
+    expect(lookedUp).toEqual(["CIIT/SP26-001/ISB"]);
+  });
+
+  it("gives up loudly rather than spinning inside a transaction", async () => {
+    // A format that omits {SEQUENCE} collides on every value. Holding a
+    // section lock while looping forever is far worse than failing.
+    const everything = { $queryRaw: () => Promise.resolve([{ next_value: 1 }]),
+      student: { findFirst: () => Promise.resolve({ id: "x" }) } } as never;
+
+    await expect(svc.allocate(everything, parts)).rejects.toThrow(/100 attempts/);
   });
 });

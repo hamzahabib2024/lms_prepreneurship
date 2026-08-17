@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { AdmissionService } from "./admission.service";
+import { AdmissionMailer } from "./admission-mailer";
 import { AdmissionController } from "./admission.controller";
 import { RegistrationNumberService } from "./registration-number.service";
 import { SlipService } from "./slip.service";
@@ -10,7 +11,7 @@ import { ContentModule } from "../content/content.module";
   // Institute has configured documents to live (ARC-043).
   imports: [ContentModule],
   controllers: [AdmissionController],
-  providers: [AdmissionService, RegistrationNumberService, SlipService],
+  providers: [AdmissionService, AdmissionMailer, RegistrationNumberService, SlipService],
   exports: [RegistrationNumberService],
 })
 export class AdmissionModule {}

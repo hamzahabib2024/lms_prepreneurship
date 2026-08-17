@@ -489,6 +489,45 @@ async function main(): Promise<void> {
   });
   console.log(`  students: ${enrolled} enrolled in ${gdFemale.code}`);
 
+  /*
+   * THE COUNTER HAS TO KNOW ABOUT THE STUDENTS ABOVE.
+   *
+   * Those fixtures were written with their registration numbers spelled out,
+   * and nothing advanced the series they came from. So the counter said the
+   * next number was 1 while CIIT/SP26-001/ISB was already on a student, and
+   * the FIRST REAL ADMISSION on any seeded database was refused:
+   *
+   *   409  DUPLICATE_RESOURCE — unique constraint on ["registration_no"]
+   *
+   * — an error naming nothing an administrator could act on, on the System's
+   * most consequential transaction. Found by approving a real application
+   * against a seeded database over HTTP; no unit test could see it, because
+   * the fault is in the disagreement between two tables rather than in either
+   * one's code.
+   *
+   * The allocator now steps over numbers that are taken, so this is no longer
+   * the only thing standing between a demonstration and that error. It is
+   * still set, because a seed should leave a database that is CONSISTENT
+   * rather than one that is merely survivable — and because the same
+   * disagreement is what OPN-01 describes on the Institute's real data.
+   *
+   * The key is instituteCode|sessionCode|campusCode, upper-cased —
+   * RegistrationNumberService.buildSeriesKey. The SQL is the same statement as
+   * that service's seedSeries(), GREATEST included: a series must never be
+   * LOWERED, because that reissues numbers already in use (BR-REG-07). It is
+   * written out here rather than called because the seed is a standalone
+   * script with no Nest container to resolve the service from.
+   */
+  const seriesKey = "CIIT|SP26|ISB";
+  await db.$executeRaw`
+    INSERT INTO number_series (id, key, next_value, created_at, updated_at)
+    VALUES (gen_random_uuid(), ${seriesKey}, ${cohort.length}, now(), now())
+    ON CONFLICT (key) DO UPDATE
+      SET next_value = GREATEST(number_series.next_value, ${cohort.length}),
+          updated_at = now()
+  `;
+  console.log(`  number series ${seriesKey}: next admission is ${cohort.length + 1}`);
+
   // Sessions spanning past and future, so the register has something to mark
   // and the dashboard has a next class to show.
   const at = (dayOffset: number, hour: number): Date => {

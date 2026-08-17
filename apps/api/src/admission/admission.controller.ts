@@ -29,6 +29,21 @@ import { MAX_SLIP_BYTES, SlipService } from "./slip.service";
 import { zodBody } from "../common/zod-validation.pipe";
 import { Public, RequirePermission } from "../rbac/permissions.guard";
 
+/**
+ * How many applications one address may submit in an hour.
+ *
+ * `Number("")` is 0, not NaN — so `APPLY_LIMIT_PER_HOUR=` in .env, or the
+ * empty string compose passes when the variable is unset, would set the limit
+ * to ZERO and refuse every application in the country with a rate-limit error.
+ * A blank is somebody not setting it, so it takes the default; a nonsense value
+ * does too, rather than deciding what a negative limit means.
+ */
+function applyLimitPerHour(): number {
+  const raw = (process.env["APPLY_LIMIT_PER_HOUR"] ?? "").trim();
+  const n = Number(raw);
+  return raw !== "" && Number.isFinite(n) && n > 0 ? n : 10;
+}
+
 /** SRS §9.4 — registration and admission endpoints. */
 @Controller()
 export class AdmissionController {
@@ -124,7 +139,7 @@ export class AdmissionController {
   @Public()
   @Throttle({
     default: {
-      limit: Number(process.env["APPLY_LIMIT_PER_HOUR"] ?? 10),
+      limit: applyLimitPerHour(),
       ttl: 3_600_000,
     },
   })

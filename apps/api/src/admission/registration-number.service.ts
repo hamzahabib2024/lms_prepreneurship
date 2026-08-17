@@ -96,14 +96,30 @@ export class RegistrationNumberService {
 
   getFormat(): NumberFormatConfig {
     return {
-      instituteCode: this.config.get<string>("INSTITUTE_CODE", "CIIT"),
-      campusCode: this.config.get<string>("CAMPUS_CODE", "ISB"),
-      padWidth: Number(this.config.get<string>("REG_NO_PAD_WIDTH", "3")),
-      template: this.config.get<string>(
-        "REG_NO_TEMPLATE",
-        "{INSTITUTE}/{SESSION}-{SEQUENCE}/{CAMPUS}",
-      ),
+      instituteCode: this.env("INSTITUTE_CODE", "CIIT"),
+      campusCode: this.env("CAMPUS_CODE", "ISB"),
+      padWidth: Number(this.env("REG_NO_PAD_WIDTH", "3")),
+      template: this.env("REG_NO_TEMPLATE", "{INSTITUTE}/{SESSION}-{SEQUENCE}/{CAMPUS}"),
     };
+  }
+
+  /**
+   * DEFINED-AS-EMPTY IS NOT THE SAME AS UNSET, and ConfigService does not
+   * conflate them: a default is returned only for `undefined`, so a variable
+   * set to "" beats it and wins.
+   *
+   * That is not a hypothetical. `docker-compose.yml` passes these through as
+   * `${INSTITUTE_CODE:-}` so the Institute can set them in .env — which means
+   * that on any machine where they are NOT set, the container receives an
+   * empty string rather than nothing, and every registration number allocated
+   * there would read "/SP26-001/" with the institute and campus missing.
+   * Writing `INSTITUTE_CODE=` in .env does the same on any deployment.
+   *
+   * The blank-is-not-a-value rule was already applied to the settings layer
+   * above; this applies it to the layer the settings fall back to.
+   */
+  private env(key: string, fallback: string): string {
+    return (this.config.get<string>(key, "") ?? "").trim() || fallback;
   }
 
   /**
@@ -162,10 +178,71 @@ export class RegistrationNumberService {
   }
 
   /** Allocates and formats in one step. Call inside the approval transaction. */
-  async allocate(tx: Tx, parts: SeriesKeyParts): Promise<{ registrationNo: string; sequence: number }> {
+  /**
+   * FR-REG-051, and the case OPN-01 warned about.
+   *
+   * A NUMBER THAT IS ALREADY IN USE IS NOT FREE, WHATEVER THE COUNTER SAYS.
+   * The counter and the students table can disagree, and when they do the
+   * counter is the one that is wrong:
+   *
+   *   - the Institute has been issuing numbers by hand for years, and OPN-01
+   *     asks for the highest one already given out. Until somebody supplies
+   *     it, a new deployment starts at 1 — on top of every number in use;
+   *   - the seed writes eight students with numbers and never advanced the
+   *     series, so the first admission on any demonstration database was
+   *     refused with "A record with that value already exists". That is how
+   *     this was found: a real approval, on a seeded database, over HTTP;
+   *   - students imported from a spreadsheet arrive with their numbers.
+   *
+   * So the allocated number is CHECKED, and a taken one is skipped. Each
+   * attempt calls allocateSequence again, which is a single atomic statement,
+   * so the counter genuinely advances and two administrators approving at the
+   * same instant still cannot be handed the same number (RSK-07) — the retry
+   * is not a read-then-write, which is the shape that breaks that guarantee.
+   *
+   * It is self-healing rather than a permanent cost: the walk happens once,
+   * over whatever block is already taken, and afterwards the counter is past
+   * it forever.
+   *
+   * The bound exists so a format that collides on EVERY value — a template
+   * with the sequence left out, say — fails loudly at admission instead of
+   * spinning inside a transaction holding a section lock.
+   */
+  async allocate(
+    tx: Tx,
+    parts: SeriesKeyParts,
+  ): Promise<{ registrationNo: string; sequence: number }> {
     const key = this.buildSeriesKey(parts);
-    const sequence = await this.allocateSequence(tx, key);
-    return { registrationNo: this.format(parts, sequence), sequence };
+
+    for (let attempt = 0; attempt < 100; attempt++) {
+      const sequence = await this.allocateSequence(tx, key);
+      const registrationNo = this.format(parts, sequence);
+
+      const taken = await tx.student.findFirst({
+        // Deleted students included ON PURPOSE: BR-REG-07 makes the number
+        // permanent and public, it is printed on certificates already issued,
+        // and the column's unique index does not exclude soft-deleted rows.
+        // Reissuing one would make two people the same person in every report.
+        where: { registrationNo },
+        select: { id: true },
+      });
+
+      if (!taken) {
+        if (attempt > 0) {
+          this.logger.warn(
+            `Skipped ${attempt} registration number(s) already in use on series "${key}". ` +
+              `The series was behind the students table — expected on a seeded or imported ` +
+              `database, and now corrected. If this repeats, set the series deliberately (OPN-01).`,
+          );
+        }
+        return { registrationNo, sequence };
+      }
+    }
+
+    throw new Error(
+      `Could not allocate a free registration number on series "${key}" after 100 attempts. ` +
+        `Check the number format — one that omits the sequence collides on every value.`,
+    );
   }
 
   /**

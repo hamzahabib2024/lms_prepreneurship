@@ -229,7 +229,19 @@ Seed a container deliberately if you want sample data:
 docker compose exec api npx prisma db seed
 ```
 
-### Two things that will catch you out
+### Three things that will catch you out
+
+**A container gets its environment when it is CREATED, and only what compose
+names.** `.env` is read to interpolate `docker-compose.yml`; it is not handed to
+a service. Two consequences, both of which have bitten:
+
+- adding a setting to `.env` and running `docker compose restart` does nothing
+  — the same container starts again with the environment it already had. Use
+  `npm run docker:up`, which recreates;
+- a setting the compose file does not mention never reaches the API at all.
+  Email was in exactly that position: valid credentials in `.env`, the host-side
+  check passing, and the container silently suppressing every message. Check
+  with `docker compose exec api sh -c 'echo $SMTP_HOST'`.
 
 **`docker compose up -d` does not rebuild.** If containers are already running
 it reports `Running` and leaves them alone — serving whatever image they
