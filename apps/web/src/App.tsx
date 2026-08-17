@@ -15,6 +15,7 @@ import { ChangePasswordPage } from "./pages/ChangePasswordPage";
 import { MySubjectsPage } from "./pages/MySubjectsPage";
 import { SubjectPage } from "./pages/SubjectPage";
 import { CoursePage } from "./pages/CoursePage";
+import { WatchPage } from "./pages/WatchPage";
 import { MarkingPage } from "./pages/MarkingPage";
 import { GradingPage } from "./pages/GradingPage";
 import { QuizMarkingPage } from "./pages/QuizMarkingPage";
@@ -576,6 +577,12 @@ export function App() {
               which the server decides — the scope predicate refuses a class
               somebody is not on either way. */}
           <Route path="/courses/:sectionSubjectId" element={<CoursePage />} />
+          {/* Watching has its own address, so it can be bookmarked,
+              opened in a new tab and returned to with the back button. */}
+          <Route
+            path="/courses/:sectionSubjectId/watch/:lectureId"
+            element={<WatchPage />}
+          />
           <Route
             path="/integrations"
             element={

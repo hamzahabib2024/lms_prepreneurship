@@ -4,6 +4,7 @@ import { AppError } from "@lms/shared";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { StorageRegistry } from "./storage/storage.registry";
+import { parseMeetRecording, titleFromFilename } from "./meet-recording";
 
 /**
  * A lecture appears on the course page when the file appears in the folder.
@@ -106,7 +107,7 @@ export class LectureSyncService {
 
     const provider = this.storage.forLectures();
     const entries = await provider.listFolder(offering.lectureFolderRef);
-    const videos = entries.filter((e) => !e.isFolder && LectureSyncService.VIDEO.test(e.name));
+    const videos = entries.filter((e) => !e.isFolder && this.isVideo(e));
 
     // Everything already catalogued for this class, by storage reference —
     // which is the identity that survives a rename in the folder.
@@ -141,6 +142,8 @@ export class LectureSyncService {
         continue;
       }
 
+      const meet = parseMeetRecording(entry.name);
+
       await this.prisma.asSystem((db) =>
         db.recordedLecture.create({
           data: {
@@ -152,7 +155,15 @@ export class LectureSyncService {
             // storage does no media probing, and "0 seconds" printed on a card
             // is a wrong fact where "—" is an honest absence.
             durationSeconds: entry.durationSeconds,
-            recordedOn: entry.modifiedAt ?? new Date(),
+            // THE NAME BEATS THE TIMESTAMP for anything Meet produced.
+            //
+            // A recording's file timestamps are when the UPLOAD finished, and
+            // Meet writes a long class well after it ends — an evening class
+            // starting 21:53 PKT lands in Drive the following day. Dating the
+            // card from the file puts Monday's class on Tuesday, which is the
+            // kind of small wrongness that makes a student stop trusting the
+            // list. The name says which class this was; it is believed.
+            recordedOn: meet.recordedOn ?? entry.modifiedAt ?? new Date(),
             // DRAFT, always. A file in a folder is not a decision to show it.
             publicationStatus: "DRAFT",
             availabilityStatus: "AVAILABLE",
@@ -195,26 +206,37 @@ export class LectureSyncService {
   }
 
   /**
-   * A filename made readable.
+   * IS THIS A VIDEO? — asked of the file, not of its name.
    *
-   * "2026-03-14_lecture-04_typography-basics.mp4" becomes "Typography basics".
-   * Teachers name files for sorting, not for reading, and a card titled with
-   * the raw filename looks like the System did not finish. Whatever this
-   * produces is a STARTING point — the title is editable afterwards and the
-   * sync never touches it again.
+   * This used to test the name against `/\.(mp4|mov|…)$/`, and against the
+   * data it exists to read that answer is NO, every time. A Google Meet
+   * recording arrives in Drive as
+   *
+   *   (Sec D) Graphic & UI/UX Class - 2026/08/13 20:58 PKT - Recording
+   *
+   * with `mimeType: "video/mp4"` and NO EXTENSION AT ALL. The Institute has
+   * eighteen of them in one class folder and not one would have been
+   * catalogued: the sweep ran, reported "0 added", and the course page stayed
+   * empty while the folder filled up — a silence, not an error.
+   *
+   * So the provider's content type decides, and the extension is the fallback
+   * for providers that have nothing better. Local disk is one; it guesses from
+   * the extension, which for a file on a disk is all there is.
+   */
+  private isVideo(entry: { name: string; contentType: string | null }): boolean {
+    if (entry.contentType) return entry.contentType.startsWith("video/");
+    return LectureSyncService.VIDEO.test(entry.name);
+  }
+
+  /**
+   * A filename made readable — and, for a Meet recording, the day of the class.
+   *
+   * The details live in meet-recording.ts, tested against the Institute's own
+   * file names. Whatever it produces is a STARTING point: the title is
+   * editable afterwards and the sync never touches it again.
    */
   private titleFrom(filename: string): string {
-    const withoutExtension = filename.replace(/\.[^.]+$/, "");
-    const cleaned = withoutExtension
-      // Leading dates and lecture numbers: how the file sorts, not what it is.
-      .replace(/^\d{4}[-_]\d{2}[-_]\d{2}[-_\s]*/, "")
-      .replace(/^(lecture|lec|class|session)[-_\s]*\d+[-_\s]*/i, "")
-      .replace(/[-_]+/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-
-    if (cleaned === "") return withoutExtension;
-    return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+    return titleFromFilename(filename);
   }
 
   /** Exposed for the tests, which is where the filename rules are pinned. */

@@ -369,13 +369,19 @@ export class ContentService {
       }),
     );
 
+    // FR-VID-008 — how far through each one this student already is, so the
+    // list can show a progress bar and offer to resume rather than restart.
+    // One query for the whole page. Empty for staff, who have no watch state
+    // of their own, and the field is then simply absent.
+    const watch = await this.watchStateFor(lectures.map((l) => l.id));
+
     return {
       subject: offering.subject,
       section: offering.section,
       // Staff only: a student has no business knowing where the files live.
       lectureFolderRef: isStudent ? null : offering.lectureFolderRef,
       canManage: !isStudent,
-      lectures,
+      lectures: lectures.map((l) => ({ ...l, watch: watch.get(l.id) ?? null })),
     };
   }
 

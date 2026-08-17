@@ -176,20 +176,24 @@ do now.
 
 > ### Read this before you start
 >
-> **Credentials alone will not switch Drive on.** Unlike email, the Drive
-> adapter is a stub: it knows whether it is configured, refuses honestly when it
-> is not, and falls back to local storage — but the actual Drive API calls
-> (`files.list`, minting a download link) are not written yet. With credentials
-> in place it still answers *"Google Drive integration not yet implemented
-> (DEP-01)"*.
+> **The adapter is written.** It authenticates as a service account, lists a
+> folder, reads durations and thumbnails, checks whether a recording still
+> exists, and hands the browser a short-lived address to play from. It was
+> built against **the Institute's own Meet recordings** — their real names,
+> their real folder-per-class layout — and everything above is covered by
+> tests that run without credentials.
 >
-> **Do the steps below anyway.** Nothing can be written or tested against Drive
-> until the service account exists, so this is the step that unblocks the work
-> rather than the step that finishes it. Roughly two days once the credentials
-> are in hand.
+> **One hop is not yet proven against live Drive**: the redirect that turns a
+> file into a playable address. It is unit-tested against a recorded Google
+> response and cannot be exercised for real until the service account below
+> exists. If Google's behaviour there has changed, playback fails with an error
+> that says so rather than quietly working the wrong way.
 >
-> The same is true of Meet in section 3 and WhatsApp in section 4. Email in
-> section 1 is finished and genuinely does go live on a restart.
+> So the steps below are now the last thing standing between the Institute and
+> lecture playback — not the beginning of two days' work.
+>
+> **Meet in section 3 and WhatsApp in section 4 are still stubs.** Email in
+> section 1 is finished and live.
 
 ## Step 1 — Create a project
 
@@ -242,31 +246,58 @@ node -r dotenv/config scripts/check-integrations.mjs
 It prints the service account's address — something like
 `lms-drive@prepreneurship-lms.iam.gserviceaccount.com`. Copy it.
 
-## Step 7 — Share the lecture folder
+## Step 7 — Share the lecture folders
 
-In Google Drive, open the folder holding your lecture recordings →
-**Share** → paste that address → set it to **Viewer** → Share.
+In Google Drive, open **each class's recording folder** → **Share** → paste that
+address → set it to **Viewer** → Share.
 
-> **Viewer, not Editor.** The System only ever reads. Giving it Editor grants a
-> permission nothing uses and that nobody would notice being misused.
+> **Viewer, not Editor.** The System only ever reads, and the key it holds asks
+> Google for a read-only scope. Editor would grant a permission nothing uses and
+> that nobody would notice being misused.
 
 This step is silently skippable and is the usual reason a correct setup returns
 an empty folder.
 
-## Step 8 — Switch it on
+> **If the Institute is on Workspace and the folders are on a Shared Drive**,
+> sharing the Shared Drive itself with the service account covers every folder
+> in it at once. The System asks for shared-drive results explicitly, so this
+> works — but without the share, Drive answers "no files" rather than "no
+> access", and an unshared folder looks exactly like an empty one.
 
-Copy the folder's id from its URL — the long string after `/folders/` — then:
+## Step 8 — Connect each class to its folder
+
+The Institute already keeps **one folder per class**, which is exactly what the
+System expects. Open the class in **Content**, and set its lecture folder to
+that folder's id — the long string after `/folders/` in the folder's URL.
+
+Then switch lecture storage over:
 
 ```ini
 LECTURE_STORAGE=google_drive
-GOOGLE_DRIVE_ROOT_FOLDER_ID=1AbCdEf...
 ```
 
-Restart the API.
+Restart the API — or `npm run docker:up` if you run it through Docker, since a
+container only picks up `.env` when it is recreated.
+
+## Step 9 — Read a folder, and watch one back
+
+Open the class and press **Check the folder**. It reports what it found:
+recordings arrive as **drafts**, never published automatically, because a file
+appearing in a folder is not a decision to show it to a class.
+
+Publish one, then open it. It should play, remember where you stopped, and
+resume there.
 
 ### ✅ You are done when
-`scripts/check-integrations.mjs` says **live**, and the Integrations screen
-agrees.
+A recording from Drive plays in the browser and the progress bar under its card
+moves.
+
+> **What the names give you.** Meet writes recordings as
+> `(Sec D) Graphic & UI/UX Class - 2026/08/13 20:58 PKT - Recording`, and the
+> System reads that name rather than the file's timestamps: the card is titled
+> *Graphic & UI/UX* and dated **13 August**, the day of the class. Meet finishes
+> writing a long evening recording after midnight, so trusting the file's own
+> dates puts Monday's class on Tuesday.
 
 ### While you wait
 `LECTURE_STORAGE=local` (the default) serves video from the application server.
