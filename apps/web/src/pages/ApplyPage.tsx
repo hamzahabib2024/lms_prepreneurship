@@ -65,7 +65,12 @@ export function ApplyPage() {
   const [step, setStep] = useState(0);
   const [error, setError] = useState<ApiError | null>(null);
   const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState<{ trackingRef: string } | null>(null);
+  const [done, setDone] = useState<{
+    trackingRef: string;
+    email: string;
+    /** Absent when the application was a duplicate — nothing is emailed then. */
+    emailSent?: boolean;
+  } | null>(null);
 
   // Kept flat rather than nested: it is posted flat, and a shape that matches
   // the request is one fewer thing to get wrong.
@@ -104,7 +109,14 @@ export function ApplyPage() {
   const programme = programmes?.find((p) => p.id === f.desiredProgrammeId);
   const section = programme?.sections.find((s) => s.id === f.desiredSectionId);
 
-  if (done) return <Submitted trackingRef={done.trackingRef} />;
+  if (done)
+    return (
+      <Submitted
+        trackingRef={done.trackingRef}
+        email={done.email}
+        emailSent={done.emailSent === true}
+      />
+    );
 
   const steps = [
     { title: "What you want to study", done: !!f.desiredSectionId },
@@ -117,15 +129,18 @@ export function ApplyPage() {
     setBusy(true);
     setError(null);
     try {
-      const r = await api.post<{ trackingRef: string }>("/public/registrations", {
-        ...f,
-        claimedAmount: Number(f.claimedAmount),
-        phoneIsWhatsapp: true,
-        documentIds,
-        consentVersion: CONSENT_VERSION,
-        consentAccepted: true,
-        ...(f.acquisitionDetail ? {} : { acquisitionDetail: undefined }),
-      });
+      const r = await api.post<{ trackingRef: string; email: string; emailSent?: boolean }>(
+        "/public/registrations",
+        {
+          ...f,
+          claimedAmount: Number(f.claimedAmount),
+          phoneIsWhatsapp: true,
+          documentIds,
+          consentVersion: CONSENT_VERSION,
+          consentAccepted: true,
+          ...(f.acquisitionDetail ? {} : { acquisitionDetail: undefined }),
+        },
+      );
       setDone(r);
     } catch (e) {
       setError(e instanceof ApiError ? e : null);
@@ -556,7 +571,15 @@ function SlipUpload({
  * application without an account, so it is large, selectable in one click, and
  * accompanied by the thing to do with it.
  */
-function Submitted({ trackingRef }: { trackingRef: string }) {
+function Submitted({
+  trackingRef,
+  email,
+  emailSent,
+}: {
+  trackingRef: string;
+  email: string;
+  emailSent: boolean;
+}) {
   return (
     <div className="landing">
       <header className="landing-nav">
@@ -575,6 +598,23 @@ function Submitted({ trackingRef }: { trackingRef: string }) {
 
           <p className="muted">Keep this reference. It is how you check on your application.</p>
           <p className="password">{trackingRef}</p>
+
+          {/* Say which it was. "A copy is on its way" when nothing was sent is
+              how a person closes the page without writing the reference down. */}
+          {emailSent ? (
+            <p className="small muted">
+              We have emailed a copy to <strong>{email}</strong>. If it is not there in a few
+              minutes, look in your spam folder.
+            </p>
+          ) : (
+            <div className="alert alert-warn">
+              <strong>Write this reference down now.</strong>
+              <p className="small">
+                We could not email you a copy. Nothing is wrong with your application — but this
+                page is the only place the reference is shown.
+              </p>
+            </div>
+          )}
 
           <h3>What happens now</h3>
           <ul className="list small">

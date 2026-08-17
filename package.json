@@ -13,6 +13,11 @@
   "scripts": {
     "setup": "node scripts/first-run.mjs",
     "start": "concurrently --names \"api,web\" --prefix-colors \"cyan,magenta\" --kill-others-on-fail \"npm:dev\" \"npm:dev:web\"",
+    "docker:up": "docker compose build && docker compose up -d --force-recreate",
+    "docker:down": "docker compose down",
+    "docker:reset": "docker compose down -v",
+    "docker:logs": "docker compose logs -f --tail=100",
+    "docker:ps": "docker compose ps",
     "build": "npm run build -w @lms/shared && npm run build -w @lms/api && npm run build -w @lms/web",
     "dev": "npm run dev --workspace=@lms/api",
     "dev:web": "npm run dev --workspace=@lms/web",

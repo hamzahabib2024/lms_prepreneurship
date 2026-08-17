@@ -45,10 +45,14 @@ interface SectionRow {
 }
 
 interface ApprovalResult {
-  student: { registrationNo: string; rollNo: number; sectionName: string };
-  account: { temporaryPassword: string };
+  student: { registrationNo: string; rollNo: number; sectionName: string; returningStudent: boolean };
+  // Null for a returning student — their account was not touched, so there is
+  // no new password. Typing it `string` printed an empty warning box.
+  account: { temporaryPassword: string | null; note?: string };
   enrolments: { count: number };
   whatsappLinks: { channel: string | null; group: string | null };
+  /** What the System managed to send, in words — see the receipt below. */
+  notificationsSent: string[];
 }
 
 export function AdmissionsPage() {
@@ -408,14 +412,34 @@ function ApprovalReceipt({
         <div><dt>Subjects</dt><dd>{result.enrolments.count} enrolled</dd></div>
       </dl>
 
-      <div className="alert alert-warn">
-        <strong>Temporary password — shown once</strong>
-        <p className="password">{result.account.temporaryPassword}</p>
-        <p className="small">
-          Send this to the student now. They will be asked to set their own password when they first
-          sign in.
+      {/* A returning student has no new password — their existing sign-in is
+          unchanged. Printing an empty box here read as "the password failed to
+          generate", which is a support call about nothing. */}
+      {result.account.temporaryPassword ? (
+        <div className="alert alert-warn">
+          <strong>Temporary password — shown once</strong>
+          <p className="password">{result.account.temporaryPassword}</p>
+          <p className="small">
+            They will be asked to set their own password when they first sign in.
+          </p>
+        </div>
+      ) : (
+        <p className="small muted">{result.account.note}</p>
+      )}
+
+      {/* Whether the email actually left. This is why the password is still
+          printed above: the office needs to know when to read it out instead. */}
+      {result.notificationsSent.map((line) => (
+        <p key={line} className={line.startsWith("Could NOT") ? "alert alert-warn" : "small muted"}>
+          {line}
+          {line.startsWith("Could NOT") && (
+            <>
+              {" "}
+              <strong>Send the password above to the student yourself.</strong>
+            </>
+          )}
         </p>
-      </div>
+      ))}
 
       {(result.whatsappLinks.channel || result.whatsappLinks.group) && (
         <p className="small muted">

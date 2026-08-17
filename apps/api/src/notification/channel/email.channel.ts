@@ -48,7 +48,13 @@ export class EmailChannel implements NotificationChannelAdapter {
     return (this.config.get<string>("SMTP_USER", "") ?? "").trim();
   }
   private get pass(): string {
-    return this.config.get<string>("SMTP_PASSWORD", "") ?? "";
+    // Trimmed at the ENDS ONLY, and the distinction is deliberate. Google
+    // shows an App Password as four groups of four, and people paste it that
+    // way — Gmail's SMTP accepts the spaces, so they are left alone rather
+    // than stripped, because some other provider's password may legitimately
+    // contain one. A trailing newline or space from a .env edit is never
+    // intentional and is the far more common fault.
+    return (this.config.get<string>("SMTP_PASSWORD", "") ?? "").trim();
   }
 
   /**

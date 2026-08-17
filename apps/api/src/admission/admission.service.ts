@@ -19,6 +19,7 @@ import { RegistrationNumberService } from "./registration-number.service";
 import { StorageRegistry } from "../content/storage/storage.registry";
 import { SettingsService } from "../settings/settings.service";
 import { parseImageLinks, parseVideoLinks } from "./video-links";
+import { AdmissionMailer } from "./admission-mailer";
 
 /** Unambiguous alphabet — no O/0, I/l/1 — because these are read aloud
  *  over WhatsApp and mis-transcribed characters generate support calls. */
@@ -37,6 +38,7 @@ export class AdmissionService {
     private readonly storage: StorageRegistry,
     private readonly config: ConfigService,
     private readonly settings: SettingsService,
+    private readonly mailer: AdmissionMailer,
   ) {}
 
   /**
@@ -194,7 +196,7 @@ export class AdmissionService {
   }
 
   async submit(input: RegistrationSubmitInput, campaignRef?: Record<string, unknown>) {
-    return this.prisma.asSystem(async (db) => {
+    const submitted = await this.prisma.asSystem(async (db) => {
       // FR-REG-016 — a probable duplicate returns the EXISTING application's
       // status rather than creating a second record. Re-submitting because the
       // first attempt seemed not to work is normal applicant behaviour, not an
@@ -218,6 +220,7 @@ export class AdmissionService {
           trackingRef: existing.trackingRef,
           status: existing.status,
           submittedAt: existing.createdAt,
+          email: input.email,
           message:
             "We already have an application from you. Use the reference below to check its status.",
         };
@@ -308,11 +311,44 @@ export class AdmissionService {
         trackingRef: created.trackingRef,
         status: "PENDING_REVIEW" as const,
         submittedAt: created.createdAt,
+        email: input.email,
         message:
           "Your application has been received. We usually review payment within 48 hours " +
           "and will email you the outcome.",
       };
     });
+
+    /*
+     * FR-REG-018 — the reference, emailed.
+     *
+     * AFTER the transaction, deliberately. Sending inside it would hold a
+     * database transaction open across a network call to a mail server, and a
+     * slow SMTP handshake would then hold locks on the registration tables
+     * while the next applicant waits.
+     *
+     * NOT AWAITED INTO THE RESULT either: an application that has been
+     * accepted has been accepted. The reference is on the screen in front of
+     * them regardless, which is why that screen tells them to write it down.
+     *
+     * A DUPLICATE IS NOT EMAILED, and that is a security decision rather than
+     * a courtesy. The duplicate test above matches on national id OR email OR
+     * phone, so a submission carrying a DIFFERENT email address can match
+     * somebody else's application by phone or CNIC — and mailing the existing
+     * reference to the address that was just typed would hand a stranger a
+     * reference they can use to read that applicant's name, programme and
+     * status. The reference goes to the address that owns it, once, or to the
+     * screen of whoever already knows the details.
+     */
+    if (!submitted.duplicate) {
+      const posted = await this.mailer.sendTrackingReference({
+        to: submitted.email,
+        fullName: input.fullName,
+        trackingRef: submitted.trackingRef,
+      });
+      return { ...submitted, emailSent: posted.sent };
+    }
+
+    return submitted;
   }
 
   /**
@@ -858,11 +894,46 @@ export class AdmissionService {
             channel: section.whatsappChannelUrl,
             group: section.whatsappGroupUrl,
           },
+          // Carried out of the transaction so the email can be sent after it
+          // commits — see below.
+          applicantEmail: req.email,
+          applicantName: req.fullName,
         };
       }),
     );
 
     this.logger.log(`Approved ${id} → ${result.registrationNo} (roll ${result.rollNo})`);
+
+    /*
+     * FR-REG-042 — the credentials, emailed.
+     *
+     * AFTER the transaction commits, and never inside it. A mail server is a
+     * network call; holding the admission transaction open across one would
+     * keep locks on the student, enrolment and numbering tables while SMTP
+     * negotiates — and an approval that rolled back because Gmail was slow
+     * would be a far worse fault than an email that did not arrive.
+     *
+     * A RETURNING STUDENT GETS NOTHING. Their account was not touched, there
+     * is no temporary password, and sending "here are your new details" to
+     * somebody whose sign-in is unchanged is how a working account gets
+     * abandoned.
+     *
+     * The password is still shown on the administrator's screen either way,
+     * which is the point of FR-REG-042: delivery is not certain, so the
+     * Institute always holds a copy it can read out.
+     */
+    const sent: string[] = [];
+    if (!result.returningStudent && tempPassword) {
+      const posted = await this.mailer.sendCredentials({
+        to: result.applicantEmail,
+        fullName: result.applicantName,
+        registrationNo: result.registrationNo,
+        temporaryPassword: tempPassword,
+        signInUrl: this.config.get<string>("PUBLIC_WEB_URL", "http://localhost:5173"),
+      });
+      if (posted.sent) sent.push(`Sign-in details emailed to ${result.applicantEmail}.`);
+      else sent.push(`Could NOT email ${result.applicantEmail} — ${posted.detail}`);
+    }
 
     return {
       student: {
@@ -895,7 +966,7 @@ export class AdmissionService {
           },
       enrolments: { count: result.subjectCount },
       whatsappLinks: result.whatsappLinks, // FR-REG-044
-      notificationsSent: [] as string[], // wired when the mailer lands (DEP-04)
+      notificationsSent: sent,
     };
   }
 
@@ -904,7 +975,7 @@ export class AdmissionService {
     const actor = getActor();
     if (!actor) throw new AppError("AUTH_TOKEN_INVALID");
 
-    return this.prisma.asSystem((db) =>
+    const rejected = await this.prisma.asSystem((db) =>
       db.$transaction(async (tx) => {
         const req = await tx.registrationRequest.findUnique({ where: { id } });
         if (!req) throw new AppError("RESOURCE_NOT_FOUND");
@@ -943,9 +1014,41 @@ export class AdmissionService {
 
         // BR-REG-11 — the request and its evidence are retained, and the
         // applicant may reapply.
-        return { status: "REJECTED" as const, reasonCode: input.reasonCode };
+        return {
+          status: "REJECTED" as const,
+          reasonCode: input.reasonCode,
+          email: req.email,
+          fullName: req.fullName,
+          trackingRef: req.trackingRef,
+        };
       }),
     );
+
+    /*
+     * FR-REG-046 — tell them.
+     *
+     * A decision the applicant is never told about is not a decision from
+     * where they are sitting: they wait, then telephone the office, and the
+     * office looks it up. Several of the reason codes are things they can fix
+     * and reapply on the same day, which they cannot do while nobody has said
+     * so. After the transaction, and unable to fail it, exactly as above.
+     */
+    const posted = await this.mailer.sendRejection({
+      to: rejected.email,
+      fullName: rejected.fullName,
+      trackingRef: rejected.trackingRef,
+      reasonCode: input.reasonCode,
+      note: input.note ?? null,
+    });
+
+    return {
+      status: rejected.status,
+      reasonCode: rejected.reasonCode,
+      // So the screen can say "and we have told them", or not.
+      notificationsSent: posted.sent
+        ? [`The applicant was emailed at ${rejected.email}.`]
+        : [`Could NOT email ${rejected.email} — ${posted.detail}`],
+    };
   }
 
   /** FR-REG-035 — ask for more, without discarding what was supplied. */
@@ -953,7 +1056,7 @@ export class AdmissionService {
     const actor = getActor();
     if (!actor) throw new AppError("AUTH_TOKEN_INVALID");
 
-    return this.prisma.asSystem((db) =>
+    const asked = await this.prisma.asSystem((db) =>
       db.$transaction(async (tx) => {
         const req = await tx.registrationRequest.findUnique({ where: { id } });
         if (!req) throw new AppError("RESOURCE_NOT_FOUND");
@@ -984,9 +1087,33 @@ export class AdmissionService {
           tx as unknown as Parameters<AuditService["record"]>[1],
         );
 
-        return { status: "NEEDS_INFO" as const };
+        return {
+          status: "NEEDS_INFO" as const,
+          email: req.email,
+          fullName: req.fullName,
+          trackingRef: req.trackingRef,
+        };
       }),
     );
+
+    /*
+     * The state NEEDS_INFO only means anything if the applicant is told.
+     * Otherwise both sides are waiting for the other, and the application sits
+     * in the queue until somebody clears it out by hand.
+     */
+    const posted = await this.mailer.sendInfoRequest({
+      to: asked.email,
+      fullName: asked.fullName,
+      trackingRef: asked.trackingRef,
+      message,
+    });
+
+    return {
+      status: asked.status,
+      notificationsSent: posted.sent
+        ? [`The applicant was emailed at ${asked.email}.`]
+        : [`Could NOT email ${asked.email} — ${posted.detail}. Telephone them instead.`],
+    };
   }
 
   // =========================================================== helpers ======

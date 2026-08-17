@@ -30,6 +30,18 @@ import { EmailChannel } from "./channel/email.channel";
   // itself whether it is configured, rather than re-deriving that from the
   // environment. Two copies of "is WhatsApp set up" is how a status screen
   // starts reporting LIVE for a channel that is not.
-  exports: [NotificationService, AnnouncementService, TemplateService, ChannelRegistry],
+  //
+  // EmailChannel is exported for the ONE case that is not a notification:
+  // admission writes to an address belonging to somebody who has no account
+  // yet, and to a student whose first password must not be stored in an inbox
+  // row that outlives it. Both go through the same adapter, so there is still
+  // one place that knows how to reach a mail server.
+  exports: [
+    NotificationService,
+    AnnouncementService,
+    TemplateService,
+    ChannelRegistry,
+    EmailChannel,
+  ],
 })
 export class NotificationModule {}

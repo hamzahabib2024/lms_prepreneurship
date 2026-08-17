@@ -80,6 +80,59 @@ services:
       # ANY stored file — every payment slip and submission in the Institute —
       # so the stack refuses to start without a real one.
       LOCAL_STORAGE_SECRET: ${LOCAL_STORAGE_SECRET:?set LOCAL_STORAGE_SECRET in .env}
+      # ------------------------------------------------------------- email
+      #
+      # NOT PASSED THROUGH IS NOT THE SAME AS NOT CONFIGURED, and the
+      # difference is invisible. compose gives a container ONLY the variables
+      # named in this block; .env is read to interpolate this FILE, it is not
+      # injected into the services. Without these lines the API inside the
+      # container has no mail settings at all, EmailChannel correctly reports
+      # itself unconfigured, and every message is silently suppressed — on a
+      # machine whose .env holds working credentials and whose host-side
+      # `check-email.mjs` passes. That is precisely what happened here: a test
+      # message sent from the host arrived, and the same code in the container
+      # would have sent nothing.
+      #
+      # Two things leave the System by this route and neither is optional to
+      # the person waiting for it: the tracking reference (FR-REG-018) and the
+      # first password (FR-REG-042).
+      MAIL_DRIVER: ${MAIL_DRIVER:-}
+      MAIL_FROM: ${MAIL_FROM:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      # Unset rather than defaulted, so an absent mailbox suppresses messages
+      # instead of stopping the stack. A server that will not boot because
+      # email is not set up yet is a worse failure than one that boots and
+      # tells you email is not set up — which /system/integrations does.
+      #
+      # ---------------------------------------------------- what to link to
+      #
+      # The address a student is told to sign in at, in the welcome email. The
+      # code's fallback is the DEVELOPMENT port (5173) because that is right
+      # for `npm start`; on this stack the app is served on WEB_PORT, so
+      # leaving it unset emails every new student a link to a port that is
+      # serving nothing. Set it to the real hostname before this faces anyone.
+      PUBLIC_WEB_URL: ${PUBLIC_WEB_URL:-http://localhost:${WEB_PORT:-8080}}
+      # Signs both messages. Without it they arrive from "the Institute".
+      INSTITUTE_NAME: ${INSTITUTE_NAME:-Prepreneurship}
+      # ------------------------------------------------- the rest of DEP-01
+      #
+      # Named here so that the day a key exists it is one .env edit rather
+      # than a compose change nobody remembers to make. Absent, the storage
+      # registry uses local disk and says so.
+      GOOGLE_SERVICE_ACCOUNT_JSON: ${GOOGLE_SERVICE_ACCOUNT_JSON:-}
+      LECTURE_STORAGE: ${LECTURE_STORAGE:-local}
+      DOCUMENT_STORAGE: ${DOCUMENT_STORAGE:-local}
+      WHATSAPP_ACCESS_TOKEN: ${WHATSAPP_ACCESS_TOKEN:-}
+      WHATSAPP_PHONE_NUMBER_ID: ${WHATSAPP_PHONE_NUMBER_ID:-}
+      # The Institute's own numbering and thresholds. Defaulting these in the
+      # image would give the Institute a registration number format chosen by
+      # a developer (OPN-01).
+      INSTITUTE_CODE: ${INSTITUTE_CODE:-}
+      CAMPUS_CODE: ${CAMPUS_CODE:-}
+      APPLY_LIMIT_PER_HOUR: ${APPLY_LIMIT_PER_HOUR:-10}
     volumes:
       # Keys OUTLIVE the container. Regenerating them on every restart would
       # invalidate every session and sign out the whole Institute.
