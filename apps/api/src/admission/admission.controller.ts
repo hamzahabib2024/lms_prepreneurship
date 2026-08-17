@@ -102,12 +102,32 @@ export class AdmissionController {
   /**
    * FR-REG-001 — no account, no login, no app install.
    *
-   * SEC-RTL-004: rate-limited to three submissions per hour per address. Tight
-   * enough to stop automated abuse, loose enough that a family sharing a
-   * connection can still apply.
+   * SEC-RTL-004: rate-limited per client address.
+   *
+   * THE LIMIT COUNTS ATTEMPTS, NOT APPLICATIONS, and that is what made three
+   * too few. A submission refused for a mistyped CNIC consumes one, so an
+   * applicant filling in nineteen fields on a phone could be locked out for an
+   * hour before a single valid attempt reached the server — and the failure
+   * looked like the Institute's fault rather than a limit.
+   *
+   * Ten matches the slip endpoint above and still stops flooding: every
+   * application needs a distinct CNIC, email and phone, so ten an hour from
+   * one address is a busy family or a cyber café, not an attack. A computer
+   * lab or an internet café — where several genuine applicants really do share
+   * one address — is the case a tight per-IP limit punishes hardest, and it is
+   * exactly where applicants in Pakistan apply from.
+   *
+   * Configurable because the right number depends on where the Institute's
+   * applicants come from, and finding out means changing it without a
+   * deployment.
    */
   @Public()
-  @Throttle({ default: { limit: 3, ttl: 3_600_000 } })
+  @Throttle({
+    default: {
+      limit: Number(process.env["APPLY_LIMIT_PER_HOUR"] ?? 10),
+      ttl: 3_600_000,
+    },
+  })
   @Post("public/registrations")
   submit(@Body(zodBody(registrationSubmitSchema)) dto: RegistrationSubmitInput, @Req() req: Request) {
     // FR-REG-006 — campaign data is captured from the link, without the
