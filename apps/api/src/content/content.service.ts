@@ -327,6 +327,117 @@ export class ContentService {
    * and this decides the first. Staff get everything including drafts, because
    * a draft they cannot see is one they cannot publish.
    */
+  /**
+   * Every class the person asking is entitled to see — the Courses screen.
+   *
+   * THIS EXISTED NOWHERE. The course page has been reachable only by knowing a
+   * UUID, or by drilling three levels into Sections: term → batch → section →
+   * a "Recordings" link on one row. A student had "My subjects"; staff had a
+   * page and no way to it. So the whole recordings feature was, for an
+   * administrator, effectively invisible.
+   *
+   * SCOPED, NOT FILTERED HERE. The query runs on `prisma.scoped`, so ARC-051's
+   * predicate decides the rows: an administrator sees the Institute, a teacher
+   * sees what they are assigned to, a student sees what they are enrolled on.
+   * There is no role test in this method, and there must not be — the moment
+   * one appears here it is a second place that can disagree with the matrix.
+   *
+   * WHAT AN ADMINISTRATOR NEEDS FROM IT is not a prettier list of subjects: it
+   * is which classes have no folder connected, and which have recordings
+   * waiting to be published. Both are invisible from anywhere else, and both
+   * are the reason a student says "last Tuesday's class isn't there".
+   */
+  async listCourses() {
+    const actor = getActor();
+    if (!actor) throw new AppError("AUTH_TOKEN_INVALID");
+    const isStudent = actor.roles.includes("student") && !actor.roles.some((r) => r !== "student");
+
+    const offerings = await this.prisma.scoped.sectionSubject.findMany({
+      where: { deletedAt: null },
+      select: {
+        id: true,
+        lectureFolderRef: true,
+        subject: { select: { id: true, code: true, name: true } },
+        section: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            status: true,
+            batch: { select: { academicSession: { select: { name: true } } } },
+          },
+        },
+        assignments: {
+          where: { deletedAt: null },
+          select: { teacher: { select: { user: { select: { fullName: true } } } } },
+          take: 2,
+        },
+      },
+    });
+
+    if (offerings.length === 0) return [];
+
+    // One grouped count for the whole page rather than a query per card. A
+    // teacher with twelve classes would otherwise cost twelve round trips to
+    // render a list nobody has clicked on yet.
+    const counts = await this.prisma.asSystem((db) =>
+      db.recordedLecture.groupBy({
+        by: ["sectionSubjectId", "publicationStatus"],
+        where: { sectionSubjectId: { in: offerings.map((o) => o.id) }, deletedAt: null },
+        _count: { _all: true },
+        _max: { recordedOn: true },
+      }),
+    );
+
+    const tally = new Map<string, { published: number; drafts: number; latest: Date | null }>();
+    for (const row of counts) {
+      const entry = tally.get(row.sectionSubjectId) ?? { published: 0, drafts: 0, latest: null };
+      const n = row._count._all;
+      if (row.publicationStatus === "PUBLISHED") entry.published += n;
+      else entry.drafts += n;
+      const max = row._max.recordedOn;
+      if (max && (!entry.latest || max > entry.latest)) entry.latest = max;
+      tally.set(row.sectionSubjectId, entry);
+    }
+
+    return offerings
+      .map((o) => {
+        const t = tally.get(o.id) ?? { published: 0, drafts: 0, latest: null };
+        return {
+          id: o.id,
+          subject: o.subject,
+          section: {
+            id: o.section.id,
+            code: o.section.code,
+            name: o.section.name,
+            status: o.section.status,
+            session: o.section.batch?.academicSession?.name ?? null,
+          },
+          teachers: o.assignments.map((a) => a.teacher.user.fullName),
+          publishedCount: t.published,
+          // A student is never told how many drafts exist. The number alone
+          // says "your teacher has recorded four classes and shown you none",
+          // which is a conversation the System should not start.
+          draftCount: isStudent ? 0 : t.drafts,
+          // Nor where the files live (ARC-041) — only whether it is set up,
+          // which is all a student could act on anyway.
+          folderConnected: o.lectureFolderRef !== null,
+          lectureFolderRef: isStudent ? null : o.lectureFolderRef,
+          latestRecordingOn: t.latest,
+          canManage: !isStudent,
+        };
+      })
+      .sort(
+        (a, b) =>
+          // Most recently taught first: the class somebody is looking for is
+          // almost always the one that just happened. Classes with nothing
+          // recorded sort to the bottom rather than the top, where an
+          // alphabetical list would put half of them.
+          (b.latestRecordingOn?.getTime() ?? 0) - (a.latestRecordingOn?.getTime() ?? 0) ||
+          a.subject.name.localeCompare(b.subject.name),
+      );
+  }
+
   async lecturesFor(sectionSubjectId: string) {
     const actor = getActor();
     if (!actor) throw new AppError("AUTH_TOKEN_INVALID");
