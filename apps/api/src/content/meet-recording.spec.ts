@@ -161,5 +161,31 @@ describe("reading a Google Meet recording's name", () => {
     it("keeps a name it cannot improve", () => {
       expect(titleFromFilename("VID_20250518_180224.mp4")).toBe("VID 20250518 180224");
     });
+
+    /**
+     * The Institute's OTHER naming pattern, found the day Drive was connected.
+     *
+     * Their recorder writes "2026-07-28 11-05 - (Sec D) Digital Marketing.mp4"
+     * — a date AND a time, where the Meet folders carry neither. The date was
+     * stripped and the time was not, so every card in that class read
+     * "11 05 (Sec D) Digital Marketing": perfectly sortable and meaningless.
+     *
+     * Written from the real folder rather than guessed, again, and it is the
+     * second time a naming pattern nobody would have invented turned up in
+     * data that was there all along.
+     */
+    it.each([
+      ["2026-07-28 11-05 - (Sec D) Digital Marketing.mp4", "(Sec D) Digital Marketing"],
+      ["2026-07-27 11-05 - (Sec D) Digital Marketing.mp4", "(Sec D) Digital Marketing"],
+      ["2026-08-02 09-30-15 - Web Development.mp4", "Web Development"],
+    ])("%s → %s", (file, expected) => {
+      expect(titleFromFilename(file)).toBe(expected);
+    });
+
+    it("does not eat a time-like number that is part of the title", () => {
+      // Only a LEADING time is a timestamp. "10-05 Revision" at the start is
+      // ambiguous and treated as one; a number inside the title is not.
+      expect(titleFromFilename("Sprint 10-05 planning.mp4")).toBe("Sprint 10 05 planning");
+    });
   });
 });

@@ -51,6 +51,8 @@ export function CoursePage() {
   const [error, setError] = useState<ApiError | null>(null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  /** Drive refusing to hand the files over — a setting there, not a fault here. */
+  const [blocked, setBlocked] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -69,9 +71,34 @@ export function CoursePage() {
     setError(null);
     setNote(null);
     try {
-      const r = await api.post<{ added: number; restored: number; missing: number; scanned: number }>(
-        `/section-subjects/${sectionSubjectId}/sync-lectures`,
-      );
+      const r = await api.post<{
+        added: number;
+        restored: number;
+        missing: number;
+        scanned: number;
+        blocked: number;
+      }>(`/section-subjects/${sectionSubjectId}/sync-lectures`);
+
+      /*
+       * Catalogued but unplayable, said here rather than discovered by a
+       * student. A Drive folder can be perfectly readable while its files
+       * cannot be downloaded — the sharing option that stops viewers
+       * downloading. Every step succeeds, the cards appear, and playback is
+       * refused the first time anybody presses play. It is one setting in
+       * Drive, so it is worth interrupting for.
+       */
+      if (r.blocked > 0) {
+        setError(null);
+        setNote(null);
+        setBlocked(
+          `${r.blocked} of ${r.scanned} recordings cannot be played yet: Google Drive is refusing ` +
+            `to hand over the files. In Drive, open this class's folder → Share → the settings ` +
+            `gear, and allow viewers to download. Nothing here can work around it.`,
+        );
+        await load();
+        return;
+      }
+      setBlocked(null);
       // The counts, not "done". An administrator who presses this needs to know
       // whether anything actually arrived.
       setNote(
@@ -150,44 +177,23 @@ export function CoursePage() {
           <p>{note}</p>
         </div>
       )}
+      {blocked && (
+        <div className="alert alert-warn" role="alert">
+          <strong>The recordings are here, but Drive will not release them</strong>
+          <p>{blocked}</p>
+        </div>
+      )}
 
       {/* Staff only, and it says where the recordings come from. Somebody
           wondering why nothing appears needs to see that no folder is set
           rather than concluding the feature is broken. */}
       {data.canManage && (
-        <div className="folder-note">
-          <Icon name="database" />
-          {!data.lectureFolderRef ? (
-            <span className="warn small">
-              No folder is connected, so nothing arrives on its own. Set one and recordings put in
-              it will appear here.
-            </span>
-          ) : data.storage?.live ? (
-            <span className="muted small">
-              Live from{" "}
-              {data.storage.provider === "google_drive" ? "Google Drive" : "local storage"} —
-              folder <code>{data.lectureFolderRef}</code>, checked every hour. Anything new arrives
-              as a draft.
-            </span>
-          ) : (
-            /* THE SCREEN USED TO SAY "checked every hour" REGARDLESS, and that
-               can be flatly untrue: these rows were catalogued from Drive while
-               the System is configured for local storage, so the sweep looks
-               for a local directory named after a Drive folder id, finds
-               nothing, and no new recording ever appears. Silently. Saying so
-               here is the difference between a fault somebody can fix and one
-               they discover when a student complains. */
-            <span className="warn small">
-              <strong>Not live.</strong> These{" "}
-              {data.storage?.mismatchedSources.includes("google_drive")
-                ? "were catalogued from Google Drive"
-                : "came from another store"}
-              , but lecture storage is set to{" "}
-              <code>{data.storage?.provider ?? "local"}</code>. Nothing new will arrive and these
-              will not play until it is connected — see <code>INTEGRATIONS.md</code>, section 2.
-            </span>
-          )}
-        </div>
+        <LectureSource
+          sectionSubjectId={sectionSubjectId}
+          folderRef={data.lectureFolderRef}
+          storage={data.storage}
+          onSaved={() => void load()}
+        />
       )}
 
       {data.lectures.length === 0 ? (
@@ -231,6 +237,143 @@ export function CoursePage() {
       )}
 
     </>
+  );
+}
+
+/**
+ * Where this class's recordings come from — and the field to change it.
+ *
+ * THE FOLDER ID HAD NO WAY IN. The endpoint existed; nothing on any screen
+ * called it, so connecting a class to its Drive folder meant an API client or
+ * a database update. Every class the Institute runs needs this set once, so
+ * "no interface for it" meant the feature could not be turned on at all.
+ *
+ * IT STATES WHAT IS TRUE, WITHOUT SHOUTING. An earlier version of this said
+ * "read from <folder>, checked every hour" whatever the state, which can be
+ * flatly untrue — and the version after it said NOT LIVE in warning colours,
+ * which read as though the recordings themselves were broken when they are
+ * listed perfectly well below. Neither is right. Setup that is not finished is
+ * not a fault; it is a step, and the step is on this panel.
+ */
+function LectureSource({
+  sectionSubjectId,
+  folderRef,
+  storage,
+  onSaved,
+}: {
+  sectionSubjectId: string;
+  folderRef: string | null;
+  storage?: { provider: string; live: boolean; mismatchedSources: string[] };
+  onSaved: () => void;
+}) {
+  const [value, setValue] = useState(folderRef ?? "");
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [open, setOpen] = useState(folderRef === null);
+
+  const provider = storage?.provider ?? "local";
+  const providerName = provider === "google_drive" ? "Google Drive" : "local storage";
+  const driveNotConfigured = storage?.mismatchedSources.includes("google_drive") ?? false;
+
+  async function save() {
+    setBusy(true);
+    setError(null);
+    setSaved(null);
+    try {
+      // The whole Drive URL is accepted and reduced to the id on the server —
+      // pasting the address bar is what people actually do.
+      const r = await api.put<{ lectureFolderRef: string | null }>(
+        `/section-subjects/${sectionSubjectId}/lecture-folder`,
+        { folderRef: value.trim() },
+      );
+      setValue(r.lectureFolderRef ?? "");
+      setSaved(
+        r.lectureFolderRef
+          ? "Folder saved. Press “Check the folder” to read it now."
+          : "Folder disconnected.",
+      );
+      onSaved();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Could not save the folder.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="lecture-source">
+      <div className="lecture-source-head">
+        <Icon name="folder" />
+        {folderRef && storage?.live ? (
+          <span className="muted small">
+            Live from {providerName} — folder <code>{folderRef}</code>, checked every hour. Anything
+            new arrives as a draft.
+          </span>
+        ) : folderRef ? (
+          <span className="muted small">
+            Folder <code>{folderRef}</code> is set, but lecture storage is currently{" "}
+            <strong>{providerName}</strong>
+            {driveNotConfigured
+              ? " — so these Drive recordings will not play and nothing new will arrive until Drive is connected."
+              : "."}
+          </span>
+        ) : (
+          <span className="muted small">
+            No folder connected yet, so nothing arrives on its own.
+          </span>
+        )}
+        <button className="btn btn-quiet btn-sm" onClick={() => setOpen((o) => !o)}>
+          {open ? "Close" : folderRef ? "Change folder" : "Connect a folder"}
+        </button>
+      </div>
+
+      {open && (
+        <div className="lecture-source-form">
+          <label htmlFor="folder-ref">Google Drive folder for this class</label>
+          <p className="muted small">
+            Open the class’s folder in Drive and paste its address here — the whole link is fine.
+            Share that folder with the System’s service account first, as Viewer, or it will read
+            as empty.
+          </p>
+          <div className="row-actions">
+            <input
+              id="folder-ref"
+              type="text"
+              value={value}
+              placeholder="https://drive.google.com/drive/folders/… or the id"
+              onChange={(e) => setValue(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && !busy && void save()}
+            />
+            <button className="btn btn-primary" onClick={() => void save()} disabled={busy}>
+              {busy ? "Saving…" : "Save"}
+            </button>
+            {folderRef && (
+              <button
+                className="btn btn-quiet"
+                disabled={busy}
+                onClick={() => {
+                  setValue("");
+                  void save();
+                }}
+              >
+                Disconnect
+              </button>
+            )}
+          </div>
+          {saved && (
+            <p className="ok small" role="status">
+              {saved}
+            </p>
+          )}
+          {error && (
+            <p className="warn small" role="alert">
+              {error}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

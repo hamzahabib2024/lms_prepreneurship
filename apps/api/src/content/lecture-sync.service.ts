@@ -85,6 +85,8 @@ export class LectureSyncService {
     restored: number;
     missing: number;
     scanned: number;
+    /** Catalogued, but the provider will not hand the bytes over. */
+    blocked: number;
     folderRef: string;
   }> {
     const offering = await this.prisma.scoped.sectionSubject.findFirst({
@@ -196,11 +198,35 @@ export class LectureSyncService {
       });
     }
 
+    /*
+     * CATALOGUED BUT UNPLAYABLE — found here rather than by a student.
+     *
+     * A Drive folder can be perfectly readable while its files cannot be
+     * downloaded: the sharing option that stops viewers downloading, set on
+     * the folder or by a Workspace policy. Every step up to this point
+     * succeeds — the folder lists, the recordings are catalogued, the cards
+     * appear — and playback is refused with a 403 the first time anybody
+     * presses play.
+     *
+     * Reported as a count so the screen that asked can say so immediately,
+     * because this is one checkbox in Drive and the alternative is finding out
+     * from a student in the middle of a lecture.
+     */
+    const blocked = videos.filter((v) => v.canDownload === false).length;
+    if (blocked > 0) {
+      this.logger.warn(
+        `${blocked} of ${videos.length} recordings in folder ${offering.lectureFolderRef} ` +
+          `cannot be downloaded. In Drive, open the folder → Share → settings, and allow ` +
+          `viewers to download. Nothing in the System can work around this.`,
+      );
+    }
+
     return {
       added,
       restored,
       missing: vanished.length,
       scanned: videos.length,
+      blocked,
       folderRef: offering.lectureFolderRef,
     };
   }

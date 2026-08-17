@@ -29,6 +29,10 @@ google-credentials*.json
 credentials.json
 gcp-*.json
 client_secret*.json
+# The folder Docker mounts the key from. Everything in it is a credential;
+# only the note explaining that is kept.
+/credentials/*
+!/credentials/README.txt
 
 # Local data
 *.log

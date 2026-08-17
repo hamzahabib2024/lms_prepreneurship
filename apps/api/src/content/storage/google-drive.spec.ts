@@ -317,8 +317,40 @@ describe("Google Drive storage", () => {
     });
 
     it("says the recording is gone when the share was revoked", async () => {
-      stubFetch(() => ({ ok: false, status: 403, headers: new Headers() }));
+      stubFetch(() => ({
+        ok: false,
+        status: 404,
+        headers: new Headers(),
+        text: async () => '{"error":{"code":404,"message":"File not found"}}',
+      }));
       await expect(provider().signUrl("x", 300)).rejects.toThrow(/no longer available/i);
+    });
+
+    /**
+     * THE REAL ANSWER FROM THE INSTITUTE'S OWN DRIVE, the day it was connected.
+     *
+     * Everything worked — token, listing, durations, cataloguing — and playback
+     * came back 403 `cannotDownloadFile`. That is not a missing file and not a
+     * revoked share: it is the Drive sharing option that stops viewers
+     * downloading, set on the folder or by a Workspace policy. Nothing in this
+     * System can work around it, and re-sharing with the service account will
+     * never help — but it is one setting in Drive, so the message has to say
+     * WHICH one rather than "no longer available".
+     */
+    it("names the Drive setting when downloading is turned off", async () => {
+      stubFetch(() => ({
+        ok: false,
+        status: 403,
+        headers: new Headers(),
+        text: async () =>
+          '{"error":{"code":403,"message":"This file cannot be downloaded by the user.",' +
+          '"errors":[{"reason":"cannotDownloadFile"}]}}',
+      }));
+
+      await expect(provider().signUrl("x", 300)).rejects.toMatchObject({
+        message: expect.stringContaining("downloading is turned off"),
+        internal: expect.stringContaining("cannotDownloadFile"),
+      });
     });
   });
 

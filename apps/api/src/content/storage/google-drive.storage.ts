@@ -85,19 +85,43 @@ export class GoogleDriveStorageProvider implements StorageProvider {
    * secret file, and a container platform that only has environment variables
    * pastes the JSON. Neither is preferred; refusing one costs somebody an hour.
    */
+  /**
+   * Why it is not configured, in words — not merely that it is not.
+   *
+   * These three failures were indistinguishable, and all three reported the
+   * same "not configured (DEP-01)": no key set at all, a key set to a path
+   * nothing can read, and a key that is unreadable JSON. The middle one is by
+   * far the most common in practice and the least guessable:
+   *
+   *   A PATH ON THE HOST IS NOT A PATH IN THE CONTAINER. Setting
+   *   E:\...\key.json works from `npm start` and cannot possibly work inside
+   *   Docker — and on Windows that value also arrives MANGLED, because \v is a
+   *   vertical tab, so the path in the container is not even the one that was
+   *   typed.
+   */
+  private lastFailure: string | null = null;
+
   private credentials(): { clientEmail: string; privateKey: string } | null {
     const raw = (this.config.get<string>("GOOGLE_SERVICE_ACCOUNT_JSON", "") ?? "").trim();
-    if (!raw) return null;
+    if (!raw || raw.endsWith("/none.json")) {
+      this.lastFailure =
+        "No service-account key is set (DEP-01). Put the key JSON where the API can read it " +
+        "and set GOOGLE_SERVICE_ACCOUNT_FILE, or paste the JSON into GOOGLE_SERVICE_ACCOUNT_JSON.";
+      return null;
+    }
 
     let json = raw;
     if (!raw.startsWith("{")) {
       try {
         json = readFileSync(raw, "utf8");
       } catch {
-        this.logger.error(
-          `GOOGLE_SERVICE_ACCOUNT_JSON points at "${raw}", which cannot be read. ` +
-            `Give it either the path to the key file or the key JSON itself.`,
-        );
+        this.lastFailure =
+          `The key was not found at "${raw}". ` +
+          `If the API runs in Docker, that must be a path INSIDE the container — a path on ` +
+          `your own machine is not visible to it. Set GOOGLE_CREDENTIALS_DIR to the folder ` +
+          `holding the key and GOOGLE_SERVICE_ACCOUNT_FILE to its filename, then recreate ` +
+          `the containers (npm run docker:up).`;
+        this.logger.error(this.lastFailure);
         return null;
       }
     }
@@ -105,12 +129,13 @@ export class GoogleDriveStorageProvider implements StorageProvider {
     try {
       const parsed = JSON.parse(json) as { client_email?: string; private_key?: string };
       if (!parsed.client_email || !parsed.private_key) {
-        this.logger.error(
-          "The service account key has no client_email or private_key. " +
-            "Download it again from Google Cloud → Service accounts → Keys.",
-        );
+        this.lastFailure =
+          "The key has no client_email or private_key. Download it again from " +
+          "Google Cloud → Service accounts → Keys, choosing JSON.";
+        this.logger.error(this.lastFailure);
         return null;
       }
+      this.lastFailure = null;
       return {
         clientEmail: parsed.client_email,
         // Environment variables cannot hold real newlines, so a pasted key
@@ -119,7 +144,10 @@ export class GoogleDriveStorageProvider implements StorageProvider {
         privateKey: parsed.private_key.replace(/\\n/g, "\n"),
       };
     } catch {
-      this.logger.error("The service account key is not valid JSON.");
+      this.lastFailure =
+        "The key is not valid JSON. If it was pasted into .env it must be on ONE line; " +
+        "if it is a path, check it points at the file and not at a folder.";
+      this.logger.error(this.lastFailure);
       return null;
     }
   }
@@ -229,7 +257,11 @@ export class GoogleDriveStorageProvider implements StorageProvider {
         q: `'${folderRef.replace(/'/g, "\\'")}' in parents and trashed = false`,
         fields:
           "nextPageToken, files(id, name, mimeType, size, modifiedTime, createdTime, " +
-          "thumbnailLink, videoMediaMetadata(durationMillis))",
+          // capabilities, because a folder can be perfectly readable while its
+          // files cannot be downloaded — the Drive sharing option that stops
+          // viewers downloading. Asked for HERE so it is known at sync time
+          // rather than discovered by a student pressing play.
+          "thumbnailLink, capabilities(canDownload), videoMediaMetadata(durationMillis))",
         pageSize: "200",
         orderBy: "createdTime desc",
         supportsAllDrives: "true",
@@ -342,10 +374,28 @@ export class GoogleDriveStorageProvider implements StorageProvider {
       };
     }
 
-    if (res.status === 404 || res.status === 403) {
-      throw new AppError("RESOURCE_NOT_FOUND", {
-        message: "That recording is no longer available.",
-        internal: `Drive returned ${res.status} for ${storageRef} — deleted, or the share was revoked.`,
+    if (res.status === 403 || res.status === 404) {
+      // Google says WHY, and the difference matters enormously to whoever has
+      // to fix it. "cannotDownloadFile" is not a missing file and not a
+      // revoked share: it is the Drive sharing option "Viewers and commenters
+      // can't download, print or copy", set on the folder or applied by a
+      // Workspace policy. Nothing in this System can work around it, and no
+      // amount of re-sharing with the service account will help — but it is
+      // one checkbox in Drive, and saying so is the difference between a
+      // five-minute fix and a day lost re-reading the integration guide.
+      const body = await res.text().catch(() => "");
+      const blocked = body.includes("cannotDownloadFile") || body.includes("cannotDownloadAbusiveFile");
+
+      throw new AppError(blocked ? "STORAGE_UNAVAILABLE" : "RESOURCE_NOT_FOUND", {
+        message: blocked
+          ? "This recording cannot be played yet: downloading is turned off for its folder in Google Drive."
+          : "That recording is no longer available.",
+        internal: blocked
+          ? `Drive refused ${storageRef} with cannotDownloadFile. In Drive, open the recordings ` +
+            `folder → Share → the gear icon → UNTICK "Viewers and commenters can see the option ` +
+            `to download, print, and copy" is the setting that BLOCKS this when ticked off. A ` +
+            `Workspace-wide sharing or DLP policy can impose the same thing.`
+          : `Drive returned ${res.status} for ${storageRef} — deleted, or the share was revoked.`,
       });
     }
 
@@ -411,7 +461,10 @@ export class GoogleDriveStorageProvider implements StorageProvider {
     if (!this.isConfigured) {
       return {
         healthy: false,
-        detail: "Google Drive service account not configured (DEP-01 / OPN-02 outstanding).",
+        // The REASON, not just the fact. Three different failures used to
+        // report the same "not configured", and the commonest of them — a host
+        // path that the container cannot see — is the least guessable.
+        detail: this.lastFailure ?? "Google Drive is not configured (DEP-01).",
         checkedAt: new Date(),
       };
     }
@@ -451,6 +504,7 @@ interface DriveFile {
   modifiedTime?: string;
   createdTime?: string;
   thumbnailLink?: string;
+  capabilities?: { canDownload?: boolean };
   videoMediaMetadata?: { durationMillis?: string };
 }
 
@@ -481,5 +535,6 @@ function toEntry(f: DriveFile): FolderEntry {
         : null,
     contentType: f.mimeType ?? null,
     thumbnailUrl: f.thumbnailLink ?? null,
+    canDownload: f.capabilities?.canDownload,
   };
 }

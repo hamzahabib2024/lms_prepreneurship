@@ -135,6 +135,8 @@ export class LocalStorageProvider implements StorageProvider {
             // from both providers and the difference stays in one place.
             contentType: d.isFile() ? guessContentType(d.name) : null,
             thumbnailUrl: null,
+            // A file on our own disk is always readable by us.
+            canDownload: true,
           };
         }),
       );
@@ -166,10 +168,25 @@ export class LocalStorageProvider implements StorageProvider {
     const expiresAt = new Date(Date.now() + ttlSeconds * 1000);
     const exp = Math.floor(expiresAt.getTime() / 1000);
     const sig = createHmac("sha256", this.secret).update(`${storageRef}:${exp}`).digest("hex");
-    const base = this.config.get<string>("API_PUBLIC_URL", "http://localhost:3000");
 
+    /*
+     * ROOT-RELATIVE, so it works wherever the System is reached from.
+     *
+     * This was `API_PUBLIC_URL` with a default of http://localhost:3000 — the
+     * API's own port. In the Docker deployment the browser reaches everything
+     * through nginx on 8080, and nothing publishes 3000, so the redirect sent
+     * every viewer to an address their machine cannot open. On a real server
+     * it would have sent them to localhost.
+     *
+     * There is nothing to configure here and nothing that can be configured
+     * wrongly: the browser is already on the origin that serves this API — the
+     * nginx container makes it same-origin in production and the Vite proxy
+     * does in development, which is the arrangement that makes CORS behave
+     * identically in both. A relative Location is resolved against the request
+     * URL by every browser, so it is correct in both without being told which.
+     */
     return Promise.resolve({
-      url: `${base}/api/v1/media/${encodeURIComponent(storageRef)}?exp=${exp}&sig=${sig}`,
+      url: `/api/v1/media/${encodeURIComponent(storageRef)}?exp=${exp}&sig=${sig}`,
       expiresAt,
       supportsRangeRequests: true,
     });

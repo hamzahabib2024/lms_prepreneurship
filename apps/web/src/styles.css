@@ -141,6 +141,7 @@ code {
 .muted { color: var(--muted); }
 .small { font-size: .8125rem; }
 .warn { color: var(--warn); }
+.ok { color: var(--ok); }
 .num { text-align: right; font-variant-numeric: tabular-nums; }
 .visually-hidden {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
@@ -867,15 +868,33 @@ code {
 .course-identity { display: flex; align-items: center; gap: .8rem; }
 .course-identity h1 { margin: 0; }
 
-.folder-note {
-  display: flex; align-items: center; gap: .6rem;
-  padding: .7rem .9rem; margin-bottom: 1rem;
+/* Where a class gets its recordings, and the field to change it.
+   Deliberately NOT an alert: setup that is not finished is a step, not a
+   fault, and colouring it red reads as though the recordings listed below
+   are broken when they are perfectly fine. */
+.lecture-source {
+  margin-bottom: 1rem;
   background: var(--surface-2);
   border: 1px dashed var(--line-strong);
   border-radius: var(--radius-sm);
 }
-.folder-note svg { width: 17px; height: 17px; color: var(--muted); flex: none; }
+.lecture-source-head {
+  display: flex; align-items: center; gap: .6rem;
+  padding: .7rem .9rem; flex-wrap: wrap;
+}
+.lecture-source-head > span { flex: 1 1 260px; }
+.lecture-source-head svg { width: 17px; height: 17px; color: var(--muted); flex: none; }
 
+.lecture-source-form {
+  padding: 0 .9rem .9rem;
+  border-top: 1px solid var(--line);
+  display: flex; flex-direction: column; gap: .35rem;
+}
+.lecture-source-form label { font-weight: 600; padding-top: .7rem; }
+/* The input takes the room; the buttons keep their own width. Wrapping is
+   what a folder URL needs on a narrow screen. */
+.lecture-source-form .row-actions { flex-wrap: wrap; gap: .4rem; }
+.lecture-source-form input { flex: 1 1 320px; min-width: 0; }
 .lecture-grid {
   display: grid; gap: 1rem;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));

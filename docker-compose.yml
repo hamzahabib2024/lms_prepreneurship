@@ -122,7 +122,22 @@ services:
       # Named here so that the day a key exists it is one .env edit rather
       # than a compose change nobody remembers to make. Absent, the storage
       # registry uses local disk and says so.
-      GOOGLE_SERVICE_ACCOUNT_JSON: ${GOOGLE_SERVICE_ACCOUNT_JSON:-}
+      # A PATH ON YOUR MACHINE IS NOT A PATH IN THE CONTAINER, and nothing
+      # says so — the adapter simply reports itself unconfigured, exactly as it
+      # would with no key at all.
+      #
+      # Worse on Windows: a value like E:\vs code\...\key.json arrives mangled,
+      # because \v is a vertical tab. That is not a typo anybody spots by
+      # reading it back.
+      #
+      # So the key is MOUNTED (see volumes below) and this always points at
+      # where it lands inside the container. Set GOOGLE_CREDENTIALS_DIR in .env
+      # to the FOLDER holding the key, with forward slashes, and
+      # GOOGLE_SERVICE_ACCOUNT_FILE to the file's name within it.
+      GOOGLE_SERVICE_ACCOUNT_JSON: /run/credentials/${GOOGLE_SERVICE_ACCOUNT_FILE:-none.json}
+      # Where a folder picker starts when connecting a class to its recordings.
+      # Optional: an id can always be pasted instead.
+      GOOGLE_DRIVE_ROOT_FOLDER_ID: ${GOOGLE_DRIVE_ROOT_FOLDER_ID:-}
       LECTURE_STORAGE: ${LECTURE_STORAGE:-local}
       DOCUMENT_STORAGE: ${DOCUMENT_STORAGE:-local}
       WHATSAPP_ACCESS_TOKEN: ${WHATSAPP_ACCESS_TOKEN:-}
@@ -146,6 +161,16 @@ services:
       # rebuild destroys the lot, silently — the rows survive and point at
       # files that are gone.
       - api-storage:/app/storage
+      # The Google service-account key, read-only.
+      #
+      # A DIRECTORY rather than the file itself, because a bind mount of a
+      # single file that does not exist creates a DIRECTORY with that name on
+      # some platforms — and then the adapter reads a directory, fails to parse
+      # it, and reports the key as invalid JSON.
+      #
+      # Defaults to ./credentials, which is committed empty and gitignored, so
+      # the stack still starts on a machine with no key at all.
+      - ${GOOGLE_CREDENTIALS_DIR:-./credentials}:/run/credentials:ro
     healthcheck:
       # Names the DATABASE check specifically, and deliberately.
       #
