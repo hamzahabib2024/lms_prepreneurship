@@ -1,11 +1,19 @@
 # The whole System: database, API, web.
 #
-# Built and run: both images build, the stack comes up healthy, the entrypoint
-# generates keys and applies all 13 migrations and the constraints, and the app
-# is reachable on one origin with sign-in working end to end.
+# THIS IS A SEPARATE PATH FROM `npm start`, and the two do not meet. `npm ci`,
+# `npm run setup` and `npm start` run on the host and use the embedded
+# PostgreSQL in ./pgdata; this runs three containers with their own database in
+# a named volume. Neither can see the other's data, which is deliberate —
+# pointing a container at ./pgdata would put two servers on one data directory.
 #
-# For LOCAL DEVELOPMENT you do not need any of this. `npm run db:start` gives
-# you a real PostgreSQL with no Docker at all — see the README.
+# For LOCAL DEVELOPMENT you do not need any of this. `npm run setup` gives you
+# a real PostgreSQL with no Docker at all. Use this for a SERVER, where the
+# database, the API and nginx should be supervised and restarted for you.
+#
+# The entrypoint generates keys if absent and applies every migration and the
+# constraints on each start. It does NOT seed: a seed writes development
+# accounts with published passwords, and an entrypoint that ran it would put
+# them on a production server.
 
 services:
   postgres:

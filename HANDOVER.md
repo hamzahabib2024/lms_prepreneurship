@@ -174,6 +174,89 @@ npm run setup
 
 ---
 
+## Docker — a separate path, not the same one
+
+**`npm ci`, `npm run setup` and `npm start` do NOT use Docker.** They run on the
+host and use an embedded PostgreSQL kept in `./pgdata`. Docker is a different
+way to run the same code, and the two never meet:
+
+| | `npm start` | `docker compose up` |
+|---|---|---|
+| Runs on | your machine | three containers |
+| Database | `./pgdata` | a named volume, `postgres-data` |
+| Ports | 5173 app, 3000 API | **8080 for both** |
+| Rebuilds on save | yes | no — rebuild the image |
+| Seeded | yes, by `setup` | **no, deliberately** |
+| For | developing | a server |
+
+Neither can see the other's data. That is on purpose: pointing a container at
+`./pgdata` would put two PostgreSQL servers on one data directory.
+
+```bash
+docker compose build
+docker compose up -d
+# then http://localhost:8080
+```
+
+The stack is three services — `postgres`, `api`, `web` — and nginx serves the
+built app and proxies `/api` to the API, so **the browser sees one origin on
+one port**. That is the same arrangement the Vite dev server creates, which is
+why CORS behaves identically in both.
+
+On every start the API's entrypoint generates signing keys if the volume has
+none, applies all 20 migrations, and applies the 24 constraints and triggers.
+**It does not seed** — a seed writes development accounts with published
+passwords, and an entrypoint that ran it would put them on a production server.
+Seed a container deliberately if you want sample data:
+
+```bash
+docker compose exec api npx prisma db seed
+```
+
+### Two things that will catch you out
+
+**`docker compose up -d` does not rebuild.** If containers are already running
+it reports `Running` and leaves them alone — serving whatever image they
+started with. That happened here: the stack was answering from a six-day-old
+build. After changing code:
+
+```bash
+docker compose build && docker compose up -d --force-recreate
+```
+
+**The database volume outlives everything.** `docker compose down` keeps it;
+containers are replaced and the data stays. To genuinely start over:
+
+```bash
+docker compose down -v      # -v removes the volumes, including the database
+```
+
+### What it needs in `.env`
+
+Compose refuses to start without these rather than falling back to something
+weak — the storage secret in particular signs every download URL, and the
+published fallback would let anyone forge a link to any stored file:
+
+```ini
+POSTGRES_PASSWORD=...
+LOCAL_STORAGE_SECRET=...
+WEB_PORT=8080
+```
+
+### Verified
+
+Built both images, brought the stack up, and checked from outside on
+17 August 2026: all three containers healthy, the app served as a built bundle
+on 8080, the API reachable through nginx on the same port, its database up, the
+entrypoint's log showing 20 migrations and 24 constraints applied, and its data
+confirmed separate from the native install's.
+
+**Do not run `--scale api=2` yet.** `ActorService` caches each user's resolved
+roles per process for fifteen minutes, and the purge on a permission change
+reaches only the node that handled it — so on a second node a revoked
+permission keeps working for up to fifteen minutes. That cache has to move to a
+shared store first, and the reason is written where it would be read.
+
 ## Checking it worked
 
 ```bash
