@@ -30,8 +30,36 @@ const publishSchema = z.object({
 });
 
 /** A Drive folder id, or a path under local storage. Empty disconnects it. */
-const lectureFolderSchema = z.object({
-  folderRef: z.string().trim().max(255),
+/**
+ * The folder a class's recordings arrive in.
+ *
+ * ACCEPTS THE WHOLE URL, because that is what a person copies. Nobody opens
+ * Drive and extracts the id from the address bar; they select the address bar,
+ * copy, and paste. Refusing that with "must be a folder id" is a validation
+ * message that blames somebody for doing the obvious thing.
+ *
+ *   https://drive.google.com/drive/folders/1Yhkvn_G0…?usp=sharing
+ *   https://drive.google.com/drive/u/0/folders/1Yhkvn_G0…
+ *   1Yhkvn_G0…
+ *
+ * All three become the id. An empty string still disconnects the folder, which
+ * is why this is not a uuid or an id pattern.
+ */
+export const lectureFolderSchema = z.object({
+  folderRef: z
+    .string()
+    .trim()
+    .max(500)
+    .transform((v) => {
+      const url = /drive\.google\.com\/.*\/folders\/([A-Za-z0-9_-]+)/.exec(v);
+      if (url) return url[1]!;
+      // A file link pasted instead of a folder link — take the id and let the
+      // sync report an empty folder rather than silently storing a URL.
+      const file = /drive\.google\.com\/file\/d\/([A-Za-z0-9_-]+)/.exec(v);
+      if (file) return file[1]!;
+      return v;
+    })
+    .pipe(z.string().max(255)),
 });
 
 const catalogueSchema = z.object({

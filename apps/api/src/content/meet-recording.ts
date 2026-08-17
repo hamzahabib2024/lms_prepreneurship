@@ -155,6 +155,12 @@ export function titleFromFilename(name: string): string {
   const base = name.replace(/\.[a-z0-9]{2,5}$/i, "");
   const cleaned = base
     .replace(/^\s*\d{4}[-_/]\d{1,2}[-_/]\d{1,2}\s*[-_ ]*/, "")
+    // The TIME after the date, which the Institute's own recorder writes:
+    // "2026-07-28 11-05 - (Sec D) Digital Marketing.mp4". Without this the
+    // separators become spaces and every card in that class is titled
+    // "11 05 (Sec D) Digital Marketing" — sortable, and meaningless to read.
+    // Anchored to the start so a real "11-05" inside a title survives.
+    .replace(/^\s*\d{1,2}[-_.:]\d{2}(?:[-_.:]\d{2})?\s*[-_ ]*/, "")
     .replace(/^\s*(lecture|lec|class|session)[-_ ]*\d+\s*[-_ ]*/i, "")
     .replace(/[-_]+/g, " ")
     .replace(/\s{2,}/g, " ")

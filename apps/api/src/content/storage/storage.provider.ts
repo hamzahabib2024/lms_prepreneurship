@@ -64,6 +64,18 @@ export interface FolderEntry {
    * never a broken image.
    */
   thumbnailUrl?: string | null;
+  /**
+   * Whether the provider will actually hand the bytes over.
+   *
+   * A folder can be perfectly readable while its files cannot be downloaded:
+   * Google Drive has a sharing option that stops viewers downloading, set per
+   * folder or by a Workspace policy. Listing succeeds, cataloguing succeeds,
+   * and PLAYBACK IS REFUSED — which, without this, is discovered by a student
+   * pressing play on a lecture the System listed as available.
+   *
+   * Undefined when the provider cannot say; only an explicit false is a no.
+   */
+  canDownload?: boolean;
 }
 
 export interface StorageHealth {

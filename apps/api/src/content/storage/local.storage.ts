@@ -135,6 +135,8 @@ export class LocalStorageProvider implements StorageProvider {
             // from both providers and the difference stays in one place.
             contentType: d.isFile() ? guessContentType(d.name) : null,
             thumbnailUrl: null,
+            // A file on our own disk is always readable by us.
+            canDownload: true,
           };
         }),
       );
