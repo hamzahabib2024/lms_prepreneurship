@@ -51,11 +51,22 @@ to sign up for — a real PostgreSQL 16 is downloaded on first run and its data
 kept in `./pgdata`.
 
 ```bash
-npm install && npm run setup   # .env, signing keys, database, schema, sample data
-npm start                      # both servers, in one terminal
+npm ci && npm run setup   # .env, signing keys, database, schema, sample data
+npm start                 # both servers, in one terminal
 ```
 
 Then open <http://localhost:5173>.
+
+> **`npm ci`, not `npm install`.** On a fresh clone `npm install` twice left a
+> partially installed `node_modules` — packages present as empty directories,
+> which surfaces later as `Cannot find package '.../node_modules/pg/index.js'`
+> while starting the database and reads as a database fault rather than an
+> install one. `npm ci` installs exactly what the lockfile says and completed
+> cleanly. `HANDOVER.md` covers this and the rest of moving to another machine.
+
+> **The first `npm run setup` is slow.** It downloads a PostgreSQL 16 build
+> before it can initialise anything — a few minutes, during which it looks
+> stuck. Every run after that is seconds, and it is safe to run again.
 
 `npm run setup` is safe to run again — every step checks whether it is already
 done and says so rather than failing. It is deliberately separate from
