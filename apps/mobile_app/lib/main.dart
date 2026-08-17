@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
-void main(List<String> args) {
-  runApp(MyApp());
+import 'features/auth/presentation/login_page.dart';
+
+void main() {
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
@@ -10,15 +12,13 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'My App',
-      home: Scaffold(
-        appBar: AppBar(
-          title: Text('My App'),
-        ),
-        body: Center(
-          child: Text('Hello, World!'),
-        ),
-      )
+      title: 'Prepreneurship LMS',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF4338CA)),
+        useMaterial3: true,
+      ),
+      home: const LoginPage(),
     );
   }
-} 
+}
