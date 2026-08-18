@@ -375,6 +375,7 @@ class _ReviewPanelState extends State<_ReviewPanel> {
                 title: 'Could not complete that',
                 message: state.actionError!.message,
                 reference: state.actionError!.reference,
+                details: serverDetailLines(state.actionError!),
               ),
               const SizedBox(height: 14),
             ],

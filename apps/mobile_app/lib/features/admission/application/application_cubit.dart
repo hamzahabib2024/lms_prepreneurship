@@ -63,6 +63,11 @@ class ApplicationCubit extends Cubit<ApplicationState> {
     if (state.submitting) return;
     emit(state.copyWith(submitting: true, error: null));
     try {
+      // The slips the reviewer will see are the ones that were actually
+      // uploaded — the draft must carry exactly what the cubit holds.
+      draft.documentIds
+        ..clear()
+        ..addAll(state.documentIds);
       final result = await repository.submit(draft);
       if (isClosed) return;
       emit(ApplicationState.submitted(result: result));

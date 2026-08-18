@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -148,6 +147,13 @@ class _ApplicationPageState extends State<ApplicationPage> {
     final dark = Theme.of(context).brightness == Brightness.dark;
     final muted = dark ? AppColorsDark.muted : AppColors.muted;
 
+    // The slip ids live in the cubit (upload happens before the application
+    // exists); the draft is the shape that is posted, so the two must agree
+    // for paymentComplete to pass and for documentIds to reach the server.
+    _draft.documentIds
+      ..clear()
+      ..addAll(state.documentIds);
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
       children: [
@@ -168,6 +174,7 @@ class _ApplicationPageState extends State<ApplicationPage> {
             title: 'That could not be sent',
             message: state.error!.message,
             reference: state.error!.reference,
+            details: serverDetailLines(state.error!),
           ),
           const SizedBox(height: 14),
         ],
@@ -445,12 +452,14 @@ class _StepAbout extends StatelessWidget {
         AdmissionFormField(
           label: "Your full name",
           value: draft.fullName,
+          maxLength: 200,
           onChanged: (v) { draft.fullName = v; onChange(); },
         ),
         const SizedBox(height: 14),
         AdmissionFormField(
           label: "Your father's or guardian's name",
           value: draft.fatherName,
+          maxLength: 200,
           onChanged: (v) { draft.fatherName = v; onChange(); },
         ),
         const SizedBox(height: 14),
@@ -494,6 +503,7 @@ class _StepAbout extends StatelessWidget {
           label: 'What exactly, and when',
           value: draft.qualification,
           hint: 'For example: FSc Pre-Engineering, 2024 — or the madrasah and year.',
+          maxLength: 120,
           onChanged: (v) { draft.qualification = v; onChange(); },
         ),
       ],
@@ -526,6 +536,9 @@ class _StepContact extends StatelessWidget {
           label: 'Email address',
           value: draft.email,
           keyboardType: TextInputType.emailAddress,
+          errorText: draft.emailInvalid
+              ? 'That does not look like a full email address — e.g. name@gmail.com.'
+              : null,
           onChanged: (v) { draft.email = v; onChange(); },
         ),
         const SizedBox(height: 14),
@@ -628,25 +641,44 @@ class _StepPayment extends StatelessWidget {
           label: 'Bank reference (optional)',
           value: draft.claimedBankRef,
           hint: 'The transaction number on the slip, if it has one.',
+          maxLength: 100,
           onChanged: (v) { draft.claimedBankRef = v; onChange(); },
         ),
         const SizedBox(height: 18),
         // SEC-PRV-003 — the notice version and the moment are recorded. It is
-        // a switch somebody has to turn on, never a default.
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            CupertinoSwitch(
-              value: draft.consentAccepted,
-              onChanged: (v) {
-                draft.consentAccepted = v;
-                onChange();
-              },
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.only(top: 2),
+        // a checkbox somebody has to tick, never a default.
+        InkWell(
+          onTap: () {
+            draft.consentAccepted = !draft.consentAccepted;
+            onChange();
+          },
+          borderRadius: BorderRadius.circular(8),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                width: 20,
+                height: 20,
+                margin: const EdgeInsets.only(top: 1),
+                decoration: BoxDecoration(
+                  color: draft.consentAccepted
+                      ? (dark ? AppColorsDark.brand600 : AppColors.brand600)
+                      : (dark ? AppColorsDark.surface2 : Colors.white),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: draft.consentAccepted
+                        ? (dark ? AppColorsDark.brand600 : AppColors.brand600)
+                        : (dark ? AppColorsDark.line : AppColors.line),
+                    width: 1.4,
+                  ),
+                ),
+                child: draft.consentAccepted
+                    ? const Icon(Icons.check_rounded, size: 15, color: Colors.white)
+                    : null,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
                 child: Text(
                   'I agree that Prepreneurship may hold and use the details above to consider this '
                   'application and, if I am admitted, to run my enrolment. I can ask for a copy of '
@@ -654,8 +686,8 @@ class _StepPayment extends StatelessWidget {
                   style: TextStyle(fontSize: 13, color: muted, height: 1.5),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ],
     );

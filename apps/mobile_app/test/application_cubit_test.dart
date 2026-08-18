@@ -18,6 +18,7 @@ class _FakeAdmissionRepository extends AdmissionRepository {
   Object? uploadError;
   SubmissionResult? submitResult;
   Object? submitError;
+  ApplicationDraft? submittedDraft;
 
   @override
   Future<List<ProspectusProgramme>> prospectus() async {
@@ -34,6 +35,7 @@ class _FakeAdmissionRepository extends AdmissionRepository {
   @override
   Future<SubmissionResult> submit(ApplicationDraft draft) async {
     if (submitError != null) throw submitError!;
+    submittedDraft = draft;
     return submitResult!;
   }
 }
@@ -146,6 +148,29 @@ void main() {
 
       expect(c.state.status, ApplicationStatus.submitted);
       expect(c.state.result?.trackingRef, 'LMS-2026-000123');
+      await c.close();
+    });
+
+    test('an uploaded slip is carried into the submitted draft (payment can complete)', () async {
+      repository.prospectusResult = const [];
+      repository.uploadResult = 'doc-7';
+      repository.submitResult = const SubmissionResult(
+        trackingRef: 'LMS-2026-000124',
+        email: 'ali@example.com',
+        duplicate: false,
+        message: 'received',
+        emailSent: true,
+      );
+      final c = cubit();
+      await c.start();
+
+      await c.uploadSlip(filename: 'slip.jpg', bytes: [1]);
+      final draft = ApplicationDraft();
+      await c.submit(draft);
+
+      expect(draft.documentIds, ['doc-7']);
+      expect(repository.submittedDraft?.documentIds, ['doc-7']);
+      expect(c.state.status, ApplicationStatus.submitted);
       await c.close();
     });
 
