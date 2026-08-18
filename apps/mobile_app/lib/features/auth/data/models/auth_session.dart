@@ -1,5 +1,6 @@
 import 'package:equatable/equatable.dart';
 
+/// The user as POST /auth/login returns it.
 class AuthUser extends Equatable {
   const AuthUser({
     required this.id,
@@ -22,10 +23,45 @@ class AuthUser extends Equatable {
       id: json['id'] as String? ?? '',
       fullName: json['fullName'] as String? ?? '',
       email: json['email'] as String? ?? '',
-      roles: (json['roles'] as List<dynamic>? ?? const []).map((e) => e.toString()).toList(),
+      roles: (json['roles'] as List<dynamic>? ?? const [])
+          .map((e) => e.toString())
+          .toList(),
       photoUrl: json['photoUrl'] as String?,
-      student: json['student'] != null ? StudentProfile.fromJson(json['student'] as Map<String, dynamic>) : null,
+      student: json['student'] != null
+          ? StudentProfile.fromJson(json['student'] as Map<String, dynamic>)
+          : null,
     );
+  }
+
+  /// GET /auth/me returns the user under `userId` rather than `id`, and is
+  /// the shape the app restores a session from.
+  factory AuthUser.fromMe(Map<String, dynamic> json) {
+    return AuthUser(
+      id: json['userId'] as String? ?? '',
+      fullName: json['fullName'] as String? ?? '',
+      email: json['email'] as String? ?? '',
+      roles: (json['roles'] as List<dynamic>? ?? const [])
+          .map((e) => e.toString())
+          .toList(),
+      photoUrl: json['photoUrl'] as String?,
+      student: json['student'] != null
+          ? StudentProfile.fromJson(json['student'] as Map<String, dynamic>)
+          : null,
+    );
+  }
+
+  bool get isStudent => roles.contains('student');
+  bool get isTeacher => roles.contains('teacher');
+  bool get isAdmin => roles.contains('admin');
+  bool get isSuperAdmin => roles.contains('super_admin');
+
+  /// The human-readable role label the shell shows under the name.
+  String get roleLabel {
+    if (isSuperAdmin) return 'Super Admin';
+    if (isAdmin) return 'Administrator';
+    if (isTeacher) return 'Teacher';
+    if (isStudent) return 'Student';
+    return 'Member';
   }
 
   @override
@@ -35,9 +71,9 @@ class AuthUser extends Equatable {
 class StudentProfile extends Equatable {
   const StudentProfile({
     required this.registrationNo,
-    required this.rollNo,
-    required this.sectionId,
-    required this.sectionName,
+    this.rollNo,
+    this.sectionId,
+    this.sectionName,
   });
 
   final String registrationNo;
@@ -58,6 +94,8 @@ class StudentProfile extends Equatable {
   List<Object?> get props => [registrationNo, rollNo, sectionId, sectionName];
 }
 
+/// What POST /auth/login and POST /auth/refresh return. The response envelope
+/// `{ data, meta }` is unwrapped by the ApiClient before this parses.
 class AuthSession extends Equatable {
   const AuthSession({
     required this.accessToken,
