@@ -22,34 +22,115 @@
 
 import { createServer } from "node:http";
 import { randomBytes, createHash } from "node:crypto";
+import { readFileSync, writeFileSync, existsSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 
 const SCOPE = "https://www.googleapis.com/auth/calendar";
 const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 
-const clientId = (process.env.GOOGLE_OAUTH_CLIENT_ID ?? "").trim();
-const clientSecret = (process.env.GOOGLE_OAUTH_CLIENT_SECRET ?? "").trim();
+const CREDENTIALS_DIR = (process.env.GOOGLE_CREDENTIALS_DIR ?? "./credentials").trim();
 
-if (!clientId || !clientSecret) {
+/**
+ * The OAuth client, from .env or from the file Google downloaded.
+ *
+ * Google hands you a JSON FILE, not two strings, and asking somebody to open
+ * it and copy two fields into .env is two chances to paste the wrong half of
+ * the wrong line. If the values are not already in .env, this reads them out
+ * of any client file sitting where the service-account key already lives.
+ */
+function findClient() {
+  const id = (process.env.GOOGLE_OAUTH_CLIENT_ID ?? "").trim();
+  const secret = (process.env.GOOGLE_OAUTH_CLIENT_SECRET ?? "").trim();
+  if (id && secret) return { id, secret, source: ".env" };
+
+  if (!existsSync(CREDENTIALS_DIR)) return null;
+
+  for (const name of readdirSync(CREDENTIALS_DIR).filter((f) => f.endsWith(".json"))) {
+    let json;
+    try {
+      json = JSON.parse(readFileSync(join(CREDENTIALS_DIR, name), "utf8"));
+    } catch {
+      continue;
+    }
+
+    // A Desktop-app client sits under `installed`; a Web one under `web`.
+    if (json.installed?.client_id && json.installed?.client_secret) {
+      return { id: json.installed.client_id, secret: json.installed.client_secret, source: name };
+    }
+
+    if (json.web?.client_id) {
+      console.error(
+        [
+          "",
+          `  ${name} is a WEB APPLICATION client. This flow needs a Desktop app one.`,
+          "",
+          "  A web client only accepts redirect URIs registered in advance, and this",
+          "  script uses a loopback port chosen at run time — so it would fail with",
+          "  redirect_uri_mismatch. Create another client:",
+          "",
+          "    console.cloud.google.com -> APIs & Services -> Credentials",
+          "    -> Create credentials -> OAuth client ID",
+          "    -> Application type: Desktop app",
+          "",
+        ].join("\n"),
+      );
+      process.exit(1);
+    }
+  }
+  return null;
+}
+
+/**
+ * Write values into .env without disturbing anything else.
+ *
+ * Updates a key in place if it is there and appends it if not. Done here
+ * rather than printed for somebody to copy, because a refresh token is a
+ * hundred characters of base64 and a truncated paste fails days later with an
+ * error that names none of this.
+ */
+function setEnv(pairs) {
+  const file = ".env";
+  let text = existsSync(file) ? readFileSync(file, "utf8") : "";
+  const eol = text.includes("\r\n") ? "\r\n" : "\n";
+
+  for (const [key, value] of Object.entries(pairs)) {
+    const line = `${key}=${value}`;
+    const existing = new RegExp(`^${key}=.*$`, "m");
+    if (existing.test(text)) text = text.replace(existing, line);
+    else text = text.replace(/\s*$/, eol) + line + eol;
+  }
+  writeFileSync(file, text);
+}
+
+const client = findClient();
+if (!client) {
   console.error(
     [
       "",
-      "Set these in .env first, from the OAuth client you created:",
+      "  No OAuth client found.",
       "",
-      "  GOOGLE_OAUTH_CLIENT_ID=....apps.googleusercontent.com",
-      "  GOOGLE_OAUTH_CLIENT_SECRET=...",
+      "  Either drop the JSON file Google gave you into this folder:",
+      `    ${CREDENTIALS_DIR}`,
       "",
-      "To create one: console.cloud.google.com -> APIs & Services -> Credentials",
-      "-> Create credentials -> OAuth client ID -> Application type: Desktop app.",
+      "  or put the two values into .env yourself:",
+      "    GOOGLE_OAUTH_CLIENT_ID=....apps.googleusercontent.com",
+      "    GOOGLE_OAUTH_CLIENT_SECRET=...",
       "",
-      "Desktop app matters: it is the type that accepts a http://localhost",
-      "redirect on any port, so there is nothing to pre-register and nothing to",
-      "get wrong here.",
+      "  To create one: console.cloud.google.com -> APIs & Services -> Credentials",
+      "  -> Create credentials -> OAuth client ID -> Application type: Desktop app.",
+      "",
+      "  Desktop app matters: it is the type that accepts a http://localhost",
+      "  redirect on any port, so there is nothing to pre-register.",
       "",
     ].join("\n"),
   );
   process.exit(1);
 }
+
+const clientId = client.id;
+const clientSecret = client.secret;
+console.log(`\n  OAuth client read from ${client.source}`);
 
 /**
  * PKCE, even though this flow has a client secret.
@@ -146,19 +227,43 @@ const server = createServer(async (req, res) => {
 
   finish("Authorised", `The LMS can now schedule classes as <strong>${who}</strong>.`);
 
+  /*
+   * WRITTEN, NOT PRINTED.
+   *
+   * The refresh token is a hundred characters of base64 and the client secret
+   * is another opaque string; a truncated paste of either fails days later
+   * with an error naming none of this. They go straight into .env, which is
+   * not committed — and the token is never echoed to the terminal, because a
+   * terminal is scrolled back, screenshotted and pasted into chats.
+   *
+   * The client values are written too, so a later run needs no JSON file and
+   * the settings live in one place.
+   */
+  setEnv({
+    GOOGLE_OAUTH_CLIENT_ID: clientId,
+    GOOGLE_OAUTH_CLIENT_SECRET: clientSecret,
+    GOOGLE_OAUTH_REFRESH_TOKEN: body.refresh_token,
+    GOOGLE_CALENDAR_ID: (process.env.GOOGLE_CALENDAR_ID ?? "").trim() || "primary",
+    LIVE_PROVIDER: "google_meet",
+  });
+
   console.log(
     [
       "",
       "  Authorised as: " + who,
       "",
-      "  Put this in .env — it is as sensitive as that account's password:",
+      "  Written to .env (the token itself is not printed — it is as sensitive",
+      "  as that account's password):",
       "",
-      "    GOOGLE_OAUTH_REFRESH_TOKEN=" + body.refresh_token,
+      "    GOOGLE_OAUTH_CLIENT_ID",
+      "    GOOGLE_OAUTH_CLIENT_SECRET",
+      "    GOOGLE_OAUTH_REFRESH_TOKEN",
       "    GOOGLE_CALENDAR_ID=primary",
       "    LIVE_PROVIDER=google_meet",
       "",
-      "  Then:  npm run docker:up",
-      "  Then:  node -r dotenv/config scripts/check-meet.mjs",
+      "  Next:",
+      "    npm run docker:up",
+      "    node -r dotenv/config scripts/check-meet.mjs",
       "",
     ].join("\n"),
   );

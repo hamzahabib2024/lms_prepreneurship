@@ -427,14 +427,25 @@ name it `Prepreneurship LMS` → Create.
 > register and nothing to get wrong. A Web application client will refuse with
 > `redirect_uri_mismatch`.
 
-Copy the **Client ID** and **Client secret** into `.env`. Both stay
-visible on the credential's own page afterwards, so losing the dialogue is
-not fatal:
+Press **DOWNLOAD JSON** and drop the file into the folder that already holds
+the service-account key:
 
-```ini
-GOOGLE_OAUTH_CLIENT_ID=1234-abcd.apps.googleusercontent.com
-GOOGLE_OAUTH_CLIENT_SECRET=GOCSPX-...
 ```
+E:/vs code/git/LMS@Prepreneurship/CREDENTIALS/
+```
+
+That is all there is to this step. The script in A3 finds the file there and
+writes the values into `.env` itself — nothing to copy by hand, and nothing
+to paste half of.
+
+> Prefer not to keep the file? Put the two values in `.env` yourself and the
+> script uses those instead. Both remain visible on the credential's own page
+> afterwards, so closing the dialogue is not fatal.
+>
+> ```ini
+> GOOGLE_OAUTH_CLIENT_ID=1234-abcd.apps.googleusercontent.com
+> GOOGLE_OAUTH_CLIENT_SECRET=GOCSPX-...
+> ```
 
 ## A2. Set the consent screen up — and PUBLISH it
 
@@ -485,16 +496,24 @@ should hold the classes**, and approve.
 > At *"Google hasn't verified this app"*, press **Advanced → Go to … (unsafe)**.
 > You are both the developer and the only user.
 
-The script prints who authorised it, and the line to paste into `.env`:
+It prints **who** authorised it, and writes everything into `.env` for you:
 
 ```ini
-GOOGLE_OAUTH_REFRESH_TOKEN=1//0g...
+GOOGLE_OAUTH_CLIENT_ID=...
+GOOGLE_OAUTH_CLIENT_SECRET=...
+GOOGLE_OAUTH_REFRESH_TOKEN=...
 GOOGLE_CALENDAR_ID=primary
 LIVE_PROVIDER=google_meet
 ```
 
-**That refresh token is as sensitive as that account's password.** It lives in
-`.env`, which is not committed.
+**The token is never printed to the terminal**, deliberately: terminals get
+scrolled back, screenshotted and pasted into chats, and that token is as
+sensitive as the account's password. It exists in `.env` — which is not
+committed — and nowhere else.
+
+Check the address it names is the one you meant. Authorising as the wrong
+Google account is the commonest mistake here, and it stays invisible until
+classes start appearing on somebody's personal calendar.
 
 ## A4. Apply it and prove it
 
