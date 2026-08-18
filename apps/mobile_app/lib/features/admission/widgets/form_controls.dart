@@ -121,8 +121,8 @@ class _SheetScaffold extends StatelessWidget {
                     ),
                   ),
                   CupertinoButton(
-                    child: const Text('Done'),
                     onPressed: onDone,
+                    child: const Text('Done'),
                   ),
                 ],
               ),
@@ -160,6 +160,7 @@ class _FieldLabel extends StatelessWidget {
 /// existing copy style.
 class AdmissionFormField extends StatelessWidget {
   const AdmissionFormField({
+    super.key,
     required this.label,
     required this.value,
     required this.onChanged,
@@ -217,6 +218,7 @@ class AdmissionFormField extends StatelessWidget {
 /// A labelled "dropdown": a read-only box that opens the iOS wheel picker.
 class AdmissionSelectField extends StatelessWidget {
   const AdmissionSelectField({
+    super.key,
     required this.label,
     required this.value,
     required this.hint,
@@ -263,6 +265,7 @@ class AdmissionSelectField extends StatelessWidget {
 /// A labelled date box that opens the date wheel.
 class AdmissionDateField extends StatelessWidget {
   const AdmissionDateField({
+    super.key,
     required this.label,
     required this.value,
     required this.hint,

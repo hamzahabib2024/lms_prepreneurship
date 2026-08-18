@@ -15,6 +15,7 @@ import '../data/models/approval_result.dart';
 import '../data/models/queue_item.dart';
 import '../data/models/section_summary.dart';
 import '../data/models/submission_result.dart';
+import '../widgets/form_controls.dart';
 import 'admissions_cubit.dart';
 
 /// Admission queue and review — SRS UC-02, §13.5.
@@ -386,7 +387,7 @@ class _ReviewPanelState extends State<_ReviewPanel> {
             const SizedBox(height: 20),
             Text('Verify payment', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 12),
-            _FormField(
+            AdmissionFormField(
               label: 'Amount received',
               hint: 'In rupees',
               keyboardType: TextInputType.number,
@@ -394,20 +395,24 @@ class _ReviewPanelState extends State<_ReviewPanel> {
               onChanged: (v) => setState(() => _verifiedAmount = v),
             ),
             const SizedBox(height: 12),
-            _FormDateField(
+            AdmissionDateField(
               label: 'Date received',
+              hint: 'Choose…',
               value: _paymentDate,
-              onChanged: (v) => setState(() => _paymentDate = v),
+              firstDate: DateTime.now().subtract(const Duration(days: 365 * 2)),
+              lastDate: DateTime.now(),
+              onChanged: (v) => setState(() => _paymentDate = v ?? _paymentDate),
             ),
             const SizedBox(height: 12),
-            _FormSelect(
+            AdmissionSelectField(
               label: 'Method',
+              hint: 'Choose…',
               value: _method,
               options: AdmissionLabels.paymentMethods.toList(),
               onChanged: (v) => setState(() => _method = v),
             ),
             const SizedBox(height: 12),
-            _FormField(
+            AdmissionFormField(
               label: 'Bank reference',
               hint: 'The transaction number on the slip',
               value: _bankReference,
@@ -415,7 +420,7 @@ class _ReviewPanelState extends State<_ReviewPanel> {
             ),
             if (_hasVariance) ...[
               const SizedBox(height: 12),
-              _FormField(
+              AdmissionFormField(
                 label:
                     'Why does this differ from the ${Formats.rupees(_claimed)} claimed? (required)',
                 hint: 'e.g. first instalment only',
@@ -426,7 +431,7 @@ class _ReviewPanelState extends State<_ReviewPanel> {
             const SizedBox(height: 20),
             Text('Section', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 12),
-            _FormSelect(
+            AdmissionSelectField(
               label: 'Assign to',
               value: _sectionId,
               hint: 'Choose a section…',
@@ -504,7 +509,7 @@ class _ReviewPanelState extends State<_ReviewPanel> {
               ),
             ],
             const SizedBox(height: 12),
-            _FormField(
+            AdmissionFormField(
               label: 'Note to the applicant (optional)',
               hint: 'Shown on their tracking page',
               value: _note,
@@ -533,8 +538,9 @@ class _ReviewPanelState extends State<_ReviewPanel> {
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: _FormSelect(
+                  child: AdmissionSelectField(
                     label: '',
+                    hint: 'Reject for…',
                     value: _rejectReason,
                     options: AdmissionLabels.rejectionReasons.toList(),
                     onChanged: (v) => setState(() => _rejectReason = v),
@@ -1000,155 +1006,3 @@ class _ReceiptRow extends StatelessWidget {
   }
 }
 
-// ------------------------------------------------------------ controls -----
-
-class _FormField extends StatelessWidget {
-  const _FormField({
-    required this.label,
-    required this.value,
-    required this.onChanged,
-    this.hint,
-    this.keyboardType,
-    this.maxLines = 1,
-  });
-
-  final String label;
-  final String value;
-  final ValueChanged<String> onChanged;
-  final String? hint;
-  final TextInputType? keyboardType;
-  final int maxLines;
-
-  @override
-  Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final muted = dark ? AppColorsDark.muted : AppColors.muted;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (label.isNotEmpty) ...[
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12.5,
-              fontWeight: FontWeight.w600,
-              color: dark ? AppColorsDark.ink2 : AppColors.ink2,
-            ),
-          ),
-          const SizedBox(height: 6),
-        ],
-        TextField(
-          controller: TextEditingController(text: value)
-            ..selection = TextSelection.collapsed(offset: value.length),
-          keyboardType: keyboardType,
-          maxLines: maxLines,
-          onChanged: onChanged,
-        ),
-        if (hint != null && hint!.isNotEmpty) ...[
-          const SizedBox(height: 4),
-          Text(hint!, style: TextStyle(fontSize: 12, color: muted)),
-        ],
-      ],
-    );
-  }
-}
-
-class _FormSelect extends StatelessWidget {
-  const _FormSelect({
-    required this.label,
-    required this.value,
-    required this.options,
-    required this.onChanged,
-    this.hint,
-  });
-
-  final String label;
-  final String value;
-  final List<(String, String)> options;
-  final ValueChanged<String> onChanged;
-  final String? hint;
-
-  @override
-  Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final muted = dark ? AppColorsDark.muted : AppColors.muted;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (label.isNotEmpty) ...[
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12.5,
-              fontWeight: FontWeight.w600,
-              color: dark ? AppColorsDark.ink2 : AppColors.ink2,
-            ),
-          ),
-          const SizedBox(height: 6),
-        ],
-        DropdownButtonFormField<String>(
-          initialValue: value.isEmpty ? null : value,
-          isExpanded: true,
-          hint: Text(hint ?? 'Choose…', style: TextStyle(color: muted, fontSize: 14.5)),
-          items: [
-            for (final (v, label) in options)
-              DropdownMenuItem(value: v, child: Text(label, overflow: TextOverflow.ellipsis)),
-          ],
-          onChanged: (v) {
-            if (v != null) onChanged(v);
-          },
-        ),
-      ],
-    );
-  }
-}
-
-class _FormDateField extends StatelessWidget {
-  const _FormDateField({required this.label, required this.value, required this.onChanged});
-
-  final String label;
-  final DateTime value;
-  final ValueChanged<DateTime> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final muted = dark ? AppColorsDark.muted : AppColors.muted;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12.5,
-            fontWeight: FontWeight.w600,
-            color: dark ? AppColorsDark.ink2 : AppColors.ink2,
-          ),
-        ),
-        const SizedBox(height: 6),
-        InkWell(
-          onTap: () async {
-            final picked = await showDatePicker(
-              context: context,
-              initialDate: value,
-              firstDate: DateTime.now().subtract(const Duration(days: 365 * 2)),
-              lastDate: DateTime.now(),
-            );
-            if (picked != null) onChanged(picked);
-          },
-          borderRadius: BorderRadius.circular(AppRadius.sm),
-          child: InputDecorator(
-            decoration: const InputDecoration(),
-            child: Row(
-              children: [
-                Icon(Icons.calendar_today_outlined, size: 16, color: muted),
-                const SizedBox(width: 10),
-                Text(Formats.isoDate(value), style: const TextStyle(fontSize: 14.5)),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}

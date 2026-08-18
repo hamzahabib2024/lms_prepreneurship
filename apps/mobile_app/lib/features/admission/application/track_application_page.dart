@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/formats.dart';
@@ -87,10 +88,15 @@ class _TrackApplicationPageState extends State<TrackApplicationPage> {
             style: TextStyle(color: muted, fontSize: 13.5),
           ),
           const SizedBox(height: 12),
-          TextField(
+          CupertinoTextField(
             controller: _controller,
             textCapitalization: TextCapitalization.characters,
-            decoration: const InputDecoration(hintText: 'e.g. LMS-2026-000001'),
+            placeholder: 'e.g. LMS-2026-000001',
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            decoration: BoxDecoration(
+              border: Border.all(color: dark ? AppColorsDark.line : AppColors.line),
+              borderRadius: BorderRadius.circular(10),
+            ),
             onSubmitted: (_) => _lookup(),
           ),
           const SizedBox(height: 10),

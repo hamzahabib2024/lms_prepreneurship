@@ -1,5 +1,9 @@
+import 'dart:io';
+
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/network/api_client.dart';
@@ -9,6 +13,7 @@ import '../data/admission_repository.dart';
 import '../data/models/application_draft.dart';
 import '../data/models/prospectus.dart';
 import '../data/models/submission_result.dart';
+import '../widgets/form_controls.dart';
 import 'application_cubit.dart';
 import 'track_application_page.dart';
 
@@ -56,13 +61,16 @@ class _ApplicationPageState extends State<ApplicationPage> {
 
   Future<void> _pickSlip(ApplicationCubit cubit) async {
     try {
+      // withData must be true for the bytes to come back at all — without it
+      // the picker appears to do nothing on every platform.
       final picked = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: const ['jpg', 'jpeg', 'png', 'pdf'],
         allowMultiple: false,
+        withData: true,
       );
       final file = picked?.files.single;
-      if (file == null || file.bytes == null) return;
+      if (file == null) return;
 
       final name = file.name.toLowerCase();
       final allowed = ['jpg', 'jpeg', 'png', 'pdf'].any((e) => name.endsWith('.$e'));
@@ -74,9 +82,23 @@ class _ApplicationPageState extends State<ApplicationPage> {
         _showPickError('That file is larger than 5 MB. Please choose a smaller photo.');
         return;
       }
-      await cubit.uploadSlip(filename: file.name, bytes: file.bytes!);
+
+      var bytes = file.bytes;
+      if (bytes == null && file.path != null) {
+        bytes = await File(file.path!).readAsBytes();
+      }
+      if (bytes == null || bytes.isEmpty) {
+        _showPickError('That file could not be read. Please try another photo.');
+        return;
+      }
+      await cubit.uploadSlip(filename: file.name, bytes: bytes);
+    } on PlatformException catch (error) {
+      _showPickError(
+        'Your device did not open a file picker (${error.message ?? 'unsupported on this device'}). '
+        'Please try again, or send the slip to the office instead.',
+      );
     } catch (_) {
-      // Picking was cancelled or failed — nothing to do.
+      // Picking was cancelled — nothing was selected, nothing was lost.
     }
   }
 
@@ -352,7 +374,7 @@ class _StepProgramme extends StatelessWidget {
             style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
           )
         else ...[
-          _SelectField(
+          AdmissionSelectField(
             label: 'Programme',
             value: draft.desiredProgrammeId,
             hint: 'Choose a programme…',
@@ -367,7 +389,7 @@ class _StepProgramme extends StatelessWidget {
           ),
           if (programme != null) ...[
             const SizedBox(height: 14),
-            _SelectField(
+          AdmissionSelectField(
               label: 'Which section',
               value: draft.desiredSectionId,
               hint: 'Choose a section…',
@@ -420,19 +442,19 @@ class _StepAbout extends StatelessWidget {
       children: [
         Text('About you', style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 16),
-        _Field(
+        AdmissionFormField(
           label: "Your full name",
           value: draft.fullName,
           onChanged: (v) { draft.fullName = v; onChange(); },
         ),
         const SizedBox(height: 14),
-        _Field(
+        AdmissionFormField(
           label: "Your father's or guardian's name",
           value: draft.fatherName,
           onChanged: (v) { draft.fatherName = v; onChange(); },
         ),
         const SizedBox(height: 14),
-        _DateField(
+        AdmissionDateField(
           label: 'Date of birth',
           value: draft.dateOfBirth,
           hint: 'Choose…',
@@ -441,7 +463,7 @@ class _StepAbout extends StatelessWidget {
           onChanged: (v) { draft.dateOfBirth = v; onChange(); },
         ),
         const SizedBox(height: 14),
-        _SelectField(
+          AdmissionSelectField(
           label: 'Gender',
           value: draft.gender,
           hint: 'Choose…',
@@ -449,7 +471,7 @@ class _StepAbout extends StatelessWidget {
           onChanged: (v) { draft.gender = v; onChange(); },
         ),
         const SizedBox(height: 14),
-        _Field(
+        AdmissionFormField(
           label: 'CNIC',
           value: draft.nationalId,
           hint: 'Thirteen digits, with or without dashes.',
@@ -460,7 +482,7 @@ class _StepAbout extends StatelessWidget {
         // The LEVEL from a list, and the detail as free text beside it: a
         // countable part and a describable part, never one free-text answer
         // typed three ways.
-        _SelectField(
+          AdmissionSelectField(
           label: 'Your education',
           value: draft.educationLevel,
           hint: 'Choose one…',
@@ -468,7 +490,7 @@ class _StepAbout extends StatelessWidget {
           onChanged: (v) { draft.educationLevel = v; onChange(); },
         ),
         const SizedBox(height: 14),
-        _Field(
+        AdmissionFormField(
           label: 'What exactly, and when',
           value: draft.qualification,
           hint: 'For example: FSc Pre-Engineering, 2024 — or the madrasah and year.',
@@ -492,7 +514,7 @@ class _StepContact extends StatelessWidget {
       children: [
         Text('How to reach you', style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 16),
-        _Field(
+        AdmissionFormField(
           label: 'Mobile number',
           value: draft.phone,
           hint: 'We will use this on WhatsApp for class announcements.',
@@ -500,26 +522,26 @@ class _StepContact extends StatelessWidget {
           onChanged: (v) { draft.phone = v; onChange(); },
         ),
         const SizedBox(height: 14),
-        _Field(
+        AdmissionFormField(
           label: 'Email address',
           value: draft.email,
           keyboardType: TextInputType.emailAddress,
           onChanged: (v) { draft.email = v; onChange(); },
         ),
         const SizedBox(height: 14),
-        _Field(
+        AdmissionFormField(
           label: 'Address',
           value: draft.address,
           onChanged: (v) { draft.address = v; onChange(); },
         ),
         const SizedBox(height: 14),
-        _Field(
+        AdmissionFormField(
           label: 'City',
           value: draft.city,
           onChanged: (v) { draft.city = v; onChange(); },
         ),
         const SizedBox(height: 14),
-        _SelectField(
+          AdmissionSelectField(
           label: 'How did you hear about us?',
           value: draft.acquisitionSource,
           hint: 'Choose…',
@@ -531,7 +553,7 @@ class _StepContact extends StatelessWidget {
         // was never shown.
         if (draft.requiresAcquisitionDetail) ...[
           const SizedBox(height: 14),
-          _Field(
+        AdmissionFormField(
             label: draft.acquisitionSource == 'REFERRAL'
                 ? 'Who told you about us?'
                 : 'Please tell us more',
@@ -585,7 +607,7 @@ class _StepPayment extends StatelessWidget {
           onRemove: onRemove,
         ),
         const SizedBox(height: 16),
-        _Field(
+        AdmissionFormField(
           label: 'Amount you paid',
           value: draft.claimedAmount,
           hint: 'In rupees.',
@@ -593,7 +615,7 @@ class _StepPayment extends StatelessWidget {
           onChanged: (v) { draft.claimedAmount = v; onChange(); },
         ),
         const SizedBox(height: 14),
-        _DateField(
+        AdmissionDateField(
           label: 'Date you paid',
           value: draft.claimedPaymentDate,
           hint: 'Choose…',
@@ -602,7 +624,7 @@ class _StepPayment extends StatelessWidget {
           onChanged: (v) { draft.claimedPaymentDate = v; onChange(); },
         ),
         const SizedBox(height: 14),
-        _Field(
+        AdmissionFormField(
           label: 'Bank reference (optional)',
           value: draft.claimedBankRef,
           hint: 'The transaction number on the slip, if it has one.',
@@ -610,25 +632,21 @@ class _StepPayment extends StatelessWidget {
         ),
         const SizedBox(height: 18),
         // SEC-PRV-003 — the notice version and the moment are recorded. It is
-        // a checkbox somebody has to tick, never a default.
-        InkWell(
-          onTap: () {
-            draft.consentAccepted = !draft.consentAccepted;
-            onChange();
-          },
-          borderRadius: BorderRadius.circular(8),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(
-                draft.consentAccepted ? Icons.check_box : Icons.check_box_outline_blank,
-                size: 20,
-                color: draft.consentAccepted
-                    ? (dark ? AppColorsDark.brand600 : AppColors.brand600)
-                    : muted,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
+        // a switch somebody has to turn on, never a default.
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            CupertinoSwitch(
+              value: draft.consentAccepted,
+              onChanged: (v) {
+                draft.consentAccepted = v;
+                onChange();
+              },
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 2),
                 child: Text(
                   'I agree that Prepreneurship may hold and use the details above to consider this '
                   'application and, if I am admitted, to run my enrolment. I can ask for a copy of '
@@ -636,8 +654,8 @@ class _StepPayment extends StatelessWidget {
                   style: TextStyle(fontSize: 13, color: muted, height: 1.5),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ],
     );
@@ -858,149 +876,3 @@ class _FieldLabel extends StatelessWidget {
   }
 }
 
-class _Field extends StatelessWidget {
-  const _Field({
-    required this.label,
-    required this.value,
-    required this.onChanged,
-    this.hint,
-    this.keyboardType,
-  });
-
-  final String label;
-  final String value;
-  final ValueChanged<String> onChanged;
-  final String? hint;
-  final TextInputType? keyboardType;
-
-  @override
-  Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final muted = dark ? AppColorsDark.muted : AppColors.muted;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _FieldLabel(label),
-        const SizedBox(height: 6),
-        TextField(
-          controller: TextEditingController(text: value)
-            ..selection = TextSelection.collapsed(offset: value.length),
-          keyboardType: keyboardType,
-          onChanged: onChanged,
-        ),
-        if (hint != null) ...[
-          const SizedBox(height: 4),
-          Text(hint!, style: TextStyle(fontSize: 12, color: muted)),
-        ],
-      ],
-    );
-  }
-}
-
-class _SelectField extends StatelessWidget {
-  const _SelectField({
-    required this.label,
-    required this.value,
-    required this.hint,
-    required this.options,
-    required this.onChanged,
-  });
-
-  final String label;
-  final String value;
-  final String hint;
-  final List<(String, String)> options;
-  final ValueChanged<String> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final muted = dark ? AppColorsDark.muted : AppColors.muted;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _FieldLabel(label),
-        const SizedBox(height: 6),
-        // A DropdownButtonFormField inside the themed InputDecorator keeps the
-        // dropdown consistent with the text fields beside it.
-        DropdownButtonFormField<String>(
-          initialValue: value.isEmpty ? null : value,
-          isExpanded: true,
-          hint: Text(hint, style: TextStyle(color: muted, fontSize: 14.5)),
-          items: [
-            for (final (v, label) in options)
-              DropdownMenuItem(value: v, child: Text(label, overflow: TextOverflow.ellipsis)),
-          ],
-          onChanged: (v) {
-            if (v != null) onChanged(v);
-          },
-        ),
-      ],
-    );
-  }
-}
-
-class _DateField extends StatelessWidget {
-  const _DateField({
-    required this.label,
-    required this.value,
-    required this.hint,
-    required this.firstDate,
-    required this.lastDate,
-    required this.onChanged,
-  });
-
-  final String label;
-  final DateTime? value;
-  final String hint;
-  final DateTime firstDate;
-  final DateTime lastDate;
-  final ValueChanged<DateTime?> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final muted = dark ? AppColorsDark.muted : AppColors.muted;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _FieldLabel(label),
-        const SizedBox(height: 6),
-        InkWell(
-          onTap: () async {
-            final picked = await showDatePicker(
-              context: context,
-              initialDate: value ?? lastDate,
-              firstDate: firstDate,
-              lastDate: lastDate,
-            );
-            if (picked != null) onChanged(picked);
-          },
-          borderRadius: BorderRadius.circular(AppRadius.sm),
-          child: InputDecorator(
-            decoration: const InputDecoration(),
-            child: Row(
-              children: [
-                Icon(Icons.calendar_today_outlined, size: 16, color: muted),
-                const SizedBox(width: 10),
-                Text(
-                  value == null
-                      ? hint
-                      : '${value!.day} ${_month(value!.month)} ${value!.year}',
-                  style: TextStyle(
-                    fontSize: 14.5,
-                    color: value == null ? muted : null,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  static String _month(int m) =>
-      const ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][m - 1];
-}
