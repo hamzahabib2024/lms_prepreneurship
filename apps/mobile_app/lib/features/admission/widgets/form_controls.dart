@@ -1,141 +1,37 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_theme.dart';
 
-/// Cupertino-style form controls shared by the admission pages: wheel-picker
-/// dropdowns (the iOS idiom), date pickers and text fields, all themed to the
-/// application palette so dark mode keeps working.
+/// The admission forms' controls — Material fields with a deliberate look:
+/// rounded, softly filled, hairline borders that turn brand-coloured on focus.
+/// Kept in one file so the apply form and the review form cannot drift apart.
 
-/// An iOS wheel-picker sheet, presented from the bottom like iOS settings.
-Future<String?> showChoiceSheet(
-  BuildContext context, {
-  required String title,
-  required List<(String, String)> options,
-  String selected = '',
-}) {
-  var index = options.indexWhere((o) => o.$1 == selected);
-  if (index < 0) index = 0;
-  return _sheet<String>(
-    context,
-    title: title,
-    onDone: () => options.isEmpty ? null : options[index].$1,
-    child: SizedBox(
-      height: 220,
-      child: CupertinoPicker(
-        scrollController: FixedExtentScrollController(initialItem: index),
-        itemExtent: 44,
-        onSelectedItemChanged: (i) => index = i,
-        children: [
-          for (final (_, label) in options)
-            Text(label, maxLines: 2, textAlign: TextAlign.center),
-        ],
-      ),
+InputDecoration _decoration(BuildContext context, String? hint, {bool hasError = false}) {
+  final dark = Theme.of(context).brightness == Brightness.dark;
+  final muted = dark ? AppColorsDark.muted : AppColors.muted;
+  final brand = dark ? AppColorsDark.brand600 : AppColors.brand600;
+  final error = dark ? AppColorsDark.error : AppColors.error;
+  final line = dark ? AppColorsDark.line : AppColors.line;
+  final fill = dark ? AppColorsDark.surface2 : Colors.white;
+
+  return InputDecoration(
+    hintText: hint,
+    hintStyle: TextStyle(color: muted, fontSize: 14.5),
+    filled: true,
+    fillColor: fill,
+    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(AppRadius.sm),
+      borderSide: BorderSide(color: hasError ? error : line),
     ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(AppRadius.sm),
+      borderSide: BorderSide(color: hasError ? error : brand, width: 1.6),
+    ),
+    border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.sm)),
+    counterText: hasError ? '' : null,
   );
 }
-
-/// A date wheel (day/month/year), presented like the picker above.
-Future<DateTime?> showDateSheet(
-  BuildContext context, {
-  required String title,
-  required DateTime initial,
-  DateTime? minimumDate,
-  DateTime? maximumDate,
-}) {
-  var selected = initial;
-  return _sheet<DateTime>(
-    context,
-    title: title,
-    onDone: () => selected,
-    child: SizedBox(
-      height: 216,
-      child: CupertinoDatePicker(
-        mode: CupertinoDatePickerMode.date,
-        initialDateTime: initial,
-        minimumDate: minimumDate,
-        maximumDate: maximumDate,
-        onDateTimeChanged: (d) => selected = d,
-      ),
-    ),
-  );
-}
-
-Future<T?> _sheet<T>(
-  BuildContext context, {
-  required String title,
-  required T? Function() onDone,
-  required Widget child,
-}) {
-  return showCupertinoModalPopup<T>(
-    context: context,
-    builder: (sheetContext) => CupertinoTheme(
-      data: CupertinoThemeData(
-        primaryColor: Theme.of(context).colorScheme.primary,
-        textTheme: CupertinoTextThemeData(
-          textStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface),
-        ),
-      ),
-      child: _SheetScaffold(
-        title: title,
-        onDone: () => Navigator.of(sheetContext).pop(onDone()),
-        child: child,
-      ),
-    ),
-  );
-}
-
-class _SheetScaffold extends StatelessWidget {
-  const _SheetScaffold({required this.title, required this.onDone, required this.child});
-
-  final String title;
-  final VoidCallback onDone;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    return SafeArea(
-      top: false,
-      child: Container(
-        decoration: BoxDecoration(
-          color: dark ? AppColorsDark.surface : AppColors.surface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              child: Row(
-                children: [
-                  CupertinoButton(
-                    child: const Text('Cancel'),
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
-                  Expanded(
-                    child: Text(
-                      title,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
-                    ),
-                  ),
-                  CupertinoButton(
-                    onPressed: onDone,
-                    child: const Text('Done'),
-                  ),
-                ],
-              ),
-            ),
-            child,
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// -------------------------------------------------------------- controls ----
 
 class _FieldLabel extends StatelessWidget {
   const _FieldLabel(this.label);
@@ -156,8 +52,7 @@ class _FieldLabel extends StatelessWidget {
   }
 }
 
-/// A labelled iOS text field with a hint beneath it, matching the two pages'
-/// existing copy style.
+/// A labelled text field with a hint beneath it.
 class AdmissionFormField extends StatelessWidget {
   const AdmissionFormField({
     super.key,
@@ -165,7 +60,9 @@ class AdmissionFormField extends StatelessWidget {
     required this.value,
     required this.onChanged,
     this.hint,
+    this.errorText,
     this.keyboardType,
+    this.maxLength,
     this.maxLines = 1,
   });
 
@@ -173,7 +70,13 @@ class AdmissionFormField extends StatelessWidget {
   final String value;
   final ValueChanged<String> onChanged;
   final String? hint;
+
+  /// Shown in red beneath the field instead of the hint; the form's own
+  /// pre-submission check, so a server rejection is not the first time a
+  /// person hears about a bad value.
+  final String? errorText;
   final TextInputType? keyboardType;
+  final int? maxLength;
   final int maxLines;
 
   @override
@@ -182,6 +85,7 @@ class AdmissionFormField extends StatelessWidget {
     final muted = dark ? AppColorsDark.muted : AppColors.muted;
     final ink = dark ? AppColorsDark.ink : AppColors.ink;
     final brand = dark ? AppColorsDark.brand600 : AppColors.brand600;
+    final error = dark ? AppColorsDark.error : AppColors.error;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -190,23 +94,24 @@ class AdmissionFormField extends StatelessWidget {
           _FieldLabel(label),
           const SizedBox(height: 6),
         ],
-        CupertinoTextField(
+        TextField(
           controller: TextEditingController(text: value)
             ..selection = TextSelection.collapsed(offset: value.length),
           keyboardType: keyboardType,
           maxLines: maxLines,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          maxLength: maxLength,
           style: TextStyle(fontSize: 15, color: ink),
-          placeholder: hint,
-          placeholderStyle: TextStyle(fontSize: 15, color: muted),
           cursorColor: brand,
-          decoration: BoxDecoration(
-            border: Border.all(color: dark ? AppColorsDark.line : AppColors.line),
-            borderRadius: BorderRadius.circular(10),
-          ),
+          decoration: _decoration(context, hint, hasError: errorText != null),
           onChanged: onChanged,
         ),
-        if (hint != null && hint!.isNotEmpty) ...[
+        if (errorText != null) ...[
+          const SizedBox(height: 4),
+          Text(
+            errorText!,
+            style: TextStyle(fontSize: 12, color: error, fontWeight: FontWeight.w500),
+          ),
+        ] else if (hint != null && hint!.isNotEmpty) ...[
           const SizedBox(height: 4),
           Text(hint!, style: TextStyle(fontSize: 12, color: muted)),
         ],
@@ -215,7 +120,7 @@ class AdmissionFormField extends StatelessWidget {
   }
 }
 
-/// A labelled "dropdown": a read-only box that opens the iOS wheel picker.
+/// A dropdown matched to the text fields beside it.
 class AdmissionSelectField extends StatelessWidget {
   const AdmissionSelectField({
     super.key,
@@ -234,8 +139,9 @@ class AdmissionSelectField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (currentLabel, selected) =
-        options.any((o) => o.$1 == value) ? (options.firstWhere((o) => o.$1 == value).$2, true) : (hint, false);
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final muted = dark ? AppColorsDark.muted : AppColors.muted;
+    final ink = dark ? AppColorsDark.ink : AppColors.ink;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -244,17 +150,22 @@ class AdmissionSelectField extends StatelessWidget {
           _FieldLabel(label),
           const SizedBox(height: 6),
         ],
-        _SelectBox(
-          text: currentLabel,
-          muted: !selected,
-          onTap: () async {
-            final picked = await showChoiceSheet(
-              context,
-              title: label.isEmpty ? 'Choose…' : label,
-              options: options,
-              selected: value,
-            );
-            if (picked != null) onChanged(picked);
+        DropdownButtonFormField<String>(
+          initialValue: value.isEmpty ? null : value,
+          isExpanded: true,
+          hint: Text(hint, style: TextStyle(color: muted, fontSize: 14.5)),
+          icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 22),
+          iconEnabledColor: muted,
+          style: TextStyle(fontSize: 15, color: ink),
+          dropdownColor: dark ? AppColorsDark.surface2 : Colors.white,
+          menuMaxHeight: 340,
+          decoration: _decoration(context, null),
+          items: [
+            for (final (v, label) in options)
+              DropdownMenuItem(value: v, child: Text(label, overflow: TextOverflow.ellipsis)),
+          ],
+          onChanged: (v) {
+            if (v != null) onChanged(v);
           },
         ),
       ],
@@ -262,7 +173,7 @@ class AdmissionSelectField extends StatelessWidget {
   }
 }
 
-/// A labelled date box that opens the date wheel.
+/// A date box that opens the Material calendar.
 class AdmissionDateField extends StatelessWidget {
   const AdmissionDateField({
     super.key,
@@ -283,24 +194,46 @@ class AdmissionDateField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final muted = dark ? AppColorsDark.muted : AppColors.muted;
+    final ink = dark ? AppColorsDark.ink : AppColors.ink;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _FieldLabel(label),
         const SizedBox(height: 6),
-        _SelectBox(
-          text: value == null ? hint : '${value!.day} ${_month(value!.month)} ${value!.year}',
-          muted: value == null,
+        InkWell(
           onTap: () async {
-            final picked = await showDateSheet(
-              context,
-              title: label,
-              initial: value ?? lastDate,
-              minimumDate: firstDate,
-              maximumDate: lastDate,
+            final picked = await showDatePicker(
+              context: context,
+              initialDate: value ?? lastDate,
+              firstDate: firstDate,
+              lastDate: lastDate,
             );
             if (picked != null) onChanged(picked);
           },
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          child: InputDecorator(
+            decoration: _decoration(context, null),
+            child: Row(
+              children: [
+                Icon(Icons.calendar_today_rounded, size: 16, color: muted),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    value == null
+                        ? hint
+                        : '${value!.day} ${_month(value!.month)} ${value!.year}',
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: value == null ? muted : ink,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ],
     );
@@ -308,48 +241,4 @@ class AdmissionDateField extends StatelessWidget {
 
   static String _month(int m) =>
       const ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][m - 1];
-}
-
-class _SelectBox extends StatelessWidget {
-  const _SelectBox({required this.text, required this.muted, required this.onTap});
-
-  final String text;
-  final bool muted;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final ink = dark ? AppColorsDark.ink : AppColors.ink;
-    final mutedColor = dark ? AppColorsDark.muted : AppColors.muted;
-
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(10),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-        decoration: BoxDecoration(
-          border: Border.all(color: dark ? AppColorsDark.line : AppColors.line),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                text,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 15, color: muted ? mutedColor : ink),
-              ),
-            ),
-            Icon(
-              CupertinoIcons.chevron_down,
-              size: 15,
-              color: mutedColor,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }

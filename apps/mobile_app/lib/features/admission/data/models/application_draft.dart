@@ -43,11 +43,20 @@ class ApplicationDraft {
 
   bool get contactComplete =>
       phone.trim().isNotEmpty &&
-      email.trim().contains('@') &&
+      _validEmail &&
       address.trim().length >= 5 &&
       city.trim().length >= 2 &&
       acquisitionSource.isNotEmpty &&
       (!requiresAcquisitionDetail || acquisitionDetail.trim().isNotEmpty);
+
+  /// Loose enough for real addresses ("a@b.co.uk"), strict enough that a
+  /// spacing slip does not bounce off the server's zod email check.
+  bool get _validEmail =>
+      RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email.trim());
+
+  /// True once the box has text — so the field can explain itself before the
+  /// user moves on, rather than failing silently at the end.
+  bool get emailInvalid => email.trim().isNotEmpty && !_validEmail;
 
   bool get paymentComplete =>
       documentIds.isNotEmpty &&

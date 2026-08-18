@@ -1,4 +1,3 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/formats.dart';
@@ -88,14 +87,40 @@ class _TrackApplicationPageState extends State<TrackApplicationPage> {
             style: TextStyle(color: muted, fontSize: 13.5),
           ),
           const SizedBox(height: 12),
-          CupertinoTextField(
+          TextField(
             controller: _controller,
             textCapitalization: TextCapitalization.characters,
-            placeholder: 'e.g. LMS-2026-000001',
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            decoration: BoxDecoration(
-              border: Border.all(color: dark ? AppColorsDark.line : AppColors.line),
-              borderRadius: BorderRadius.circular(10),
+            style: TextStyle(
+              fontSize: 15,
+              color: dark ? AppColorsDark.ink : AppColors.ink,
+            ),
+            cursorColor: dark ? AppColorsDark.brand600 : AppColors.brand600,
+            decoration: InputDecoration(
+              hintText: 'e.g. LMS-2026-000001',
+              hintStyle: TextStyle(
+                fontSize: 14.5,
+                color: dark ? AppColorsDark.muted : AppColors.muted,
+              ),
+              filled: true,
+              fillColor: dark ? AppColorsDark.surface2 : Colors.white,
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+                borderSide: BorderSide(
+                  color: dark ? AppColorsDark.line : AppColors.line,
+                ),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+                borderSide: BorderSide(
+                  color: dark ? AppColorsDark.brand600 : AppColors.brand600,
+                  width: 1.6,
+                ),
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+              ),
             ),
             onSubmitted: (_) => _lookup(),
           ),

@@ -2,7 +2,48 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../network/api_exception.dart';
 import '../theme/app_theme.dart';
+
+/// Human labels for the server's validation field names — a field-level
+/// rejection should say "Email address: …", never just "email: …".
+const _fieldLabels = <String, String>{
+  'fullName': 'Full name',
+  'fatherName': "Father's or guardian's name",
+  'dateOfBirth': 'Date of birth',
+  'gender': 'Gender',
+  'nationalId': 'CNIC',
+  'phone': 'Mobile number',
+  'email': 'Email address',
+  'address': 'Address',
+  'city': 'City',
+  'educationLevel': 'Education',
+  'qualification': 'Qualification',
+  'occupation': 'Occupation',
+  'desiredProgrammeId': 'Programme',
+  'desiredSectionId': 'Section',
+  'acquisitionSource': 'How you heard about us',
+  'acquisitionDetail': 'Referral detail',
+  'claimedAmount': 'Amount paid',
+  'claimedPaymentDate': 'Date paid',
+  'claimedBankRef': 'Bank reference',
+  'documentIds': 'Payment slip',
+  'consentAccepted': 'Consent',
+};
+
+/// The server's field-level problems, readable: "Email address: Enter a valid
+/// email address." — screens hand this to AppAlert.details.
+List<String> serverDetailLines(ApiException error) {
+  final lines = <String>[];
+  for (final detail in error.details) {
+    final message = (detail['message'] as String? ?? '').trim();
+    if (message.isEmpty) continue;
+    final field = (detail['field'] as String? ?? '').trim();
+    final label = field.isEmpty ? null : _fieldLabels[field];
+    lines.add(label == null ? message : '$label: $message');
+  }
+  return lines;
+}
 
 /// A loading placeholder shaped like the thing that is coming. A block the
 /// shape of the content holds the space so the screen does not jump when the
@@ -209,12 +250,17 @@ class AppAlert extends StatelessWidget {
     required this.title,
     required this.message,
     this.reference,
+    this.details = const [],
     this.warn = false,
   });
 
   final String title;
   final String message;
   final String? reference;
+
+  /// Field-level problems from the server's validation envelope, shown as
+  /// bullet lines so a person knows what to fix.
+  final List<String> details;
   final bool warn;
 
   @override
@@ -248,6 +294,14 @@ class AppAlert extends StatelessWidget {
             Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
             const SizedBox(height: 3),
             Text(message),
+            for (final line in details)
+              Padding(
+                padding: const EdgeInsets.only(top: 3),
+                child: Text(
+                  '• $line',
+                  style: const TextStyle(fontSize: 12.5),
+                ),
+              ),
             if (reference != null)
               Padding(
                 padding: const EdgeInsets.only(top: 3),
