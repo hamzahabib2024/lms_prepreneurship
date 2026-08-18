@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import '../../../../core/network/api_exception.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/ui.dart';
+import '../../../admission/application/application_page.dart';
+import '../../../admission/application/track_application_page.dart';
 import 'auth_brand_panel.dart';
 
 /// The sign-in card — ported from the web's LoginPage. The screen is the
@@ -167,6 +169,33 @@ class _LoginFormState extends State<LoginForm> {
               ),
               textAlign: TextAlign.center,
             ),
+          const SizedBox(height: 8),
+          // FR-REG-001 — the public path. The web client puts the application
+          // on its landing page; the mobile equivalent is here, beside sign-in,
+          // because this is where somebody with no account lands.
+          const Divider(height: 24),
+          Text(
+            "Not a student yet?",
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 12.5, color: muted),
+          ),
+          const SizedBox(height: 4),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (_) => const ApplicationPage()),
+              );
+            },
+            child: const Text('Apply for admission'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (_) => const TrackApplicationPage()),
+              );
+            },
+            child: const Text('Track your application'),
+          ),
         ],
       ),
     );

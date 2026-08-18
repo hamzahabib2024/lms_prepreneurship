@@ -97,6 +97,33 @@ class ApiClient {
   Future<T> delete<T>(String path, [Object? body]) =>
       _request<T>(path, method: 'DELETE', body: body);
 
+  /// Multipart upload (payment slips, FR-REG-008). The JSON content-type
+  /// header is deliberately absent — the boundary must come from Dio.
+  Future<T> uploadForm<T>(String path, FormData form) async {
+    try {
+      final response = await _dio.post<dynamic>(path, data: form);
+      final envelope = response.data as Map<String, dynamic>? ?? const {};
+      return (envelope['data'] as T);
+    } on DioException catch (error) {
+      throw _mapError(error);
+    }
+  }
+
+  /// Raw response bytes (a payment slip for review, FR-REG-024). Never a
+  /// storage URL — the object is somebody's bank record and must not be
+  /// reachable without a session (SEC-FIL-009).
+  Future<List<int>> bytes(String path) async {
+    try {
+      final response = await _dio.get<List<int>>(
+        path,
+        options: Options(responseType: ResponseType.bytes),
+      );
+      return response.data ?? const [];
+    } on DioException catch (error) {
+      throw _mapError(error);
+    }
+  }
+
   Future<T> _request<T>(
     String path, {
     String method = 'GET',
