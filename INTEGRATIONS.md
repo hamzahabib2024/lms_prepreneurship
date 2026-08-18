@@ -381,7 +381,7 @@ cannot — Google answers `400 Invalid conference type value`, measured against
 this very project. There are exactly two ways to give the LMS a person to act
 as:
 
-| | Route A — **sign in once** | Route B — domain-wide delegation |
+| | Route A — **OAuth 2.0** | Route B — domain-wide delegation |
 |---|---|---|
 | Needs Workspace admin | **No** | Yes, a super admin |
 | Works on personal Gmail | **Yes** | No |
@@ -395,7 +395,25 @@ describes. Route B is at the end.
 
 ---
 
-# Route A — sign in once (no admin needed)
+# Route A — OAuth 2.0 (sign in once, no admin needed)
+
+### What OAuth 2.0 is doing here, in one paragraph
+
+The Institute's account grants the LMS permission to use its calendar, in
+its own browser, the same way it would grant any app. Google hands back a
+**refresh token** — a long-lived credential the LMS exchanges for a working
+access token whenever it needs one, without anybody signing in again.
+Meetings are then created **as that account**, which is precisely what Meet
+requires and what a service account can never be.
+
+Four things to set up, once:
+
+| | |
+|---|---|
+| **A1** | An OAuth client — who is asking |
+| **A2** | A consent screen, published — so the grant does not expire |
+| **A3** | The sign-in itself — which produces the refresh token |
+| **A4** | Paste it into `.env` and prove it works |
 
 ## A1. Create an OAuth client
 
@@ -409,7 +427,9 @@ name it `Prepreneurship LMS` → Create.
 > register and nothing to get wrong. A Web application client will refuse with
 > `redirect_uri_mismatch`.
 
-Copy the **Client ID** and **Client secret** into `.env`:
+Copy the **Client ID** and **Client secret** into `.env`. Both stay
+visible on the credential's own page afterwards, so losing the dialogue is
+not fatal:
 
 ```ini
 GOOGLE_OAUTH_CLIENT_ID=1234-abcd.apps.googleusercontent.com
@@ -423,9 +443,22 @@ GOOGLE_OAUTH_CLIENT_SECRET=GOCSPX-...
 If the project belongs to your Workspace organisation, choose **Internal** and
 you are finished with this step — no verification, no expiry.
 
-Otherwise choose **External**, fill in the app name and your email, add the
-Calendar scope, and then — **this is the step that catches people** — go back
-to the consent screen and press **PUBLISH APP**.
+Otherwise choose **External** and fill in the app name, a support email and a
+developer email. Those three are the only required fields.
+
+Then add the scope. The page is called **Data access** in the current console
+and **Scopes** in the older one; either way, **Add or remove scopes**, and
+paste this into the *manually add scopes* box:
+
+```
+https://www.googleapis.com/auth/calendar
+```
+
+It will be listed as a **restricted** or **sensitive** scope. That is
+expected and is not a problem for an app only your own institute uses.
+
+Finally — **this is the step that catches people** — go back to the consent
+screen and press **PUBLISH APP**.
 
 > ### The seven-day trap
 >
@@ -473,6 +506,65 @@ node -r dotenv/config scripts/check-meet.mjs
 ### ✅ You are done when
 Step 3 reads *"a person has authorised the LMS"* and step 4 creates a real
 `https://meet.google.com/…` link and deletes it again.
+
+---
+
+
+## OAuth 2.0 — what goes wrong, and what it means
+
+Every one of these is a real Google error with a cause that its wording does
+not give away.
+
+**`redirect_uri_mismatch`** — the OAuth client is a **Web application**, not a
+Desktop app. A Web client only accepts redirect URIs registered in advance;
+`google-authorise.mjs` uses a loopback port chosen at run time, which only a
+Desktop app client accepts. Create a new client of the right type; you can
+delete the old one.
+
+**`access_denied` / "Google hasn't verified this app"** — expected for your own
+app. Press **Advanced → Go to Prepreneurship LMS (unsafe)**. Verification is
+for apps asking strangers for access; you are the developer, the publisher and
+the only user.
+
+**The script says "an access token came back but NO REFRESH TOKEN"** — Google
+issues one only on the *first* consent, and will not repeat it. Revoke the
+LMS at <https://myaccount.google.com/permissions> and run the script again.
+
+**`invalid_grant` a few days after it was working** — almost always the
+seven-day trap: the consent screen is still in **Testing**, where Google
+expires refresh tokens after a week. Publish the app, then re-authorise. It
+can also mean the account's password changed, or somebody revoked the grant.
+
+**`invalid_client`** — the client ID or secret in `.env` does not match the
+OAuth client. Copy both again; the secret is shown in full only when created,
+but can be re-downloaded from the credential's page.
+
+**`insufficient authentication scopes`** — the grant was made before the
+Calendar scope was added to the consent screen. Add it, then re-authorise: an
+existing refresh token does not gain scopes it was not granted.
+
+**Everything green on your machine, nothing working in the app** — the
+container did not get the settings. `.env` is read when a container is
+**created**, not when it restarts:
+
+```powershell
+npm run docker:up
+docker compose exec api sh -c 'echo ${GOOGLE_OAUTH_REFRESH_TOKEN:+set} $LIVE_PROVIDER'
+```
+
+## Looking after the refresh token
+
+It is **as sensitive as that account's password**: anyone holding it, the
+client ID and the secret can read and write that calendar until it is revoked.
+
+- It lives in `.env`, which is not committed. Do not paste it into chat, a
+  ticket, or a screenshot.
+- To revoke: <https://myaccount.google.com/permissions> → Prepreneurship LMS →
+  Remove access. Classes stop being created; nothing already scheduled is lost.
+- To rotate: revoke, then run `google-authorise.mjs` again.
+- It does not expire on a published app, but it **does** stop working if the
+  account's password changes or the grant is removed. `check-meet.mjs` says
+  which of those happened.
 
 ---
 
