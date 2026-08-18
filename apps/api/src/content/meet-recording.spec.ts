@@ -135,6 +135,19 @@ describe("reading a Google Meet recording's name", () => {
       expect(parsed.isMeetRecording).toBe(false);
     });
 
+    it("handles the number Meet appends to a second recording of one class", () => {
+      // Real, from the Institute's English folder: one session recorded twice.
+      // Without this the whole name survives as the title, and the card reads
+      // "(Sec D) English Class 2026/07/03 19:46 PKT Recording 2" beside eleven
+      // that read "English".
+      const parsed = parseMeetRecording(
+        "(Sec D) English Class - 2026/07/03 19:46 PKT - Recording 2",
+      );
+      expect(parsed.title).toBe("English");
+      expect(parsed.recordedOn?.toISOString().slice(0, 10)).toBe("2026-07-03");
+      expect(parsed.isMeetRecording).toBe(true);
+    });
+
     it("never produces an empty title", () => {
       // A card headed by nothing is worse than one headed by the raw name.
       for (const name of ["Class - 2026/08/13 10:00 PKT - Recording", "(Sec D) Class", "- -"]) {

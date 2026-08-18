@@ -1,13 +1,16 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { createSign } from "node:crypto";
+import { Readable } from "node:stream";
 import { readFileSync } from "node:fs";
 import { AppError } from "@lms/shared";
 import type {
+  ByteRange,
   FolderEntry,
   SignedUrl,
   StorageHealth,
   StorageProvider,
+  StorageStream,
   StoredObjectRef,
 } from "./storage.provider";
 
@@ -350,64 +353,91 @@ export class GoogleDriveStorageProvider implements StorageProvider {
    * caller's ticket expiry is the limit that is actually enforced, and it is
    * checked before this is ever called.
    */
-  async signUrl(storageRef: string, ttlSeconds: number): Promise<SignedUrl> {
+  /**
+   * DRIVE CANNOT SIGN A URL, and this says so rather than inventing one.
+   *
+   * The earlier version asked Drive for the bytes with redirect:"manual" and
+   * handed the browser whatever Location came back, on the belief that Drive
+   * answers 302 to a short-lived googleusercontent address. MEASURED AGAINST
+   * THE INSTITUTE'S OWN DRIVE, IT DOES NOT: it answers 200 and streams the
+   * file. There was no Location to hand over and never had been.
+   *
+   * So playback goes through openStream() below. Callers ask for that first
+   * and fall back to a signed URL only for providers that genuinely have one.
+   */
+  signUrl(): Promise<SignedUrl> {
+    return Promise.reject(
+      new AppError("STORAGE_UNAVAILABLE", {
+        message: "That recording could not be prepared for playback.",
+        internal:
+          "Google Drive has no signed URLs — it serves content directly against an OAuth " +
+          "token. Playback must use openStream(). Reaching here means a caller asked for a " +
+          "URL without checking for openStream first.",
+      }),
+    );
+  }
+
+  /**
+   * The bytes, streamed — the ARC-052 deviation described on the interface.
+   *
+   * NEVER BUFFERED. A 363 MB recording read into memory per viewer is the
+   * whole application tier gone at four concurrent students. The response body
+   * is piped straight through, so memory stays flat however large the file.
+   *
+   * The Range header is passed to Drive and its answer mirrored back verbatim.
+   * Drive honours ranges — verified against the Institute's real recordings,
+   * suffix ranges included — which is what makes seeking work, and what stops
+   * a player pulling a whole lecture down to show its first ten seconds.
+   */
+  async openStream(storageRef: string, range?: ByteRange): Promise<StorageStream> {
     if (!this.isConfigured) this.refuse();
 
     const url = new URL(`${GoogleDriveStorageProvider.API}/files/${encodeURIComponent(storageRef)}`);
     url.searchParams.set("alt", "media");
     url.searchParams.set("supportsAllDrives", "true");
 
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${await this.accessToken()}` },
-      // The whole point. Following it would download the file into the API.
-      redirect: "manual",
-    });
-
-    const location = res.headers.get("location");
-    if (location) {
-      return {
-        url: location,
-        expiresAt: new Date(Date.now() + ttlSeconds * 1000),
-        // Google's media hosts honour Range, which is what makes seeking work
-        // (ARC-042). A player without it can only ever play from the start.
-        supportsRangeRequests: true,
-      };
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${await this.accessToken()}`,
+    };
+    if (range) {
+      headers["Range"] =
+        range.end === undefined ? `bytes=${range.start}-` : `bytes=${range.start}-${range.end}`;
     }
 
-    if (res.status === 403 || res.status === 404) {
-      // Google says WHY, and the difference matters enormously to whoever has
-      // to fix it. "cannotDownloadFile" is not a missing file and not a
-      // revoked share: it is the Drive sharing option "Viewers and commenters
-      // can't download, print or copy", set on the folder or applied by a
-      // Workspace policy. Nothing in this System can work around it, and no
-      // amount of re-sharing with the service account will help — but it is
-      // one checkbox in Drive, and saying so is the difference between a
-      // five-minute fix and a day lost re-reading the integration guide.
-      const body = await res.text().catch(() => "");
-      const blocked = body.includes("cannotDownloadFile") || body.includes("cannotDownloadAbusiveFile");
+    const res = await fetch(url, { headers });
 
+    if (!res.ok && res.status !== 206) {
+      const body = await res.text().catch(() => "");
+      const blocked =
+        body.includes("cannotDownloadFile") || body.includes("cannotDownloadAbusiveFile");
       throw new AppError(blocked ? "STORAGE_UNAVAILABLE" : "RESOURCE_NOT_FOUND", {
         message: blocked
           ? "This recording cannot be played yet: downloading is turned off for its folder in Google Drive."
           : "That recording is no longer available.",
         internal: blocked
-          ? `Drive refused ${storageRef} with cannotDownloadFile. In Drive, open the recordings ` +
-            `folder → Share → the gear icon → UNTICK "Viewers and commenters can see the option ` +
-            `to download, print, and copy" is the setting that BLOCKS this when ticked off. A ` +
-            `Workspace-wide sharing or DLP policy can impose the same thing.`
-          : `Drive returned ${res.status} for ${storageRef} — deleted, or the share was revoked.`,
+          ? `Drive refused ${storageRef} with cannotDownloadFile. Give the service account a role ` +
+            `above viewer on the folder — a writer is exempt from the "viewers cannot download" ` +
+            `restriction, and students never touch Drive at all.`
+          : `Drive answered ${res.status} for ${storageRef}: ${body.slice(0, 200)}`,
       });
     }
 
-    // Named rather than silently proxied. If Google ever serves the bytes
-    // directly instead of redirecting, that is a change worth finding out
-    // about from an error, not from a bandwidth bill.
-    throw new AppError("STORAGE_UNAVAILABLE", {
-      message: "That recording could not be prepared for playback.",
-      internal:
-        `Drive answered ${res.status} with no redirect for ${storageRef}. ARC-052 forbids ` +
-        `proxying the bytes through the API, so playback fails here rather than doing that.`,
-    });
+    if (!res.body) {
+      throw new AppError("STORAGE_UNAVAILABLE", {
+        message: "That recording could not be read.",
+        internal: `Drive returned ${res.status} with no body for ${storageRef}.`,
+      });
+    }
+
+    const length = res.headers.get("content-length");
+    return {
+      status: res.status,
+      contentType: res.headers.get("content-type"),
+      contentLength: length ? Number(length) : null,
+      contentRange: res.headers.get("content-range"),
+      // Web stream to Node stream. Piped, never collected.
+      body: Readable.fromWeb(res.body as Parameters<typeof Readable.fromWeb>[0]),
+    };
   }
 
   // ────────────────────────────────────────────────────────────── writing ──

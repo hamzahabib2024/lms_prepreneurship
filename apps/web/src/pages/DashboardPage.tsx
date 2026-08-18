@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { text } from "../api/text";
 import { ApiError, api } from "../api/client";
 import { ProgressRing, SkeletonCards } from "../components/Ui";
@@ -134,9 +135,25 @@ function WidgetBody({ name, v }: { name: string; v: Record<string, unknown> }) {
             {new Date(String(v["scheduledStart"])).toLocaleString()} · starts in{" "}
             {formatDuration(startsIn)}
           </p>
-          <button className="btn btn-primary" disabled={!v["joinWindowOpen"]}>
-            {v["joinWindowOpen"] ? "Join class" : "Join opens shortly"}
-          </button>
+          {/*
+            A LINK, and it used to be a button that did nothing at all — no
+            click handler, no destination. A student could see that their
+            class existed and had no way into it from here.
+
+            It goes to the class page rather than straight to the meeting,
+            because joining has to record attendance and the page is what
+            does that. Sending them to the video directly would mark nobody
+            present.
+          */}
+          {v["joinWindowOpen"] ? (
+            <Link className="btn btn-primary" to={`/classes/${String(v["sessionId"])}`}>
+              Join class
+            </Link>
+          ) : (
+            <Link className="btn" to={`/classes/${String(v["sessionId"])}`}>
+              See the class
+            </Link>
+          )}
           {/* FR-LIV-019 — surfaced before the class, not during it. */}
           {!v["linkReady"] && <p className="muted small">The class link is not ready yet.</p>}
         </>

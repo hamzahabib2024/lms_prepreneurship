@@ -274,70 +274,101 @@ describe("Google Drive storage", () => {
 
   // ──────────────────────────────────────────────────────────── playback ──
 
-  describe("preparing a recording for playback (ARC-041/052)", () => {
-    it("hands back Google's short-lived address, without downloading the file", async () => {
-      const temporary =
-        "https://doc-0k-8s-docs.googleusercontent.com/docs/securesc/abc/def?e=download&expires=1";
-      const fetchMock = stubFetch(() => ({
-        ok: false,
-        status: 302,
-        headers: new Headers({ location: temporary }),
-      }));
-
-      const signed = await provider().signUrl("1Nkr4Vh", 300);
-
-      expect(signed.url).toBe(temporary);
-      expect(signed.supportsRangeRequests).toBe(true);
-      expect(signed.expiresAt.getTime()).toBeGreaterThan(Date.now());
-      // The whole point of ARC-052: the API must not follow the redirect and
-      // pull 133MB through itself.
-      const mediaCall = fetchMock.mock.calls.find((c) => String(c[0]).includes("alt=media"));
-      expect((mediaCall![1] as RequestInit).redirect).toBe("manual");
+  /**
+   * DRIVE SERVES BYTES, IT DOES NOT REDIRECT — measured, not assumed.
+   *
+   * The adapter was first written believing Drive answers a request for file
+   * content with 302 to a short-lived googleusercontent address, which would
+   * have satisfied ARC-052 exactly. Against the Institute's own Drive it
+   * answers 200 and streams the file. There is no signed-URL equivalent and no
+   * Location to hand a browser, so playback is proxied and that deviation is
+   * recorded rather than hidden.
+   */
+  describe("streaming a recording (ARC-041, ARC-052 deviation)", () => {
+    const streamResponse = (init: {
+      status?: number;
+      contentRange?: string;
+      length?: string;
+    } = {}) => ({
+      ok: (init.status ?? 200) < 400,
+      status: init.status ?? 200,
+      headers: new Headers({
+        "content-type": "video/mp4",
+        "content-length": init.length ?? "69591660",
+        ...(init.contentRange ? { "content-range": init.contentRange } : {}),
+      }),
+      body: new ReadableStream({
+        start(c) {
+          c.enqueue(new Uint8Array([0, 1, 2]));
+          c.close();
+        },
+      }),
+      text: async () => "",
     });
 
-    it("NEVER returns a permanent Drive link (ARC-041)", async () => {
-      // The tempting shortcut is webContentLink, which requires making the
-      // file link-shared — a permanent public URL to a class recording.
-      const fetchMock = stubFetch(() => ({
-        ok: false,
-        status: 302,
-        headers: new Headers({ location: "https://doc-0k.googleusercontent.com/x?e=download" }),
-      }));
-      const signed = await provider().signUrl("1Nkr4Vh", 300);
-      expect(signed.url).not.toContain("drive.google.com");
-      expect(signed.url).not.toContain("/view");
-      expect(fetchMock.mock.calls.every((c) => !String(c[0]).includes("permissions"))).toBe(true);
+    it("refuses to pretend it can sign a URL", async () => {
+      // Silently returning something unusable is how the first version shipped
+      // a playback path that could never have worked.
+      await expect(provider().signUrl()).rejects.toThrow(/could not be prepared/i);
     });
 
-    it("fails loudly rather than proxying when Google does not redirect", async () => {
-      // If Drive ever serves the bytes directly, that is a change worth
-      // learning about from an error and not from a bandwidth bill.
-      stubFetch(() => ({ ok: true, status: 200, headers: new Headers() }));
-      await expect(provider().signUrl("x", 300)).rejects.toThrow(/could not be prepared/i);
+    it("streams the whole file when no range is asked for", async () => {
+      stubFetch(() => streamResponse() as unknown as Response);
+
+      const s = await provider().openStream("1Nkr4Vh");
+
+      expect(s.status).toBe(200);
+      expect(s.contentType).toBe("video/mp4");
+      expect(s.contentLength).toBe(69591660);
+      expect(s.contentRange).toBeNull();
     });
 
-    it("says the recording is gone when the share was revoked", async () => {
-      stubFetch(() => ({
-        ok: false,
-        status: 404,
-        headers: new Headers(),
-        text: async () => '{"error":{"code":404,"message":"File not found"}}',
-      }));
-      await expect(provider().signUrl("x", 300)).rejects.toThrow(/no longer available/i);
+    it("passes a range through and mirrors Drive's 206", async () => {
+      // Without this the browser cannot seek: dragging the scrubber on an
+      // hour-long class would do nothing.
+      const fetchMock = stubFetch(
+        () =>
+          streamResponse({
+            status: 206,
+            contentRange: "bytes 100-199/69591660",
+            length: "100",
+          }) as unknown as Response,
+      );
+
+      const s = await provider().openStream("1Nkr4Vh", { start: 100, end: 199 });
+
+      expect(s.status).toBe(206);
+      expect(s.contentRange).toBe("bytes 100-199/69591660");
+
+      const call = fetchMock.mock.calls.find((c) => String(c[0]).includes("alt=media"));
+      expect((call![1] as RequestInit).headers).toMatchObject({ Range: "bytes=100-199" });
     });
 
-    /**
-     * THE REAL ANSWER FROM THE INSTITUTE'S OWN DRIVE, the day it was connected.
-     *
-     * Everything worked — token, listing, durations, cataloguing — and playback
-     * came back 403 `cannotDownloadFile`. That is not a missing file and not a
-     * revoked share: it is the Drive sharing option that stops viewers
-     * downloading, set on the folder or by a Workspace policy. Nothing in this
-     * System can work around it, and re-sharing with the service account will
-     * never help — but it is one setting in Drive, so the message has to say
-     * WHICH one rather than "no longer available".
-     */
+    it("sends an open-ended range as Drive expects it", async () => {
+      const fetchMock = stubFetch(() => streamResponse({ status: 206 }) as unknown as Response);
+      await provider().openStream("1Nkr4Vh", { start: 500 });
+      const call = fetchMock.mock.calls.find((c) => String(c[0]).includes("alt=media"));
+      expect((call![1] as RequestInit).headers).toMatchObject({ Range: "bytes=500-" });
+    });
+
+    it("NEVER produces a permanent Drive link (ARC-041)", async () => {
+      // The tempting shortcut is webContentLink, which needs the file
+      // link-shared: a permanent public URL to a paid course recording.
+      const fetchMock = stubFetch(() => streamResponse() as unknown as Response);
+      await provider().openStream("1Nkr4Vh");
+      for (const call of fetchMock.mock.calls) {
+        expect(String(call[0])).not.toContain("drive.google.com");
+        expect(String(call[0])).not.toContain("permissions");
+      }
+    });
+
     it("names the Drive setting when downloading is turned off", async () => {
+      /*
+       * The real answer from the Institute's Drive before the service account
+       * was raised above viewer. Not a missing file and not a revoked share:
+       * the sharing option that stops viewers downloading. Saying "no longer
+       * available" sent somebody looking for a deleted recording.
+       */
       stubFetch(() => ({
         ok: false,
         status: 403,
@@ -347,10 +378,20 @@ describe("Google Drive storage", () => {
           '"errors":[{"reason":"cannotDownloadFile"}]}}',
       }));
 
-      await expect(provider().signUrl("x", 300)).rejects.toMatchObject({
+      await expect(provider().openStream("x")).rejects.toMatchObject({
         message: expect.stringContaining("downloading is turned off"),
-        internal: expect.stringContaining("cannotDownloadFile"),
+        internal: expect.stringContaining("above viewer"),
       });
+    });
+
+    it("says the recording is gone when Drive says it is", async () => {
+      stubFetch(() => ({
+        ok: false,
+        status: 404,
+        headers: new Headers(),
+        text: async () => '{"error":{"code":404,"message":"File not found"}}',
+      }));
+      await expect(provider().openStream("x")).rejects.toThrow(/no longer available/i);
     });
   });
 

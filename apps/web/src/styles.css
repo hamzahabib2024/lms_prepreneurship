@@ -2517,3 +2517,57 @@ details > summary:hover { text-decoration: underline; }
 /* Pushed to the bottom so every tile's last line sits on the same baseline,
    whatever the title wrapped to. */
 .course-tile-when { margin-top: auto; padding-top: .4rem; }
+
+/* ── The live class page ────────────────────────────────────────────────────
+   Everything about a class except the video surface, which Google Meet
+   forbids being framed (X-Frame-Options: SAMEORIGIN). The stage keeps the same
+   proportions a player would, so the page does not jump when a provider that
+   CAN be embedded is used and the iframe branch starts being taken. */
+.class-head { align-items: flex-start; }
+.class-head h1 { margin: .15rem 0; }
+
+.pill-live {
+  display: inline-flex; align-items: center; gap: .4rem;
+  background: color-mix(in srgb, var(--error) 14%, transparent);
+  color: var(--error); border-color: transparent; font-weight: 600;
+}
+.live-dot {
+  width: 8px; height: 8px; border-radius: 999px;
+  background: currentColor;
+  animation: live-pulse 1.8s var(--ease) infinite;
+}
+/* Never the only signal — the word "live" is beside it (NFR-ACC-007) — and it
+   stops entirely for anybody who has asked for less motion. */
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: .35; transform: scale(.8); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .live-dot { animation: none; }
+}
+
+.class-stage {
+  background: var(--ink);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow-2);
+  min-height: 320px;
+  display: grid;
+}
+.class-frame { width: 100%; aspect-ratio: 16 / 9; border: 0; display: block; }
+
+.class-waiting {
+  display: grid; place-content: center; justify-items: center;
+  gap: .7rem; padding: 3rem 1.5rem; text-align: center;
+  color: rgb(255 255 255 / 82%);
+}
+.class-waiting svg { width: 38px; height: 38px; color: rgb(255 255 255 / 55%); }
+.class-waiting .muted { color: rgb(255 255 255 / 55%); }
+.class-waiting-message { margin: 0; font-size: 1.05rem; font-weight: 600; }
+.class-countdown {
+  margin: 0; font-size: 1.6rem; font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.class-notes { margin-top: 1.4rem; }
+.class-notes h2 { font-size: 1rem; margin-bottom: .4rem; }

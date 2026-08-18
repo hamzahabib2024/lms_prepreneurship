@@ -16,6 +16,7 @@ import { MySubjectsPage } from "./pages/MySubjectsPage";
 import { SubjectPage } from "./pages/SubjectPage";
 import { CoursePage } from "./pages/CoursePage";
 import { CoursesPage } from "./pages/CoursesPage";
+import { ClassPage } from "./pages/ClassPage";
 import { WatchPage } from "./pages/WatchPage";
 import { MarkingPage } from "./pages/MarkingPage";
 import { GradingPage } from "./pages/GradingPage";
@@ -590,6 +591,9 @@ export function App() {
               somebody is not on either way. */}
           {/* The index. Without it the course page was reachable only by
               knowing a UUID, or by drilling three levels into Sections. */}
+          {/* One scheduled class: countdown, one press to join, attendance
+              recorded at that moment. The join button used to do nothing. */}
+          <Route path="/classes/:sessionId" element={<ClassPage />} />
           <Route path="/courses" element={<CoursesPage />} />
           <Route path="/courses/:sectionSubjectId" element={<CoursePage />} />
           {/* Watching has its own address, so it can be bookmarked,

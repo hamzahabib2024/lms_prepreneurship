@@ -802,8 +802,8 @@ export class ContentService {
      * told the recording was moved, which is a lie about their teacher's work.
      *
      * `storageProvider` is recorded on every lecture for exactly this reason.
-     * Using it means the two stores can coexist: recordings catalogued before
-     * the switch keep playing, and new ones come from Drive.
+     * Using it means the two stores coexist: recordings catalogued before a
+     * switch keep playing, and new ones come from wherever they now arrive.
      */
     const lecture = await this.prisma.asSystem((db) =>
       db.recordedLecture.findUnique({
@@ -813,8 +813,26 @@ export class ContentService {
     );
     const provider = this.storage.get(lecture?.storageProvider ?? this.storage.forLectures().key);
 
+    /*
+     * A URL WHERE THERE IS ONE, BYTES WHERE THERE IS NOT.
+     *
+     * Local storage signs a short-lived URL and the browser is redirected to
+     * it — bytes never cross this tier, which is what ARC-052 asks for.
+     *
+     * Google Drive has no such URL. It serves content directly against an
+     * OAuth token, measured against the Institute's own Drive rather than
+     * assumed, and the only ways to produce a browser-fetchable Drive link are
+     * to make the recording link-shared or publish it — a permanent public
+     * link to a paid course recording, which ARC-041 forbids outright. So
+     * Drive-backed playback is proxied, and the caller is told which it is
+     * getting rather than the two being conflated.
+     */
+    if (typeof provider.openStream === "function") {
+      return { mode: "proxy" as const, provider, storageRef: ticket.storageRef };
+    }
+
     const signed = await provider.signUrl(ticket.storageRef, ttl);
-    return { redirectTo: signed.url, expiresAt: signed.expiresAt };
+    return { mode: "redirect" as const, redirectTo: signed.url, expiresAt: signed.expiresAt };
   }
 
   /**

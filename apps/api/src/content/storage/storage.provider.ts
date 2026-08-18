@@ -1,3 +1,5 @@
+import type { Readable } from "node:stream";
+
 /**
  * Storage abstraction — SRS ARC-043.
  *
@@ -105,4 +107,42 @@ export interface StorageProvider {
   delete(storageRef: string): Promise<void>;
 
   healthCheck(): Promise<StorageHealth>;
+
+  /**
+   * Read the bytes out, for a provider that CANNOT hand the browser a URL.
+   *
+   * Google Drive is one, and it is not a preference: the Drive API serves file
+   * content directly from googleapis.com against an OAuth token — measured,
+   * not assumed — with no presigned-link equivalent. The only ways to give a
+   * browser a fetchable Drive URL are to make the file link-shared, which is a
+   * permanent public link to a paid course recording (ARC-041), or to publish
+   * it to the web. Both are far worse than proxying.
+   *
+   * ARC-052 SAYS DO NOT PROXY, and this is a deviation from it, recorded as
+   * one rather than quietly taken. §3.8 sized the application tier assuming
+   * video never crosses it; with Drive it must. Range requests are passed
+   * through — Drive honours them — so seeking still works and a player fetches
+   * only what it plays rather than the whole file.
+   *
+   * Absent on a provider that can sign a URL. Local storage can, and still
+   * redirects, exactly as before.
+   */
+  openStream?(storageRef: string, range?: ByteRange): Promise<StorageStream>;
+}
+
+/** One byte range a player asked for. */
+export interface ByteRange {
+  start: number;
+  end?: number;
+}
+
+/** What a proxying provider hands back: a live stream, never a buffer. */
+export interface StorageStream {
+  /** 200 for the whole file, 206 for a range — mirrored from the source. */
+  status: number;
+  contentType: string | null;
+  contentLength: number | null;
+  /** Present on a 206, verbatim, so the browser can seek. */
+  contentRange: string | null;
+  body: Readable;
 }

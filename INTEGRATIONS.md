@@ -32,7 +32,7 @@ cp .env.example .env
 |---|---|---|---|
 | 1 | **Email** | 10 min | A mailbox you already own |
 | 2 | **Google Drive** | 30 min | Google Cloud access |
-| 3 | **Google Meet** | 10 min | Step 2 done first |
+| 3 | **Google Calendar / Meet** | 20 min | Step 2 done first. **No Workspace admin needed** |
 | 4 | **WhatsApp** | Days | A Meta Business account and template approval |
 
 ---
@@ -320,39 +320,361 @@ normally. Only the file's location differs.
 
 ---
 
-# 3. Google Meet
+# 3. Google Calendar and Google Meet
 
-Same project, same service account, same key file. Nothing new to download.
+Same Cloud project, same service account, same key file as section 2. Nothing
+new to download.
 
-## Step 1 — Confirm Calendar API is on
+> ## Read this first — one thing is not possible
+>
+> **Google Meet cannot be shown inside the LMS.** Not with Workspace, not with
+> any setting, not with any amount of work on our side:
+>
+> ```
+> GET https://meet.google.com/
+> x-frame-options: SAMEORIGIN
+> ```
+>
+> That header tells every browser to refuse to display Meet inside another
+> site. A recording can be shown in the LMS because it is a file — the server
+> fetches the bytes and re-serves them. A live class is a direct connection
+> between the student's browser and Google, so there is nothing to fetch.
+>
+> **What the LMS does own**: the timetable, the countdown, the join window, one
+> press to join, the register, and the recording afterwards. The class opens in
+> a window; the student never goes hunting for a link. If you need students to
+> stay on the page, the video has to move off Meet — see the note at the end of
+> this section.
 
-You enabled it in section 2, step 2. If you skipped it, do it now.
+## Before you start — run the checker
 
-## Step 2 — Grant domain-wide delegation
+```bash
+node -r dotenv/config scripts/check-meet.mjs
+```
 
-This is the step everyone misses, and without it Meet fails.
+It asks Google directly and prints the one next thing to do. **Run it after
+every step below.** It creates nothing except a probe event on the service
+account's own calendar, which it deletes immediately.
 
-In **Google Workspace Admin** → **Security → Access and data control → API
-controls → Domain-wide delegation → Add new**:
+Right now, on this installation, it says:
 
-- **Client ID**: the service account's client ID (Cloud Console → the service
-  account → its Unique ID)
-- **OAuth scopes**: `https://www.googleapis.com/auth/calendar.events`
+```
+1. The service account key
+  ✓ readable — lms-drive@prepreneurship-lms.iam.gserviceaccount.com
+    client ID for domain-wide delegation: 117293134412752348571
+2. The Calendar API on the project
+  ✓ enabled, and the service account can call it
+3. Acting as a real person (domain-wide delegation)
+  ✗ GOOGLE_IMPERSONATE_SUBJECT is not set
+4. Creating a Meet link
+  ✗ refused — Invalid conference type value.
+```
 
-## Step 3 — Restart
+So steps 1 and 2 are already done. Start at step 3.
+
+---
+
+## Two routes, and you only need one
+
+Creating a Meet link means acting as a **real person**. A service account
+cannot — Google answers `400 Invalid conference type value`, measured against
+this very project. There are exactly two ways to give the LMS a person to act
+as:
+
+| | Route A — **OAuth 2.0** | Route B — domain-wide delegation |
+|---|---|---|
+| Needs Workspace admin | **No** | Yes, a super admin |
+| Works on personal Gmail | **Yes** | No |
+| Set-up | One browser sign-in | Admin console entry |
+| Who owns the meetings | The account that signed in | The impersonated user |
+| Renewal | Never, once published | Never |
+
+**Route A is recommended** unless you already have the Admin console open. It
+is faster, it needs nobody else, and it is what the rest of this section
+describes. Route B is at the end.
+
+---
+
+# Route A — OAuth 2.0 (sign in once, no admin needed)
+
+### What OAuth 2.0 is doing here, in one paragraph
+
+The Institute's account grants the LMS permission to use its calendar, in
+its own browser, the same way it would grant any app. Google hands back a
+**refresh token** — a long-lived credential the LMS exchanges for a working
+access token whenever it needs one, without anybody signing in again.
+Meetings are then created **as that account**, which is precisely what Meet
+requires and what a service account can never be.
+
+Four things to set up, once:
+
+| | |
+|---|---|
+| **A1** | An OAuth client — who is asking |
+| **A2** | A consent screen, published — so the grant does not expire |
+| **A3** | The sign-in itself — which produces the refresh token |
+| **A4** | Paste it into `.env` and prove it works |
+
+## A1. Create an OAuth client
+
+<https://console.cloud.google.com/apis/credentials?project=prepreneurship-lms>
+
+**Create credentials → OAuth client ID → Application type: `Desktop app`** →
+name it `Prepreneurship LMS` → Create.
+
+> **Desktop app, not Web application.** It is the type that accepts a
+> `http://localhost` redirect on *any* port, so there is no redirect URI to
+> register and nothing to get wrong. A Web application client will refuse with
+> `redirect_uri_mismatch`.
+
+Press **DOWNLOAD JSON** and drop the file into the folder that already holds
+the service-account key:
+
+```
+E:/vs code/git/LMS@Prepreneurship/CREDENTIALS/
+```
+
+That is all there is to this step. The script in A3 finds the file there and
+writes the values into `.env` itself — nothing to copy by hand, and nothing
+to paste half of.
+
+> Prefer not to keep the file? Put the two values in `.env` yourself and the
+> script uses those instead. Both remain visible on the credential's own page
+> afterwards, so closing the dialogue is not fatal.
+>
+> ```ini
+> GOOGLE_OAUTH_CLIENT_ID=1234-abcd.apps.googleusercontent.com
+> GOOGLE_OAUTH_CLIENT_SECRET=GOCSPX-...
+> ```
+
+## A2. Set the consent screen up — and PUBLISH it
+
+<https://console.cloud.google.com/apis/credentials/consent?project=prepreneurship-lms>
+
+If the project belongs to your Workspace organisation, choose **Internal** and
+you are finished with this step — no verification, no expiry.
+
+Otherwise choose **External** and fill in the app name, a support email and a
+developer email. Those three are the only required fields.
+
+Then add the scope. The page is called **Data access** in the current console
+and **Scopes** in the older one; either way, **Add or remove scopes**, and
+paste this into the *manually add scopes* box:
+
+```
+https://www.googleapis.com/auth/calendar
+```
+
+It will be listed as a **restricted** or **sensitive** scope. That is
+expected and is not a problem for an app only your own institute uses.
+
+Finally — **this is the step that catches people** — go back to the consent
+screen and press **PUBLISH APP**.
+
+> ### The seven-day trap
+>
+> While the consent screen is in **Testing**, Google **expires every refresh
+> token after 7 days**. Everything works, classes schedule perfectly, and then
+> a week later it stops with `invalid_grant` and nobody remembers what changed.
+>
+> **Publish the app.** For your own app used by your own institute, the
+> "unverified app" warning is expected and you click through it — verification
+> is for apps asking the public for access.
+
+## A3. Authorise, once
+
+```bash
+node -r dotenv/config scripts/google-authorise.mjs
+```
+
+It prints a URL. Open it **in a browser signed in as the account whose calendar
+should hold the classes**, and approve.
+
+> Use a shared account — `classes@` or `office@` — not a teacher's own. A
+> teacher leaving would otherwise take every scheduled class with them.
+>
+> At *"Google hasn't verified this app"*, press **Advanced → Go to … (unsafe)**.
+> You are both the developer and the only user.
+
+It prints **who** authorised it, and writes everything into `.env` for you:
+
+```ini
+GOOGLE_OAUTH_CLIENT_ID=...
+GOOGLE_OAUTH_CLIENT_SECRET=...
+GOOGLE_OAUTH_REFRESH_TOKEN=...
+GOOGLE_CALENDAR_ID=primary
+LIVE_PROVIDER=google_meet
+```
+
+**The token is never printed to the terminal**, deliberately: terminals get
+scrolled back, screenshotted and pasted into chats, and that token is as
+sensitive as the account's password. It exists in `.env` — which is not
+committed — and nowhere else.
+
+Check the address it names is the one you meant. Authorising as the wrong
+Google account is the commonest mistake here, and it stays invisible until
+classes start appearing on somebody's personal calendar.
+
+## A4. Apply it and prove it
+
+```powershell
+npm run docker:up
+node -r dotenv/config scripts/check-meet.mjs
+```
 
 ### ✅ You are done when
-The Integrations screen stops saying the classroom provider is unconfigured.
+Step 3 reads *"a person has authorised the LMS"* and step 4 creates a real
+`https://meet.google.com/…` link and deletes it again.
 
-**It will not create Meet links yet** — the Calendar API calls are not written,
-and the provider still refuses with *"Google Calendar integration not yet
-implemented (DEP-02)"*. What these steps buy is that the work can now be done
-and tested. About a day, on top of the Drive work, since it is the same account
-and the same authentication.
+---
 
-### While you wait
-Whoever schedules the class pastes the link in. Attendance, the register, the
-timetable and the attendance rules are unaffected — only the link is manual.
+
+## OAuth 2.0 — what goes wrong, and what it means
+
+Every one of these is a real Google error with a cause that its wording does
+not give away.
+
+**`redirect_uri_mismatch`** — the OAuth client is a **Web application**, not a
+Desktop app. A Web client only accepts redirect URIs registered in advance;
+`google-authorise.mjs` uses a loopback port chosen at run time, which only a
+Desktop app client accepts. Create a new client of the right type; you can
+delete the old one.
+
+**`access_denied` / "Google hasn't verified this app"** — expected for your own
+app. Press **Advanced → Go to Prepreneurship LMS (unsafe)**. Verification is
+for apps asking strangers for access; you are the developer, the publisher and
+the only user.
+
+**The script says "an access token came back but NO REFRESH TOKEN"** — Google
+issues one only on the *first* consent, and will not repeat it. Revoke the
+LMS at <https://myaccount.google.com/permissions> and run the script again.
+
+**`invalid_grant` a few days after it was working** — almost always the
+seven-day trap: the consent screen is still in **Testing**, where Google
+expires refresh tokens after a week. Publish the app, then re-authorise. It
+can also mean the account's password changed, or somebody revoked the grant.
+
+**`invalid_client`** — the client ID or secret in `.env` does not match the
+OAuth client. Copy both again; the secret is shown in full only when created,
+but can be re-downloaded from the credential's page.
+
+**`insufficient authentication scopes`** — the grant was made before the
+Calendar scope was added to the consent screen. Add it, then re-authorise: an
+existing refresh token does not gain scopes it was not granted.
+
+**Everything green on your machine, nothing working in the app** — the
+container did not get the settings. `.env` is read when a container is
+**created**, not when it restarts:
+
+```powershell
+npm run docker:up
+docker compose exec api sh -c 'echo ${GOOGLE_OAUTH_REFRESH_TOKEN:+set} $LIVE_PROVIDER'
+```
+
+## Looking after the refresh token
+
+It is **as sensitive as that account's password**: anyone holding it, the
+client ID and the secret can read and write that calendar until it is revoked.
+
+- It lives in `.env`, which is not committed. Do not paste it into chat, a
+  ticket, or a screenshot.
+- To revoke: <https://myaccount.google.com/permissions> → Prepreneurship LMS →
+  Remove access. Classes stop being created; nothing already scheduled is lost.
+- To rotate: revoke, then run `google-authorise.mjs` again.
+- It does not expire on a published app, but it **does** stop working if the
+  account's password changes or the grant is removed. `check-meet.mjs` says
+  which of those happened.
+
+---
+
+# Route B — domain-wide delegation (Workspace admin)
+
+Only if you would rather not sign in, and you have a super admin to hand.
+
+**B1.** Get the service account's client ID. `scripts/check-meet.mjs` prints
+it; for this installation it is **`117293134412752348571`**. It is the numeric
+*Unique ID*, not the email address, and hunting for it is where this route
+usually stalls.
+
+**B2.** <https://admin.google.com> as a **super admin** →
+**Security → Access and data control → API controls →**
+**MANAGE DOMAIN-WIDE DELEGATION → Add new**
+
+| Field | Value |
+|---|---|
+| Client ID | `117293134412752348571` |
+| OAuth scopes | `https://www.googleapis.com/auth/calendar` |
+
+**B3.** In `.env`:
+
+```ini
+GOOGLE_IMPERSONATE_SUBJECT=classes@yourdomain.com
+GOOGLE_CALENDAR_ID=primary
+LIVE_PROVIDER=google_meet
+```
+
+Then `npm run docker:up` and run the checker.
+
+> If **API controls** is not in the menu, you are not a super admin or the
+> account is not Workspace. There is no Admin console for a personal Google
+> account — use Route A, which does not need one.
+
+## What still has to be built
+
+**Being able to create a link is not the same as the LMS creating one.** The
+adapter that turns a scheduled class into a Calendar event is not written yet
+(DEP-02). With everything above green, scheduling a class still produces a
+class with no link, and the teacher pastes one in.
+
+That work is roughly **a day**, and it cannot be written honestly until the
+steps above are green — there would be no way to test it. It is the same
+position Drive was in before its credentials arrived.
+
+Until then, and it works today:
+
+1. Teacher creates the meeting in Google Calendar or Meet as they do now
+2. Opens the class in the LMS and pastes the link into **Class link**
+3. Students press **Join the class** in the LMS, which records attendance
+
+The timetable, join window, register, warnings and recordings are all
+unaffected — only the link is manual.
+
+## If you need students to stay on the page
+
+Meet cannot do it, whatever else is configured. The LMS's live-classroom layer
+was built to be swapped (ARC-001/ARC-028): the join route already has an
+`EMBEDDED_ROUTE` branch, handled by the class page, waiting for a provider that
+permits framing. Realistic options are **Jitsi** (free, self-hosted or via
+8x8), **Daily.co** or **LiveKit**. That is an adapter and a player page — two
+to three days — and teachers would stop using Meet for live classes.
+
+## Troubleshooting, with the exact errors
+
+**`unauthorized_client: Client is unauthorized to retrieve access tokens using
+this method`** — step 3 is not done, or the scope in the Admin console differs
+from the one requested by even one character. It does **not** mean the key is
+wrong.
+
+**`Invalid conference type value`** — the account being used may not create
+Meet conferences. Either `GOOGLE_IMPERSONATE_SUBJECT` is unset, so the service
+account is acting as itself and never can, or the impersonated user has no
+Workspace licence that includes Meet.
+
+**`invalid_grant`** — Google accepts the client but not the user. Check the
+spelling of `GOOGLE_IMPERSONATE_SUBJECT`, and that they are a real user in the
+Workspace domain.
+
+**`404 Not Found` on the calendar** — `GOOGLE_CALENDAR_ID` names a calendar
+that user cannot see. Use `primary` unless you have deliberately made another.
+
+**Everything green on the host, nothing working in the app** — the container
+did not get the settings. `.env` is read when a container is **created**:
+`npm run docker:up`, not `restart`. Confirm with:
+
+```powershell
+docker compose exec api sh -c 'echo $GOOGLE_IMPERSONATE_SUBJECT $LIVE_PROVIDER'
+```
+
 
 ---
 
