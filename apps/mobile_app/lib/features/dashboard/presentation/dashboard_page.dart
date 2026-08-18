@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/ui.dart';
+import '../../admission/review/admissions_page.dart';
 import '../../auth/bloc/auth_bloc.dart';
 import '../../auth/data/models/auth_session.dart';
 import '../../auth/presentation/change_password_page.dart';
@@ -30,15 +31,16 @@ class DashboardPage extends StatelessWidget {
       create: (_) =>
           DashboardBloc(repository: DashboardRepository(api: api))
             ..add(const DashboardLoadRequested()),
-      child: DashboardScreen(user: user),
+      child: DashboardScreen(user: user, api: api),
     );
   }
 }
 
 class DashboardScreen extends StatelessWidget {
-  const DashboardScreen({super.key, required this.user});
+  const DashboardScreen({super.key, required this.user, required this.api});
 
   final AuthUser user;
+  final ApiClient api;
 
   /// The dashboard's page hue — the web's `.page-dashboard` --page-base.
   static const pageColor = Color(0xFF0891B2);
@@ -52,7 +54,7 @@ class DashboardScreen extends StatelessWidget {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _Header(user: user, state: state),
+                _Header(user: user, api: api, state: state),
                 Expanded(child: _DashboardBody(state: state)),
               ],
             );
@@ -64,11 +66,13 @@ class DashboardScreen extends StatelessWidget {
 }
 
 /// Greeting + date + staleness pill (ARC-048 — anything that may be stale
-/// carries when it was computed), with the account entry on the far end.
+/// carries when it was computed), with the admissions entry and the account
+/// entry on the far end.
 class _Header extends StatelessWidget {
-  const _Header({required this.user, required this.state});
+  const _Header({required this.user, required this.api, required this.state});
 
   final AuthUser user;
+  final ApiClient api;
   final DashboardState state;
 
   @override
@@ -79,6 +83,8 @@ class _Header extends StatelessWidget {
         : hour < 17
             ? 'Good afternoon'
             : 'Good evening';
+
+    final isAdmin = user.isAdmin || user.isSuperAdmin;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 4),
@@ -106,6 +112,15 @@ class _Header extends StatelessWidget {
               padding: const EdgeInsets.only(top: 6),
               child: Pill(text: 'as at ${_time(state.data!.generatedAt)}'),
             ),
+          // The web gates Admissions behind the admin role; the server still
+          // enforces the permission on every request (FR-REG-022).
+          if (isAdmin) ...[
+            const SizedBox(width: 12),
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: _AdmissionsButton(api: api),
+            ),
+          ],
           const SizedBox(width: 12),
           _ProfileButton(user: user),
         ],
@@ -128,6 +143,52 @@ class _Header extends StatelessWidget {
     final h = d.hour.toString().padLeft(2, '0');
     final m = d.minute.toString().padLeft(2, '0');
     return '$h:$m';
+  }
+}
+
+/// The avatar — the web's `.avatar` initials tile. Opens the profile sheet,
+/// the mobile equivalent of the sidebar foot (avatar, name, role, sign-out).
+class _AdmissionsButton extends StatelessWidget {
+  const _AdmissionsButton({required this.api});
+
+  final ApiClient api;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(builder: (_) => AdmissionsPage(api: api)),
+          );
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.how_to_reg_outlined, size: 16),
+              const SizedBox(width: 6),
+              Text(
+                'Admissions',
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
