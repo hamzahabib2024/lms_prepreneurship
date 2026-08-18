@@ -60,8 +60,14 @@ export interface MeetRecording {
 const DATE_AND_TIME =
   /[-–]\s*(\d{4})[/-](\d{1,2})[/-](\d{1,2})\s*(?:(\d{1,2}):(\d{2}))?\s*([A-Z]{2,5})?\s*[-–]?/;
 
-/** The trailing "- Recording", in any case, with or without a space before it. */
-const TRAILING_RECORDING = /[-–]?\s*recording\s*$/i;
+/**
+ * The trailing "- Recording", in any case, with or without a space before it
+ * — and with the NUMBER Meet appends when one meeting is recorded more than
+ * once: "… - Recording 2". Real, from the Institute's English folder, where a
+ * single session has two. Without it that one card carried its whole filename
+ * as its title, sitting beside eleven that read "English".
+ */
+const TRAILING_RECORDING = /[-–]?\s*recording(\s*\d+)?\s*$/i;
 
 /**
  * Noise around the subject. Ordered: the organiser's notes first, because

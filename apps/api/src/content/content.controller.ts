@@ -1,6 +1,6 @@
-import { Body, Controller, Get, Param, Patch, Post, Put, Query, Res } from "@nestjs/common";
+import { Body, Controller, Get, Param, Patch, Post, Put, Query, Req, Res } from "@nestjs/common";
 import { z } from "zod";
-import type { Response } from "express";
+import type { Request, Response } from "express";
 import { ContentService } from "./content.service";
 import { LectureSyncService } from "./lecture-sync.service";
 import { StorageRegistry } from "./storage/storage.registry";
@@ -276,11 +276,47 @@ export class ContentController {
    */
   @Public()
   @Get("lectures/stream/:ticketId")
-  async stream(@Param("ticketId") ticketId: string, @Res() res: Response): Promise<void> {
-    const { redirectTo } = await this.content.resolveTicket(ticketId);
-    // 302 rather than 301: the target expires, and a permanent redirect would
-    // be cached by the browser long after the signature is dead.
-    res.redirect(302, redirectTo);
+  async stream(
+    @Param("ticketId") ticketId: string,
+    @Req() req: Request,
+    @Res() res: Response,
+  ): Promise<void> {
+    const resolved = await this.content.resolveTicket(ticketId);
+
+    if (resolved.mode === "redirect") {
+      // 302 rather than 301: the target expires, and a permanent redirect
+      // would be cached by the browser long after the signature is dead.
+      res.redirect(302, resolved.redirectTo);
+      return;
+    }
+
+    /*
+     * Proxied, because Google Drive has no signed URL — see resolveTicket.
+     *
+     * The Range header is passed through and Drive's answer mirrored back, so
+     * seeking works and a player fetches only what it plays. The body is
+     * PIPED: a 363 MB recording collected into memory per viewer would end the
+     * application tier at four concurrent students.
+     */
+    const range = parseRangeHeader(req.headers.range);
+    const stream = await resolved.provider.openStream!(resolved.storageRef, range);
+
+    res.status(stream.status);
+    if (stream.contentType) res.setHeader("Content-Type", stream.contentType);
+    if (stream.contentLength !== null) res.setHeader("Content-Length", String(stream.contentLength));
+    if (stream.contentRange) res.setHeader("Content-Range", stream.contentRange);
+    res.setHeader("Accept-Ranges", "bytes");
+    // One person's, for fifteen minutes. A shared cache holding this would
+    // serve a paid recording to whoever asked next.
+    res.setHeader("Cache-Control", "private, max-age=0, no-store");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+
+    // If the student closes the tab mid-lecture, stop pulling from Drive
+    // rather than streaming the rest of the file into a socket nobody is
+    // reading — which would keep the connection and the quota busy for the
+    // length of the recording.
+    res.on("close", () => stream.body.destroy?.());
+    stream.body.pipe(res);
   }
 
   @RequirePermission("watch_progress", "update")
@@ -303,4 +339,26 @@ export class ContentController {
   providers() {
     return this.storage.listWithHealth();
   }
+}
+
+/**
+ * The Range header, as the byte range a provider is asked for.
+ *
+ * Deliberately NOT the media route`s parseRange, which clamps against a known
+ * file size. Nothing here knows the size — only the provider does — so this
+ * cannot clamp, and a suffix range ("the last N bytes") is handed on untouched
+ * for the provider to resolve. Conflating the two would mean guessing a length.
+ */
+function parseRangeHeader(header: string | undefined): { start: number; end?: number } | undefined {
+  if (!header) return undefined;
+  const match = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
+  if (!match) return undefined;
+  const [, rawStart, rawEnd] = match;
+  // A suffix range ("the last N bytes") cannot be turned into a start without
+  // knowing the length, so it is handed on as written.
+  if (rawStart === "") return undefined;
+  const start = Number(rawStart);
+  if (!Number.isFinite(start) || start < 0) return undefined;
+  const end = rawEnd === "" ? undefined : Number(rawEnd);
+  return end !== undefined && Number.isFinite(end) ? { start, end } : { start };
 }
