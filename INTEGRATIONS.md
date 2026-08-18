@@ -32,7 +32,7 @@ cp .env.example .env
 |---|---|---|---|
 | 1 | **Email** | 10 min | A mailbox you already own |
 | 2 | **Google Drive** | 30 min | Google Cloud access |
-| 3 | **Google Calendar / Meet** | 20 min | Step 2 done first, **and Workspace admin access** |
+| 3 | **Google Calendar / Meet** | 20 min | Step 2 done first. **No Workspace admin needed** |
 | 4 | **WhatsApp** | Days | A Meta Business account and template approval |
 
 ---
@@ -374,105 +374,139 @@ So steps 1 and 2 are already done. Start at step 3.
 
 ---
 
-## What you need
+## Two routes, and you only need one
 
-| | |
-|---|---|
-| **Google Workspace** | Not a personal @gmail.com account. Meet link creation is a Workspace feature |
-| **A super-admin login** to admin.google.com | Step 3 cannot be done from the Cloud console |
-| **A user account to schedule as** | The classes will appear on this person's calendar |
+Creating a Meet link means acting as a **real person**. A service account
+cannot — Google answers `400 Invalid conference type value`, measured against
+this very project. There are exactly two ways to give the LMS a person to act
+as:
 
-## Step 1 — The Calendar API (already done)
+| | Route A — **sign in once** | Route B — domain-wide delegation |
+|---|---|---|
+| Needs Workspace admin | **No** | Yes, a super admin |
+| Works on personal Gmail | **Yes** | No |
+| Set-up | One browser sign-in | Admin console entry |
+| Who owns the meetings | The account that signed in | The impersonated user |
+| Renewal | Never, once published | Never |
 
-Enabled in section 2, step 2. To confirm:
+**Route A is recommended** unless you already have the Admin console open. It
+is faster, it needs nobody else, and it is what the rest of this section
+describes. Route B is at the end.
 
-<https://console.cloud.google.com/apis/library/calendar-json.googleapis.com?project=prepreneurship-lms>
+---
 
-It should read **Manage**, not **Enable**.
+# Route A — sign in once (no admin needed)
 
-## Step 2 — Find the client ID
+## A1. Create an OAuth client
 
-**Not the email address.** Domain-wide delegation is keyed on a numeric client
-ID, and looking for it is where this step usually stalls.
+<https://console.cloud.google.com/apis/credentials?project=prepreneurship-lms>
 
-The checker prints it:
+**Create credentials → OAuth client ID → Application type: `Desktop app`** →
+name it `Prepreneurship LMS` → Create.
 
-```
-client ID for domain-wide delegation: 117293134412752348571
-```
+> **Desktop app, not Web application.** It is the type that accepts a
+> `http://localhost` redirect on *any* port, so there is no redirect URI to
+> register and nothing to get wrong. A Web application client will refuse with
+> `redirect_uri_mismatch`.
 
-Or in the Cloud console: **IAM & Admin → Service Accounts → lms-drive →**
-the **Unique ID** field.
-
-## Step 3 — Authorise it in the Admin console
-
-**This is the step that is currently failing, and the one everybody misses.**
-
-Sign in to <https://admin.google.com> as a **super admin**, then:
-
-**Security → Access and data control → API controls →** scroll to
-**Domain-wide delegation → MANAGE DOMAIN-WIDE DELEGATION → Add new**
-
-| Field | Value |
-|---|---|
-| **Client ID** | `117293134412752348571` |
-| **OAuth scopes** | `https://www.googleapis.com/auth/calendar` |
-
-Paste the scope exactly, with no spaces. Press **Authorise**.
-
-> **If you cannot find "API controls"**, you are not signed in as a super
-> admin, or the account is not a Workspace account. There is no Admin console
-> for a personal Google account, and this step cannot be completed without one.
-
-Google takes a few minutes to apply it. Then:
-
-```bash
-node -r dotenv/config scripts/check-meet.mjs
-```
-
-Step 3 should turn green. If it still says `unauthorized_client`, the client ID
-or the scope does not match — that error never means the key is wrong.
-
-## Step 4 — Tell the LMS whose calendar to use
-
-In `.env`:
+Copy the **Client ID** and **Client secret** into `.env`:
 
 ```ini
-# The Workspace user the LMS schedules as. Classes appear on this calendar and
-# this person is the meeting's owner.
-GOOGLE_IMPERSONATE_SUBJECT=classes@prepreneurship.com
+GOOGLE_OAUTH_CLIENT_ID=1234-abcd.apps.googleusercontent.com
+GOOGLE_OAUTH_CLIENT_SECRET=GOCSPX-...
+```
 
-# Which of that user's calendars. "primary" is their own.
+## A2. Set the consent screen up — and PUBLISH it
+
+<https://console.cloud.google.com/apis/credentials/consent?project=prepreneurship-lms>
+
+If the project belongs to your Workspace organisation, choose **Internal** and
+you are finished with this step — no verification, no expiry.
+
+Otherwise choose **External**, fill in the app name and your email, add the
+Calendar scope, and then — **this is the step that catches people** — go back
+to the consent screen and press **PUBLISH APP**.
+
+> ### The seven-day trap
+>
+> While the consent screen is in **Testing**, Google **expires every refresh
+> token after 7 days**. Everything works, classes schedule perfectly, and then
+> a week later it stops with `invalid_grant` and nobody remembers what changed.
+>
+> **Publish the app.** For your own app used by your own institute, the
+> "unverified app" warning is expected and you click through it — verification
+> is for apps asking the public for access.
+
+## A3. Authorise, once
+
+```bash
+node -r dotenv/config scripts/google-authorise.mjs
+```
+
+It prints a URL. Open it **in a browser signed in as the account whose calendar
+should hold the classes**, and approve.
+
+> Use a shared account — `classes@` or `office@` — not a teacher's own. A
+> teacher leaving would otherwise take every scheduled class with them.
+>
+> At *"Google hasn't verified this app"*, press **Advanced → Go to … (unsafe)**.
+> You are both the developer and the only user.
+
+The script prints who authorised it, and the line to paste into `.env`:
+
+```ini
+GOOGLE_OAUTH_REFRESH_TOKEN=1//0g...
 GOOGLE_CALENDAR_ID=primary
-
-# Switch live classes over to Meet.
 LIVE_PROVIDER=google_meet
 ```
 
-> **Use a shared account, not a teacher's own.** `classes@` or `office@`
-> outlives any individual, and a teacher leaving does not take every scheduled
-> class with them.
+**That refresh token is as sensitive as that account's password.** It lives in
+`.env`, which is not committed.
 
-Then recreate the containers — a container only reads `.env` when it is
-created, not when it restarts:
+## A4. Apply it and prove it
 
 ```powershell
 npm run docker:up
-```
-
-## Step 5 — Prove a Meet link can be created
-
-```bash
 node -r dotenv/config scripts/check-meet.mjs
 ```
 
-All five checks green, and step 4 prints a real `https://meet.google.com/…`
-link, which it then deletes.
-
 ### ✅ You are done when
-The checker creates and deletes a Meet link without complaint.
+Step 3 reads *"a person has authorised the LMS"* and step 4 creates a real
+`https://meet.google.com/…` link and deletes it again.
 
 ---
+
+# Route B — domain-wide delegation (Workspace admin)
+
+Only if you would rather not sign in, and you have a super admin to hand.
+
+**B1.** Get the service account's client ID. `scripts/check-meet.mjs` prints
+it; for this installation it is **`117293134412752348571`**. It is the numeric
+*Unique ID*, not the email address, and hunting for it is where this route
+usually stalls.
+
+**B2.** <https://admin.google.com> as a **super admin** →
+**Security → Access and data control → API controls →**
+**MANAGE DOMAIN-WIDE DELEGATION → Add new**
+
+| Field | Value |
+|---|---|
+| Client ID | `117293134412752348571` |
+| OAuth scopes | `https://www.googleapis.com/auth/calendar` |
+
+**B3.** In `.env`:
+
+```ini
+GOOGLE_IMPERSONATE_SUBJECT=classes@yourdomain.com
+GOOGLE_CALENDAR_ID=primary
+LIVE_PROVIDER=google_meet
+```
+
+Then `npm run docker:up` and run the checker.
+
+> If **API controls** is not in the menu, you are not a super admin or the
+> account is not Workspace. There is no Admin console for a personal Google
+> account — use Route A, which does not need one.
 
 ## What still has to be built
 

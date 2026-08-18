@@ -64,6 +64,36 @@ function loadKey() {
   }
 }
 
+/**
+ * The OTHER way in, and the one that needs no Workspace admin.
+ *
+ * A person authorised the LMS once in their own browser and we kept the
+ * refresh token. Google issues access tokens against it indefinitely, and
+ * anything created belongs to that person -- so Meet links work, which is
+ * the whole point. See scripts/google-authorise.mjs.
+ */
+async function tokenFromRefresh() {
+  const id = (process.env.GOOGLE_OAUTH_CLIENT_ID ?? "").trim();
+  const secret = (process.env.GOOGLE_OAUTH_CLIENT_SECRET ?? "").trim();
+  const refresh = (process.env.GOOGLE_OAUTH_REFRESH_TOKEN ?? "").trim();
+  if (!id || !secret || !refresh) return null;
+
+  const res = await fetch(TOKEN_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: id,
+      client_secret: secret,
+      refresh_token: refresh,
+      grant_type: "refresh_token",
+    }),
+  });
+  const body = await res.json();
+  return body.access_token
+    ? { token: body.access_token }
+    : { error: `${body.error ?? res.status}: ${body.error_description ?? ""}`.trim() };
+}
+
 async function getToken(key, scope, subject) {
   const now = Math.floor(Date.now() / 1000);
   const b64 = (o) => Buffer.from(JSON.stringify(o)).toString("base64url");
@@ -126,11 +156,26 @@ ok("enabled, and the service account can call it");
 
 // ─────────────────────────────────────────────── domain-wide delegation ──
 const subject = (process.env.GOOGLE_IMPERSONATE_SUBJECT ?? "").trim();
-step(3, "Acting as a real person (domain-wide delegation)");
-if (!subject) {
-  no("GOOGLE_IMPERSONATE_SUBJECT is not set");
+const oauth = await tokenFromRefresh();
+step(3, "Acting as a real person");
+if (oauth && !oauth.error) {
+  ok("a person has authorised the LMS (OAuth refresh token)");
+  info("No Workspace admin was needed for this, and none is.");
+} else if (oauth && oauth.error) {
+  no(`the saved authorisation was refused - ${oauth.error}`);
+  if (oauth.error.includes("invalid_grant")) {
+    info("A refresh token stops working if it is revoked, if the account password");
+    info("changed, or if the OAuth consent screen is still in Testing - in which");
+    info("case Google expires it after SEVEN DAYS. Publish the app, then run:");
+    info("  node -r dotenv/config scripts/google-authorise.mjs");
+  }
+  process.exit(1);
+} else if (!subject) {
+  no("no way to act as a person is configured");
   info("A service account cannot create Meet links on its own — proved in step 4 below.");
-  info("It has to act AS a Workspace user, and that user's address goes here.");
+  info("Two ways to fix it, and EITHER is enough:");
+  info("  A. node -r dotenv/config scripts/google-authorise.mjs   (no admin needed)");
+  info("  B. domain-wide delegation, then set GOOGLE_IMPERSONATE_SUBJECT");
 } else {
   const asUser = await getToken(key, CAL_SCOPE, subject);
   if (asUser.error) {
@@ -160,7 +205,15 @@ if (!subject) {
 
 // ──────────────────────────────────────────────────── creating a meeting ──
 step(4, "Creating a Meet link");
-const actor = subject ? await getToken(key, CAL_SCOPE, subject) : direct;
+// OAuth first: it is a real person, which is what Meet requires. Then
+// impersonation. The bare service account last, only so step 4 can show
+// exactly why it cannot work.
+const actor =
+  oauth && !oauth.error
+    ? oauth
+    : subject
+      ? await getToken(key, CAL_SCOPE, subject)
+      : direct;
 if (actor.error) {
   no(actor.error);
   process.exit(1);
@@ -198,7 +251,7 @@ if (!created.ok) {
     info(
       subject
         ? "The impersonated user needs a Workspace licence that includes Meet."
-        : "A service account acting as ITSELF can never create one. Set GOOGLE_IMPERSONATE_SUBJECT.",
+        : "A service account acting as ITSELF can never create one. Run scripts/google-authorise.mjs.",
     );
   }
   if (created.status === 404) info(`No calendar "${calendarId}" for that account.`);

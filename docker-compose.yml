@@ -148,6 +148,12 @@ services:
       # answers "Invalid conference type value", measured against this very
       # project. It has to act as a real Workspace user through domain-wide
       # delegation, and this names them.
+      # Route A: a person signed in once and the System kept the refresh
+      # token. Needs no Workspace admin and works on any Google account.
+      GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET:-}
+      GOOGLE_OAUTH_REFRESH_TOKEN: ${GOOGLE_OAUTH_REFRESH_TOKEN:-}
+      # Route B: domain-wide delegation, and the user to act as.
       GOOGLE_IMPERSONATE_SUBJECT: ${GOOGLE_IMPERSONATE_SUBJECT:-}
       GOOGLE_CALENDAR_ID: ${GOOGLE_CALENDAR_ID:-primary}
       # manual until the Calendar adapter is written: the teacher pastes the
