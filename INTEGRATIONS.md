@@ -32,7 +32,7 @@ cp .env.example .env
 |---|---|---|---|
 | 1 | **Email** | 10 min | A mailbox you already own |
 | 2 | **Google Drive** | 30 min | Google Cloud access |
-| 3 | **Google Meet** | 10 min | Step 2 done first |
+| 3 | **Google Calendar / Meet** | 20 min | Step 2 done first, **and Workspace admin access** |
 | 4 | **WhatsApp** | Days | A Meta Business account and template approval |
 
 ---
@@ -320,39 +320,216 @@ normally. Only the file's location differs.
 
 ---
 
-# 3. Google Meet
+# 3. Google Calendar and Google Meet
 
-Same project, same service account, same key file. Nothing new to download.
+Same Cloud project, same service account, same key file as section 2. Nothing
+new to download.
 
-## Step 1 — Confirm Calendar API is on
+> ## Read this first — one thing is not possible
+>
+> **Google Meet cannot be shown inside the LMS.** Not with Workspace, not with
+> any setting, not with any amount of work on our side:
+>
+> ```
+> GET https://meet.google.com/
+> x-frame-options: SAMEORIGIN
+> ```
+>
+> That header tells every browser to refuse to display Meet inside another
+> site. A recording can be shown in the LMS because it is a file — the server
+> fetches the bytes and re-serves them. A live class is a direct connection
+> between the student's browser and Google, so there is nothing to fetch.
+>
+> **What the LMS does own**: the timetable, the countdown, the join window, one
+> press to join, the register, and the recording afterwards. The class opens in
+> a window; the student never goes hunting for a link. If you need students to
+> stay on the page, the video has to move off Meet — see the note at the end of
+> this section.
 
-You enabled it in section 2, step 2. If you skipped it, do it now.
+## Before you start — run the checker
 
-## Step 2 — Grant domain-wide delegation
+```bash
+node -r dotenv/config scripts/check-meet.mjs
+```
 
-This is the step everyone misses, and without it Meet fails.
+It asks Google directly and prints the one next thing to do. **Run it after
+every step below.** It creates nothing except a probe event on the service
+account's own calendar, which it deletes immediately.
 
-In **Google Workspace Admin** → **Security → Access and data control → API
-controls → Domain-wide delegation → Add new**:
+Right now, on this installation, it says:
 
-- **Client ID**: the service account's client ID (Cloud Console → the service
-  account → its Unique ID)
-- **OAuth scopes**: `https://www.googleapis.com/auth/calendar.events`
+```
+1. The service account key
+  ✓ readable — lms-drive@prepreneurship-lms.iam.gserviceaccount.com
+    client ID for domain-wide delegation: 117293134412752348571
+2. The Calendar API on the project
+  ✓ enabled, and the service account can call it
+3. Acting as a real person (domain-wide delegation)
+  ✗ GOOGLE_IMPERSONATE_SUBJECT is not set
+4. Creating a Meet link
+  ✗ refused — Invalid conference type value.
+```
 
-## Step 3 — Restart
+So steps 1 and 2 are already done. Start at step 3.
+
+---
+
+## What you need
+
+| | |
+|---|---|
+| **Google Workspace** | Not a personal @gmail.com account. Meet link creation is a Workspace feature |
+| **A super-admin login** to admin.google.com | Step 3 cannot be done from the Cloud console |
+| **A user account to schedule as** | The classes will appear on this person's calendar |
+
+## Step 1 — The Calendar API (already done)
+
+Enabled in section 2, step 2. To confirm:
+
+<https://console.cloud.google.com/apis/library/calendar-json.googleapis.com?project=prepreneurship-lms>
+
+It should read **Manage**, not **Enable**.
+
+## Step 2 — Find the client ID
+
+**Not the email address.** Domain-wide delegation is keyed on a numeric client
+ID, and looking for it is where this step usually stalls.
+
+The checker prints it:
+
+```
+client ID for domain-wide delegation: 117293134412752348571
+```
+
+Or in the Cloud console: **IAM & Admin → Service Accounts → lms-drive →**
+the **Unique ID** field.
+
+## Step 3 — Authorise it in the Admin console
+
+**This is the step that is currently failing, and the one everybody misses.**
+
+Sign in to <https://admin.google.com> as a **super admin**, then:
+
+**Security → Access and data control → API controls →** scroll to
+**Domain-wide delegation → MANAGE DOMAIN-WIDE DELEGATION → Add new**
+
+| Field | Value |
+|---|---|
+| **Client ID** | `117293134412752348571` |
+| **OAuth scopes** | `https://www.googleapis.com/auth/calendar` |
+
+Paste the scope exactly, with no spaces. Press **Authorise**.
+
+> **If you cannot find "API controls"**, you are not signed in as a super
+> admin, or the account is not a Workspace account. There is no Admin console
+> for a personal Google account, and this step cannot be completed without one.
+
+Google takes a few minutes to apply it. Then:
+
+```bash
+node -r dotenv/config scripts/check-meet.mjs
+```
+
+Step 3 should turn green. If it still says `unauthorized_client`, the client ID
+or the scope does not match — that error never means the key is wrong.
+
+## Step 4 — Tell the LMS whose calendar to use
+
+In `.env`:
+
+```ini
+# The Workspace user the LMS schedules as. Classes appear on this calendar and
+# this person is the meeting's owner.
+GOOGLE_IMPERSONATE_SUBJECT=classes@prepreneurship.com
+
+# Which of that user's calendars. "primary" is their own.
+GOOGLE_CALENDAR_ID=primary
+
+# Switch live classes over to Meet.
+LIVE_PROVIDER=google_meet
+```
+
+> **Use a shared account, not a teacher's own.** `classes@` or `office@`
+> outlives any individual, and a teacher leaving does not take every scheduled
+> class with them.
+
+Then recreate the containers — a container only reads `.env` when it is
+created, not when it restarts:
+
+```powershell
+npm run docker:up
+```
+
+## Step 5 — Prove a Meet link can be created
+
+```bash
+node -r dotenv/config scripts/check-meet.mjs
+```
+
+All five checks green, and step 4 prints a real `https://meet.google.com/…`
+link, which it then deletes.
 
 ### ✅ You are done when
-The Integrations screen stops saying the classroom provider is unconfigured.
+The checker creates and deletes a Meet link without complaint.
 
-**It will not create Meet links yet** — the Calendar API calls are not written,
-and the provider still refuses with *"Google Calendar integration not yet
-implemented (DEP-02)"*. What these steps buy is that the work can now be done
-and tested. About a day, on top of the Drive work, since it is the same account
-and the same authentication.
+---
 
-### While you wait
-Whoever schedules the class pastes the link in. Attendance, the register, the
-timetable and the attendance rules are unaffected — only the link is manual.
+## What still has to be built
+
+**Being able to create a link is not the same as the LMS creating one.** The
+adapter that turns a scheduled class into a Calendar event is not written yet
+(DEP-02). With everything above green, scheduling a class still produces a
+class with no link, and the teacher pastes one in.
+
+That work is roughly **a day**, and it cannot be written honestly until the
+steps above are green — there would be no way to test it. It is the same
+position Drive was in before its credentials arrived.
+
+Until then, and it works today:
+
+1. Teacher creates the meeting in Google Calendar or Meet as they do now
+2. Opens the class in the LMS and pastes the link into **Class link**
+3. Students press **Join the class** in the LMS, which records attendance
+
+The timetable, join window, register, warnings and recordings are all
+unaffected — only the link is manual.
+
+## If you need students to stay on the page
+
+Meet cannot do it, whatever else is configured. The LMS's live-classroom layer
+was built to be swapped (ARC-001/ARC-028): the join route already has an
+`EMBEDDED_ROUTE` branch, handled by the class page, waiting for a provider that
+permits framing. Realistic options are **Jitsi** (free, self-hosted or via
+8x8), **Daily.co** or **LiveKit**. That is an adapter and a player page — two
+to three days — and teachers would stop using Meet for live classes.
+
+## Troubleshooting, with the exact errors
+
+**`unauthorized_client: Client is unauthorized to retrieve access tokens using
+this method`** — step 3 is not done, or the scope in the Admin console differs
+from the one requested by even one character. It does **not** mean the key is
+wrong.
+
+**`Invalid conference type value`** — the account being used may not create
+Meet conferences. Either `GOOGLE_IMPERSONATE_SUBJECT` is unset, so the service
+account is acting as itself and never can, or the impersonated user has no
+Workspace licence that includes Meet.
+
+**`invalid_grant`** — Google accepts the client but not the user. Check the
+spelling of `GOOGLE_IMPERSONATE_SUBJECT`, and that they are a real user in the
+Workspace domain.
+
+**`404 Not Found` on the calendar** — `GOOGLE_CALENDAR_ID` names a calendar
+that user cannot see. Use `primary` unless you have deliberately made another.
+
+**Everything green on the host, nothing working in the app** — the container
+did not get the settings. `.env` is read when a container is **created**:
+`npm run docker:up`, not `restart`. Confirm with:
+
+```powershell
+docker compose exec api sh -c 'echo $GOOGLE_IMPERSONATE_SUBJECT $LIVE_PROVIDER'
+```
+
 
 ---
 

@@ -33,8 +33,30 @@ export class GoogleMeetProvider implements LiveClassroomProvider {
 
   constructor(private readonly config: ConfigService) {}
 
+  /**
+   * A KEY IS NOT ENOUGH, and believing otherwise was a live trap.
+   *
+   * This tested only for the service-account key — which now exists, because
+   * Drive uses the same one. So the moment LIVE_PROVIDER was set to
+   * google_meet, this adapter declared itself configured and createSession
+   * threw "not yet implemented" on EVERY class anybody scheduled. The
+   * credentials arriving for one integration silently armed another.
+   *
+   * Meet also needs an account to act AS. A service account cannot create a
+   * Meet conference on its own: Google answers
+   *
+   *   400 "Invalid conference type value."
+   *
+   * — measured against this Institute's own project. Only a real Workspace
+   * user can, reached through domain-wide delegation, which is what
+   * GOOGLE_IMPERSONATE_SUBJECT names. Without it there is nothing to do but
+   * degrade honestly, which is what FR-LIV-004 asks for anyway.
+   */
   private get isConfigured(): boolean {
-    return !!this.config.get<string>("GOOGLE_SERVICE_ACCOUNT_JSON");
+    return (
+      !!this.config.get<string>("GOOGLE_SERVICE_ACCOUNT_JSON") &&
+      !!(this.config.get<string>("GOOGLE_IMPERSONATE_SUBJECT", "") ?? "").trim()
+    );
   }
 
   capabilities(): ProviderCapabilities {
@@ -68,11 +90,32 @@ export class GoogleMeetProvider implements LiveClassroomProvider {
       };
     }
 
-    // TODO(DEP-02): create a Calendar event with conferenceDataVersion=1 and
-    // read conferenceData.entryPoints[].uri. Deliberately not stubbed with a
-    // fake URL — a plausible-looking link that does not work is worse than an
-    // absent one, because the teacher discovers it mid-class.
-    throw new Error("Google Calendar integration not yet implemented (DEP-02).");
+    /*
+     * TODO(DEP-02): create a Calendar event with conferenceDataVersion=1 and
+     * read conferenceData.entryPoints[].uri.
+     *
+     * DEGRADES, IT DOES NOT THROW. Throwing here failed the whole scheduling
+     * transaction, so with this provider selected a teacher could not create
+     * a class at all — the System went from missing one feature to refusing
+     * an unrelated one. FR-LIV-004 is explicit: the session exists and is
+     * usable, only the link is absent, and the teacher supplies one
+     * (FR-LIV-018).
+     *
+     * Still no fabricated URL. A plausible link that does not work is worse
+     * than an absent one, because the teacher finds out mid-class.
+     */
+    this.logger.warn(
+      `Meet link creation is not implemented yet (DEP-02); session ${req.sessionId} ` +
+        `created without one. The teacher can paste a link on the class.`,
+    );
+    return {
+      providerKey: this.key,
+      externalId: null,
+      joinUrl: null,
+      hostUrl: null,
+      providerMetadata: { reason: "not_implemented" },
+      status: "PENDING",
+    };
   }
 
   updateSession(binding: ProviderBinding, _req: SessionRequest): Promise<ProviderBinding> {

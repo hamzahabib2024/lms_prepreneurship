@@ -138,6 +138,21 @@ services:
       # Where a folder picker starts when connecting a class to its recordings.
       # Optional: an id can always be pasted instead.
       GOOGLE_DRIVE_ROOT_FOLDER_ID: ${GOOGLE_DRIVE_ROOT_FOLDER_ID:-}
+      # ------------------------------------------- live classes (DEP-02)
+      #
+      # Same class of bug as the mail settings were: a variable the API reads
+      # and compose never passed, so setting it in .env changed nothing and
+      # said nothing. Named here so the documented steps actually take effect.
+      #
+      # A service account CANNOT create a Meet link on its own — Google
+      # answers "Invalid conference type value", measured against this very
+      # project. It has to act as a real Workspace user through domain-wide
+      # delegation, and this names them.
+      GOOGLE_IMPERSONATE_SUBJECT: ${GOOGLE_IMPERSONATE_SUBJECT:-}
+      GOOGLE_CALENDAR_ID: ${GOOGLE_CALENDAR_ID:-primary}
+      # manual until the Calendar adapter is written: the teacher pastes the
+      # link and everything else about the class works unchanged.
+      LIVE_PROVIDER: ${LIVE_PROVIDER:-manual}
       LECTURE_STORAGE: ${LECTURE_STORAGE:-local}
       DOCUMENT_STORAGE: ${DOCUMENT_STORAGE:-local}
       WHATSAPP_ACCESS_TOKEN: ${WHATSAPP_ACCESS_TOKEN:-}
