@@ -46,11 +46,33 @@ export function LoginPage() {
         the software actually does.
       */}
       <aside className="auth-brand">
+        {/*
+          THE LOCKUP, ON THE BRAND'S OWN DARK GROUND.
+
+          §2.3 wants the full lockup — emblem, wordmark, tagline — on
+          institutional surfaces, and a sign-in screen is the most
+          institutional surface this product has: it is the one screen every
+          student describes to somebody else.
+
+          The MASTER PNG IS NOT USED HERE and that is deliberate. Its wordmark
+          is Wordmark Black #1a1a1a, and §2.2 calls for "the reversed light
+          version" on deep navy — an asset we have not been given. Placing the
+          black-wordmark file on navy would be using the logo wrongly, which is
+          worse than setting the wordmark in type beside the emblem. The full
+          master file is used where it belongs, on white.
+        */}
         <div className="auth-logo">
-          <span className="brand-mark" aria-hidden="true">
-            P
+          <img
+            className="brand-mark brand-mark-lg"
+            src="/brand/ppship-emblem.png"
+            alt=""
+            width="48"
+            height="48"
+          />
+          <span className="brand-words">
+            Prepreneurship
+            <span className="brand-sub">Dream. Learn. Earn.</span>
           </span>
-          Prepreneurship
         </div>
 
         <h1>Everything your institute runs on, in one place.</h1>
