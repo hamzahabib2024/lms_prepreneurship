@@ -56,10 +56,33 @@ const PATHS: Record<string, string> = {
   alert: "M12 8v5M12 16.5h.01M10.3 3.9 2.4 17.5A2 2 0 0 0 4.1 20.5h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z",
   clock: "M12 7v5l3 2M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z",
   folder: "M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z",
+
+  /* Added with the shell: search, the sidebar rail, and the account menu. */
+  search: "M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14ZM20 20l-4-4",
+  /* A bare tick. `check` is the register's boxed one and reads as a checkbox. */
+  tick: "m5 13 4 4L19 7",
+  panel: "M4 4h16a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1ZM9 4v16",
+  key: "M14.5 10.5a4 4 0 1 0-4.9 3.9L4 20v0h3v-2h2v-2h1.6a4 4 0 0 0 3.9-5.5ZM16.5 7.5h.01",
+  sun: "M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10ZM12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4",
+  moon: "M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z",
+  monitor: "M4 4h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1ZM8 20h8m-4-4v4",
 };
 
-/** Every name in PATHS, for the guard that proves the app only uses these. */
-export const ICON_NAMES = Object.keys(PATHS);
+/**
+ * Every name in PATHS, for the guard that proves the app only uses these.
+ *
+ * `IconName` is the same fact as a TYPE, and it is the stronger of the two.
+ * The guard reads icon names out of .tsx files with a regex over the JSX,
+ * which cannot see a name held in a data structure — and the navigation is now
+ * exactly that. A destination naming an icon nobody drew becomes a compile
+ * error rather than a four-square grid where a chevron should be.
+ *
+ * (The first version of this comment quoted the JSX it describes, and the
+ * guard duly failed the build on the example. Left as a note that the regex
+ * does not strip comments.)
+ */
+export type IconName = keyof typeof PATHS;
+export const ICON_NAMES = Object.keys(PATHS) as IconName[];
 
 export function Icon({ name, className }: { name: string; className?: string }) {
   // A missing name falls back to a shape rather than crashing, which is right
