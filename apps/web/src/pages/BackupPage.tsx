@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Skeleton } from "../components/Ui";
 import { ApiError, api } from "../api/client";
 import { StepUpPrompt, needsStepUp } from "../components/StepUpPrompt";
 
@@ -144,7 +145,7 @@ export function BackupPage() {
       )}
 
       {!backups ? (
-        <p className="muted">Loading…</p>
+        <Skeleton lines={2} />
       ) : backups.length === 0 ? (
         <div className="card">
           <p className="warn">

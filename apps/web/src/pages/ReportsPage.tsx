@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { SkeletonTable } from "../components/Ui";
 import { text } from "../api/text";
 import { ApiError, api } from "../api/client";
 
@@ -127,7 +128,7 @@ export function ReportsPage() {
       </div>
     );
   }
-  if (!defs) return <p className="muted">Loading…</p>;
+  if (!defs) return <SkeletonTable rows={6} columns={5} />;
 
   return (
     <>

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Skeleton } from "../components/Ui";
 import { useParams } from "react-router-dom";
 import { ApiError, api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
@@ -154,7 +155,7 @@ export function DiscussionPage() {
         <>
           {offeringId && <Ask offeringId={offeringId} onAsked={loadThreads} onError={setError} />}
           {!threads ? (
-            <p className="muted">Loading…</p>
+            <Skeleton lines={2} />
           ) : threads.length === 0 ? (
             <div className="card">
               <p className="muted">

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { EmptyState } from "../components/Ui";
 import { ApiError, api } from "../api/client";
 
 /**
@@ -177,7 +178,10 @@ export function BulkPage() {
           </div>
 
           {roster.length === 0 ? (
-            <p className="muted">Nobody is in that section.</p>
+            <EmptyState icon="users" title="That section has no students">
+              Nobody is enrolled in it yet, so there is nothing to move. Enrol students from
+              Admissions, or choose a different section above.
+            </EmptyState>
           ) : (
             <ul className="list">
               {roster.map((r) => (

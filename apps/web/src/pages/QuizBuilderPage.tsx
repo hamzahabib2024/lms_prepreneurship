@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { SkeletonList } from "../components/Ui";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ApiError, api } from "../api/client";
 import { QuestionComposer } from "../components/QuestionComposer";
@@ -282,7 +283,7 @@ function Paper({ quizId }: { quizId: string }) {
   useEffect(loadBanks, [loadBanks]);
   useEffect(loadQuestions, [loadQuestions]);
 
-  if (!quiz) return <p className="muted">Loading…</p>;
+  if (!quiz) return <SkeletonList rows={5} />;
 
   const locked = quiz.publicationStatus === "PUBLISHED";
   const onPaper = new Set(quiz.questions.map((q) => q.questionId));

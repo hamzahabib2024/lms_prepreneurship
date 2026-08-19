@@ -2,7 +2,7 @@ import { Fragment, useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { ApiError, api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
-import { EmptyState } from "../components/Ui";
+import { EmptyState, Skeleton, SkeletonTable } from "../components/Ui";
 
 interface Section {
   id: string;
@@ -208,7 +208,7 @@ export function SectionsPage() {
     }
   }
 
-  if (!rows) return <p className="muted">Loading…</p>;
+  if (!rows) return <SkeletonTable rows={6} columns={5} />;
 
   const offeredIds = new Set((offerings ?? []).map((o) => o.subject.id));
   const addable = subjects.filter((s) => !offeredIds.has(s.id));
@@ -549,7 +549,7 @@ export function SectionsPage() {
                           <td colSpan={9} className="row-detail">
                             <h3>Subjects in {s.code}</h3>
                             {offerings === null ? (
-                              <p className="muted">Loading…</p>
+                              <Skeleton lines={2} />
                             ) : offerings.length === 0 ? (
                               <p className="muted">
                                 No subjects yet. A section with no subjects has nothing to teach,

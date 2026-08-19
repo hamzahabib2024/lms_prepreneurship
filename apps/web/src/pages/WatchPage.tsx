@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { SkeletonCards } from "../components/Ui";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ApiError, api } from "../api/client";
 import { LecturePlayer } from "../components/LecturePlayer";
@@ -86,7 +87,7 @@ export function WatchPage() {
       </div>
     );
   }
-  if (!data) return <p className="muted">Loading…</p>;
+  if (!data) return <SkeletonCards count={2} />;
 
   const playable = data.lectures.filter((l) => l.availabilityStatus === "AVAILABLE");
   const current = data.lectures.find((l) => l.id === lectureId);

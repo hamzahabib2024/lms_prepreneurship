@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { EmptyState, SkeletonTable } from "../components/Ui";
 import { ApiError, api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { StepUpPrompt, needsStepUp } from "../components/StepUpPrompt";
@@ -200,7 +201,7 @@ function DebtorList({
   debtors: Debtor[] | null;
   onOpen: (studentId: string) => void;
 }) {
-  if (!debtors) return <p className="muted">Loading…</p>;
+  if (!debtors) return <SkeletonTable rows={6} columns={5} />;
 
   if (debtors.length === 0) {
     // Said in words. An empty table here is ambiguous between "nobody owes
@@ -361,7 +362,10 @@ function StatementView({
       <section className="card">
         <h2>Statement</h2>
         {s.lines.length === 0 ? (
-          <p className="muted">Nothing has been charged yet.</p>
+          <EmptyState icon="money" title="No charges yet">
+          Nothing has been billed to this student, so there is nothing owing. Charges
+          appear here as soon as a fee is raised.
+        </EmptyState>
         ) : (
           <div className="table-scroll">
             <table className="table">

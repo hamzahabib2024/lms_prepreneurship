@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { ApiError, api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
-import { EmptyState } from "../components/Ui";
+import { EmptyState, SkeletonTable } from "../components/Ui";
 
 interface Programme {
   id: string;
@@ -172,7 +172,7 @@ export function StructurePage() {
     }
   }
 
-  if (!sessions) return <p className="muted">Loading…</p>;
+  if (!sessions) return <SkeletonTable rows={6} columns={4} />;
 
   const visibleBatches = termFilter
     ? batches.filter((b) => b.academicSession.id === termFilter)

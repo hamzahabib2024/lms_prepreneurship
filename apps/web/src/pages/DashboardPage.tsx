@@ -231,7 +231,12 @@ function WidgetBody({ name, v }: { name: string; v: Record<string, unknown> }) {
         enrolled: number;
       }>);
       if (!Array.isArray(sections) || sections.length === 0) {
-        return <p className="muted">No subject-sections assigned to you.</p>;
+        return (
+          <p className="muted">
+            No subject-sections are assigned to you yet. An administrator assigns these
+            when the timetable is set.
+          </p>
+        );
       }
       return (
         <ul className="list">
@@ -250,7 +255,11 @@ function WidgetBody({ name, v }: { name: string; v: Record<string, unknown> }) {
     case "attendance": {
       const overall = v["overall"] as { percentage: number | null } | undefined;
       if (!overall || overall.percentage === null) {
-        return <p className="muted">No attendance recorded yet.</p>;
+        return (
+          <p className="muted">
+            No attendance recorded yet — this fills in after your first class.
+          </p>
+        );
       }
       const below = Boolean(v["isBelowThreshold"]);
       return (

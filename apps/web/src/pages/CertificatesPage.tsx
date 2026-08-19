@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { EmptyState, SkeletonList } from "../components/Ui";
 import { ApiError, api } from "../api/client";
 
 /**
@@ -56,6 +57,10 @@ export function CertificatesPage() {
   const [offerings, setOfferings] = useState<Offering[]>([]);
   const [offeringId, setOfferingId] = useState("");
   const [view, setView] = useState<IssuanceView | null>(null);
+  // `view` is null BOTH before a subject is chosen and while one is
+  // loading, and those are different screens: one is waiting for the
+  // reader, the other is waiting for the server.
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -78,10 +83,12 @@ export function CertificatesPage() {
 
   const load = useCallback(() => {
     if (!offeringId) return;
+    setLoading(true);
     api
       .get<IssuanceView>(`/section-subjects/${offeringId}/certificates`)
       .then(setView)
-      .catch((e) => setError(e instanceof ApiError ? e.message : "Could not load that subject."));
+      .catch((e) => setError(e instanceof ApiError ? e.message : "Could not load that subject."))
+      .finally(() => setLoading(false));
   }, [offeringId]);
 
   useEffect(load, [load]);
@@ -132,7 +139,16 @@ export function CertificatesPage() {
         </div>
       </section>
 
-      {view && (
+      {loading && <SkeletonList rows={6} />}
+
+      {!loading && !offeringId && (
+        <EmptyState icon="award" title="Choose a subject">
+          Pick a section and a subject above to see who has met the requirements for a
+          certificate, and who is short of them.
+        </EmptyState>
+      )}
+
+      {!loading && view && (
         <section className="card">
           <p className="muted small">
             {view.eligible === 0
