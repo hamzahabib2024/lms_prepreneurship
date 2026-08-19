@@ -1,71 +1,122 @@
 import 'package:flutter/material.dart';
 
-/// The design system, ported token-for-token from the web app's styles.css
-/// (apps/web/src/styles.css). The palette, radii, shadows and typography below
-/// are the same contract the web client uses, so the two clients stay
-/// indistinguishable in look and feel.
+/// The design system, ported token-for-token from the web client's styles.css
+/// (apps/web/src/styles.css), which is itself Brand Guidelines V2.0. The
+/// palette, radii, shadows and typography below are the same contract, so the
+/// two clients stay indistinguishable.
 ///
-/// Contrast figures refer to the surface the colour sits on, not white.
+/// IF YOU CHANGE A VALUE HERE, CHANGE IT THERE. The two files are the only
+/// copies of the palette in the repository and they are meant to agree; the
+/// web side is checked by `npm run brand:audit`, and this side is checked by
+/// theme_brand_test.dart beside it.
+///
+/// Contrast figures refer to the surface the colour sits on, not white, and
+/// every one of them was computed rather than estimated.
 abstract final class AppColors {
-  // Brand. Indigo carries the product, amber marks the things that need a
-  // second look. Both are dark enough to hold white text at 44px.
-  static const brand600 = Color(0xFF4F46E5);
-  static const brand700 = Color(0xFF4338CA); // 8.6:1 on white
-  static const brand800 = Color(0xFF3730A3);
-  static const brand050 = Color(0xFFEEF2FF);
-  static const brand100 = Color(0xFFE0E7FF);
+  // ------------------------------------------------------------- brand ----
+  // §3.1 and §7.1. Navy carries the product; amber is the singular accent.
+  // §3.2 forbids "bright generic blues, purples, teals, or rainbow
+  // gradients", which is what the indigo #4338CA this replaced actually was.
+  static const navy = Color(0xFF1A3C5E); // 11.3:1 on white, 10.3:1 on cream
+  static const navyDeep = Color(0xFF0E2540);
+  static const amber = Color(0xFFF5A623);
+  static const cream = Color(0xFFF0F4F8);
 
-  static const accent600 = Color(0xFFD97706);
-  static const accent050 = Color(0xFFFFFBEB);
+  /// AMBER IS A FILL, NEVER TEXT ON LIGHT — it is 2.03:1 on white, so it
+  /// cannot carry a word and cannot even serve as a 3:1 non-text indicator.
+  /// This is the darkened amber for the places an accent has to be read.
+  static const amberInk = Color(0xFF8A5700); // 6.1:1 on white, 5.5:1 on cream
 
-  // Ink and surfaces.
-  static const ink = Color(0xFF0F172A); // 17.4:1 on white
-  static const ink2 = Color(0xFF334155); // 9.7:1
-  static const muted = Color(0xFF64748B); // 4.8:1 — the floor
-  static const line = Color(0xFFE2E8F0);
-  static const lineStrong = Color(0xFFCBD5E1);
-  static const bg = Color(0xFFF8FAFC);
+  // The old names, kept so no widget had to change.
+  static const brand600 = navy;
+  static const brand700 = navy;
+  static const brand800 = navyDeep;
+  static const brand050 = Color(0xFFE8EEF5);
+  static const brand100 = Color(0xFFD3DEEA);
+
+  static const accent600 = amberInk;
+  static const accent050 = Color(0xFFFEF6E7);
+
+  /// §7.4 — the call to action is amber with navy on it, 5.6:1.
+  static const cta = amber;
+  static const ctaInk = navy;
+
+  // -------------------------------------------------- ink and surfaces ----
+  static const ink = Color(0xFF111827); // 17.7:1 on white, 16.1:1 on cream
+  static const ink2 = Color(0xFF374151); // 10.4:1 on white
+
+  /// The brand grey, darkened four per cent, and deliberately so: §7.1 gives
+  /// #6B7280 and §3.1 gives the cream ground, and together they measure
+  /// 4.37:1 — under the 4.5:1 §6.3 itself demands. This is 4.88:1 on cream.
+  static const muted = Color(0xFF616B7B);
+
+  static const line = Color(0xFFD3DCE6);
+  static const lineStrong = Color(0xFFB6C3D2);
+  static const bg = cream;
   static const surface = Colors.white;
-  static const surface2 = Color(0xFFF1F5F9);
+  static const surface2 = Color(0xFFE4EAF1);
 
-  // Status. Never colour alone (NFR-ACC-007) — each is paired with a word.
-  static const ok = Color(0xFF047857); // 4.8:1
-  static const okBg = Color(0xFFECFDF5);
-  static const warn = Color(0xFFB45309); // 4.6:1
-  static const warnBg = Color(0xFFFFFBEB);
-  static const error = Color(0xFFB91C1C); // 5.9:1
-  static const errorBg = Color(0xFFFEF2F2);
+  // Status. §3.2: green is for status indicators only, never as a brand
+  // colour. Never colour alone either — each is paired with a word.
+  static const ok = Color(0xFF065F46); // 7.0:1 on cream
+  static const okBg = Color(0xFFE6F2EE);
+  static const warn = amberInk;
+  static const warnBg = Color(0xFFFEF6E7);
+  static const error = Color(0xFFB91C1C); // 5.9:1 on cream
+  static const errorBg = Color(0xFFFCEDED);
 }
 
-/// Dark mode, by preference rather than a toggle — the same rule as the web.
-/// Status colours are LIGHTENED here rather than reused: #b91c1c on a dark
-/// surface fails contrast badly, and an error message nobody can read is worse
-/// than no colour at all.
+/// Dark, built from the brand's own dark surfaces — §3.1 and §6.3.
+///
+/// The brand book does not specify a dark UI theme but it specifies every
+/// ingredient of one: Navy Deep as the gradient base, Dark Charcoal for card
+/// backgrounds on dark slides, white body text on navy, and amber for
+/// highlights and CTAs.
+///
+/// ON A DARK GROUND THE ACCENT SWAPS. §3.2 is explicit — "On navy
+/// backgrounds: white text for body, amber for highlights and CTAs" — so the
+/// primary becomes amber here, where at 7.6:1 it can finally carry text, the
+/// one thing it must never do on white.
 abstract final class AppColorsDark {
-  static const brand600 = Color(0xFF818CF8);
-  static const brand700 = Color(0xFFA5B4FC);
-  static const brand800 = Color(0xFFC7D2FE);
-  static const brand050 = Color(0xFF1E1B4B);
-  static const brand100 = Color(0xFF312E81);
+  static const navy = Color(0xFF1A3C5E);
+  static const navyDeep = Color(0xFF0E2540);
+  static const amber = Color(0xFFF5A623);
+  static const amberInk = amber; // 7.6:1 on the ground, 5.9:1 on a card
 
-  static const accent600 = Color(0xFFFBBF24);
-  static const accent050 = Color(0xFF292524);
+  static const brand600 = amber;
+  static const brand700 = amber;
+  static const brand800 = Color(0xFFFBBF4C);
+  static const brand050 = Color(0xFF1B3A57);
+  static const brand100 = Color(0xFF24486A);
 
-  static const ink = Color(0xFFF1F5F9);
-  static const ink2 = Color(0xFFCBD5E1);
-  static const muted = Color(0xFF94A3B8); // 6.4:1 on surface
-  static const line = Color(0xFF1E293B);
-  static const lineStrong = Color(0xFF334155);
-  static const bg = Color(0xFF020617);
-  static const surface = Color(0xFF0F172A);
-  static const surface2 = Color(0xFF1E293B);
+  static const accent600 = amber;
+  static const accent050 = Color(0xFF2A1C04);
 
-  static const ok = Color(0xFF34D399);
-  static const okBg = Color(0xFF052E26);
-  static const warn = Color(0xFFFBBF24);
-  static const warnBg = Color(0xFF2C1C02);
-  static const error = Color(0xFFF87171);
-  static const errorBg = Color(0xFF2D0D0D);
+  static const cta = amber;
+  static const ctaInk = navy;
+
+  static const ink = Colors.white; // 12.0:1 on a card
+  static const ink2 = Color(0xFFD8E1EC); // 9.1:1
+  static const muted = Color(0xFF9FB0C4); // 5.4:1 on a card
+  static const line = Color(0xFF23415F);
+  static const lineStrong = Color(0xFF33536F);
+  static const bg = navyDeep;
+  static const surface = Color(0xFF16304C);
+  static const surface2 = Color(0xFF22405F);
+
+  static const ok = Color(0xFF34D399); // 6.2:1 on a card
+  static const okBg = Color(0xFF08331F);
+  static const warn = Color(0xFFFBBF4C);
+  static const warnBg = Color(0xFF2A1C04);
+  static const error = Color(0xFFFCA5A5); // 6.0:1 on a card
+  static const errorBg = Color(0xFF33161A);
+}
+
+/// §4.1 — Sora displays, Inter carries body and UI. Declared once so a widget
+/// never names a family as a bare string.
+abstract final class AppFonts {
+  static const display = 'Sora';
+  static const body = 'Inter';
 }
 
 abstract final class AppRadius {
@@ -77,36 +128,36 @@ abstract final class AppRadius {
 abstract final class AppShadow {
   static const soft = <BoxShadow>[
     BoxShadow(
-      color: Color(0x0F0F172A), // slab-900 at 6%
+      color: Color(0x121A3C5E), // navy at 7%
       blurRadius: 2,
       offset: Offset(0, 1),
     ),
     BoxShadow(
-      color: Color(0x0A0F172A), // slab-900 at 4%
+      color: Color(0x0D1A3C5E), // navy at 5%
       blurRadius: 3,
       offset: Offset(0, 1),
     ),
   ];
   static const raised = <BoxShadow>[
     BoxShadow(
-      color: Color(0x140F172A), // slab-900 at 8%
+      color: Color(0x171A3C5E), // navy at 9%
       blurRadius: 12,
       offset: Offset(0, 4),
     ),
     BoxShadow(
-      color: Color(0x0A0F172A), // slab-900 at 4%
+      color: Color(0x0D1A3C5E), // navy at 5%
       blurRadius: 4,
       offset: Offset(0, 2),
     ),
   ];
   static const floating = <BoxShadow>[
     BoxShadow(
-      color: Color(0x1F0F172A), // slab-900 at 12%
+      color: Color(0x241A3C5E), // navy at 14%
       blurRadius: 32,
       offset: Offset(0, 12),
     ),
     BoxShadow(
-      color: Color(0x0F0F172A), // slab-900 at 6%
+      color: Color(0x121A3C5E), // navy at 7%
       blurRadius: 8,
       offset: Offset(0, 4),
     ),
@@ -124,7 +175,8 @@ abstract final class AppTheme {
     return ColorScheme(
       brightness: dark ? Brightness.dark : Brightness.light,
       primary: dark ? AppColorsDark.brand700 : AppColors.brand700,
-      onPrimary: dark ? const Color(0xFF1E1B4B) : Colors.white,
+      // On a dark ground the primary IS amber, so what sits on it is navy.
+      onPrimary: dark ? AppColorsDark.ctaInk : Colors.white,
       secondary: dark ? AppColorsDark.brand600 : AppColors.brand600,
       onSecondary: Colors.white,
       error: dark ? AppColorsDark.error : AppColors.error,
@@ -153,6 +205,8 @@ abstract final class AppTheme {
       brightness: brightness,
       colorScheme: scheme,
       scaffoldBackgroundColor: dark ? AppColorsDark.bg : AppColors.bg,
+      // §4.1 — Inter carries body and UI everywhere it is not overridden.
+      fontFamily: AppFonts.body,
     );
 
     return base.copyWith(
@@ -160,43 +214,74 @@ abstract final class AppTheme {
           .apply(
             bodyColor: dark ? AppColorsDark.ink : AppColors.ink,
             displayColor: dark ? AppColorsDark.ink : AppColors.ink,
-            fontFamily: null,
+            fontFamily: AppFonts.body,
           )
           .copyWith(
-            // ~ h1: 1.5rem, 680 weight, -.02em
+            /*
+             * HEADINGS ARE SORA — §4.3, "Headlines use the display font,
+             * never the body font" — with the negative tracking §4.3 asks
+             * for. Sizes follow the web client exactly, which sits at the
+             * lower end of §4.2's web scale because these are application
+             * screens rather than a marketing hero.
+             */
             headlineMedium: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w700,
-              letterSpacing: -0.5,
+              fontFamily: AppFonts.display,
+              fontSize: 28, // §4.2 H3 Subhead band
+              fontWeight: FontWeight.w600,
+              letterSpacing: -0.84, // -0.03em
+              color: dark ? AppColorsDark.ink : AppColors.ink,
+              height: 1.15,
+            ),
+            titleLarge: TextStyle(
+              fontFamily: AppFonts.display,
+              fontSize: 22,
+              fontWeight: FontWeight.w600,
+              letterSpacing: -0.55,
               color: dark ? AppColorsDark.ink : AppColors.ink,
               height: 1.2,
             ),
-            // ~ h2: 1.0625rem, 640 weight, -.01em
             titleMedium: TextStyle(
-              fontSize: 17,
+              fontFamily: AppFonts.display,
+              fontSize: 18, // §4.2 H4 Card Title band
               fontWeight: FontWeight.w600,
-              letterSpacing: -0.2,
+              letterSpacing: -0.36, // -0.02em
               color: dark ? AppColorsDark.ink : AppColors.ink,
+              height: 1.3,
             ),
-            // ~ h3: .95rem, 640
             titleSmall: TextStyle(
-              fontSize: 15.2,
+              fontFamily: AppFonts.display,
+              fontSize: 16,
               fontWeight: FontWeight.w600,
+              letterSpacing: -0.24,
               color: dark ? AppColorsDark.ink : AppColors.ink,
             ),
+            // §4.2 puts body at 16-18px and §4.3 makes 1.6 a floor. It was
+            // 15 on 1.55, under both.
             bodyMedium: TextStyle(
-              fontSize: 15,
-              height: 1.55,
+              fontFamily: AppFonts.body,
+              fontSize: 16,
+              height: 1.6,
               color: dark ? AppColorsDark.ink : AppColors.ink,
             ),
             bodySmall: TextStyle(
-              fontSize: 13,
+              fontFamily: AppFonts.body,
+              fontSize: 13.5,
               height: 1.5,
               color: dark ? AppColorsDark.muted : AppColors.muted,
             ),
+            // §4.2 CTA / Button: 14-16, medium.
             labelLarge: const TextStyle(
-              fontSize: 14,
+              fontFamily: AppFonts.body,
+              fontSize: 15,
               fontWeight: FontWeight.w600,
+            ),
+            // §4.3 — an eyebrow is tracked +0.18em to +0.22em.
+            labelSmall: TextStyle(
+              fontFamily: AppFonts.display,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1.98, // 0.18em at 11px
+              color: dark ? AppColorsDark.muted : AppColors.muted,
             ),
           ),
       inputDecorationTheme: InputDecorationTheme(
@@ -222,7 +307,13 @@ abstract final class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.sm),
-          borderSide: const BorderSide(color: AppColors.brand600, width: 2),
+          // Was pinned to the light brand colour in both themes, so on a dark
+          // ground the focused field was outlined in a colour from the other
+          // palette.
+          borderSide: BorderSide(
+            color: dark ? AppColorsDark.brand600 : AppColors.brand600,
+            width: 2,
+          ),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.sm),
@@ -239,17 +330,21 @@ abstract final class AppTheme {
         ),
       ),
       filledButtonTheme: FilledButtonThemeData(
+        // §7.4 .btn--primary — amber ground, navy text, 5.6:1. It was
+        // white on indigo, which made the call to action the same colour as
+        // the furniture around it.
         style: FilledButton.styleFrom(
-          backgroundColor: dark ? AppColorsDark.brand700 : AppColors.brand700,
-          foregroundColor: dark ? const Color(0xFF1E1B4B) : Colors.white,
-          disabledBackgroundColor: (dark ? AppColorsDark.brand700 : AppColors.brand700)
-              .withValues(alpha: 0.5),
+          backgroundColor: dark ? AppColorsDark.cta : AppColors.cta,
+          foregroundColor: dark ? AppColorsDark.ctaInk : AppColors.ctaInk,
+          disabledBackgroundColor:
+              (dark ? AppColorsDark.cta : AppColors.cta).withValues(alpha: 0.5),
           minimumSize: const Size(64, 40),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppRadius.sm),
           ),
           textStyle: const TextStyle(
-            fontSize: 14,
+            fontFamily: AppFonts.body,
+            fontSize: 15,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -264,13 +359,21 @@ abstract final class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppRadius.sm),
           ),
-          textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+          textStyle: const TextStyle(
+            fontFamily: AppFonts.body,
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: dark ? AppColorsDark.brand700 : AppColors.brand700,
-          textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+          textStyle: const TextStyle(
+            fontFamily: AppFonts.body,
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ),
       cardTheme: CardThemeData(

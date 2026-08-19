@@ -30,7 +30,12 @@ class AdmissionsPage extends StatelessWidget {
 
   final ApiClient api;
 
-  static const pageColor = Color(0xFF7C3AED);
+  /// The accent under the page heading. It was violet #7C3AED, one of
+  /// twelve per-screen hues copied from the web client — and §3.2
+  /// forbids "bright generic blues, purples, teals, or rainbow
+  /// gradients" by name. There is one accent now, and §10.02 says which:
+  /// "The amber #F5A623 is the accent colour."
+  static const pageColor = AppColors.amber;
 
   @override
   Widget build(BuildContext context) {
