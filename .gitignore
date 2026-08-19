@@ -50,6 +50,11 @@ uploads/
 # Generated
 apps/api/src/generated/
 
+# Bytecode from the tooling scripts in scripts/ (brand audit, checklist,
+# font fetch). Regenerated on every run and machine-specific.
+__pycache__/
+*.py[cod]
+
 # Uploaded coursework and lecture files (local storage provider).
 # Student work, never committed.
 #
