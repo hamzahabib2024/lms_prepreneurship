@@ -34,10 +34,29 @@ function hashOf(seed: string): number {
 }
 
 /**
- * Twelve hues spaced around the wheel, all at a lightness that holds white
- * text — picking a random hue would eventually land on a yellow that does not.
+ * SIX TONES OF NAVY, NOT TWELVE HUES AROUND THE WHEEL.
+ *
+ * This was [212, 258, 292, 330, 8, 24, 44, 96, 152, 172, 190, 236] — a full
+ * rainbow, and §3.2 of the brand guidelines forbids precisely that: "Never use
+ * bright generic blues, purples, teals, or rainbow gradients."
+ *
+ * WHAT IS LOST, SAID PLAINLY. A course no longer has its own colour, so
+ * "Graphic Designing is the green one" stops being true. That was a real
+ * affordance and it is worth naming rather than pretending the replacement is
+ * strictly better.
+ *
+ * WHAT REPLACES IT is the part of the old system that did the most work
+ * anyway: FOUR PATTERNS at a per-course rotation, now paired with six navy
+ * tones and an amber accent, which still gives twenty-four visibly distinct
+ * covers. And it survives a reader who could not tell the twelve hues apart —
+ * a pattern is legible to a person with any kind of colour vision, which the
+ * rainbow was not.
+ *
+ * The band is 198–218 degrees: every value is recognisably the brand navy
+ * (#1a3c5e is hue 209), varied only enough that two courses side by side do
+ * not read as the same tile.
  */
-const HUES = [212, 258, 292, 330, 8, 24, 44, 96, 152, 172, 190, 236];
+const HUES = [198, 203, 209, 212, 215, 218];
 
 const SHAPES = ["arcs", "grid", "waves", "orbit"] as const;
 
@@ -81,11 +100,20 @@ export function CourseCover({
   const hue = HUES[h % HUES.length]!;
   const shape = SHAPES[(h >> 4) % SHAPES.length]!;
   const rotate = (h >> 8) % 40;
+  // The depth of the navy, as a second axis. Six tones times four patterns
+  // times two depths is enough that a page of courses does not look tiled.
+  const deep = (h >> 12) % 2 === 0 ? 26 : 21;
 
   return (
     <div
       className={`cover cover-${size} cover-${shape}`}
-      style={{ "--cover-hue": hue, "--cover-turn": `${rotate}deg` } as React.CSSProperties}
+      style={
+        {
+          "--cover-hue": hue,
+          "--cover-lift": `${deep}%`,
+          "--cover-turn": `${rotate}deg`,
+        } as React.CSSProperties
+      }
       aria-hidden="true"
     >
       <span className="cover-mark">
