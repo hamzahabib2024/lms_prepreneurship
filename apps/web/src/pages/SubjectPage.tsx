@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { SkeletonList } from "../components/Ui";
 import { Link, useParams } from "react-router-dom";
 import { ApiError, api } from "../api/client";
 import { LecturePlayer } from "../components/LecturePlayer";
@@ -108,7 +109,7 @@ export function SubjectPage() {
     );
   }
 
-  if (!progress || !modules) return <p className="muted">Loading…</p>;
+  if (!progress || !modules) return <SkeletonList rows={4} />;
 
   const video = progress.components.find((c) => c.key === "video");
 

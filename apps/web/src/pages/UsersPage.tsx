@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { EmptyState, SkeletonTable } from "../components/Ui";
 import { ApiError, api, tokens } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { StepUpPrompt, needsStepUp } from "../components/StepUpPrompt";
@@ -111,11 +112,20 @@ export function UsersPage() {
       </section>
 
       {!users ? (
-        <p className="muted">Loading…</p>
+        <SkeletonTable rows={8} columns={5} />
       ) : users.length === 0 ? (
-        <div className="card">
-          <p className="muted">Nobody matches that.</p>
-        </div>
+        <EmptyState
+          icon="users"
+          title="Nobody matches those filters"
+          action={
+            <button type="button" className="btn" onClick={() => { setRole(""); setStatus(""); setQ(""); }}>
+              Clear the filters
+            </button>
+          }
+        >
+          The directory is not empty — this combination of role, status and search simply
+          excludes everyone in it.
+        </EmptyState>
       ) : (
         <section className="card">
           <ul className="list">

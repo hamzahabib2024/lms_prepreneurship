@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ApiError, api } from "../api/client";
-import { EmptyState, SkeletonCards } from "../components/Ui";
+import { EmptyState, Skeleton, SkeletonCards } from "../components/Ui";
 import { AtRiskPanel } from "../components/AtRiskPanel";
 
 /**
@@ -131,7 +131,7 @@ function SectionAssignments({ section }: { section: TeacherSection }) {
       </h2>
 
       {items === null ? (
-        <p className="muted small">Loading…</p>
+        <Skeleton lines={2} />
       ) : items.length === 0 ? (
         <p className="muted small">No assignments set for this subject yet.</p>
       ) : (

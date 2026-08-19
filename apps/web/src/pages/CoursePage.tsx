@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ApiError, api } from "../api/client";
 import { CourseCover } from "../components/CourseCover";
-import { EmptyState } from "../components/Ui";
+import { EmptyState, SkeletonCards } from "../components/Ui";
 import { Icon } from "../components/Icon";
 import { LectureThumb } from "../components/LectureThumb";
 
@@ -141,7 +141,7 @@ export function CoursePage() {
       </div>
     );
   }
-  if (!data) return <p className="muted">Loading…</p>;
+  if (!data) return <SkeletonCards count={3} />;
 
   const published = data.lectures.filter((l) => l.publicationStatus === "PUBLISHED");
   const drafts = data.lectures.filter((l) => l.publicationStatus !== "PUBLISHED");

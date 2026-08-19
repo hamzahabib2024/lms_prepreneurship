@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { SkeletonCards } from "../components/Ui";
 import { Link, useParams } from "react-router-dom";
 import { ApiError, api } from "../api/client";
 import { Icon } from "../components/Icon";
@@ -148,7 +149,7 @@ export function ClassPage() {
       </div>
     );
   }
-  if (!route) return <p className="muted">Loading…</p>;
+  if (!route) return <SkeletonCards count={2} />;
 
   const s = route.session;
   const startsIn = new Date(s.scheduledStart).getTime() - now;

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { SkeletonList } from "../components/Ui";
 import { text as asText } from "../api/text";
 import { Link, useParams } from "react-router-dom";
 import { ApiError, api } from "../api/client";
@@ -83,7 +84,7 @@ export function QuizMarkingPage() {
       </div>
     );
   }
-  if (!queue) return <p className="muted">Loading…</p>;
+  if (!queue) return <SkeletonList rows={5} />;
 
   // Group by question: one standard applied across the cohort in a single pass.
   const byQuestion = new Map<string, MarkableAnswer[]>();

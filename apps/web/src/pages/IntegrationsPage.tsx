@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { ApiError, api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
-import { EmptyState } from "../components/Ui";
+import { EmptyState, SkeletonTable } from "../components/Ui";
 
 interface Status {
   key: string;
@@ -89,7 +89,7 @@ export function IntegrationsPage() {
       </div>
     );
   }
-  if (!rows) return <p className="muted">Loading…</p>;
+  if (!rows) return <SkeletonTable rows={5} columns={4} />;
 
   const simulated = rows.filter((r) => r.mode !== "LIVE");
 

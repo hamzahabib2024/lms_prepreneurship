@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { EmptyState, Skeleton } from "../components/Ui";
 import { ApiError, api } from "../api/client";
 
 /**
@@ -124,7 +125,7 @@ export function SecurityPage() {
       )}
 
       {!overview ? (
-        <p className="muted">Loading…</p>
+        <Skeleton lines={2} />
       ) : (
         <>
           {/* The judgement, before anything else. */}
@@ -225,9 +226,12 @@ export function SecurityPage() {
         </div>
 
         {!events ? (
-          <p className="muted">Loading…</p>
+          <Skeleton lines={2} />
         ) : events.length === 0 ? (
-          <p className="muted">Nothing matches that.</p>
+          <EmptyState icon="shield" title="No events match those filters">
+            Which is usually the right answer — it means nothing of this kind has happened
+            in the window you asked about. Widen the range to be certain.
+          </EmptyState>
         ) : (
           <div className="table-scroll">
             <table className="table">

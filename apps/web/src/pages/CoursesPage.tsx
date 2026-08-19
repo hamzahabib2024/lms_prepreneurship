@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { ApiError, api } from "../api/client";
 import { CourseCover } from "../components/CourseCover";
-import { EmptyState } from "../components/Ui";
+import { EmptyState, SkeletonCards } from "../components/Ui";
 import { Icon } from "../components/Icon";
 
 interface Course {
@@ -80,7 +80,7 @@ export function CoursesPage() {
       </div>
     );
   }
-  if (!courses) return <p className="muted">Loading…</p>;
+  if (!courses) return <SkeletonCards count={6} />;
 
   const canManage = courses.some((c) => c.canManage);
   const waiting = courses.reduce((n, c) => n + c.draftCount, 0);

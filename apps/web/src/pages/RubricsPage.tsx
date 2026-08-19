@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Skeleton } from "../components/Ui";
 import { ApiError, api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 
@@ -88,7 +89,7 @@ export function RubricsPage() {
       )}
 
       {!rubrics ? (
-        <p className="muted">Loading…</p>
+        <Skeleton lines={2} />
       ) : rubrics.length === 0 ? (
         <div className="card">
           <p className="muted">
@@ -256,7 +257,7 @@ function RubricEditor({
   if (loading) {
     return (
       <section className="card">
-        <p className="muted">Loading…</p>
+        <Skeleton lines={2} />
       </section>
     );
   }
