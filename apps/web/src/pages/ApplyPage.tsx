@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Skeleton } from "../components/Ui";
 import { Link } from "react-router-dom";
 import { ApiError, api } from "../api/client";
 import { EDUCATION_LEVEL, EDUCATION_LEVEL_LABEL } from "@lms/shared";
@@ -158,9 +159,7 @@ export function ApplyPage() {
     <div className="landing">
       <header className="landing-nav">
         <Link className="auth-logo" to="/">
-          <span className="brand-mark" aria-hidden="true">
-            P
-          </span>
+          <img className="brand-mark" src="/brand/ppship-emblem.png" alt="" width="32" height="32" />
           Prepreneurship
         </Link>
         <Link className="btn btn-quiet" to="/login">
@@ -214,7 +213,7 @@ export function ApplyPage() {
             <>
               <h2>What you want to study</h2>
               {!programmes ? (
-                <p className="muted">Loading…</p>
+                <Skeleton lines={2} />
               ) : programmes.length === 0 ? (
                 <p className="muted">
                   Nothing is open for enrolment at the moment. Please speak to the office.
@@ -584,9 +583,7 @@ function Submitted({
     <div className="landing">
       <header className="landing-nav">
         <Link className="auth-logo" to="/">
-          <span className="brand-mark" aria-hidden="true">
-            P
-          </span>
+          <img className="brand-mark" src="/brand/ppship-emblem.png" alt="" width="32" height="32" />
           Prepreneurship
         </Link>
       </header>
