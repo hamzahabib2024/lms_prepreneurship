@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Skeleton } from "../components/Ui";
 import { ApiError, api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 
@@ -127,7 +128,7 @@ export function TimetablePage() {
       {canGenerate && <GeneratePanel onGenerated={load} />}
 
       {!timetable ? (
-        <p className="muted">Loading…</p>
+        <Skeleton lines={2} />
       ) : timetable.days.length === 0 ? (
         <div className="card">
           {/* In words. An empty page is ambiguous between "no classes" and

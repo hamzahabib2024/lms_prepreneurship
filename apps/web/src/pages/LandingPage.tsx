@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Skeleton } from "../components/Ui";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import { Icon } from "../components/Icon";
@@ -88,9 +89,7 @@ export function LandingPage() {
     <div className="landing">
       <header className="landing-nav">
         <span className="auth-logo">
-          <span className="brand-mark" aria-hidden="true">
-            P
-          </span>
+          <img className="brand-mark" src="/brand/ppship-emblem.png" alt="" width="32" height="32" />
           Prepreneurship
         </span>
         <nav className="row-actions">
@@ -138,7 +137,7 @@ export function LandingPage() {
         <div className="hero-art" aria-hidden="true">
           <div className="hero-card">
             <div className="hero-card-head">
-              <span className="brand-mark">P</span>
+              <img className="brand-mark" src="/brand/ppship-emblem.png" alt="" width="32" height="32" />
               <div>
                 <strong>Graphic Designing</strong>
                 <span className="muted small">GD-101 · Morning A</span>
@@ -252,7 +251,7 @@ export function LandingPage() {
         </header>
 
         {programmes === null ? (
-          <p className="muted">Loading…</p>
+          <Skeleton lines={2} />
         ) : programmes.length === 0 ? (
           <div className="card">
             <p className="muted">
@@ -348,9 +347,7 @@ export function LandingPage() {
       <footer className="landing-foot">
         <div className="landing-inner landing-foot-inner">
           <span className="auth-logo">
-            <span className="brand-mark" aria-hidden="true">
-              P
-            </span>
+            <img className="brand-mark" src="/brand/ppship-emblem.png" alt="" width="32" height="32" />
             Prepreneurship
           </span>
           {showcase && <SocialRow social={showcase.social} />}

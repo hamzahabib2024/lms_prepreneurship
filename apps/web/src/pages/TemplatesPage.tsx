@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { SkeletonList } from "../components/Ui";
 import { ApiError, api } from "../api/client";
 
 /**
@@ -95,7 +96,7 @@ export function TemplatesPage() {
       </div>
     );
   }
-  if (!templates) return <p className="muted">Loading…</p>;
+  if (!templates) return <SkeletonList rows={5} />;
 
   const edited = templates.filter((t) => t.source === "INSTITUTE").length;
 

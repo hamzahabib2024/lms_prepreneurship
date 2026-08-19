@@ -142,3 +142,119 @@ export function ProgressRing({
     </div>
   );
 }
+
+/**
+ * A LIST'S WORTH, for the screens that render rows rather than cards.
+ *
+ * The shape has to match what is coming or the placeholder is just a
+ * differently-shaped jump: a card grid skeleton in front of an incoming table
+ * moves the layout twice instead of once.
+ */
+export function SkeletonList({ rows = 5 }: { rows?: number }) {
+  return (
+    <>
+      <span className="visually-hidden" role="status">
+        Loading
+      </span>
+      <div className="card" aria-hidden="true">
+        <ul className="list skeleton-list">
+          {Array.from({ length: rows }, (_, i) => (
+            <li key={i}>
+              <span className="skeleton" style={{ width: `${58 - (i % 3) * 9}%` }} />
+              <span className="skeleton skeleton-trail" />
+            </li>
+          ))}
+        </ul>
+      </div>
+    </>
+  );
+}
+
+/**
+ * A TABLE'S WORTH — header band and rows, at the column count the real table
+ * will have, so the header does not jump sideways when the data lands.
+ */
+export function SkeletonTable({ rows = 6, columns = 4 }: { rows?: number; columns?: number }) {
+  return (
+    <>
+      <span className="visually-hidden" role="status">
+        Loading
+      </span>
+      <div className="table-scroll skeleton-table" aria-hidden="true">
+        <div className="skeleton-thead">
+          {Array.from({ length: columns }, (_, c) => (
+            <span key={c} className="skeleton" />
+          ))}
+        </div>
+        {Array.from({ length: rows }, (_, r) => (
+          <div className="skeleton-tr" key={r}>
+            {Array.from({ length: columns }, (_, c) => (
+              <span
+                key={c}
+                className="skeleton"
+                style={{ width: c === 0 ? "70%" : `${40 + ((r + c) % 4) * 12}%` }}
+              />
+            ))}
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
+/**
+ * A PAGE'S WORTH — the heading band plus whatever is under it.
+ *
+ * Used where the whole screen is waiting, so the title does not appear a
+ * beat before the content and shift it.
+ */
+export function SkeletonPage({ children }: { children?: ReactNode }) {
+  return (
+    <>
+      <span className="visually-hidden" role="status">
+        Loading
+      </span>
+      <div className="skeleton-head" aria-hidden="true">
+        <span className="skeleton" />
+      </div>
+      {children ?? <SkeletonCards count={3} />}
+    </>
+  );
+}
+
+/**
+ * SOMETHING WENT WRONG, AND WHAT TO DO ABOUT IT.
+ *
+ * The thirty-eight error banners across these pages already say the right
+ * thing — they surface the server's own message rather than inventing one,
+ * and they carry `role="alert"` so a screen reader speaks them. What none of
+ * them offered was a way to try again, so a network blip meant reloading the
+ * whole application to get back to a screen that was one fetch away.
+ *
+ * `onRetry` is optional because some failures are not retryable — a 403 will
+ * be a 403 next time, and a button that fails identically twice teaches
+ * people to distrust every button.
+ */
+export function ErrorState({
+  title = "That did not load",
+  message,
+  onRetry,
+}: {
+  title?: string;
+  message?: string | null;
+  onRetry?: () => void;
+}) {
+  return (
+    <div className="alert alert-error" role="alert">
+      <strong>{title}</strong>
+      {message && <p>{message}</p>}
+      {onRetry && (
+        <div className="row-actions">
+          <button type="button" className="btn btn-sm" onClick={onRetry}>
+            Try again
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { EmptyState, Skeleton } from "../components/Ui";
 import { ApiError, api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 
@@ -60,11 +61,12 @@ export function AnnouncementsPage() {
       {mayPost && <Composer onPosted={load} />}
 
       {!items ? (
-        <p className="muted">Loading…</p>
+        <Skeleton lines={2} />
       ) : items.length === 0 ? (
-        <div className="card">
-          <p className="muted">Nothing has been announced yet.</p>
-        </div>
+        <EmptyState icon="megaphone" title="No announcements yet">
+          Notices from the Institute appear here. There is nothing you need to do — you
+          will be notified when something is posted.
+        </EmptyState>
       ) : (
         items.map((a) => (
           <section className="card" key={a.id}>

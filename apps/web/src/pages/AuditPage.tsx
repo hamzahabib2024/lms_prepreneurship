@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { EmptyState, SkeletonTable } from "../components/Ui";
 import { text } from "../api/text";
 import { ApiError, api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
@@ -105,11 +106,12 @@ export function AuditPage() {
       </section>
 
       {!entries ? (
-        <p className="muted">Loading…</p>
+        <SkeletonTable rows={8} columns={4} />
       ) : entries.length === 0 ? (
-        <div className="card">
-          <p className="muted">Nothing matches that.</p>
-        </div>
+        <EmptyState icon="clipboard" title="No entries match those filters">
+          The log is not empty — these filters simply exclude everything in it. Widen the
+          date range or clear the action filter.
+        </EmptyState>
       ) : (
         <>
           <section className="card">

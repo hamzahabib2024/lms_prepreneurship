@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { SkeletonCards } from "../components/Ui";
 import { useParams } from "react-router-dom";
 import { ApiError, api } from "../api/client";
 
@@ -85,7 +86,7 @@ export function ReceiptPage() {
       </div>
     );
   }
-  if (!receipt) return <p className="muted">Loading…</p>;
+  if (!receipt) return <SkeletonCards count={2} />;
 
   return (
     <>

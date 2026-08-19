@@ -337,7 +337,9 @@ export function CohortImportPage() {
             }
           >
             {busy
-              ? "Loading…"
+              ? `Loading ${preview.wouldLoad + preview.wouldRejoin} student${
+                  preview.wouldLoad + preview.wouldRejoin === 1 ? "" : "s"
+                }…`
               : `Load ${preview.wouldLoad + preview.wouldRejoin} student${
                   preview.wouldLoad + preview.wouldRejoin === 1 ? "" : "s"
                 }`}

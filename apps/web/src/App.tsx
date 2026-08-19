@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { useAuth } from "./auth/AuthContext";
 import { LoginPage } from "./pages/LoginPage";
@@ -43,6 +43,9 @@ import { AnnouncementsPage } from "./pages/AnnouncementsPage";
 import { NotificationBell } from "./components/NotificationBell";
 import { Icon } from "./components/Icon";
 import { ImpersonationBanner } from "./components/ImpersonationBanner";
+import { AccountMenu } from "./components/AccountMenu";
+import { CommandPalette } from "./components/CommandPalette";
+import { destinationsFor } from "./navigation";
 
 /**
  * Application shell — SRS §13.1.
@@ -54,11 +57,65 @@ import { ImpersonationBanner } from "./components/ImpersonationBanner";
  * refused.
  */
 export function App() {
-  const { user, initialising, mustChangePassword, signOut, hasRole } = useAuth();
+  const { user, initialising, mustChangePassword, hasRole } = useAuth();
   const location = useLocation();
   // The mobile drawer. Closed on every navigation, because a menu still open
   // over the page you just chose is a menu you have to dismiss twice.
   const [navOpen, setNavOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  /*
+   * THE SIDEBAR'S WIDTH, and three states rather than two.
+   *
+   * "auto" is nobody having said — the stylesheet decides from the viewport,
+   * full above 1180px and a rail below it, which is the right answer for a
+   * laptop and for a tablet in landscape. The other two are somebody saying,
+   * and somebody saying always wins at every width.
+   *
+   * Two states would mean picking an initial value at mount and then never
+   * agreeing with the screen again after a resize.
+   */
+  const [rail, setRail] = useState<"auto" | "on" | "off">(() => {
+    try {
+      const v = localStorage.getItem("lms.rail");
+      return v === "on" || v === "off" ? v : "auto";
+    } catch {
+      return "auto";
+    }
+  });
+
+  const toggleRail = useCallback(() => {
+    setRail((current) => {
+      const wide = window.matchMedia("(min-width: 1181px)").matches;
+      const isRail = current === "on" || (current === "auto" && !wide);
+      const next = isRail ? "off" : "on";
+      try {
+        localStorage.setItem("lms.rail", next);
+      } catch {
+        // The choice holds for this tab and will not survive a reload. A
+        // sidebar width is not worth failing a render over.
+      }
+      return next;
+    });
+  }, []);
+
+  /*
+   * Cmd-K, or Ctrl-K.
+   *
+   * On `window` rather than on any element, because the whole point is that it
+   * works from wherever you are — including from inside a table somebody has
+   * scrolled halfway down. preventDefault stops Firefox's own search bar
+   * taking the same chord.
+   */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPaletteOpen((o) => !o);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   // FR-CRT-015 — certificate verification is PUBLIC, and is checked before the
   // authentication gate below. An employer holding a printed certificate has no
@@ -143,200 +200,121 @@ export function App() {
         ? "Teacher"
         : "Student";
 
+  const destinations = destinationsFor(hasRole);
+  // The chord as this keyboard writes it. "Ctrl K" shown to somebody on a Mac
+  // is a shortcut that does not work.
+  const modKey =
+    typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform)
+      ? "⌘"
+      : "Ctrl ";
+  const layoutClass =
+    "layout" + (rail === "on" ? " is-collapsed" : rail === "off" ? " is-expanded" : "");
+
   return (
     <div className="shell">
+      {/*
+        THE FIRST FOCUSABLE THING ON THE PAGE.
+
+        The sidebar is rendered before the content and holds up to twenty-four
+        links, so a keyboard or screen-reader user was tabbing through the
+        whole navigation on every screen before reaching what they came for
+        (WCAG 2.4.1). None of the static checks could have found this: they
+        read markup, and this is about order.
+      */}
+      <a className="skip-link" href="#main-content">
+        Skip to the content
+      </a>
+
       {/* Above everything, so it is the first thing on the page and cannot be
           scrolled past (SEC-AUZ-013). */}
       <ImpersonationBanner />
 
-      <div className="layout">
+      <div className={layoutClass}>
         {/*
-          GROUPED, because there are twenty-one destinations and a Super Admin
-          sees most of them. Wrapped across the top they were a wall of words in
-          which nothing could be found twice; the group heading is what tells
-          somebody where to look. The groups are by WHAT YOU ARE DOING —
+          GROUPED, because there are two dozen destinations and a Super Admin
+          sees most of them. Wrapped across the top they were a wall of words
+          in which nothing could be found twice; the group heading is what
+          tells somebody where to look. The groups are by WHAT YOU ARE DOING —
           teaching, money, running the place — rather than by which permission
           happens to guard them.
+
+          RENDERED FROM A LIST NOW, not written out by hand. The command
+          palette searches the same destinations, and two hand-written copies
+          of this list would be two places for a role predicate to be wrong.
+          The predicates themselves are unchanged and live in navigation.ts
+          with the reasoning beside each one.
         */}
         <aside id="sidebar" className={`sidebar${navOpen ? " open" : ""}`}>
+          {/*
+            THE REAL EMBLEM, and the real tagline.
+
+            The mark was a "P" drawn in CSS on an indigo gradient. §2.3 is
+            blunt about that — "Recreate the logo from scratch — always use
+            the master asset" — so this is the emblem cut from
+            ppship-logo.png, with the wordmark dropped out as §2.4 requires at
+            this size.
+
+            The sub-label said "Learning". §1.2 makes "Dream. Learn. Earn."
+            the tagline, with exact punctuation, on every page without
+            exception — so it is here, in the one piece of furniture that is
+            genuinely on every page.
+
+            `alt=""` because the words are right beside it: an emblem that
+            announced itself would make a screen reader say the brand twice.
+          */}
           <NavLink to="/" end className="brand" onClick={() => setNavOpen(false)}>
-            <span className="brand-mark" aria-hidden="true">
-              P
-            </span>
-            <span>
+            <img className="brand-mark" src="/brand/ppship-emblem.png" alt="" width="32" height="32" />
+            <span className="brand-words">
               Prepreneurship
-              <span className="brand-sub">Learning</span>
+              <span className="brand-sub">Dream. Learn. Earn.</span>
             </span>
           </NavLink>
 
           <nav className="nav" onClick={() => setNavOpen(false)}>
-            <NavLink to="/" end>
-              <Icon name="dashboard" />
-              Dashboard
-            </NavLink>
-            <NavLink to="/timetable">
-              <Icon name="calendar" />
-              Timetable
-            </NavLink>
-            <NavLink to="/announcements">
-              <Icon name="megaphone" />
-              Announcements
-            </NavLink>
+            {destinations.map((d, i) => {
+              // A heading whenever the group changes. Decided here rather than
+              // held in the data, so a group whose every entry this role
+              // cannot see does not leave its title behind.
+              const previous = destinations[i - 1];
+              const heading =
+                d.group && d.group !== previous?.group ? (
+                  <div className="nav-group">{d.group}</div>
+                ) : null;
 
-            {hasRole("student") && (
-              <>
-                <div className="nav-group">Learning</div>
-                <NavLink to="/subjects">
-                  <Icon name="book" />
-                  My subjects
-                </NavLink>
-              </>
-            )}
-            {hasRole("student", "teacher") && (
-              <NavLink to="/discussions">
-                <Icon name="chat" />
-                Discussion
-              </NavLink>
-            )}
+              // `title` gives the rail a name under the pointer. The label
+              // itself stays in the markup and is only clipped, so the
+              // accessible name is the word either way.
+              const inside = (
+                <>
+                  <Icon name={d.icon} />
+                  <span className="nav-label">{d.label}</span>
+                </>
+              );
 
-            {hasRole("super_admin", "admin", "teacher") && (
-              <>
-                <div className="nav-group">Teaching</div>
-                <NavLink to="/attendance">
-                  <Icon name="check" />
-                  Attendance
-                </NavLink>
-                <NavLink to="/marking">
-                  <Icon name="pen" />
-                  Marking
-                </NavLink>
-                <NavLink to="/rubrics">
-                  <Icon name="clipboard" />
-                  Rubrics
-                </NavLink>
-                {/* Every class, with the two things visible nowhere else:
-                    which have recordings waiting to be published, and which
-                    have no Drive folder connected at all.
-
-                    section_subject:read is held by all four roles, each at its
-                    own scope, so a teacher lands on their own classes rather
-                    than on a 403 — and the page itself never tests a role. */}
-                <NavLink to="/courses">
-                  <Icon name="play" />
-                  Courses
-                </NavLink>
-                <NavLink to="/content">
-                  <Icon name="layers" />
-                  Content
-                </NavLink>
-              </>
-            )}
-
-            {hasRole("super_admin", "admin") && (
-              <>
-                <div className="nav-group">Students</div>
-                <NavLink to="/admissions">
-                  <Icon name="clipboard" />
-                  Admissions
-                </NavLink>
-                <NavLink to="/users">
-                  <Icon name="users" />
-                  People
-                </NavLink>
-                <NavLink to="/certificates">
-                  <Icon name="award" />
-                  Certificates
-                </NavLink>
-                <NavLink to="/import">
-                  <Icon name="upload" />
-                  Import
-                </NavLink>
-                <NavLink to="/bulk">
-                  <Icon name="shuffle" />
-                  Bulk changes
-                </NavLink>
-              </>
-            )}
-
-            <div className="nav-group">Institute</div>
-            <NavLink to="/sections">
-              <Icon name="layers" />
-              Sections
-            </NavLink>
-            {/* Terms and batches. A teacher and a student may read the
-                structure; only an Admin sees the forms, which the page decides
-                for itself rather than being hidden wholesale here. */}
-            <NavLink to="/structure">
-              <Icon name="calendar" />
-              Structure
-            </NavLink>
-            {/* A TEACHER holds no `payment` grant at all (§4.5) — offering
-                them the page would be offering a 403. */}
-            {hasRole("super_admin", "admin", "student") && (
-              <NavLink to="/fees">
-                <Icon name="money" />
-                Fees
-              </NavLink>
-            )}
-            {hasRole("super_admin", "admin", "teacher") && (
-              <NavLink to="/reports">
-                <Icon name="chart" />
-                Reports
-              </NavLink>
-            )}
-
-            {/* A teacher holds provider_binding:read and needs it — whether a
-                Meet link is created for them or they must paste one in changes
-                what they do before class. A student holds no such grant. */}
-            {hasRole("super_admin", "admin", "teacher") && (
-              <NavLink to="/integrations">
-                <Icon name="shuffle" />
-                Integrations
-              </NavLink>
-            )}
-
-            {/* The public page, as a stranger sees it. An ordinary link rather
-                than a NavLink: it leaves the application shell entirely, which
-                is the point — a preview inside the sidebar would not be a
-                preview of anything. */}
-            {hasRole("super_admin", "admin") && (
-              <a href="/home">
-                <Icon name="megaphone" />
-                Public page
-              </a>
-            )}
-
-            {hasRole("super_admin", "admin") && (
-              <>
-                <div className="nav-group">Administration</div>
-                <NavLink to="/settings">
-                  <Icon name="settings" />
-                  Settings
-                </NavLink>
-                <NavLink to="/messages">
-                  <Icon name="bell" />
-                  Messages
-                </NavLink>
-                <NavLink to="/audit">
-                  <Icon name="clipboard" />
-                  Audit
-                </NavLink>
-              </>
-            )}
-            {hasRole("super_admin") && (
-              <>
-                <NavLink to="/security">
-                  <Icon name="shield" />
-                  Security
-                </NavLink>
-                <NavLink to="/backups">
-                  <Icon name="database" />
-                  Backups
-                </NavLink>
-              </>
-            )}
+              return (
+                <Fragment key={d.to}>
+                  {heading}
+                  {d.leavesApp ? (
+                    // An ordinary link: it leaves the application shell
+                    // entirely, which is the point — a preview inside the
+                    // sidebar would not be a preview of anything.
+                    <a href={d.to} title={d.label}>
+                      {inside}
+                    </a>
+                  ) : (
+                    <NavLink to={d.to} end={d.to === "/"} title={d.label}>
+                      {inside}
+                    </NavLink>
+                  )}
+                </Fragment>
+              );
+            })}
           </nav>
 
+          {/* Whose session this is, at a glance and without opening anything.
+              What you DO about it — change password, appearance, sign out —
+              moved to the account menu in the top strip, because reaching it
+              here meant scrolling past every destination on a phone. */}
           <div className="sidebar-foot">
             <span className="avatar" aria-hidden="true">
               {initials}
@@ -345,14 +323,6 @@ export function App() {
               <strong>{user.fullName || user.email}</strong>
               <span>{roleLabel}</span>
             </span>
-            <button
-              className="btn btn-quiet"
-              onClick={() => void signOut()}
-              aria-label="Sign out"
-              title="Sign out"
-            >
-              <Icon name="logout" />
-            </button>
           </div>
         </aside>
 
@@ -375,6 +345,13 @@ export function App() {
         )}
 
         <div style={{ flex: 1, minWidth: 0 }}>
+          {/*
+            The top strip used to hold a hamburger that is hidden above 900px
+            and a bell — so on every desktop screen it was an empty band with
+            one control in it. It now carries the three things that belong to
+            the application rather than to any one page: how to find something,
+            what is waiting, and who you are signed in as.
+          */}
           <header className="topbar">
             <button
               className="btn btn-quiet menu-button"
@@ -385,8 +362,29 @@ export function App() {
             >
               <Icon name="menu" />
             </button>
+            <button
+              type="button"
+              className="icon-btn sidebar-collapse"
+              onClick={toggleRail}
+              aria-label="Narrow or widen the sidebar"
+              title="Narrow or widen the sidebar"
+              aria-controls="sidebar"
+            >
+              <Icon name="panel" />
+            </button>
+            <button
+              type="button"
+              className="search-trigger"
+              onClick={() => setPaletteOpen(true)}
+              aria-label="Go to a screen"
+            >
+              <Icon name="search" />
+              <span className="search-trigger-label">Go to…</span>
+              <span className="kbd">{modKey}K</span>
+            </button>
             <div className="topbar-right">
               <NotificationBell />
+              <AccountMenu initials={initials} roleLabel={roleLabel} />
             </div>
           </header>
 
@@ -400,7 +398,16 @@ export function App() {
         matches the sidebar icon for the same destination, so the colour a
         person clicked is the colour they arrive at.
       */}
-      <main className={`main page-${location.pathname.split("/")[1] || "dashboard"}`}>
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+
+      {/* `tabIndex={-1}` is what makes the skip link land: an element the
+          browser cannot focus is one it jumps straight past. It adds no tab
+          stop of its own. */}
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className={`main page-${location.pathname.split("/")[1] || "dashboard"}`}
+      >
         <Routes>
           <Route path="/" element={<DashboardPage />} />
           {/*

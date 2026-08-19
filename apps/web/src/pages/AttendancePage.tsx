@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { SkeletonTable } from "../components/Ui";
 import { ApiError, api } from "../api/client";
 
 /**
@@ -75,7 +76,7 @@ export function AttendancePage() {
       .catch(() => setSessions([]));
   }, []);
 
-  if (!sessions) return <p className="muted">Loading…</p>;
+  if (!sessions) return <SkeletonTable rows={8} columns={5} />;
 
   if (sessions.length === 0) {
     return (
@@ -232,7 +233,7 @@ function RegisterGrid({ sessionId }: { sessionId: string }) {
       </div>
     );
   }
-  if (!register) return <p className="muted">Loading…</p>;
+  if (!register) return <SkeletonTable rows={8} columns={5} />;
 
   const unmarked = register.students.filter((s) => marks[s.studentId] === "NOT_MARKED").length;
   const tally = STATUSES.map((s) => ({

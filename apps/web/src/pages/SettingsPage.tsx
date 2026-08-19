@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Skeleton } from "../components/Ui";
 import { text } from "../api/text";
 import { ApiError, api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
@@ -137,7 +138,7 @@ export function SettingsPage() {
       )}
 
       {!groups ? (
-        <p className="muted">Loading…</p>
+        <Skeleton lines={2} />
       ) : visible.length === 0 ? (
         <div className="card">
           <p className="muted">

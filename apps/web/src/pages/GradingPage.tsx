@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { SkeletonList } from "../components/Ui";
 import { Link, useParams } from "react-router-dom";
 import { ApiError, api, tokens } from "../api/client";
 import { StudentNotes } from "../components/StudentNotes";
@@ -97,7 +98,7 @@ export function GradingPage() {
       </div>
     );
   }
-  if (!roster) return <p className="muted">Loading…</p>;
+  if (!roster) return <SkeletonList rows={7} />;
 
   const { assignment: a, summary } = roster;
 

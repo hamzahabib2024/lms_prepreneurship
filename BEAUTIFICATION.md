@@ -35,6 +35,90 @@ Four things reach every screen without any page being edited:
 
 ---
 
+## The brand pass
+
+Brand Guidelines V2.0, April 2026, Office of the CEO. The palette, the
+typefaces, the logo and the breakpoints are now the brand's rather than this
+codebase's own inventions.
+
+`npm run brand:audit` checks every rule that can be checked mechanically and
+prints what cannot be. It measures forty-odd contrast pairs while it is there.
+
+| | |
+|---|---|
+| **Navy replaces indigo** | The product was built on #4338ca. §3.2 forbids "bright generic blues, purples, teals, or rainbow gradients" and §10.02 settles it: amber #f5a623 is the accent, navy #1a3c5e is the brand. Every token moved; not one page had to be edited, because the token NAMES did not change |
+| **Twelve page hues deleted** | Violet, fuchsia, cyan, teal, pink, orange-red and a retired gold, one per screen. Every one of them was on the prohibited list. One amber rule under every heading now, which is §3.2's own "accent bars" |
+| **Sora and Inter, self-hosted** | §4.1 names them. The previous pass had removed Inter and argued for the system stack — every objection in that argument was about Google's servers rather than the typefaces, and 101 KB of latin-subset variable woff2 from our own origin answers all of them |
+| **The real logo** | The mark was a "P" drawn in CSS on a gradient, in six places. §2.3: "Recreate the logo from scratch — always use the master asset." The emblem is now cut from ppship-logo.png, with the wordmark dropped out at nav and favicon sizes as §2.4 requires |
+| **"Dream. Learn. Earn."** | §1.2, exact punctuation, on every page without exception. It is in the sidebar lockup, which is the one piece of furniture that qualifies |
+| **Amber is the call to action** | §7.4 — amber ground, navy text, 5.6:1. It was white on indigo, which made the primary button the same colour as the furniture around it |
+| **Solid navigation** | §10.11: "No transparent state." Both the app top bar and the public site's nav were a translucent wash over a blur |
+| **Brand breakpoints** | §7.2 — burger at 1100px, mobile 768, small 640. The app had picked 900, 880 and 860 by eye |
+| **Body type** | 16px on 1.6, from 15px on 1.55. §4.2 puts body at 16–18 and §4.3 makes 1.6 a floor |
+
+### Three places the brand book was followed with a stated deviation
+
+Each is a case where two rules in the book cannot both hold, so one had to
+give. All three are commented at the point of change.
+
+- **The caption grey.** §7.1 gives `--ink-soft` as `#6b7280` and §3.1 gives the
+  cream ground as `#f0f4f8`. Together they measure **4.37:1**, and §6.3 itself
+  demands 4.5:1. Darkened four per cent to `#616b7b` — 4.88:1 on cream, 5.39:1
+  on white.
+- **The heading scale.** §4.2 puts H1 at 56–72px. That is written for
+  prepreneurship.com, where the H1 is the only thing on screen; here it is the
+  title of a register with forty rows under it. Application screens use the H3
+  Subhead band (22–32px), which is still the brand's scale. The public hero
+  keeps the brand's hero size.
+- **The sign-in lockup.** §2.3 wants the full lockup on institutional surfaces
+  and §2.2 wants "the reversed light version" on deep navy. The master file's
+  wordmark is Wordmark Black and no reversed asset exists, so the emblem is
+  paired with the wordmark set in Sora rather than placing a black-wordmark
+  file on navy.
+
+### What the brand pass did NOT do
+
+- **Photography (§6.2).** There are no Institute photographs in this repo, so
+  nothing was checked and nothing is claimed.
+- **Voice and tone (§5).** Copy was not rewritten. The book asks for
+  conviction over excitement and forbids "training centre", "course" and
+  "workshop" among others; that is a screen-by-screen copy review and it has
+  not happened.
+- **The Flutter app.** `apps/mobile_app` is untouched and is still on the old
+  palette.
+
+## The shell
+
+The frame rather than any screen, done once so all four roles inherit it.
+
+| | |
+|---|---|
+| **Skip to the content** | The first focusable element on the page. The sidebar renders before `<main>` and holds up to twenty-four links, so a keyboard user was tabbing through the whole navigation on every screen before reaching anything (WCAG 2.4.1). None of the static checks could have found it — they read markup, and this is about order |
+| **One list of destinations** | `navigation.ts`. The sidebar renders it and the command palette searches it, so there is no second hand-written copy of the role predicates to drift. The predicates themselves are unchanged |
+| **A rail** | The sidebar narrows to 64px and remembers the choice. Labels are clipped, never `display: none`, so every link keeps its accessible name. Between 901 and 1180px the rail is the default, because a laptop has nothing to spare |
+| **Go to a screen** | Cmd-K or Ctrl-K. It searches SCREENS, not students or classes, and says so in the placeholder and again in the empty state — there is no global search endpoint, and a palette that looked as though it searched people would report "no such student" when it had never looked |
+| **An account menu** | Name, role, a student's registration number, change password, appearance, sign out — in the top strip. Signing out used to mean opening the drawer on a phone and scrolling past every destination to an unlabelled button |
+| **Light, dark, or the machine** | The dark palette has existed since the first pass and was reachable only by changing your operating system. Three states, defaulting to the system, applied before React mounts so a dark reader does not get a white flash on every load |
+| **Sections and Structure are staff-only** | They are institute-configuration screens and they were two of a student's eight destinations. The ROUTES are unchanged and still resolve for anybody who types the address; this is the interface declining to offer something, which is all it was ever able to do |
+
+## Two claims below that this document made too early
+
+Written down rather than quietly corrected, because the pattern is the point:
+a document that describes intent in the past tense is how work gets counted
+twice.
+
+- **"Twenty-four screens said Loading… in grey"** — the `Skeleton` component
+  was built and is correct. It reached three pages. There are still 33 bare
+  `Loading…` strings across roughly thirty screens.
+- **"UsersPage — zebra striping and a sticky header"** — the table primitives
+  exist and are good. People renders a `<ul>`, so there is nothing to stripe.
+  The same is true of Audit, Admissions, Bulk changes and Certificates.
+
+Both are scheduled: the tables with the Admin pass, the loading and empty
+states as a sweep across all pages after the role work.
+
+---
+
 ## The pages
 
 ### The public front

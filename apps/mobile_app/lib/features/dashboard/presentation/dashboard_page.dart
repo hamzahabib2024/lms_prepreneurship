@@ -42,8 +42,9 @@ class DashboardScreen extends StatelessWidget {
   final AuthUser user;
   final ApiClient api;
 
-  /// The dashboard's page hue — the web's `.page-dashboard` --page-base.
-  static const pageColor = Color(0xFF0891B2);
+  /// The accent under the page heading. It was cyan #0891B2; the web's
+  /// twelve page hues are gone and so are these — §3.2 and §10.02.
+  static const pageColor = AppColors.amber;
 
   @override
   Widget build(BuildContext context) {

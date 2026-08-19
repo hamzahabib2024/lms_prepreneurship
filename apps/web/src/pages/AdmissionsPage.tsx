@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { SkeletonList } from "../components/Ui";
 import { ApiError, api } from "../api/client";
 import { SlipViewer } from "../components/SlipViewer";
 
@@ -87,7 +88,7 @@ export function AdmissionsPage() {
       </div>
     );
   }
-  if (!queue) return <p className="muted">Loading…</p>;
+  if (!queue) return <SkeletonList rows={6} />;
 
   const overdue = queue.filter((r) => r.isOverdue).length;
 
