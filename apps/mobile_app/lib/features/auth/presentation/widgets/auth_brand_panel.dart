@@ -20,17 +20,35 @@ class AuthBrandPanel extends StatelessWidget {
         horizontal: compact ? 28 : 40,
         vertical: compact ? 26 : 48,
       ),
+      // §6.3 — the brand's own overlay: navy-deep to navy. It ran to
+      // #6D28D9, a violet, which §3.2 prohibits outright and which was the
+      // first colour anybody saw.
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [AppColors.brand800, AppColors.brand600, Color(0xFF6D28D9)],
-          stops: [0.0, 0.55, 1.0],
+          colors: [AppColors.navyDeep, AppColors.navy],
+          stops: [0.0, 1.0],
         ),
       ),
       child: Stack(
         children: [
-          // The web's decorative wash: a soft circle bleeding off the corner.
+          // §6.3 — "optional radial accent: rgba(245,166,35,0.08) at top-right
+          // for amber bloom". The web client carries the same wash.
+          Positioned(
+            right: -140,
+            top: -170,
+            child: Container(
+              width: 420,
+              height: 420,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                color: Color(0x1FF5A623), // amber at 12%
+              ),
+            ),
+          ),
+          // The original decorative circle, kept: it is what stops the panel
+          // reading as a flat rectangle on a tall phone.
           if (!compact)
             Positioned(
               right: -160,
@@ -96,33 +114,47 @@ class AuthLogoRow extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Container(
-          width: 36,
-          height: 36,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.18),
-            borderRadius: BorderRadius.circular(9),
-          ),
-          child: const Text(
-            'P',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 19,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.5,
-            ),
-          ),
+        // THE MASTER EMBLEM, not a letter in a rounded box. §2.3:
+        // "Recreate the logo from scratch — always use the master asset."
+        //
+        // No shadow, no tinted plate behind it: §2.3 forbids drop shadows,
+        // glows, outlines and filters on the logo, and the old mark sat on a
+        // white-at-18% square that was doing all three jobs at once.
+        Image.asset(
+          'assets/brand/ppship-emblem.png',
+          width: 40,
+          height: 40,
+          // The lockup is decorative here; the wordmark beside it is the name.
+          excludeFromSemantics: true,
         ),
-        const SizedBox(width: 10),
-        const Text(
-          'Prepreneurship',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 19,
-            fontWeight: FontWeight.w700,
-            letterSpacing: -0.3,
-          ),
+        const SizedBox(width: 12),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Prepreneurship',
+              style: TextStyle(
+                fontFamily: AppFonts.display,
+                color: Colors.white,
+                fontSize: 19,
+                fontWeight: FontWeight.w600,
+                letterSpacing: -0.57, // §4.3 negative tracking on display
+                height: 1.1,
+              ),
+            ),
+            // §1.2 — the tagline, exact punctuation, on every surface.
+            Text(
+              'Dream. Learn. Earn.',
+              style: TextStyle(
+                fontFamily: AppFonts.body,
+                color: Colors.white.withValues(alpha: 0.76),
+                fontSize: 10,
+                fontWeight: FontWeight.w500,
+                letterSpacing: 1.8, // §4.3 eyebrow tracking
+              ),
+            ),
+          ],
         ),
       ],
     );
