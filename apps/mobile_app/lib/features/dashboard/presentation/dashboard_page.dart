@@ -91,30 +91,41 @@ class _Header extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(greeting, style: Theme.of(context).textTheme.headlineMedium),
-                const SizedBox(height: 2),
-                Text(
-                  _longDate(DateTime.now()),
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+          // The greeting row never competes for width, so the words can
+          // never be squeezed into a vertical smear by the buttons.
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(greeting, style: Theme.of(context).textTheme.headlineMedium),
+                    const SizedBox(height: 2),
+                    Text(
+                      _longDate(DateTime.now()),
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 12),
+              _ProfileButton(user: user),
+            ],
           ),
-          // Trailing entries as a wrap so a narrow phone drops them to a
-          // second line rather than overflowing the greeting.
+          // The actions live on their own line, wrapping only among
+          // themselves — an "Academic" pill is never allowed to push
+          // "Good morning" sideways.
           Wrap(
             spacing: 12,
             runSpacing: 8,
+            alignment: WrapAlignment.end,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               if (state.data != null)
@@ -123,7 +134,6 @@ class _Header extends StatelessWidget {
               // still enforces the permission on every request (FR-REG-022).
               if (isAdmin) _AdmissionsButton(api: api),
               if (isStaff) _AcademicButton(user: user, api: api),
-              _ProfileButton(user: user),
             ],
           ),
         ],
