@@ -120,6 +120,22 @@ export const RESOURCES = [
   "lesson",
   "content_publication",
   "recorded_lecture",
+  /**
+   * THE RAW STORAGE TREE — every folder the Institute keeps recordings in, by
+   * name and by id.
+   *
+   * Held apart from `recorded_lecture` because the audiences differ, which is
+   * the recurring defect in this codebase: a teacher holds
+   * `recorded_lecture:create` at ASSIGNED scope so they can catalogue a
+   * recording for their own class, and that is right. It does NOT follow that
+   * they should be handed the identifier of every OTHER class's folder — with
+   * one, a teacher can point their own class at another cohort's recordings,
+   * or simply read a folder they were never given.
+   *
+   * A folder id is close to a bearer token for that folder's contents. Office
+   * only.
+   */
+  "lecture_storage_index",
   "lecture_playback",
   "lesson_resource",
   "watch_progress",
@@ -431,6 +447,14 @@ export const PERMISSION_MATRIX: Record<Resource, ResourcePolicy> = {
     admin: { actions: FULL, scope: "ALL" },
     teacher: { actions: FULL, scope: "ASSIGNED" },
     student: { actions: ["read"], scope: "ENROLLED" },
+  },
+  /**
+   * SUPER ADMIN AND ADMIN ONLY, and no teacher entry at all — an absent role
+   * is a refusal here, not an oversight. See the note on the resource.
+   */
+  lecture_storage_index: {
+    super_admin: { actions: ["read"], scope: "ALL" },
+    admin: { actions: ["read"], scope: "ALL" },
   },
   lecture_playback: {
     super_admin: { actions: ["read"], scope: "ALL" },

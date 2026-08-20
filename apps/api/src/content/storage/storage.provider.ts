@@ -80,6 +80,26 @@ export interface FolderEntry {
   canDownload?: boolean;
 }
 
+/** One recording on its way in. The stream is consumed exactly once. */
+export interface UploadInput {
+  /** Where it goes. A Drive folder id, or a prefix under local storage. */
+  folderRef: string | null;
+  /** What the person called it. A LABEL — never used as a path (SEC-FIL-005). */
+  filename: string;
+  contentType: string;
+  /** Known in advance because it came from a file on disk. Drive needs it. */
+  sizeBytes: number;
+  body: Readable;
+}
+
+export interface UploadCapability {
+  accepted: boolean;
+  /** Present when `accepted` is false. Says what to do, not merely what failed. */
+  reason?: string;
+  /** Where the file would land, for a panel that has to say so before sending. */
+  destination?: string;
+}
+
 export interface StorageHealth {
   healthy: boolean;
   detail?: string;
@@ -105,6 +125,41 @@ export interface StorageProvider {
   put(key: string, body: Buffer, contentType: string): Promise<StoredObjectRef>;
   get(storageRef: string): Promise<Buffer>;
   delete(storageRef: string): Promise<void>;
+
+  /**
+   * A LECTURE, PUT THERE FROM SOMEBODY'S LAPTOP — streamed, never buffered.
+   *
+   * `put()` takes a Buffer, which is correct for a payment slip and impossible
+   * for a recording: the Institute's own files run from 130 MB to 360 MB, and
+   * reading one into memory to store it costs the whole application tier per
+   * upload. This takes a stream and the size, and providers push it through
+   * without ever holding it.
+   *
+   * OPTIONAL, because not every provider can accept one and the honest answer
+   * differs by provider. `canAcceptUploads()` says so BEFORE a person picks a
+   * 300 MB file, waits for it to cross the network, and is then told no.
+   */
+  putStream?(
+    input: UploadInput,
+  ): Promise<StoredObjectRef>;
+
+  /**
+   * Whether an upload would be accepted, and if not, WHY — in words an
+   * administrator can act on.
+   *
+   * This exists because of a constraint no code can work around, discovered by
+   * measuring rather than by reading: a Google service account HAS NO DRIVE
+   * STORAGE QUOTA. It can list the Institute's folder, read every recording in
+   * it, and is even reported `canAddChildren: true` — and an upload is refused
+   * with `storageQuotaExceeded`, because a file in somebody's My Drive has to
+   * be charged to somebody and a service account is nobody. The folder must be
+   * on a Shared Drive, or the account must act as a real Workspace user
+   * through domain-wide delegation.
+   *
+   * An interface that only found this out at upload time would waste the whole
+   * transfer before saying so.
+   */
+  canAcceptUploads?(folderRef: string | null): Promise<UploadCapability>;
 
   healthCheck(): Promise<StorageHealth>;
 

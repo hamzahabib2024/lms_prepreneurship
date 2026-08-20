@@ -12,6 +12,8 @@ import type {
   StorageProvider,
   StorageStream,
   StoredObjectRef,
+  UploadCapability,
+  UploadInput,
 } from "./storage.provider";
 
 /**
@@ -72,10 +74,23 @@ export class GoogleDriveStorageProvider implements StorageProvider {
 
   private static readonly TOKEN_URL = "https://oauth2.googleapis.com/token";
   private static readonly API = "https://www.googleapis.com/drive/v3";
-  /** Read-only. The System catalogues and streams; it never writes to Drive. */
-  private static readonly SCOPE = "https://www.googleapis.com/auth/drive.readonly";
+  /**
+   * TWO SCOPES, AND THE NARROW ONE IS STILL THE DEFAULT.
+   *
+   * Reading is all this adapter did for most of its life and read-only is the
+   * right authority for it: the System catalogues and streams recordings the
+   * Institute already has. Uploading a lecture from somebody's laptop needs
+   * write access, and asking for it on every token — including the ones that
+   * only ever list a folder — would widen the blast radius of a leaked token
+   * for a feature most requests never touch.
+   *
+   * So tokens are minted per scope and cached per scope. A deployment that
+   * never uploads never asks Google for a writable token at all.
+   */
+  private static readonly READ_SCOPE = "https://www.googleapis.com/auth/drive.readonly";
+  private static readonly WRITE_SCOPE = "https://www.googleapis.com/auth/drive";
 
-  private token: { value: string; expiresAt: number } | null = null;
+  private tokens = new Map<string, { value: string; expiresAt: number }>();
 
   constructor(private readonly config: ConfigService) {}
 
@@ -153,20 +168,39 @@ export class GoogleDriveStorageProvider implements StorageProvider {
    * is valid when checked and expired when it arrives at Google produces an
    * intermittent 401 during exactly the busy period that made the call slow.
    */
-  private async accessToken(): Promise<string> {
-    if (this.token && Date.now() < this.token.expiresAt) return this.token.value;
+  private async accessToken(
+    scope: string = GoogleDriveStorageProvider.READ_SCOPE,
+  ): Promise<string> {
+    const cached = this.tokens.get(scope);
+    if (cached && Date.now() < cached.expiresAt) return cached.value;
 
     const creds = this.credentials();
     if (!creds) this.refuse();
 
     const now = Math.floor(Date.now() / 1000);
-    const claims = {
+    const claims: Record<string, unknown> = {
       iss: creds.clientEmail,
-      scope: GoogleDriveStorageProvider.SCOPE,
+      scope,
       aud: GoogleDriveStorageProvider.TOKEN_URL,
       iat: now,
       exp: now + 3600,
     };
+
+    /*
+     * ACTING AS A REAL PERSON, when the Institute has said who.
+     *
+     * A service account has no Drive storage quota of its own — measured
+     * against this Institute's own project, an upload is refused with
+     * `storageQuotaExceeded` even though the folder reports canAddChildren.
+     * Domain-wide delegation is one of the two ways out: `sub` makes Google
+     * issue the token AS that Workspace user, and the file is then owned by
+     * and charged to them.
+     *
+     * The same variable the Meet provider uses, because it is the same grant
+     * and having two would mean configuring it twice.
+     */
+    const subject = (this.config.get<string>("GOOGLE_IMPERSONATE_SUBJECT", "") ?? "").trim();
+    if (subject) claims["sub"] = subject;
 
     const b64 = (o: unknown) => Buffer.from(JSON.stringify(o)).toString("base64url");
     const unsigned = `${b64({ alg: "RS256", typ: "JWT" })}.${b64(claims)}`;
@@ -197,11 +231,12 @@ export class GoogleDriveStorageProvider implements StorageProvider {
     }
 
     const body = (await res.json()) as { access_token: string; expires_in: number };
-    this.token = {
+    const token = {
       value: body.access_token,
       expiresAt: Date.now() + (body.expires_in - 60) * 1000,
     };
-    return this.token.value;
+    this.tokens.set(scope, token);
+    return token.value;
   }
 
   private async api(path: string, params: Record<string, string> = {}): Promise<Response> {
@@ -423,11 +458,228 @@ export class GoogleDriveStorageProvider implements StorageProvider {
   // promises a Promise; a caller writing `provider.put(…).catch(…)` on the
   // previous version got an uncaught exception instead of their handler.
   async put(): Promise<StoredObjectRef> {
-    // CON-01 / BR-CNT-05 — the System catalogues and streams Drive video; it
-    // never uploads to it. Teachers upload through Drive itself, and the
-    // service account holds READ-ONLY scope, so this could not succeed anyway.
+    // Small documents still do not go to Drive. Slips and submissions are the
+    // Institute's records rather than shared media, and they live in the
+    // System's own storage by design. A LECTURE is different, and goes through
+    // putStream below.
     throw new AppError("VALIDATION_FAILED", {
-      message: "Lecture video is uploaded to Google Drive directly, not through the System.",
+      message:
+        "Only lecture video is uploaded to Google Drive, and it goes through the lecture " +
+        "upload rather than here.",
+    });
+  }
+
+  /**
+   * WILL DRIVE ACTUALLY TAKE A FILE? Asked before the transfer, not after.
+   *
+   * THE CONSTRAINT THIS EXISTS FOR, measured against this Institute's own
+   * project rather than read in a document:
+   *
+   *   A GOOGLE SERVICE ACCOUNT HAS NO DRIVE STORAGE QUOTA.
+   *
+   * It can list the Institute's Recordings folder, read every file in it, and
+   * Drive even answers `capabilities.canAddChildren: true` for that folder —
+   * and the upload is still refused, 403 `storageQuotaExceeded`, because a
+   * file in somebody's My Drive must be charged to somebody and a service
+   * account is nobody. There are exactly two ways out and both are
+   * configuration rather than code:
+   *
+   *   · put the folder on a SHARED DRIVE, where files are owned by the drive;
+   *   · or set GOOGLE_IMPERSONATE_SUBJECT so the account acts as a real
+   *     Workspace user through domain-wide delegation.
+   *
+   * Finding this out at upload time would mean a person waits for 300 MB to
+   * cross their connection and is then told it was never going to work. So the
+   * folder is inspected first: a `driveId` means a Shared Drive, and
+   * impersonation is a setting we can read without asking Google anything.
+   */
+  async canAcceptUploads(folderRef: string | null): Promise<UploadCapability> {
+    if (!this.isConfigured) {
+      return { accepted: false, reason: this.lastFailure ?? "Google Drive is not connected." };
+    }
+    if (!folderRef) {
+      return {
+        accepted: false,
+        reason:
+          "This class has no Drive folder connected yet, so there is nowhere to put the " +
+          "recording. Connect one first.",
+      };
+    }
+
+    const impersonating = (
+      this.config.get<string>("GOOGLE_IMPERSONATE_SUBJECT", "") ?? ""
+    ).trim();
+
+    try {
+      const res = await this.api(`/files/${encodeURIComponent(folderRef)}`, {
+        fields: "id, name, driveId, capabilities(canAddChildren)",
+        supportsAllDrives: "true",
+      });
+
+      if (!res.ok) {
+        return {
+          accepted: false,
+          reason:
+            res.status === 404
+              ? "That folder is not shared with the System, or no longer exists."
+              : `Drive answered ${res.status} when asked about the folder.`,
+        };
+      }
+
+      const f = (await res.json()) as {
+        name?: string;
+        driveId?: string;
+        capabilities?: { canAddChildren?: boolean };
+      };
+
+      if (f.capabilities?.canAddChildren === false) {
+        return {
+          accepted: false,
+          destination: f.name,
+          reason:
+            `The service account can read "${f.name ?? folderRef}" but not add to it. Share the ` +
+            "folder with it as an Editor rather than a Viewer.",
+        };
+      }
+
+      // The whole point of this method.
+      if (!f.driveId && !impersonating) {
+        return {
+          accepted: false,
+          destination: f.name,
+          reason:
+            `"${f.name ?? folderRef}" is in an ordinary Google Drive, and a service account has ` +
+            "no storage quota of its own — Google refuses the upload however the folder is " +
+            "shared. Either move the folder to a Shared Drive, or set " +
+            "GOOGLE_IMPERSONATE_SUBJECT to a Workspace user the account may act as. Until then " +
+            "the recording can still be stored by the System itself.",
+        };
+      }
+
+      return { accepted: true, destination: f.name ?? folderRef };
+    } catch (err) {
+      return {
+        accepted: false,
+        reason: err instanceof Error ? err.message : "Drive could not be reached.",
+      };
+    }
+  }
+
+  /**
+   * A recording, streamed into the class's Drive folder — FR-VID-002.
+   *
+   * RESUMABLE, NOT MULTIPART, and the file sizes decide that rather than
+   * taste. Google's multipart upload wants the whole body in one request; the
+   * Institute's own recordings are 130–360 MB, and a single request that size
+   * fails on a dropped connection with nothing to resume from and the whole
+   * transfer to do again. The resumable protocol takes a session URL first and
+   * sends the bytes to it, which is also the only shape that lets the body be
+   * a STREAM — the file never exists in this process's memory.
+   *
+   * `duplex: "half"` is not optional on a fetch with a stream body. Without it
+   * Node throws "duplex option is required when sending a body as a stream",
+   * and it is the sort of error that reads as a bug in the upload rather than
+   * a missing flag.
+   */
+  async putStream(input: UploadInput): Promise<StoredObjectRef> {
+    if (!this.isConfigured) this.refuse();
+
+    const token = await this.accessToken(GoogleDriveStorageProvider.WRITE_SCOPE);
+
+    // 1 — open a session. The metadata goes here; the bytes go to the URL it
+    //     answers with.
+    const start = await fetch(
+      "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true&fields=id,name,size,mimeType,modifiedTime,videoMediaMetadata(durationMillis)",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json; charset=UTF-8",
+          "X-Upload-Content-Type": input.contentType,
+          "X-Upload-Content-Length": String(input.sizeBytes),
+        },
+        body: JSON.stringify({
+          name: input.filename,
+          ...(input.folderRef ? { parents: [input.folderRef] } : {}),
+        }),
+      },
+    );
+
+    if (!start.ok) {
+      const detail = await start.text();
+      throw this.uploadError(start.status, detail, input.folderRef);
+    }
+
+    const session = start.headers.get("location");
+    if (!session) {
+      throw new AppError("STORAGE_UNAVAILABLE", {
+        message: "The recording could not be uploaded.",
+        internal: "Drive accepted the resumable session request but returned no Location header.",
+      });
+    }
+
+    // 2 — the bytes. One PUT, streamed.
+    const put = await fetch(session, {
+      method: "PUT",
+      headers: {
+        "Content-Type": input.contentType,
+        "Content-Length": String(input.sizeBytes),
+      },
+      // The stream, as fetch's body. Cast because Node's DOM-shaped fetch
+      // types do not name a Readable, which it accepts perfectly well.
+      body: input.body as unknown as ReadableStream,
+      // Required by Node's fetch for a streaming body. See the note above.
+      duplex: "half",
+    } as RequestInit & { duplex: "half" });
+
+    if (!put.ok) {
+      const detail = await put.text();
+      throw this.uploadError(put.status, detail, input.folderRef);
+    }
+
+    const f = (await put.json()) as DriveFile;
+    this.logger.log(
+      JSON.stringify({ event: "drive.upload", fileId: f.id, sizeBytes: input.sizeBytes }),
+    );
+
+    return {
+      storageRef: f.id,
+      sizeBytes: f.size ? Number(f.size) : input.sizeBytes,
+      contentType: f.mimeType ?? input.contentType,
+      durationSeconds: durationOf(f),
+      lastModified: f.modifiedTime ? new Date(f.modifiedTime) : new Date(),
+    };
+  }
+
+  /**
+   * The refusal, named.
+   *
+   * `storageQuotaExceeded` is the one that will actually happen and the one
+   * whose raw text sends an administrator to check their Google storage plan
+   * — which is not the problem and buying more of it will not help.
+   */
+  private uploadError(status: number, detail: string, folderRef: string | null): AppError {
+    if (detail.includes("storageQuotaExceeded") || detail.includes("do not have storage quota")) {
+      return new AppError("STORAGE_UNAVAILABLE", {
+        message:
+          "Google refused the upload: the System's service account has no Drive storage of its " +
+          "own. Move this class's folder to a Shared Drive, or set GOOGLE_IMPERSONATE_SUBJECT " +
+          "to a Workspace user. The recording can be stored by the System instead in the " +
+          "meantime.",
+        internal: `Drive upload ${status} for folder ${folderRef}: ${detail.slice(0, 300)}`,
+      });
+    }
+    if (status === 403 || status === 404) {
+      return new AppError("STORAGE_UNAVAILABLE", {
+        message:
+          "Google would not accept the recording into that folder. Check the folder is shared " +
+          "with the System's service account as an Editor.",
+        internal: `Drive upload ${status} for folder ${folderRef}: ${detail.slice(0, 300)}`,
+      });
+    }
+    return new AppError("STORAGE_UNAVAILABLE", {
+      message: "The recording could not be uploaded to Google Drive.",
+      internal: `Drive upload ${status} for folder ${folderRef}: ${detail.slice(0, 300)}`,
     });
   }
 

@@ -176,15 +176,38 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   if (!res.ok) {
     const err = (body as { error?: Record<string, unknown> }).error ?? {};
 
-    // An expired access token is routine, not a failure: refresh once and
-    // replay the request so the user never notices.
-    if (res.status === 401 && err["code"] === "AUTH_TOKEN_EXPIRED" && !options._retried) {
+    /*
+     * A 401 WITH A REFRESH TOKEN IN HAND IS ROUTINE, not a failure. Refresh
+     * once and replay the request, so the user never notices.
+     *
+     * THIS USED TO REQUIRE `AUTH_TOKEN_EXPIRED`, AND THAT BROKE EVERY RELOAD.
+     * The access token lives in memory only — deliberately, so it dies with
+     * the tab and is never readable from disk. So the FIRST request after any
+     * page load carries no Authorization header at all, and the server answers
+     * `AUTH_TOKEN_INVALID` rather than `AUTH_TOKEN_EXPIRED`: there was no token
+     * to expire. The refresh branch therefore never fired, AuthContext's
+     * catch ran `clear()`, and the stored refresh token was destroyed.
+     *
+     * The effect was that a page reload always signed the user out, and the
+     * whole refresh-token mechanism — the rotation, the 30-day lifetime, the
+     * session that is supposed to survive a reload — had never once worked.
+     * It looked like a session timing out, which is why it read as normal.
+     *
+     * The condition that matters is not which 401 it is: it is whether there
+     * is a refresh token to try. `refreshAccessToken()` returns false when
+     * there is none or when the server rejects it, and the sign-out below
+     * still happens then.
+     */
+    if (res.status === 401 && !options._retried && tokens.getRefresh()) {
       if (await refreshAccessToken()) {
         return request<T>(path, { ...options, _retried: true });
       }
       onUnauthenticated?.();
+    } else if (res.status === 401) {
+      // No refresh token, or the replay was refused as well. Either way this
+      // session is over.
+      onUnauthenticated?.();
     }
-    if (res.status === 401 && options._retried) onUnauthenticated?.();
 
     throw new ApiError(res.status, err as ConstructorParameters<typeof ApiError>[1]);
   }

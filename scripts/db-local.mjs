@@ -34,7 +34,72 @@ const pg = new EmbeddedPostgres({
   password: PASSWORD,
   port: PORT,
   persistent: true,
+  /*
+   * UTF-8, EXPLICITLY, AND THIS IS NOT A PREFERENCE.
+   *
+   * `initdb` with no encoding takes it from the operating system's locale. On
+   * an English-Windows machine that is WIN1252, and a WIN1252 database CANNOT
+   * STORE URDU AT ALL:
+   *
+   *   ERROR: character with byte sequence 0xd8 0xb9 in encoding "UTF8"
+   *          has no equivalent in encoding "WIN1252"
+   *
+   * Measured on a database this very script created. Latin-1 accents happen to
+   * survive — "Zoë" stores fine — which is exactly what makes it dangerous:
+   * every test somebody is likely to type passes, and the failure waits for a
+   * student whose name is written in the script most of this Institute's
+   * students actually use. It surfaces as a 500 on registration, from a
+   * constraint nothing in the application layer mentions.
+   *
+   * The collation is left to the platform deliberately: `initdb` refuses a
+   * locale the OS does not have, and getting UTF-8 encoding right is the part
+   * that decides whether a name can be stored at all.
+   *
+   * THIS ONLY AFFECTS A DATABASE CREATED FROM NOW ON. An existing ./pgdata
+   * keeps whatever encoding it was initialised with — encoding is fixed at
+   * creation and cannot be altered afterwards. `npm run db:reset-local` prints
+   * what to do about that.
+   */
+  initdbFlags: ["--encoding=UTF8"],
 });
+
+/** Refuses to go on if the cluster cannot hold the Institute's own names. */
+async function warnIfNotUtf8() {
+  const { Client } = await import("pg").catch(() => ({ Client: null }));
+  if (!Client) return;
+  const client = new Client({
+    host: "localhost",
+    port: PORT,
+    user: USER,
+    password: PASSWORD,
+    database: DATABASE,
+  });
+  try {
+    await client.connect();
+    const { rows } = await client.query("SELECT current_setting('server_encoding') AS enc");
+    const enc = rows[0]?.enc;
+    if (enc && enc.toUpperCase() !== "UTF8") {
+      console.log("");
+      console.log(`  !  This database was created with ${enc}, not UTF8.`);
+      console.log("     It CANNOT store Urdu, Arabic or any non-Latin script — a student");
+      console.log("     named in Urdu fails to register with a 500 from the database.");
+      console.log("");
+      console.log("     Encoding is fixed when a cluster is created and cannot be changed.");
+      console.log("     To fix it, back up anything you need, then:");
+      console.log("");
+      console.log("       node scripts/db-local.mjs stop");
+      console.log("       rm -r pgdata           # deletes the local database entirely");
+      console.log("       node scripts/db-local.mjs start");
+      console.log("       npm run db:setup");
+      console.log("");
+    }
+  } catch {
+    // The check is a courtesy; a database that cannot be reached will report
+    // itself far more loudly a moment later.
+  } finally {
+    await client.end().catch(() => undefined);
+  }
+}
 
 const command = process.argv[2] ?? "start";
 
@@ -54,6 +119,8 @@ async function start() {
     await pg.createDatabase(DATABASE);
     console.log(`Created database "${DATABASE}".`);
   }
+
+  await warnIfNotUtf8();
 
   const url = `postgresql://${USER}:${PASSWORD}@localhost:${PORT}/${DATABASE}?schema=public`;
   console.log("\nPostgreSQL is running.\n");

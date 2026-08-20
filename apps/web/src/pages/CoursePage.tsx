@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ApiError, api } from "../api/client";
+import { useAuth } from "../auth/AuthContext";
 import { CourseCover } from "../components/CourseCover";
 import { EmptyState, SkeletonCards } from "../components/Ui";
 import { Icon } from "../components/Icon";
+import { LectureFolderPicker } from "../components/LectureFolderPicker";
+import { LectureUpload } from "../components/LectureUpload";
 import { LectureThumb } from "../components/LectureThumb";
 
 interface Lecture {
@@ -47,12 +50,14 @@ interface CourseLectures {
  */
 export function CoursePage() {
   const { sectionSubjectId = "" } = useParams();
+  const { hasRole } = useAuth();
   const [data, setData] = useState<CourseLectures | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   /** Drive refusing to hand the files over — a setting there, not a fault here. */
   const [blocked, setBlocked] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -188,12 +193,45 @@ export function CoursePage() {
           wondering why nothing appears needs to see that no folder is set
           rather than concluding the feature is broken. */}
       {data.canManage && (
-        <LectureSource
-          sectionSubjectId={sectionSubjectId}
-          folderRef={data.lectureFolderRef}
-          storage={data.storage}
-          onSaved={() => void load()}
-        />
+        <>
+          <LectureSource
+            sectionSubjectId={sectionSubjectId}
+            folderRef={data.lectureFolderRef}
+            storage={data.storage}
+            onSaved={() => void load()}
+            mayBrowseFolders={hasRole("super_admin", "admin")}
+          />
+
+          {/* FR-VID-002 — a recording that Google Meet did not make.
+              Collapsed by default: the ordinary path is still a file appearing
+              in the Drive folder on its own, and a permanently-open upload form
+              would make the exception look like the rule. */}
+          <div className="lecture-source">
+            <div className="lecture-source-head">
+              <Icon name="upload" />
+              <span className="muted small">
+                Have a recording on your own device? Add it here — a phone video, a screen
+                capture, or anything Meet did not record for you.
+              </span>
+              <button
+                className="btn btn-quiet btn-sm"
+                onClick={() => setUploading((u) => !u)}
+              >
+                {uploading ? "Close" : "Upload a recording"}
+              </button>
+            </div>
+            {uploading && (
+              <LectureUpload
+                sectionSubjectId={sectionSubjectId}
+                onCancel={() => setUploading(false)}
+                onDone={() => {
+                  setUploading(false);
+                  void load();
+                }}
+              />
+            )}
+          </div>
+        </>
       )}
 
       {data.lectures.length === 0 ? (
@@ -260,23 +298,36 @@ function LectureSource({
   folderRef,
   storage,
   onSaved,
+  /**
+   * Whether this reader may see the FOLDER INDEX — every class folder the
+   * Institute keeps, by name and id.
+   *
+   * Office only, and the server enforces it on `lecture_storage_index`. A
+   * teacher may still connect a folder they have been GIVEN the id of, which
+   * is what the text box below is for; they may not browse the list, because a
+   * folder id is close to a bearer token for that folder's contents and with
+   * one a teacher could point their class at another cohort's recordings.
+   */
+  mayBrowseFolders,
 }: {
   sectionSubjectId: string;
   folderRef: string | null;
   storage?: { provider: string; live: boolean; mismatchedSources: string[] };
   onSaved: () => void;
+  mayBrowseFolders: boolean;
 }) {
   const [value, setValue] = useState(folderRef ?? "");
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(folderRef === null);
+  const [browsing, setBrowsing] = useState(false);
 
   const provider = storage?.provider ?? "local";
   const providerName = provider === "google_drive" ? "Google Drive" : "local storage";
   const driveNotConfigured = storage?.mismatchedSources.includes("google_drive") ?? false;
 
-  async function save() {
+  async function save(explicit?: string) {
     setBusy(true);
     setError(null);
     setSaved(null);
@@ -285,7 +336,7 @@ function LectureSource({
       // pasting the address bar is what people actually do.
       const r = await api.put<{ lectureFolderRef: string | null }>(
         `/section-subjects/${sectionSubjectId}/lecture-folder`,
-        { folderRef: value.trim() },
+        { folderRef: (explicit ?? value).trim() },
       );
       setValue(r.lectureFolderRef ?? "");
       setSaved(
@@ -326,7 +377,31 @@ function LectureSource({
         <button className="btn btn-quiet btn-sm" onClick={() => setOpen((o) => !o)}>
           {open ? "Close" : folderRef ? "Change folder" : "Connect a folder"}
         </button>
+        {/* The list, for the people allowed to see it. This is the difference
+            between "go to Drive, find it among a dozen similar names, copy the
+            address bar, come back" and choosing it here. */}
+        {mayBrowseFolders && (
+          <button className="btn btn-quiet btn-sm" onClick={() => setBrowsing((b) => !b)}>
+            {browsing ? "Hide folders" : "Browse folders"}
+          </button>
+        )}
       </div>
+
+      {browsing && mayBrowseFolders && (
+        <LectureFolderPicker
+          currentRef={folderRef}
+          onClose={() => setBrowsing(false)}
+          onPick={(id) => {
+            setValue(id);
+            setBrowsing(false);
+            // Saved straight away rather than dropped into the box for
+            // somebody to press Save on. Choosing "use for this class" IS the
+            // instruction; making it a two-step is how a class ends up
+            // connected to nothing because the second step was missed.
+            void save(id);
+          }}
+        />
+      )}
 
       {open && (
         <div className="lecture-source-form">

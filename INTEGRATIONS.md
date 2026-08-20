@@ -296,6 +296,36 @@ into it whole, on one line. If it is set it wins over the pair above:
 GOOGLE_SERVICE_ACCOUNT_JSON=/run/secrets/service-account.json
 ```
 
+## Uploading a lecture INTO Drive — read this before trying
+
+The System can read the Institute's recordings with the setup above. Putting a
+recording **into** Drive from somebody's laptop is a different grant, and there
+is one constraint that no amount of sharing fixes:
+
+> **A Google service account has no Drive storage quota.**
+>
+> It will list your folder, read every file in it, and Drive even reports
+> `canAddChildren: true` — and the upload is refused with
+> `storageQuotaExceeded`. A file in an ordinary My Drive has to be charged to
+> somebody, and a service account is nobody. This was measured against this
+> Institute's own project, not read in a document.
+
+Two ways out, and only one of them is likely to suit you:
+
+| | What to do | Cost |
+|---|---|---|
+| **Shared Drive** | Move the Recordings folder to a Shared Drive and share that with the service account as **Content manager** | Needs Google Workspace |
+| **Impersonation** | Set `GOOGLE_IMPERSONATE_SUBJECT` to a Workspace user and grant domain-wide delegation in the Admin console | Needs Workspace admin |
+
+```ini
+GOOGLE_IMPERSONATE_SUBJECT=office@prepreneurship.pk
+```
+
+**You do not have to do either.** The upload panel asks the question before it
+offers a file picker, says which of these applies, and offers to store the
+recording in the System itself instead — students watch it in exactly the same
+way. Nothing is blocked; only the destination differs.
+
 ## Step 6 — Find out who to share with
 
 ```bash

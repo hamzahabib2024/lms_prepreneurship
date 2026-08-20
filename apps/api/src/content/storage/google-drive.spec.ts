@@ -398,8 +398,8 @@ describe("Google Drive storage", () => {
   // ───────────────────────────────────────────────────────────── writing ──
 
   describe("what it will not do", () => {
-    it("refuses to upload — teachers put video in Drive themselves (CON-01)", async () => {
-      await expect(provider().put()).rejects.toThrow(/uploaded to Google Drive directly/i);
+    it("refuses put() — only a lecture goes to Drive, and it goes through putStream", async () => {
+      await expect(provider().put()).rejects.toThrow(/lecture video/i);
     });
 
     it("never deletes from the Institute's Drive", async () => {

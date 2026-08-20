@@ -1,11 +1,96 @@
-import { Body, Controller, Get, Param, Patch, Post, Put, Query, Req, Res } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Put,
+  Query,
+  Req,
+  Res,
+  UploadedFile,
+  UseInterceptors,
+} from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
+import { open, unlink } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { z } from "zod";
 import type { Request, Response } from "express";
+import { AppError } from "@lms/shared";
 import { ContentService } from "./content.service";
+import { LectureStorageService } from "./lecture-storage.service";
 import { LectureSyncService } from "./lecture-sync.service";
 import { StorageRegistry } from "./storage/storage.registry";
 import { zodBody } from "../common/zod-validation.pipe";
 import { Public, RequirePermission } from "../rbac/permissions.guard";
+
+/**
+ * A LECTURE IS NOT A DOCUMENT, and the ceiling says so.
+ *
+ * The slip limit is 5 MB, which is right for a photograph of a bank receipt.
+ * The Institute's own recordings run from 130 MB to 360 MB, so anything under
+ * a gigabyte would refuse real files. Configurable because a course that
+ * records three-hour workshops will want more, and finding that out should not
+ * need a deployment.
+ */
+export const MAX_LECTURE_BYTES =
+  Number(process.env["MAX_LECTURE_UPLOAD_MB"] ?? 1024) * 1024 * 1024;
+
+const lectureUploadSchema = z.object({
+  title: z.string().trim().min(2, "Give the recording a title students will recognise.").max(255),
+  lessonId: z.string().uuid().optional(),
+  recordedOn: z.coerce.date(),
+  /** `local` stores it in the System instead of Drive — see the upload target. */
+  storeIn: z.enum(["auto", "local"]).optional(),
+});
+
+/**
+ * WHAT THE FILE ACTUALLY IS — SEC-FIL-003.
+ *
+ * Read from the first bytes on disk rather than from the name or the
+ * content-type the browser sent, both of which the uploader chooses. Only the
+ * header is read: the file is up to a gigabyte and the answer is in the first
+ * few dozen bytes.
+ *
+ * The four containers here are what a phone, a screen recorder or Meet
+ * actually produce. MP4 and MOV share the ISO base media format and are told
+ * apart by the brand after `ftyp`; WebM and MKV are both EBML and are
+ * distinguished by the doctype, which is far enough into the header that it is
+ * simpler and honest to report the one the Institute will overwhelmingly have.
+ */
+async function sniffVideo(path: string): Promise<string | null> {
+  const handle = await open(path, "r");
+  try {
+    const buf = Buffer.alloc(64);
+    const { bytesRead } = await handle.read(buf, 0, 64, 0);
+    if (bytesRead < 12) return null;
+
+    // ISO base media: 4 bytes size, then "ftyp".
+    if (buf.subarray(4, 8).toString("ascii") === "ftyp") {
+      const brand = buf.subarray(8, 12).toString("ascii");
+      return brand.startsWith("qt") ? "video/quicktime" : "video/mp4";
+    }
+
+    // EBML — WebM and Matroska share it.
+    if (buf[0] === 0x1a && buf[1] === 0x45 && buf[2] === 0xdf && buf[3] === 0xa3) {
+      const head = buf.toString("ascii");
+      return head.includes("webm") ? "video/webm" : "video/x-matroska";
+    }
+
+    // AVI, still produced by older screen recorders.
+    if (
+      buf.subarray(0, 4).toString("ascii") === "RIFF" &&
+      buf.subarray(8, 12).toString("ascii") === "AVI "
+    ) {
+      return "video/x-msvideo";
+    }
+
+    return null;
+  } finally {
+    await handle.close();
+  }
+}
 
 const moduleSchema = z.object({
   subjectId: z.string().uuid(),
@@ -89,6 +174,7 @@ export class ContentController {
     private readonly content: ContentService,
     private readonly storage: StorageRegistry,
     private readonly lectureSync: LectureSyncService,
+    private readonly lectureStorage: LectureStorageService,
   ) {}
 
   // -------------------------------------------------------------- structure
@@ -164,6 +250,119 @@ export class ContentController {
   @Get("storage/browse")
   browse(@Query("folder") folder?: string) {
     return this.content.browseStorage(folder);
+  }
+
+  /**
+   * THE FOLDER INDEX — every class folder the Institute keeps, by name and id.
+   *
+   * `lecture_storage_index`, which ONLY a Super Admin and an Admin hold, and
+   * that is the whole reason the resource exists rather than reusing
+   * `recorded_lecture`. A teacher legitimately holds `recorded_lecture:create`
+   * at ASSIGNED scope so they can catalogue a recording for their own class.
+   * It does not follow that they should be handed the identifier of every
+   * OTHER class's folder — a folder id is close to a bearer token for that
+   * folder's contents, and with one a teacher can point their class at another
+   * cohort's recordings.
+   *
+   * The endpoint above stays on `recorded_lecture:create` because it lists
+   * FILES inside a folder somebody already has, which is the act of
+   * cataloguing. This lists the tree.
+   */
+  @RequirePermission("lecture_storage_index", "read")
+  @Get("storage/folders")
+  folders(@Query("parent") parent?: string) {
+    return this.lectureStorage.folderIndex(parent);
+  }
+
+  /**
+   * Where a recording for this class would go, and whether it would be taken.
+   *
+   * Asked BEFORE the file picker, because the answer is sometimes no for a
+   * reason no amount of retrying fixes — a Google service account has no Drive
+   * storage quota, so a folder in an ordinary My Drive refuses every upload
+   * however it is shared. Finding that out after a 300 MB transfer is the
+   * failure this prevents.
+   */
+  @RequirePermission("recorded_lecture", "create")
+  @Get("section-subjects/:id/lecture-upload-target")
+  uploadTarget(@Param("id") id: string) {
+    return this.lectureStorage.uploadTarget(id);
+  }
+
+  /**
+   * FR-VID-002 — a recording from somebody's own device.
+   *
+   * DISK, NOT MEMORY. `dest` makes multer stream the upload to a temporary
+   * file; the default is an in-memory buffer, and the Institute's recordings
+   * are 130–360 MB each. One upload buffered in this process is the whole
+   * application tier, and two are an outage.
+   *
+   * The service removes the temporary file in a `finally`, on every path.
+   */
+  @RequirePermission("recorded_lecture", "create")
+  @Post("section-subjects/:id/lectures/upload")
+  @UseInterceptors(
+    FileInterceptor("file", {
+      dest: tmpdir(),
+      limits: { fileSize: MAX_LECTURE_BYTES, files: 1 },
+    }),
+  )
+  async uploadLecture(
+    @Param("id") id: string,
+    @Body() body: Record<string, string>,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    if (!file) {
+      throw new AppError("VALIDATION_FAILED", {
+        message: "No recording was received.",
+        details: [{ field: "file", code: "REQUIRED", message: "Choose a video file to upload." }],
+      });
+    }
+
+    const parsed = lectureUploadSchema.safeParse(body);
+    if (!parsed.success) {
+      // The temporary file is this method's responsibility until the service
+      // takes it. Refusing without removing it leaves a 300 MB orphan.
+      await unlink(file.path).catch(() => undefined);
+      throw new AppError("VALIDATION_FAILED", {
+        message: "That upload could not be accepted.",
+        details: parsed.error.issues.map((i) => ({
+          field: i.path.join("."),
+          code: "INVALID",
+          message: i.message,
+        })),
+      });
+    }
+
+    // SEC-FIL-003 — the CONTENT decides the type, never the name or whatever
+    // content-type the browser chose to send.
+    const sniffed = await sniffVideo(file.path);
+    if (!sniffed) {
+      await unlink(file.path).catch(() => undefined);
+      throw new AppError("FILE_TYPE_NOT_ALLOWED", {
+        message: "That file is not a video the System can store.",
+        details: [
+          {
+            field: "file",
+            code: "UNSUPPORTED_TYPE",
+            message:
+              "Upload an MP4, WebM, QuickTime (.mov) or Matroska (.mkv) file. A screen recording " +
+              "or a phone video is normally one of these already.",
+          },
+        ],
+      });
+    }
+
+    return this.lectureStorage.uploadLecture({
+      sectionSubjectId: id,
+      ...(parsed.data.lessonId ? { lessonId: parsed.data.lessonId } : {}),
+      title: parsed.data.title,
+      recordedOn: parsed.data.recordedOn,
+      tempPath: file.path,
+      originalName: file.originalname,
+      contentType: sniffed,
+      ...(parsed.data.storeIn ? { storeIn: parsed.data.storeIn } : {}),
+    });
   }
 
   @RequirePermission("recorded_lecture", "create")
