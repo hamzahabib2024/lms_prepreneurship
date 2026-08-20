@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../auth/data/models/auth_session.dart';
 import '../../core/network/api_client.dart';
 import '../../core/theme/app_theme.dart';
+import '../enrolment/enrolment_page.dart';
 import 'content/content_page.dart';
 import 'sections/sections_page.dart';
 import 'staffing/staffing_page.dart';
@@ -37,6 +38,13 @@ class AcademicPanel extends StatelessWidget {
         title: 'Sections',
         subtitle: 'Section groups, their subjects and who teaches them',
         builder: (context) => SectionsPage(api: api, user: user),
+        staffOnly: true,
+      ),
+      _Entry(
+        icon: Icons.how_to_reg_outlined,
+        title: 'Enrolment',
+        subtitle: 'Rosters, transfers, suspension, withdrawal and bulk moves',
+        builder: (context) => EnrolmentPage(api: api, user: user),
         staffOnly: true,
       ),
       _Entry(
