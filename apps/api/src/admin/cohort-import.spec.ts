@@ -2,6 +2,7 @@ import {
   MAX_IMPORT,
   countAgainstSection,
   describePlan,
+  importResultMessage,
   parseCsv,
   planImport,
   templateCsv,
@@ -488,5 +489,67 @@ describe("the template offered on the screen", () => {
   it("names every required column", () => {
     const header = templateCsv().split("\n")[0] ?? "";
     for (const c of ["fullName", "email", "gender", "phone"]) expect(header).toContain(c);
+  });
+});
+
+/**
+ * What the operator is told afterwards — FR-OPS-026.
+ *
+ * THE CLAIM THAT CANNOT BE CHECKED BY LOOKING. Whether a hundred students were
+ * actually sent their passwords is invisible on the screen, so the sentence
+ * has to be exact about it. An operator told "300 students loaded" closes the
+ * page; if forty were never emailed, forty people hold an account they cannot
+ * reach, and nobody finds out until the term starts.
+ */
+describe("the sentence the operator reads afterwards", () => {
+  const msg = (o: Partial<Parameters<typeof importResultMessage>[0]>) =>
+    importResultMessage({ loaded: 0, rejoined: 0, skipped: 0, emailed: 0, notEmailed: 0, ...o });
+
+  it("says every student was emailed when every student was", () => {
+    const m = msg({ loaded: 3, emailed: 3 });
+    expect(m).toContain("3 new students loaded");
+    expect(m).toMatch(/Every new student has been emailed/);
+  });
+
+  it("NAMES THE NUMBER that could not be reached rather than rounding it away", () => {
+    // The defect this exists to prevent: a partial failure reported as a
+    // success, because the sentence only mentioned how many were loaded.
+    const m = msg({ loaded: 300, emailed: 260, notEmailed: 40 });
+    expect(m).toContain("260 students were emailed");
+    expect(m).toContain("40 could not be reached");
+    expect(m).not.toMatch(/Every new student has been emailed/);
+  });
+
+  it("is unmistakable when email is off entirely", () => {
+    // Not a footnote. If nothing was sent, relaying every password by hand is
+    // the operator's next hour, and they have to know before they close it.
+    const m = msg({ loaded: 12, emailed: 0, notEmailed: 12 });
+    expect(m).toContain("NOBODY WAS EMAILED");
+    expect(m).toMatch(/Integrations/);
+  });
+
+  it("says nothing about email when nothing new was created", () => {
+    // A returning student's password was not touched, so there is nothing to
+    // have sent and nothing to report.
+    const m = msg({ rejoined: 4 });
+    expect(m).toContain("4 existing students joined this section");
+    expect(m).not.toMatch(/email/i);
+  });
+
+  it("counts one student in the singular", () => {
+    expect(msg({ loaded: 1, emailed: 1 })).toContain("1 new student loaded");
+    expect(msg({ loaded: 2, emailed: 1, notEmailed: 1 })).toContain("1 student was emailed");
+  });
+
+  it("does not pretend an empty file did something", () => {
+    expect(msg({})).toBe("Nothing was loaded.");
+  });
+
+  it("still reports the skipped rows beside the delivery count", () => {
+    // Both, always. "298 of 300 loaded" beside a tick is how somebody closes
+    // the page believing all three hundred went in.
+    const m = msg({ loaded: 298, skipped: 2, emailed: 298 });
+    expect(m).toContain("2 skipped");
+    expect(m).toMatch(/Every new student has been emailed/);
   });
 });

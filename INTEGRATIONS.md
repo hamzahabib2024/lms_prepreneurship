@@ -44,11 +44,21 @@ and it is the one currently costing you something real.
 
 ## Why it matters
 
-When an administrator creates an account, the System shows a temporary password
-**once, on screen**. There is no second chance to see it. Without email, the
-only way it reaches the person is somebody reading it aloud or pasting it into a
-chat — so the password to a student record ends up in a WhatsApp history for
-good.
+Four things in the System mint a temporary password: admitting an applicant,
+importing a cohort, creating a staff account, and resetting somebody's password.
+**All four email it to the person it belongs to**, and all four still show it
+once on the administrator's screen, because delivery is never certain.
+
+Without email configured, none of them can send. The password is then shown on
+screen and nowhere else, so the only way it reaches its owner is somebody
+reading it aloud or pasting it into a chat — the password to a student record,
+in a WhatsApp history for good. For eight students in a room that is survivable.
+For the hundred-row cohort import it is not: an operator will not relay a
+hundred passwords by hand, so in practice the accounts go unused.
+
+Every screen that issues one now says whether it also arrived by email, and the
+cohort import marks the rows that did not — those are the only ones anybody has
+to chase.
 
 ## Step 1 — Turn on 2-Step Verification
 
@@ -84,6 +94,14 @@ INSTITUTE_NAME=Prepreneurship
 ```
 
 `SMTP_USER` must be **the same account** the App Password was created on.
+
+> **`PUBLIC_WEB_URL` is not decoration.** It is the address a new student is told
+> to sign in at, and the address of the "track your application" link. Left at
+> `http://localhost:5173` in a real deployment, every student is emailed a link
+> to *their own computer*, which works for nobody and reads as the System being
+> broken rather than misconfigured. If it is empty the System falls back to
+> `WEB_ORIGIN` — set in every deployment because CORS does not work without it
+> — and only then to localhost.
 
 ## Step 4 — Check the login, before any student is involved
 
@@ -230,12 +248,37 @@ Move it somewhere outside the project folder, for example
 
 ## Step 5 — Point `.env` at it
 
+Give the **folder** and the **filename** separately:
+
 ```ini
-GOOGLE_SERVICE_ACCOUNT_JSON=C:\prepreneurship\service-account.json
+GOOGLE_CREDENTIALS_DIR=C:\prepreneurship
+GOOGLE_SERVICE_ACCOUNT_FILE=service-account.json
 ```
 
-Use a **full path**. A relative one is resolved from wherever the server was
-started, which is rarely where you expect.
+Use a **full path** for the folder. A relative one is resolved from wherever the
+server was started, which is rarely where you expect.
+
+> **Why two settings rather than one.** Docker cannot see a path on your
+> machine, so `docker-compose.yml` mounts `GOOGLE_CREDENTIALS_DIR` into the
+> container at `/run/credentials` and composes the two into the single variable
+> the API reads. Writing the pair means the same two lines work whether you run
+> the API with `npm run dev`, `npm start`, or in Docker.
+>
+> **This was a real fault, not a preference.** Until it was fixed, the API,
+> the integrations screen and `check-integrations.mjs` all read only the
+> composed variable — which nothing but docker-compose sets. Outside Docker, a
+> valid key in the right place with the folder correctly shared reported
+> *"Google Drive: not configured"*, and lectures fell back to local storage
+> without an error anywhere. Three tools agreeing on a wrong answer is why
+> nobody suspected the answer.
+
+There is still one variable, for a container platform that has environment
+variables and no filesystem to mount. Set it to a path, or paste the key's JSON
+into it whole, on one line. If it is set it wins over the pair above:
+
+```ini
+GOOGLE_SERVICE_ACCOUNT_JSON=/run/secrets/service-account.json
+```
 
 ## Step 6 — Find out who to share with
 

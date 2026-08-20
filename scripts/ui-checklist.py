@@ -64,6 +64,7 @@ ROLES = {
     "SubjectPage": "Student",
     "TemplatesPage": "Admin, Super Admin",
     "TimetablePage": "everyone",
+    "TrackPage": "public",
     "UsersPage": "Admin, Super Admin",
     "VerifyPage": "public",
     "WatchPage": "everyone",
@@ -109,6 +110,7 @@ NOTES = {
     "TemplatesPage": "List skeleton. Live preview kept.",
     "TimetablePage": "List skeleton. Ruled-paper texture now drawn from the amber accent.",
     "UsersPage": "Table skeleton at the directory's column count, and an empty state with a Clear the filters action — the directory is not empty, the filters exclude it.",
+    "TrackPage": "New page. FR-REG-020 had an endpoint and no screen, so a tracking reference could only be used by telephoning the office. One field, one button, and a plain-language verdict rather than a status enum.",
     "VerifyPage": "Palette and type only. Public, and unchanged in behaviour.",
     "WatchPage": "Card skeleton. No autoplay, no cross-class recommendations — both kept.",
 }

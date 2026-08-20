@@ -6,6 +6,7 @@ import { NotificationController } from "./notification.controller";
 import { ChannelRegistry } from "./channel/channel.registry";
 import { LoggedWhatsAppChannel } from "./channel/logged.channel";
 import { EmailChannel } from "./channel/email.channel";
+import { CredentialsMailer } from "./credentials-mailer";
 
 /**
  * Global, because notifications are raised from everywhere — admission,
@@ -25,6 +26,7 @@ import { EmailChannel } from "./channel/email.channel";
     ChannelRegistry,
     LoggedWhatsAppChannel,
     EmailChannel,
+    CredentialsMailer,
   ],
   // ChannelRegistry is exported so the integrations screen can ask the adapter
   // itself whether it is configured, rather than re-deriving that from the
@@ -42,6 +44,11 @@ import { EmailChannel } from "./channel/email.channel";
     TemplateService,
     ChannelRegistry,
     EmailChannel,
+    // CredentialsMailer for the four places that mint a temporary password —
+    // admission approval, cohort import, account creation and password reset.
+    // Each used to decide for itself whether the password ever left the
+    // administrator's screen, and three of them decided it did not.
+    CredentialsMailer,
   ],
 })
 export class NotificationModule {}

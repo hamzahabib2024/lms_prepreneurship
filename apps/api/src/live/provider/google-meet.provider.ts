@@ -11,6 +11,7 @@ import type {
   SessionRequest,
   UserContext,
 } from "./live-classroom.provider";
+import { hasGoogleCredentials } from "../../common/google-credentials";
 
 /**
  * Google Meet, via Google Calendar — the Phase 1 provider (CON-03).
@@ -54,7 +55,7 @@ export class GoogleMeetProvider implements LiveClassroomProvider {
    */
   private get isConfigured(): boolean {
     return (
-      !!this.config.get<string>("GOOGLE_SERVICE_ACCOUNT_JSON") &&
+      hasGoogleCredentials((k) => this.config.get<string>(k, "")) &&
       !!(this.config.get<string>("GOOGLE_IMPERSONATE_SUBJECT", "") ?? "").trim()
     );
   }

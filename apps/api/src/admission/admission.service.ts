@@ -20,6 +20,7 @@ import { StorageRegistry } from "../content/storage/storage.registry";
 import { SettingsService } from "../settings/settings.service";
 import { parseImageLinks, parseVideoLinks } from "./video-links";
 import { AdmissionMailer } from "./admission-mailer";
+import { CredentialsMailer } from "../notification/credentials-mailer";
 
 /** Unambiguous alphabet — no O/0, I/l/1 — because these are read aloud
  *  over WhatsApp and mis-transcribed characters generate support calls. */
@@ -39,6 +40,9 @@ export class AdmissionService {
     private readonly config: ConfigService,
     private readonly settings: SettingsService,
     private readonly mailer: AdmissionMailer,
+    // For the public base URL only. One implementation of "where is this
+    // System reachable", shared with every other email that carries a link.
+    private readonly credentials: CredentialsMailer,
   ) {}
 
   /**
@@ -344,6 +348,10 @@ export class AdmissionService {
         to: submitted.email,
         fullName: input.fullName,
         trackingRef: submitted.trackingRef,
+        // FR-REG-020 — the reference is only useful with somewhere to type it.
+        // Before this the email said "you can check at any time" and named no
+        // way to, which is the whole complaint the tracking page answers.
+        trackUrl: `${this.credentials.signInUrl()}/track/${submitted.trackingRef}`,
       });
       return { ...submitted, emailSent: posted.sent };
     }
@@ -929,7 +937,10 @@ export class AdmissionService {
         fullName: result.applicantName,
         registrationNo: result.registrationNo,
         temporaryPassword: tempPassword,
-        signInUrl: this.config.get<string>("PUBLIC_WEB_URL", "http://localhost:5173"),
+        // PUBLIC_WEB_URL, then WEB_ORIGIN, then localhost. Reading only
+        // PUBLIC_WEB_URL — which nothing but docker-compose sets — emailed
+        // every new student a sign-in link to http://localhost:5173.
+        signInUrl: this.credentials.signInUrl(),
       });
       if (posted.sent) sent.push(`Sign-in details emailed to ${result.applicantEmail}.`);
       else sent.push(`Could NOT email ${result.applicantEmail} — ${posted.detail}`);

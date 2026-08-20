@@ -36,6 +36,17 @@ interface Issued {
   fullName: string;
   temporaryPassword: string;
   what: "created" | "reset";
+  /**
+   * Whether the person was also emailed their own copy.
+   *
+   * The administrator's next action depends entirely on this. If it arrived,
+   * they can close the panel; if it did not, somebody has to relay the
+   * password by hand — and a panel that does not say which leaves them
+   * assuming the first.
+   */
+  emailSent: boolean;
+  emailDetail?: string;
+  email?: string;
 }
 
 const SUB_PERMISSIONS = [
@@ -176,6 +187,23 @@ function PasswordPanel({ issued, onDismiss }: { issued: Issued; onDismiss: () =>
           I have written it down
         </button>
       </div>
+      {/* Whether it also reached them, said plainly. The System emails a
+          temporary password to its owner now; before, this panel was the only
+          copy in existence and every one was relayed by hand. */}
+      {issued.emailSent ? (
+        <p className="small">
+          A copy has been emailed to <strong>{issued.email}</strong>. You do not need to pass
+          this on unless they say it never arrived.
+        </p>
+      ) : (
+        <div className="alert alert-warn">
+          <strong>This was NOT emailed — you must pass it on yourself.</strong>
+          <p className="small">
+            {issued.emailDetail ?? "The message could not be sent."} Check Integrations to see
+            whether email is configured.
+          </p>
+        </div>
+      )}
       <p className="warn small">
         This will not be shown again. It is stored as a hash the moment it is created, so
         nobody can look it up — if it is lost you have to reset it again. They must change
@@ -196,7 +224,13 @@ function NewStaff({ onCreated }: { onCreated: (issued: Issued) => void }) {
     setBusy(true);
     setProblems([]);
     try {
-      const created = await api.post<{ fullName: string; temporaryPassword: string }>(
+      const created = await api.post<{
+        fullName: string;
+        email: string;
+        temporaryPassword: string;
+        emailSent: boolean;
+        emailDetail: string;
+      }>(
         "/admin/users",
         {
           email: form.email,
@@ -208,8 +242,11 @@ function NewStaff({ onCreated }: { onCreated: (issued: Issued) => void }) {
       );
       onCreated({
         fullName: created.fullName,
+        email: created.email,
         temporaryPassword: created.temporaryPassword,
         what: "created",
+        emailSent: created.emailSent,
+        emailDetail: created.emailDetail,
       });
       setForm({ email: "", fullName: "", phone: "", role: "teacher" });
       setSubs([]);
@@ -575,13 +612,19 @@ function UserRow({
               disabled={busy}
               onClick={() =>
                 void act(async () => {
-                  const reset = await api.post<{ fullName: string; temporaryPassword: string }>(
-                    `/admin/users/${u.id}/reset-password`,
-                  );
+                  const reset = await api.post<{
+                    fullName: string;
+                    temporaryPassword: string;
+                    emailSent: boolean;
+                    emailDetail: string;
+                  }>(`/admin/users/${u.id}/reset-password`);
                   onIssued({
                     fullName: reset.fullName,
+                    email: u.email,
                     temporaryPassword: reset.temporaryPassword,
                     what: "reset",
+                    emailSent: reset.emailSent,
+                    emailDetail: reset.emailDetail,
                   });
                 })
               }

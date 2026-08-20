@@ -129,6 +129,7 @@ states as a sweep across all pages after the role work.
 | **ApplyPage** | Stepper with completed steps ticked, per-field validation colour, the education level as a proper list |
 | **LoginPage** | Split panel — the brand on one side, the form on the other. Collapses on a phone so the form stays above the fold |
 | **VerifyPage** | Certificate verification, styled as a result rather than a form |
+| **TrackPage** | Application tracking, and a page that did not exist at all — the landing page promised "a tracking reference you can check at any time" and there was nowhere to check it. One field and one button on a single line, the reference set in the same monospace face the confirmation page uses so the two read as the same object. The answer is a plain-language verdict with a coloured pill, not a status enum; the office's own message is set apart as a quotation, which for NEEDS\_INFO is the entire point of the page |
 
 ### The daily screens
 

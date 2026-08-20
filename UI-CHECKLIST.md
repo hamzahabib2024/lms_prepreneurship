@@ -13,11 +13,11 @@ get it. The **What changed** column records what was done *beyond* that.
 
 | | |
 |---|---|
-| Pages | **40** |
-| On the brand palette and type scale | **40 of 40** |
-| Loading state shaped like its content | **32 of 40** |
-| Explained empty state | **14 of 40** |
-| Announced error state | **38 of 40** |
+| Pages | **41** |
+| On the brand palette and type scale | **41 of 41** |
+| Loading state shaped like its content | **32 of 41** |
+| Explained empty state | **14 of 41** |
+| Announced error state | **39 of 41** |
 | Still carrying known work | **14** |
 
 ## Legend
@@ -70,6 +70,7 @@ get it. The **What changed** column records what was done *beyond* that.
 | **SubjectPage** | Student | ✅ | ✅ | — | ✅ | List skeleton. |
 | **TemplatesPage** | Admin, Super Admin | ✅ | ✅ | — | ✅ | List skeleton. Live preview kept. |
 | **TimetablePage** | everyone | ✅ | ✅ | — | ✅ | List skeleton. Ruled-paper texture now drawn from the amber accent. |
+| **TrackPage** | public | ✅ | — | — | ✅ | New page. FR-REG-020 had an endpoint and no screen, so a tracking reference could only be used by telephoning the office. One field, one button, and a plain-language verdict rather than a status enum. |
 | **UsersPage** | Admin, Super Admin | ✅ | ✅ | ✅ | ✅ | Table skeleton at the directory's column count, and an empty state with a Clear the filters action — the directory is not empty, the filters exclude it. |
 | **VerifyPage** | public | ✅ | — | — | ✅ | Palette and type only. Public, and unchanged in behaviour. |
 | **WatchPage** | everyone | ✅ | ✅ | — | ✅ | Card skeleton. No autoplay, no cross-class recommendations — both kept. |

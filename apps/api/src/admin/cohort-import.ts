@@ -573,3 +573,58 @@ export function describePlan(plan: ImportPlan): string {
     "and left for you to correct — nothing else is held up by them."
   );
 }
+
+/**
+ * What happened, in a sentence — FR-OPS-026.
+ *
+ * PURE, AND HERE RATHER THAN ON THE SERVICE, because the half of it that
+ * matters is a claim about the outside world that nobody can check by looking
+ * at the screen: whether each student was actually sent their own password.
+ *
+ * THE FAILURE THIS GUARDS. An operator told "300 students loaded" closes the
+ * page. If forty of those were never emailed, forty people hold an account
+ * they cannot reach, and nobody finds out until the term starts. A message
+ * that does not distinguish "all of them" from "260 of them" leaves the reader
+ * assuming the first, every time.
+ */
+export function importResultMessage(counts: {
+  loaded: number;
+  rejoined: number;
+  skipped: number;
+  emailed: number;
+  notEmailed: number;
+}): string {
+  const { loaded, rejoined, skipped, emailed, notEmailed } = counts;
+
+  const parts: string[] = [];
+  if (loaded > 0) parts.push(`${loaded} new ${loaded === 1 ? "student" : "students"} loaded`);
+  if (rejoined > 0) {
+    parts.push(
+      `${rejoined} existing ${rejoined === 1 ? "student" : "students"} joined this section ` +
+        "keeping their registration number",
+    );
+  }
+  if (skipped > 0) parts.push(`${skipped} skipped`);
+  if (parts.length === 0) return "Nothing was loaded.";
+
+  const delivery =
+    loaded === 0
+      ? ""
+      : notEmailed === 0 && emailed > 0
+        ? " Every new student has been emailed their own sign-in details."
+        : emailed === 0
+          ? " NOBODY WAS EMAILED — read each temporary password below and relay it yourself. " +
+            "Check Integrations if you expected email to be working."
+          : ` ${emailed} ${emailed === 1 ? "student was" : "students were"} emailed their ` +
+            `sign-in details; ${notEmailed} could not be reached and must be told by hand.`;
+
+  return (
+    parts.join(", ") +
+    "." +
+    (loaded > 0
+      ? " Each new student has a temporary password shown once below and must change it when " +
+        "they first sign in."
+      : "") +
+    delivery
+  );
+}

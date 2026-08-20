@@ -626,6 +626,13 @@ function Submitted({
           </ul>
 
           <div className="row-actions">
+            {/* FR-REG-020 — the reference is only useful with somewhere to
+                type it, and this is the one moment the applicant certainly
+                has it in front of them. Pre-filled, so the first check costs
+                them nothing. */}
+            <Link className="btn btn-primary" to={`/track/${encodeURIComponent(trackingRef)}`}>
+              Check your application
+            </Link>
             <Link className="btn" to="/">
               Back to the home page
             </Link>

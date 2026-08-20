@@ -35,17 +35,27 @@ export class AdmissionMailer {
     fullName: string;
     trackingRef: string;
     programmeName?: string;
+    /** The page that answers "what is happening with my application". */
+    trackUrl?: string;
   }): Promise<{ sent: boolean; detail: string }> {
     const body = [
       `Thank you for applying to ${this.instituteName()}.`,
       "",
       `Your reference is ${input.trackingRef}.`,
       "",
-      input.programmeName ? `Programme: ${input.programmeName}` : null,
-      "",
+      // The programme line AND the blank line after it, or neither. Filtering
+      // only the line left a double gap in every message, because no
+      // programme name is ever passed here today.
+      ...(input.programmeName ? [`Programme: ${input.programmeName}`, ""] : []),
       "Keep this reference. You can use it to check what is happening with your",
       "application at any time, and you will need it if you contact the office.",
       "",
+      // The link, when there is one. A message that says "you can check at any
+      // time" and names nowhere to check is the reason people telephone the
+      // office instead — which is the cost FR-REG-020 exists to remove.
+      ...(input.trackUrl
+        ? ["Check your application here:", "", `  ${input.trackUrl}`, ""]
+        : []),
       "We review payment slips within 48 hours. We will write to you again with",
       "the outcome — there is nothing you need to do until then.",
     ]

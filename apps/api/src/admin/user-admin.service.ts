@@ -5,6 +5,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { AuthService } from "../auth/auth.service";
 import { getActor } from "../prisma/actor-context";
+import { CredentialsMailer } from "../notification/credentials-mailer";
 
 /** Unambiguous by design — these are read aloud and typed by hand (FR-REG-042). */
 const TEMP_PASSWORD_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -40,6 +41,10 @@ export class UserAdminService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly auth: AuthService,
+    // FR-USR-012 / FR-REG-042 — the temporary password has to reach the person
+    // it belongs to. It used to stop at the administrator's screen, which
+    // meant it travelled by whatever they happened to use.
+    private readonly credentials: CredentialsMailer,
   ) {}
 
   /**
@@ -212,6 +217,23 @@ export class UserAdminService {
       after: { email, role: input.role, subPermissions: input.subPermissions ?? [] },
     });
 
+    /*
+     * The password, to the person who needs it — after the transaction and
+     * never inside it. A mail server is a network call, and an account that
+     * rolled back because SMTP was slow would be a worse fault than an email
+     * that did not arrive.
+     *
+     * NOT AWAITED INTO SUCCESS. The account exists whether or not the message
+     * was accepted; the outcome is reported so the screen can say which, and
+     * the password is still shown there because delivery is never certain.
+     */
+    const posted = await this.credentials.sendNewAccount({
+      to: email,
+      fullName: input.fullName.trim(),
+      temporaryPassword,
+      roleLabel: input.role === "admin" ? "administrator" : "teacher",
+    });
+
     return {
       id: created.id,
       email,
@@ -220,6 +242,8 @@ export class UserAdminService {
       // FR-REG-042 — shown once, here, and never retrievable again.
       temporaryPassword,
       mustChangePassword: true,
+      emailSent: posted.sent,
+      emailDetail: posted.detail,
     };
   }
 
@@ -341,11 +365,25 @@ export class UserAdminService {
       after: { by: actor.userId, sessionsRevoked: true },
     });
 
+    /*
+     * A reset ends every session the person held, so the first thing they
+     * experience is being signed out with no explanation. Telling them is not
+     * a courtesy — a silent reset is indistinguishable from an account
+     * takeover, and is exactly what one looks like from the inside.
+     */
+    const posted = await this.credentials.sendPasswordReset({
+      to: user.email,
+      fullName: user.fullName,
+      temporaryPassword,
+    });
+
     return {
       id: user.id,
       fullName: user.fullName,
       temporaryPassword,
       mustChangePassword: true,
+      emailSent: posted.sent,
+      emailDetail: posted.detail,
     };
   }
 
