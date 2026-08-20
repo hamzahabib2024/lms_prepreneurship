@@ -96,6 +96,14 @@ export function LandingPage() {
           <a className="btn btn-quiet" href="#programmes">
             Programmes
           </a>
+          {/* FR-REG-020 — in the nav, not buried in the footer. Somebody who
+              has already applied arrives at this page for exactly one reason,
+              and until now the page had nothing for them: it promised a
+              reference they could check at any time and offered nowhere to
+              check it. */}
+          <Link className="btn btn-quiet" to="/track">
+            Track application
+          </Link>
           <Link className="btn btn-quiet" to="/login">
             Sign in
           </Link>
@@ -336,6 +344,10 @@ export function LandingPage() {
             <p>
               Applications are open. Fill the form, attach your slip, and we will write to you with
               a tracking reference you can check at any time.
+            </p>
+            {/* The promise in the sentence above, made good. */}
+            <p className="small">
+              Already applied? <Link to="/track">Check your application</Link>.
             </p>
           </div>
           <Link className="btn btn-lg closing-cta" to="/apply">

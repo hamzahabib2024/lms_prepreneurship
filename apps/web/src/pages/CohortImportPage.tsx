@@ -64,6 +64,14 @@ interface Outcome {
   rollNo?: number;
   reason?: string;
   temporaryPassword?: string;
+  /**
+   * Whether the student was sent their own copy.
+   *
+   * Absent means nothing was owed — a returning student, or a skipped row.
+   * False means a send was attempted and failed, and this row must be relayed
+   * by hand.
+   */
+  emailSent?: boolean;
 }
 
 interface Result {
@@ -72,6 +80,9 @@ interface Result {
   rejoined: number;
   skipped: number;
   outcomes: Outcome[];
+  /** How many students were sent their own password, and how many were not. */
+  emailed: number;
+  notEmailed: number;
   message: string;
 }
 
@@ -520,6 +531,27 @@ function ResultPanel({ result, onAgain }: { result: Result; onAgain: () => void 
             {withPasswords.length} temporary{" "}
             {withPasswords.length === 1 ? "password" : "passwords"}
           </h2>
+          {/* DELIVERY FIRST, because it decides whether there is anything to
+              do here at all. The System emails each student their own password
+              now; this list used to be the only copy in existence, and every
+              one of three hundred was relayed by hand. */}
+          {result.notEmailed === 0 ? (
+            <p>
+              Every one of these was <strong>emailed to the student</strong> at their own
+              address. This list is your copy, for anybody who says it never arrived.
+            </p>
+          ) : (
+            <div className="alert alert-warn">
+              <strong>
+                {result.notEmailed} of these could NOT be emailed — pass those on yourself.
+              </strong>
+              <p className="small">
+                They are marked below and in the downloaded file. Check Integrations to see
+                whether email is configured.
+              </p>
+            </div>
+          )}
+
           <p className="warn">
             <strong>These are shown once and cannot be recovered.</strong> Each is hashed the
             moment it is created, so nobody — including a Super Admin — can look one up. If they
@@ -552,7 +584,13 @@ function ResultPanel({ result, onAgain }: { result: Result; onAgain: () => void 
                 <span className="muted">
                   {o.registrationNo} · roll {o.rollNo} ·{" "}
                 </span>
-                <code>{o.temporaryPassword}</code>
+                <code>{o.temporaryPassword}</code>{" "}
+                {/* A word, not a colour alone (NFR-ACC-007). */}
+                {o.emailSent ? (
+                  <span className="pill pill-ok">emailed</span>
+                ) : (
+                  <span className="pill pill-warn">not emailed</span>
+                )}
               </li>
             ))}
           </ul>

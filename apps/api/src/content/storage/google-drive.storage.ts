@@ -2,7 +2,7 @@ import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { createSign } from "node:crypto";
 import { Readable } from "node:stream";
-import { readFileSync } from "node:fs";
+import { loadGoogleCredentials } from "../../common/google-credentials";
 import { AppError } from "@lms/shared";
 import type {
   ByteRange,
@@ -103,56 +103,33 @@ export class GoogleDriveStorageProvider implements StorageProvider {
    *   typed.
    */
   private lastFailure: string | null = null;
+  /** Logged once per distinct reason: `stat` runs per lecture in the weekly
+   *  integrity sweep, and an unconfigured Drive would otherwise write the same
+   *  line once per recording the Institute owns. */
+  private loggedFailure: string | null = null;
 
   private credentials(): { clientEmail: string; privateKey: string } | null {
-    const raw = (this.config.get<string>("GOOGLE_SERVICE_ACCOUNT_JSON", "") ?? "").trim();
-    if (!raw || raw.endsWith("/none.json")) {
-      this.lastFailure =
-        "No service-account key is set (DEP-01). Put the key JSON where the API can read it " +
-        "and set GOOGLE_SERVICE_ACCOUNT_FILE, or paste the JSON into GOOGLE_SERVICE_ACCOUNT_JSON.";
+    /*
+     * RESOLVED IN ONE PLACE — see common/google-credentials.ts.
+     *
+     * This used to read GOOGLE_SERVICE_ACCOUNT_JSON and nothing else, which is
+     * a variable only docker-compose composes. Started any other way — the
+     * `npm run dev` every developer uses — a perfectly valid key sitting in
+     * GOOGLE_CREDENTIALS_DIR was invisible, and Drive reported itself
+     * unconfigured while LECTURE_STORAGE said google_drive.
+     */
+    const result = loadGoogleCredentials((k) => this.config.get<string>(k, ""));
+    if (!result.ok) {
+      this.lastFailure = result.reason;
+      if (this.loggedFailure !== result.reason) {
+        this.loggedFailure = result.reason;
+        this.logger.error(result.reason);
+      }
       return null;
     }
-
-    let json = raw;
-    if (!raw.startsWith("{")) {
-      try {
-        json = readFileSync(raw, "utf8");
-      } catch {
-        this.lastFailure =
-          `The key was not found at "${raw}". ` +
-          `If the API runs in Docker, that must be a path INSIDE the container — a path on ` +
-          `your own machine is not visible to it. Set GOOGLE_CREDENTIALS_DIR to the folder ` +
-          `holding the key and GOOGLE_SERVICE_ACCOUNT_FILE to its filename, then recreate ` +
-          `the containers (npm run docker:up).`;
-        this.logger.error(this.lastFailure);
-        return null;
-      }
-    }
-
-    try {
-      const parsed = JSON.parse(json) as { client_email?: string; private_key?: string };
-      if (!parsed.client_email || !parsed.private_key) {
-        this.lastFailure =
-          "The key has no client_email or private_key. Download it again from " +
-          "Google Cloud → Service accounts → Keys, choosing JSON.";
-        this.logger.error(this.lastFailure);
-        return null;
-      }
-      this.lastFailure = null;
-      return {
-        clientEmail: parsed.client_email,
-        // Environment variables cannot hold real newlines, so a pasted key
-        // arrives with literal \n. Left unfixed, signing fails with an error
-        // about PEM formatting that names nothing an administrator can act on.
-        privateKey: parsed.private_key.replace(/\\n/g, "\n"),
-      };
-    } catch {
-      this.lastFailure =
-        "The key is not valid JSON. If it was pasted into .env it must be on ONE line; " +
-        "if it is a path, check it points at the file and not at a folder.";
-      this.logger.error(this.lastFailure);
-      return null;
-    }
+    this.loggedFailure = null;
+    this.lastFailure = null;
+    return { clientEmail: result.credentials.clientEmail, privateKey: result.credentials.privateKey };
   }
 
   private get isConfigured(): boolean {

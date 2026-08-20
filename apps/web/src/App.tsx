@@ -38,6 +38,8 @@ import { TimetablePage } from "./pages/TimetablePage";
 import { DiscussionPage } from "./pages/DiscussionPage";
 import { BackupPage } from "./pages/BackupPage";
 import { VerifyPage } from "./pages/VerifyPage";
+import { TrackPage } from "./pages/TrackPage";
+import { CourseAdminPage } from "./pages/CourseAdminPage";
 import { CertificatesPage } from "./pages/CertificatesPage";
 import { AnnouncementsPage } from "./pages/AnnouncementsPage";
 import { NotificationBell } from "./components/NotificationBell";
@@ -124,6 +126,27 @@ export function App() {
     return (
       <Routes>
         <Route path="/verify/:code" element={<VerifyPage />} />
+      </Routes>
+    );
+  }
+
+  /*
+   * FR-REG-020 — tracking an application is PUBLIC, and checked here for the
+   * same reason certificate verification is.
+   *
+   * An applicant has no account and cannot be given one until they are
+   * admitted, so this must work signed out. It is checked BEFORE the
+   * authentication gate rather than only inside the signed-out branch, because
+   * the link in the confirmation email is opened on whatever device is to hand
+   * — often a shared one, where somebody else is already signed in. Falling
+   * through to the application shell there would answer a stranger's emailed
+   * link with a student's dashboard.
+   */
+  if (location.pathname === "/track" || location.pathname.startsWith("/track/")) {
+    return (
+      <Routes>
+        <Route path="/track" element={<TrackPage />} />
+        <Route path="/track/:trackingRef" element={<TrackPage />} />
       </Routes>
     );
   }
@@ -592,6 +615,17 @@ export function App() {
           <Route path="/announcements" element={<AnnouncementsPage />} />
           <Route path="/sections" element={<SectionsPage />} />
           <Route path="/structure" element={<StructurePage />} />
+          {/* FR-CRS-004/015, FR-PAY-033 — creating the courses themselves,
+              giving them a picture and setting their price. A teacher may read
+              programmes and subjects but holds no create on either and no
+              fee_structure grant beyond read, so offering them this page would
+              be offering three refusals. */}
+          <Route
+            path="/courses-admin"
+            element={
+              hasRole("super_admin", "admin") ? <CourseAdminPage /> : <Navigate to="/" replace />
+            }
+          />
           {/* One class's recordings. Everyone: a student sees the published
               ones on classes they are enrolled in and staff see drafts too,
               which the server decides — the scope predicate refuses a class

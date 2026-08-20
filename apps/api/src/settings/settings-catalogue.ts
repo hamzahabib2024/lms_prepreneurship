@@ -376,6 +376,63 @@ export const CATALOGUE: SettingDefinition[] = [
       "The shape of the number. Available: {INSTITUTE}, {SESSION}, {SEQUENCE}, {CAMPUS}. {PROGRAMME} is also substituted but should not be used — one student may enrol in several courses, and a number naming a programme would either have to change or describe them wrongly for good (BR-REG-07).",
   },
 
+  /*
+   * WHERE AN APPLICANT SENDS THE MONEY.
+   *
+   * The application form has always said "pay the fee into the Institute's
+   * account" and never named one. An applicant reading that either telephoned
+   * to ask or guessed, and the office found out which by reading the slip.
+   *
+   * IN SETTINGS RATHER THAN IN CODE because an institute changes bank, and
+   * doing that should not need a deployment. Every field is optional and the
+   * apply page renders only the ones that are filled in — an institute taking
+   * cash at the desk fills in the instructions and leaves the account blank.
+   *
+   * NOT SECRET. A bank account that receives fees is printed on every
+   * prospectus the Institute has ever handed out; marking it isSecret would
+   * make it write-only and unreadable by the public page that exists to show
+   * it, which is the opposite of what it is for.
+   */
+  {
+    key: "finance.bankName",
+    type: "string",
+    default: "",
+    group: "Payments",
+    description:
+      "The bank an applicant transfers the fee to, shown on the public application form. Leave blank if the Institute takes payment another way.",
+  },
+  {
+    key: "finance.bankAccountName",
+    type: "string",
+    default: "",
+    group: "Payments",
+    description:
+      "The name the account is held in. Shown to applicants so they can check the transfer is going where they expect — a mismatched name is what a person about to send money looks for.",
+  },
+  {
+    key: "finance.bankAccountNumber",
+    type: "string",
+    default: "",
+    group: "Payments",
+    description:
+      "The account number an applicant pays into. Shown on the public application form beside the fee.",
+  },
+  {
+    key: "finance.bankIban",
+    type: "string",
+    default: "",
+    group: "Payments",
+    description:
+      "The IBAN, for transfers that need one. Optional; shown only when it is set.",
+  },
+  {
+    key: "finance.paymentInstructions",
+    type: "string",
+    default: "",
+    group: "Payments",
+    description:
+      "Anything else an applicant needs to know before paying — a reference to quote, an office to visit, hours the desk is open. Shown under the account details on the application form.",
+  },
   {
     key: "finance.receiptNote",
     type: "string",

@@ -25,8 +25,29 @@ export const programmeCreateSchema = z.object({
   code: shortCode,
   description: z.string().trim().max(2000).optional(),
   durationWeeks: z.coerce.number().int().positive().max(520).optional(),
+  /** A MediaAsset id from POST /course-media. Null clears the picture. */
+  thumbnailAssetId: z.string().uuid().nullish(),
 });
 export type ProgrammeCreateInput = z.infer<typeof programmeCreateSchema>;
+
+/**
+ * FR-CRS-004 — editing a programme after it exists.
+ *
+ * THE CODE IS NOT HERE, and its absence is deliberate. A programme code is
+ * baked into every registration number ever issued against it (Appendix B):
+ * changing GD to GRD would leave four hundred students holding numbers that
+ * refer to a programme code no longer in use, and no migration can fix that
+ * because the numbers are printed on certificates. Everything else about a
+ * programme is a label and may be corrected freely.
+ */
+export const programmeUpdateSchema = z.object({
+  name: z.string().trim().min(3).max(200).optional(),
+  description: z.string().trim().max(2000).nullish(),
+  durationWeeks: z.coerce.number().int().positive().max(520).nullish(),
+  thumbnailAssetId: z.string().uuid().nullish(),
+  isActive: z.boolean().optional(),
+});
+export type ProgrammeUpdateInput = z.infer<typeof programmeUpdateSchema>;
 
 export const academicSessionCreateSchema = z
   .object({
@@ -115,8 +136,24 @@ export const subjectCreateSchema = z.object({
   code: shortCode,
   description: z.string().trim().max(2000).optional(),
   credits: z.coerce.number().int().positive().max(20).optional(),
+  /** A MediaAsset id from POST /course-media. */
+  thumbnailAssetId: z.string().uuid().nullish(),
+  /** An EXTERNAL picture instead, pasted as a URL. The uploaded one wins. */
+  thumbnailUrl: z.string().trim().url().max(500).nullish(),
 });
 export type SubjectCreateInput = z.infer<typeof subjectCreateSchema>;
+
+/** FR-CRS-015 — editing a subject. The code is immutable for the same reason
+ *  a programme's is: it appears on transcripts already issued. */
+export const subjectUpdateSchema = z.object({
+  name: z.string().trim().min(2).max(200).optional(),
+  description: z.string().trim().max(2000).nullish(),
+  credits: z.coerce.number().int().positive().max(20).nullish(),
+  thumbnailAssetId: z.string().uuid().nullish(),
+  thumbnailUrl: z.string().trim().url().max(500).nullish(),
+  isActive: z.boolean().optional(),
+});
+export type SubjectUpdateInput = z.infer<typeof subjectUpdateSchema>;
 
 /** FR-CRS-016 — offering a subject to a section. */
 export const offeringCreateSchema = z.object({

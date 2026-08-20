@@ -3,6 +3,7 @@ import { IntegrationController } from "./integration.controller";
 import { IntegrationService } from "./integration.service";
 import { SimulatedOutbox } from "./simulated-outbox";
 import { ContentModule } from "../content/content.module";
+import { LiveModule } from "../live/live.module";
 
 /**
  * Global for the same reason the notification module is: the outbox is written
@@ -12,7 +13,11 @@ import { ContentModule } from "../content/content.module";
  */
 @Global()
 @Module({
-  imports: [ContentModule],
+  // LiveModule for ProviderRegistry: the status screen asks the provider that
+  // will actually be used whether it creates meeting links, rather than
+  // guessing from the environment. Drive and Meet share a service account, and
+  // guessing made a key added for lecture video claim that Meet was live too.
+  imports: [ContentModule, LiveModule],
   controllers: [IntegrationController],
   providers: [IntegrationService, SimulatedOutbox],
   exports: [SimulatedOutbox],
