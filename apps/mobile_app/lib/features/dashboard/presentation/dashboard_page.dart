@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/ui.dart';
+import '../../academic/academic_panel.dart';
 import '../../admission/review/admissions_page.dart';
 import '../../auth/bloc/auth_bloc.dart';
 import '../../auth/data/models/auth_session.dart';
@@ -86,6 +87,7 @@ class _Header extends StatelessWidget {
             : 'Good evening';
 
     final isAdmin = user.isAdmin || user.isSuperAdmin;
+    final isStaff = isAdmin || user.isTeacher;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 4),
@@ -108,22 +110,22 @@ class _Header extends StatelessWidget {
               ],
             ),
           ),
-          if (state.data != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: Pill(text: 'as at ${_time(state.data!.generatedAt)}'),
-            ),
-          // The web gates Admissions behind the admin role; the server still
-          // enforces the permission on every request (FR-REG-022).
-          if (isAdmin) ...[
-            const SizedBox(width: 12),
-            Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: _AdmissionsButton(api: api),
-            ),
-          ],
-          const SizedBox(width: 12),
-          _ProfileButton(user: user),
+          // Trailing entries as a wrap so a narrow phone drops them to a
+          // second line rather than overflowing the greeting.
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              if (state.data != null)
+                Pill(text: 'as at ${_time(state.data!.generatedAt)}'),
+              // The web gates Admissions behind the admin role; the server
+              // still enforces the permission on every request (FR-REG-022).
+              if (isAdmin) _AdmissionsButton(api: api),
+              if (isStaff) _AcademicButton(user: user, api: api),
+              _ProfileButton(user: user),
+            ],
+          ),
         ],
       ),
     );
@@ -179,6 +181,56 @@ class _AdmissionsButton extends StatelessWidget {
               const SizedBox(width: 6),
               Text(
                 'Admissions',
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The mobile equivalent of the web sidebar's Institute block — staff land
+/// here to manage programmes, sections, subjects, content, timetables and
+/// teacher assignments.
+class _AcademicButton extends StatelessWidget {
+  const _AcademicButton({required this.user, required this.api});
+
+  final AuthUser user;
+  final ApiClient api;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => AcademicPanel(user: user, api: api),
+            ),
+          );
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.school_outlined, size: 16),
+              const SizedBox(width: 6),
+              Text(
+                'Academic',
                 style: TextStyle(
                   fontSize: 12.5,
                   fontWeight: FontWeight.w600,
