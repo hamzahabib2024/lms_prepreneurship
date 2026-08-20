@@ -22,6 +22,15 @@ const announcementSchema = z
     title: z.string().trim().min(3).max(200),
     body: z.string().trim().min(1).max(20000),
     isPinned: z.boolean().default(false),
+    /**
+     * How much this matters — NORMAL, IMPORTANT or URGENT.
+     *
+     * `isUrgent` is still accepted so nothing that already posts announcements
+     * breaks, and the service reconciles the two: URGENT and isUrgent mean the
+     * same thing, and whichever is given decides both. Two ways to say one
+     * thing is a transitional cost, not a design.
+     */
+    priority: z.enum(["NORMAL", "IMPORTANT", "URGENT"]).optional(),
     isUrgent: z.boolean().default(false),
     /** FR-PUB — also shown to people with no account. Off unless asked for. */
     isPublic: z.boolean().default(false),

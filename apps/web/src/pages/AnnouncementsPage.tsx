@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { EmptyState, Skeleton } from "../components/Ui";
+import { Icon } from "../components/Icon";
 import { ApiError, api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 
@@ -19,6 +20,8 @@ interface Announcement {
   body: string;
   isPinned: boolean;
   isUrgent: boolean;
+  /** NORMAL | IMPORTANT | URGENT. See PRIORITY below for what each one does. */
+  priority?: string;
   publishedAt: string;
   authorName: string;
   about: string;
@@ -68,30 +71,96 @@ export function AnnouncementsPage() {
           will be notified when something is posted.
         </EmptyState>
       ) : (
-        items.map((a) => (
-          <section className="card" key={a.id}>
-            <div className="assignment-head">
-              <h2>
-                {/* Pinned and urgent are stated, not just styled
-                    (NFR-ACC-003). */}
-                {a.isPinned && <span className="small">📌 Pinned · </span>}
-                {a.isUrgent && <span className="warn small">Urgent · </span>}
-                {a.title}
-              </h2>
-              <span className="muted small">
-                {new Date(a.publishedAt).toLocaleDateString()}
-              </span>
-            </div>
-            <p className="muted small">
-              {a.authorName} · {a.about}
-            </p>
-            <p className="announcement-body">{a.body}</p>
-          </section>
-        ))
+        items.map((a) => {
+          const level = PRIORITY[a.priority ?? (a.isUrgent ? "URGENT" : "NORMAL")] ?? PRIORITY["NORMAL"]!;
+          return (
+            <section
+              className={`card announcement announcement-${level.key.toLowerCase()}`}
+              key={a.id}
+            >
+              {/*
+                THE BAND IS THE POINT, and it is a WORD on a colour rather
+                than a colour alone (NFR-ACC-007). Urgent used to render as
+                "Urgent · " in small text before the title — the same weight as
+                the date beside it — which is not a way of saying something
+                matters, it is a way of mentioning it.
+              */}
+              {level.key !== "NORMAL" && (
+                <p className="announcement-band">
+                  <Icon name={level.icon} />
+                  <strong>{level.label}</strong>
+                  <span>{level.note}</span>
+                </p>
+              )}
+
+              <div className="assignment-head">
+                <h2>
+                  {a.isPinned && (
+                    <span className="pill announcement-pin" title="Kept at the top of the list">
+                      <Icon name="panel" /> Pinned
+                    </span>
+                  )}
+                  {a.title}
+                </h2>
+                <span className="muted small">
+                  {new Date(a.publishedAt).toLocaleDateString(undefined, {
+                    day: "numeric",
+                    month: "short",
+                  })}
+                </span>
+              </div>
+              <p className="muted small">
+                {a.authorName} · {a.about}
+              </p>
+              <p className="announcement-body">{a.body}</p>
+            </section>
+          );
+        })
       )}
     </>
   );
 }
+
+/**
+ * HOW MUCH AN ANNOUNCEMENT MATTERS, in one table read by the card and the
+ * composer alike.
+ *
+ * THREE LEVELS AND NOT MORE. Two is not enough — everything between a room
+ * change and an emergency had to be dressed as an emergency or lost in the
+ * list, and a notice board where everything is urgent is one nobody reads.
+ * Four would mean an author having to decide between "important" and "very
+ * important", which is a decision with no consequence attached to it.
+ *
+ * URGENT IS THE ONLY ONE THAT DOES ANYTHING BEYOND LOOK DIFFERENT: BR-COM-02
+ * makes it ignore a recipient's quiet hours. The note on each level says so,
+ * because an author choosing red should know they are waking somebody up.
+ */
+const PRIORITY: Record<
+  string,
+  { key: string; label: string; icon: string; note: string; help: string }
+> = {
+  NORMAL: {
+    key: "NORMAL",
+    label: "Normal",
+    icon: "megaphone",
+    note: "",
+    help: "Appears in the list and the inbox. Held back during quiet hours.",
+  },
+  IMPORTANT: {
+    key: "IMPORTANT",
+    label: "Important",
+    icon: "alert",
+    note: "Please read this one.",
+    help: "Stands out in amber. Still respects quiet hours.",
+  },
+  URGENT: {
+    key: "URGENT",
+    label: "Urgent",
+    icon: "alert",
+    note: "Needs attention now.",
+    help: "Red, and the only level that IGNORES quiet hours — it reaches people at night. Use it when that is genuinely warranted.",
+  },
+};
 
 function Composer({ onPosted }: { onPosted: () => void }) {
   const { hasRole } = useAuth();
@@ -100,7 +169,7 @@ function Composer({ onPosted }: { onPosted: () => void }) {
   const [sectionSubjectId, setSectionSubjectId] = useState("");
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
-  const [isUrgent, setIsUrgent] = useState(false);
+  const [priority, setPriority] = useState<"NORMAL" | "IMPORTANT" | "URGENT">("NORMAL");
   const [isPinned, setIsPinned] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -125,7 +194,7 @@ function Composer({ onPosted }: { onPosted: () => void }) {
         ...(audience === "SECTION_SUBJECT" ? { sectionSubjectId } : {}),
         title,
         body,
-        isUrgent,
+        priority,
         isPinned,
       });
       // The count matters: a teacher should know whether they just reached
@@ -137,7 +206,7 @@ function Composer({ onPosted }: { onPosted: () => void }) {
       );
       setTitle("");
       setBody("");
-      setIsUrgent(false);
+      setPriority("NORMAL");
       setIsPinned(false);
       onPosted();
     } catch (e) {
@@ -193,23 +262,73 @@ function Composer({ onPosted }: { onPosted: () => void }) {
         <textarea rows={4} value={body} onChange={(e) => setBody(e.target.value)} />
       </label>
 
+      {/*
+        HOW MUCH IT MATTERS — three buttons rather than a checkbox called
+        "Urgent".
+
+        A checkbox offers two states and no middle, so everything that was more
+        than routine and less than an emergency got ticked. Shown as a row, the
+        levels are visible at once and each carries the consequence of choosing
+        it — which is what an author needs before they pick red, not after.
+      */}
+      <fieldset className="field priority-picker">
+        <legend>How much does this matter?</legend>
+        <div className="priority-options">
+          {(["NORMAL", "IMPORTANT", "URGENT"] as const).map((key) => {
+            const level = PRIORITY[key]!;
+            return (
+              <label
+                key={key}
+                className={
+                  priority === key
+                    ? `priority-option is-on priority-${key.toLowerCase()}`
+                    : "priority-option"
+                }
+              >
+                <input
+                  type="radio"
+                  name="priority"
+                  checked={priority === key}
+                  onChange={() => setPriority(key)}
+                />
+                <span>
+                  <strong>
+                    {key !== "NORMAL" && <Icon name={level.icon} />}
+                    {level.label}
+                  </strong>
+                  <span className="muted small">{level.help}</span>
+                </span>
+              </label>
+            );
+          })}
+        </div>
+      </fieldset>
+
       <div className="row-actions">
         <label className="option">
           <input type="checkbox" checked={isPinned} onChange={(e) => setIsPinned(e.target.checked)} />
-          <span>Pin to the top</span>
-        </label>
-        <label className="option">
-          <input type="checkbox" checked={isUrgent} onChange={(e) => setIsUrgent(e.target.checked)} />
-          <span>Urgent</span>
+          {/* A SEPARATE AXIS from priority, and the label says so: the term
+              dates are worth keeping at the top and are not urgent, and an
+              urgent notice usually passes. */}
+          <span>Keep at the top of the list</span>
         </label>
       </div>
-      {isUrgent && (
+
+      {priority === "URGENT" && (
         // BR-COM-02 — urgency has a cost, and the person choosing it should
         // know what it is before they do.
-        <p className="muted small">
-          An urgent announcement reaches people during their quiet hours and ignores
-          their muted topics. Use it when waiting until morning would be worse.
-        </p>
+        // NOT `alert-error`, deliberately. It carries the error PALETTE
+        // because the consequence is serious, and it is not an error: nothing
+        // has gone wrong, and `role="alert"` would interrupt a screen reader
+        // the moment somebody tabs onto the radio. `role="status"` announces
+        // it politely, which is what a consequence notice should do.
+        <div className="alert alert-consequence" role="status">
+          <strong>This will reach people during their quiet hours.</strong>
+          <p className="small">
+            An urgent announcement ignores muted topics and night-time suppression. Use it when
+            waiting until morning would be worse.
+          </p>
+        </div>
       )}
 
       {error && (

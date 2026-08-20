@@ -1034,8 +1034,21 @@ model Announcement {
   title String @db.VarChar(200)
   body  String @db.Text
 
-  /// FR-COM-006 — pinned to the top until the author unpins it.
+  /// FR-COM-006 — pinned to the top until the author unpins it. A separate
+  /// axis from `priority`: a normal notice can be worth keeping at the top
+  /// (the term dates), and an urgent one usually is not (it passes).
   isPinned Boolean @default(false) @map("is_pinned")
+
+  /// NORMAL | IMPORTANT | URGENT — how much this matters, and how loudly the
+  /// card says so.
+  ///
+  /// `isUrgent` below is DERIVED FROM THIS by the service and kept in step,
+  /// rather than being a second decision that can disagree with it. It stays
+  /// because it carries a behaviour rather than a colour: BR-COM-02 makes an
+  /// urgent announcement ignore a recipient's quiet hours, and that rule is
+  /// read by the notification fan-out and the delivery record.
+  priority String @default("NORMAL") @db.VarChar(20)
+
   /// BR-COM-02 — an urgent announcement ignores a quiet-hours suppression.
   isUrgent Boolean @default(false) @map("is_urgent")
 

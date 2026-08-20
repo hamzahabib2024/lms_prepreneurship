@@ -1624,7 +1624,23 @@ code {
   display: block; font-size: .8125rem; font-weight: 600;
   margin-bottom: .3rem; color: var(--ink-2);
 }
-.field input, .field select, .field textarea, .inline-field input, .inline-field select {
+/*
+ * A CHECKBOX AND A RADIO ARE NOT TEXT BOXES, and this rule used to treat them
+ * as one: `width: 100%` with a 40px minimum turned every radio inside a
+ * `.field` into a full-width control with the dot floating in the middle and
+ * its own label pushed clean off the card. It went unnoticed for the life of
+ * the project because no `.field` had ever contained one — every checkbox in
+ * the app lives in `.option` or `.field-inline` instead. The first radio group
+ * put inside a fieldset with this class rendered as three empty rectangles.
+ *
+ * `:not([type=checkbox]):not([type=radio])` is the whole fix, and it belongs
+ * here rather than as an override in each component: the next person to put a
+ * radio in a field should not have to discover this.
+ */
+.field input:not([type="checkbox"]):not([type="radio"]),
+.field select, .field textarea,
+.inline-field input:not([type="checkbox"]):not([type="radio"]),
+.inline-field select {
   width: 100%; min-height: 40px; padding: .5rem .7rem;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
@@ -2599,6 +2615,473 @@ details > summary:hover { text-decoration: underline; }
   .fee-bank-list dd { text-align: left; }
   .fee-headline-amount { font-size: 1.6rem; }
 }
+
+/* ------------------------------------------- building a fee, step by step --
+   The previous form asked for a total and a list of instalments and refused to
+   publish unless they added up — with no help in making them add up. These
+   rules carry the three numbered steps and the split helper that does the
+   arithmetic nobody should be doing by hand. */
+.fee-form .fee-step {
+  border-top: 1px solid var(--line);
+  padding-top: .85rem;
+  margin-top: .85rem;
+}
+.fee-form .fee-step:first-child { border-top: 0; padding-top: 0; margin-top: 0; }
+.fee-step h4 {
+  display: flex; align-items: center; gap: .45rem;
+  margin: 0 0 .6rem; font-size: .95rem;
+}
+.fee-step-num {
+  display: grid; place-items: center;
+  width: 20px; height: 20px; border-radius: 50%;
+  background: var(--brand-700); color: var(--primary-ink);
+  font-size: .7rem; font-weight: 700;
+}
+
+.fee-split {
+  display: flex; align-items: center; gap: .4rem; flex-wrap: wrap;
+  padding: .55rem .7rem; margin-bottom: .7rem;
+  background: var(--surface-2);
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.fee-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: .3rem; }
+.fee-row {
+  display: flex; gap: .45rem; align-items: center; flex-wrap: wrap;
+  padding: .3rem 0;
+}
+/* The payment's position, so a row can be talked about — "the second one is
+   wrong" — without counting down the list. */
+.fee-row-n {
+  flex: 0 0 20px; width: 20px; height: 20px;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  background: var(--surface-2); color: var(--muted);
+  font-size: .7rem; font-weight: 700;
+}
+
+/* WHAT THE APPLICANT WILL ACTUALLY SEE. The form above is a table of numbers;
+   this is the sentence they read, which is what turns "does this add up" into
+   a question answerable by looking rather than by publishing and checking. */
+.fee-preview {
+  margin: .9rem 0;
+  padding: .7rem .85rem;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+.fee-preview.is-ready {
+  background: var(--ok-bg);
+  border-color: color-mix(in srgb, var(--ok) 30%, transparent);
+}
+.fee-preview-label {
+  display: block;
+  font-size: .7rem; font-weight: 700; letter-spacing: .07em;
+  text-transform: uppercase; color: var(--muted);
+  margin-bottom: .2rem;
+}
+.fee-preview p { margin: 0; font-variant-numeric: lining-nums tabular-nums; }
+
+/* ------------------------------------------------------------ discussion --
+   Shaped like a messaging app on purpose: the people using this have one open
+   on the same phone, and who-said-what-on-which-side with the reply box pinned
+   at the bottom is the one interface pattern every student already knows. What
+   is NOT copied is read receipts and disappearing messages — see the note in
+   DiscussionPage.tsx. */
+
+/* ------------------------------------------------- the list of questions -- */
+.chat-list-card { padding: .35rem; }
+.chat-list { list-style: none; margin: 0; padding: 0; }
+.chat-list-row {
+  display: flex; align-items: center; gap: .7rem; width: 100%;
+  padding: .6rem .65rem;
+  background: none; border: 0; border-radius: var(--radius-sm);
+  text-align: left; cursor: pointer;
+  color: inherit; font: inherit;
+}
+.chat-list-row:hover { background: var(--surface-2); }
+.chat-list li + li { border-top: 1px solid var(--line); }
+
+.chat-list-text { display: grid; gap: .1rem; min-width: 0; flex: 1 1 auto; }
+.chat-list-title {
+  display: flex; align-items: center; gap: .3rem;
+  font-weight: 650;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.chat-list-title svg { width: 12px; height: 12px; flex: 0 0 12px; opacity: .6; }
+
+/* Where an unread badge sits. A zero shows as a dash rather than 0 in a
+   circle, which would read as an unread nobody can clear. */
+.chat-count {
+  flex: 0 0 auto; min-width: 1.6rem; text-align: center;
+  font-size: .8rem; color: var(--muted);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+.chat-count.has-any {
+  background: var(--brand-700); color: var(--primary-ink);
+  border-radius: 999px; padding: .1rem .45rem; font-weight: 650;
+}
+
+/* No photographs exist in this System, so an initial is the honest avatar. */
+.chat-avatar {
+  flex: 0 0 34px; width: 34px; height: 34px;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  background: var(--brand-700); color: var(--primary-ink);
+  font-weight: 700; font-size: .9rem;
+}
+
+/* -------------------------------------------------------- one conversation */
+.chat { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
+
+.chat-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: .75rem; flex-wrap: wrap;
+  padding: .75rem 1rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-2);
+}
+.chat-head h2 { margin: 0; font-size: 1rem; }
+.chat-head-text p { margin: 0; }
+
+.chat-transcript {
+  display: flex; flex-direction: column; gap: .45rem;
+  padding: .9rem 1rem;
+  /* Bounded, so the composer stays reachable without scrolling a long thread
+     to the end of the page first. */
+  max-height: 60vh; overflow-y: auto;
+  /* The faint ground a messaging app uses to separate the transcript from the
+     furniture around it. */
+  background: color-mix(in srgb, var(--surface-2) 55%, transparent);
+}
+
+/* A date rule. Without it a thread spanning a fortnight reads as one
+   afternoon. */
+.chat-day { display: flex; align-items: center; gap: .6rem; margin: .5rem 0 .2rem; }
+.chat-day::before, .chat-day::after {
+  content: ""; flex: 1 1 auto; height: 1px; background: var(--line);
+}
+.chat-day span {
+  font-size: .72rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em;
+}
+
+.chat-row { display: flex; gap: .5rem; align-items: flex-end; max-width: 100%; }
+/* Mine on the right — the arrangement that makes a conversation readable
+   without reading the names. */
+.chat-row.is-mine { flex-direction: row-reverse; }
+
+.chat-bubble {
+  position: relative;
+  max-width: min(78%, 34rem);
+  padding: .5rem .7rem;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  display: grid; gap: .15rem;
+}
+.chat-row.is-mine .chat-bubble {
+  background: var(--ok-bg);
+  border-color: color-mix(in srgb, var(--ok) 25%, transparent);
+}
+/* The question that started it, marked so a reader arriving mid-thread knows
+   which message everything else is answering. */
+.chat-bubble.is-question { border-left: 3px solid var(--brand-600); }
+.chat-bubble.is-removed { background: var(--surface-2); font-style: italic; }
+
+.chat-author { font-size: .78rem; font-weight: 650; color: var(--brand-700); }
+.chat-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.chat-meta { font-size: .7rem; color: var(--muted); text-align: right; }
+
+/* Kept out of the way until wanted: moderation on every bubble at full
+   strength turns a conversation into a control panel. */
+.chat-actions { display: flex; gap: .5rem; opacity: .5; transition: opacity .15s var(--ease); }
+.chat-bubble:hover .chat-actions,
+.chat-bubble:focus-within .chat-actions { opacity: 1; }
+
+/* ------------------------------------------------------------- composing -- */
+.chat-composer {
+  display: flex; gap: .5rem; align-items: flex-end;
+  padding: .7rem 1rem;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+}
+.chat-composer textarea {
+  flex: 1 1 auto; resize: none; min-height: 42px; max-height: 8rem;
+  border-radius: 20px; padding: .6rem .9rem;
+  /* This textarea is not inside a `.field`, so it misses the rule that gives
+     every other one the body face — and a bare <textarea> defaults to
+     monospace, which made the composer look like a code box. */
+  font: inherit; font-size: .9rem;
+  border: 1px solid var(--line-strong);
+  background: var(--surface); color: var(--ink);
+}
+.chat-send {
+  flex: 0 0 auto; width: 42px; height: 42px; padding: 0;
+  border-radius: 50%; display: grid; place-items: center;
+}
+.chat-send svg { width: 18px; height: 18px; }
+
+.chat-closed { padding: .8rem 1rem; border-top: 1px solid var(--line); margin: 0; }
+
+@media (max-width: 640px) {
+  .chat-bubble { max-width: 88%; }
+  .chat-transcript { max-height: 55vh; padding: .75rem .6rem; }
+  /* Always visible on a touch screen, which has no hover to reveal them. */
+  .chat-actions { opacity: 1; }
+}
+
+/* ------------------------------------------------------- announcements ----
+   THE PROBLEM: an urgent notice rendered as the words "Urgent · " in small
+   text before the title, at the same weight as the date beside it. That is a
+   way of mentioning that something matters, not a way of saying it — and a
+   notice board where nothing stands out is one people stop opening.
+
+   Three levels, each announced by a WORD on a coloured band rather than by
+   colour alone (NFR-ACC-007), because a reader who cannot distinguish red from
+   amber must still be able to tell an emergency from a reminder. */
+
+.announcement { position: relative; overflow: hidden; }
+
+/* The rule down the left is the quiet signal — visible while scrolling a long
+   list, and out of the way of the text. */
+.announcement-important { border-left: 4px solid var(--warn); }
+.announcement-urgent { border-left: 4px solid var(--error); }
+
+.announcement-band {
+  display: flex; align-items: center; gap: .45rem; flex-wrap: wrap;
+  margin: -.15rem 0 .65rem;
+  padding: .35rem .6rem;
+  border-radius: var(--radius-sm);
+  font-size: .8rem;
+}
+.announcement-band svg { width: 15px; height: 15px; flex: 0 0 15px; }
+.announcement-band strong {
+  text-transform: uppercase; letter-spacing: .06em; font-size: .72rem; font-weight: 700;
+}
+
+.announcement-important .announcement-band {
+  background: var(--warn-bg); color: var(--warn);
+}
+.announcement-urgent .announcement-band {
+  background: var(--error-bg); color: var(--error);
+}
+
+/* Pinned is a different axis from priority — the term dates are worth keeping
+   at the top and are not urgent — so it sits with the title rather than in the
+   band, and reads as a label rather than a level. */
+.announcement-pin {
+  display: inline-flex; align-items: center; gap: .25rem;
+  margin-right: .45rem; vertical-align: middle;
+}
+.announcement-pin svg { width: 11px; height: 11px; }
+
+/*
+  URGENT PULLS THE EYE ONCE, then stops.
+
+  A permanently animated card is one people learn to ignore and cannot read on
+  a bad day. Three seconds of a slow glow on arrival is enough to be noticed in
+  a list; after that it is an ordinary card with a red rule.
+*/
+@keyframes announcement-arrive {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--error) 45%, transparent); }
+  70%  { box-shadow: 0 0 0 10px color-mix(in srgb, var(--error) 0%, transparent); }
+  100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--error) 0%, transparent); }
+}
+.announcement-urgent { animation: announcement-arrive 1.6s var(--ease) 2; }
+
+@media (prefers-reduced-motion: reduce) {
+  /* The band and the rule carry the whole message without it. */
+  .announcement-urgent { animation: none; }
+}
+
+/* ------------------------------------------------- choosing the level ----- */
+.priority-picker { border: 0; margin: 0 0 .75rem; padding: 0; }
+.priority-picker legend {
+  padding: 0; margin-bottom: .35rem;
+  font-size: .8rem; font-weight: 650; color: var(--ink-2);
+}
+.priority-options { display: grid; gap: .3rem; }
+
+.priority-option {
+  display: flex; gap: .55rem; align-items: flex-start;
+  padding: .45rem .6rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.priority-option:hover { background: var(--surface-2); }
+.priority-option input { margin-top: .25rem; flex: 0 0 auto; }
+.priority-option > span { display: grid; gap: .05rem; min-width: 0; }
+.priority-option strong { display: flex; align-items: center; gap: .3rem; }
+.priority-option strong svg { width: 14px; height: 14px; }
+
+/* The chosen one takes the colour it will actually produce, so an author sees
+   the consequence before posting rather than after. */
+.priority-option.is-on { border-color: var(--brand-600); background: var(--surface-2); }
+.priority-option.is-on.priority-important {
+  border-color: var(--warn); background: var(--warn-bg);
+}
+.priority-option.is-on.priority-important strong { color: var(--warn); }
+.priority-option.is-on.priority-urgent {
+  border-color: var(--error); background: var(--error-bg);
+}
+.priority-option.is-on.priority-urgent strong { color: var(--error); }
+
+/* --------------------------------------------- subjects → course → batches --
+   The order is the thing being explained, so it is drawn rather than
+   described: a numbered row with arrows between, which reads in one glance and
+   survives being translated into a language this codebase does not have. */
+.hierarchy {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  padding: 1rem 1.15rem;
+  margin-bottom: 1.25rem;
+}
+.hierarchy-intro h2 { margin: 0 0 .15rem; font-size: 1rem; }
+.hierarchy-intro p { margin: 0 0 .85rem; }
+
+.hierarchy-steps {
+  list-style: none; margin: 0; padding: 0;
+  display: flex; align-items: stretch; gap: .5rem; flex-wrap: wrap;
+}
+.hierarchy-step {
+  flex: 1 1 14rem; min-width: 0;
+  display: flex; gap: .6rem; align-items: flex-start;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: .7rem .8rem;
+}
+.hierarchy-step strong { display: flex; align-items: center; gap: .35rem; }
+.hierarchy-step strong svg { width: 15px; height: 15px; opacity: .7; }
+.hierarchy-step p { margin: .2rem 0 0; }
+
+/* The step number does the ordering work that colour cannot (NFR-ACC-007). */
+.hierarchy-num {
+  flex: 0 0 22px; width: 22px; height: 22px;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  background: var(--brand-700); color: var(--primary-ink);
+  font-size: .72rem; font-weight: 700;
+}
+
+.hierarchy-arrow {
+  display: grid; place-items: center; flex: 0 0 auto;
+  color: var(--muted);
+}
+.hierarchy-arrow svg { width: 18px; height: 18px; }
+
+.hierarchy-example {
+  margin: .9rem 0 0; padding-top: .8rem;
+  border-top: 1px solid var(--line);
+  color: var(--ink-2);
+}
+
+/* The one-line version, for screens that edit a layer underneath. */
+.hierarchy-crumb { display: flex; align-items: center; gap: .3rem; margin: 0 0 .75rem; }
+.hierarchy-crumb svg { width: 12px; height: 12px; opacity: .5; }
+.hierarchy-crumb .crumb { color: var(--muted); }
+.hierarchy-crumb .crumb-here { color: var(--ink); font-weight: 650; }
+
+@media (max-width: 820px) {
+  /* Stacked, and the arrows turn down rather than sideways — a right-pointing
+     chevron between vertically stacked items reads as decoration. */
+  .hierarchy-steps { flex-direction: column; }
+  .hierarchy-arrow svg { transform: rotate(90deg); }
+}
+
+/* ----------------------------------------------------- a course, at a glance */
+/* The three things that can be missing — no fee, no subjects, no batches —
+   each of which is a course that looks finished and does nothing. */
+.course-facet {
+  display: flex; align-items: center; gap: .5rem; flex-wrap: wrap;
+  padding: .3rem 0;
+  border-top: 1px dashed color-mix(in srgb, var(--line) 70%, transparent);
+}
+.course-facet-label {
+  display: inline-flex; align-items: center; gap: .3rem;
+  flex: 0 0 6.5rem;
+  font-size: .72rem; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--muted);
+}
+.course-facet-label svg { width: 13px; height: 13px; }
+.course-facet-values { display: flex; gap: .25rem; flex-wrap: wrap; }
+
+/* ------------------------------------------------------------- the batches -- */
+.batch-list { list-style: none; margin: .4rem 0 0; padding: 0; display: grid; gap: .3rem; }
+.batch-row {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+.batch-row .row-link { padding: .5rem .65rem; margin: 0; align-items: center; }
+/* A batch with no subjects has nowhere to go, so it is not a link — but it
+   still has to line up with the ones that are. */
+.batch-row .row-link.is-flat { cursor: default; }
+.batch-row .row-link.is-flat:hover { background: transparent; }
+.batch-row-main { display: grid; gap: .1rem; min-width: 0; flex: 1 1 auto; }
+.batch-seats { text-align: right; flex: 0 0 auto; display: grid; }
+.batch-seats strong { font-variant-numeric: lining-nums tabular-nums; font-size: 1.05rem; }
+
+/* --------------------------------------------------------- making a batch -- */
+.batch-form fieldset { border: 0; margin: 0 0 .9rem; padding: 0; }
+/* The two questions that carry a consequence get a little more room than the
+   fields above them: one cannot be changed once a student is admitted, and
+   the other decides whether the batch has a register at all. */
+.batch-audience, .batch-subjects { padding-top: .25rem; }
+.batch-subjects .warn { margin-top: .4rem; }
+
+/* Serious, but not an error — see the note at its use in AnnouncementsPage.
+   It takes the error palette because the consequence is real, and it is not
+   `alert-error` because nothing has gone wrong. */
+.alert-consequence {
+  background: var(--error-bg);
+  border-color: color-mix(in srgb, var(--error) 25%, transparent);
+  border-left-color: var(--error);
+  color: var(--error);
+}
+.batch-form legend {
+  padding: 0; margin-bottom: .35rem;
+  font-size: .8rem; font-weight: 650; color: var(--ink-2);
+}
+
+/* Radios as rows rather than a select: the three choices carry consequences
+   that need a sentence each, and a <select> has nowhere to put one. */
+.radio-row {
+  display: flex; gap: .55rem; align-items: flex-start;
+  padding: .45rem .6rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  margin-bottom: .3rem;
+  cursor: pointer;
+}
+.radio-row:hover { background: var(--surface-2); }
+.radio-row input { margin-top: .2rem; flex: 0 0 auto; }
+.radio-row > span { display: grid; gap: .05rem; }
+.radio-row:has(input:checked) { border-color: var(--brand-600); background: var(--surface-2); }
+
+/* Subjects as chips: a dozen checkboxes down a column is a list somebody
+   scrolls past, and the set is small enough to see at once. */
+.subject-picker { display: flex; flex-wrap: wrap; gap: .35rem; }
+.subject-chip {
+  display: inline-flex; align-items: center; gap: .35rem;
+  padding: .3rem .6rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  cursor: pointer;
+  font-size: .875rem;
+}
+.subject-chip:hover { border-color: var(--brand-600); }
+.subject-chip.is-on {
+  background: var(--ok-bg);
+  border-color: color-mix(in srgb, var(--ok) 40%, transparent);
+}
+/* The tick is the state, and it is a real checkbox so it is reachable by
+   keyboard and announced (NFR-ACC-005). */
+.subject-chip input { margin: 0; }
 
 /* ------------------------------------------------- the lecture folders ----
    FR-VID-003. Office only — a folder id is close to a bearer token for that

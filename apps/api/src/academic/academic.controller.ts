@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query } from "@nestjs/common";
 import {
   academicSessionCreateSchema,
   academicSessionUpdateSchema,
@@ -10,6 +10,7 @@ import {
   noteUpdateSchema,
   offeringCreateSchema,
   programmeCreateSchema,
+  quickBatchCreateSchema,
   programmeUpdateSchema,
   sectionCreateSchema,
   sectionUpdateSchema,
@@ -28,6 +29,7 @@ import {
   type NoteUpdateInput,
   type OfferingCreateInput,
   type ProgrammeCreateInput,
+  type QuickBatchCreateInput,
   type ProgrammeUpdateInput,
   type SectionCreateInput,
   type SectionUpdateInput,
@@ -41,6 +43,7 @@ import { AssignmentService } from "./assignment.service";
 import { EnrolmentService } from "./enrolment.service";
 import { zodBody } from "../common/zod-validation.pipe";
 import { RequirePermission } from "../rbac/permissions.guard";
+import { CourseBuilderService } from "./course-builder.service";
 import { assertOwnStudent } from "../rbac/ownership";
 
 /** SRS §9.5 — academic structure and enrolment endpoints. */
@@ -48,6 +51,7 @@ import { assertOwnStudent } from "../rbac/ownership";
 export class AcademicController {
   constructor(
     private readonly academic: AcademicService,
+    private readonly builder: CourseBuilderService,
     private readonly assignments: AssignmentService,
     private readonly enrolments: EnrolmentService,
     private readonly notes: StudentNoteService,
@@ -59,6 +63,39 @@ export class AcademicController {
   @Get("programmes")
   listProgrammes() {
     return this.academic.listProgrammes();
+  }
+
+  /**
+   * THE WHOLE COURSE, as an administrator pictures it — FR-CRS-004.
+   *
+   * Subjects, batches, seats and terms in one response, with the two middle
+   * layers of the real hierarchy flattened away. `programme:read`, which every
+   * role holds at its own scope, because this is what the Courses screen is.
+   */
+  @RequirePermission("programme", "read")
+  @Get("course-tree")
+  courseTree(@Query("programmeId") programmeId?: string) {
+    return this.builder.courseTree(programmeId);
+  }
+
+  /**
+   * Add a batch to a course, and whatever it needs above it — FR-CRS-011.
+   *
+   * `section:create`, because a batch IS a section. It is a different route
+   * rather than a different guard: the same authority, asked for in the shape
+   * somebody actually has the answers in.
+   */
+  @RequirePermission("section", "create")
+  @Post("course-batches")
+  createCourseBatch(@Body(zodBody(quickBatchCreateSchema)) dto: QuickBatchCreateInput) {
+    return this.builder.createBatch(dto);
+  }
+
+  /** FR-CRS-016 — which subjects a batch teaches. */
+  @RequirePermission("section_subject", "create")
+  @Put("course-batches/:id/subjects")
+  setBatchSubjects(@Param("id") id: string, @Body() body: { subjectIds?: string[] }) {
+    return this.builder.setBatchSubjects(id, body.subjectIds ?? []);
   }
 
   @RequirePermission("programme", "create")

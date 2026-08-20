@@ -1,6 +1,6 @@
 # Project status
 
-Last updated: 20 August 2026 (lecture folders, uploads, and a dashboard you can act on)
+Last updated: 20 August 2026 (the hierarchy, said in three words instead of five)
 
 **Roughly 96% built, and that figure has arithmetic behind it.**
 
@@ -943,4 +943,93 @@ converted in place — encoding is fixed at creation — so that call belongs to
 whoever owns the data.
 
 Thirty defects and three absences. The number found by reading rather than
+running is still zero.
+
+---
+
+## 20 August 2026 — the hierarchy, said in three words instead of five
+
+**TWO MODELS OF THE SAME THING, AND THE SYSTEM ONLY SPOKE ONE OF THEM.**
+
+    The System's:          Programme → Term → Batch → Section → Subject
+    An administrator's:              Subjects → Course → Batches
+
+What an administrator calls a BATCH — "a female batch and a male batch of the
+same course" — is a Section: that is where the gender restriction, the capacity
+and the shift actually live. What the System calls a Batch is a fourth layer
+between the term and the section, and in every piece of real data this Institute
+holds, each term contains exactly one of them. Nobody has ever needed it.
+
+The cost was not vocabulary. Creating a class meant: a term under Structure,
+then a delivery group under Structure, then a section under Sections, then
+offering subjects to it under Sections again — four steps across two screens,
+each refusing to begin until the one above it existed, and **nothing anywhere
+stating the order**. An administrator who did not already know the model could
+not reach the end, and the ones who did got there by remembering a sequence no
+screen described. The commonest outcome was a section with no subjects, which
+looks created and does nothing: no register, no attendance, nothing on a course
+page.
+
+The interface now asks the three questions somebody can answer — which course,
+what the batch is called, who is in it and what it teaches — and fills in the
+other two layers itself. Both are still real, still written, still editable
+under Structure; they have simply stopped being a prerequisite. The Courses
+screen opens with a diagram of the three levels, because the order is the thing
+an inexperienced administrator does not have and cannot guess.
+
+**THE THREE WAYS A COURSE CAN LOOK FINISHED AND DO NOTHING** are now on its
+card rather than two clicks inside it: no fee (applicants are told to telephone
+for a price), no subjects (no register anywhere), no batches (nowhere to admit
+anybody).
+
+**THE FEE FORM ASKED FOR ARITHMETIC IT ALREADY KNEW HOW TO DO.** It wanted a
+total, then a list of instalments, and refused to publish unless they added up —
+with no help in making them add up. An administrator entering 100,000 in three
+parts had to work out that one instalment must carry the extra paisa or the
+table is a rupee short. It also asked separately for "the amount payable to
+apply" and then refused every value that was not exactly the first instalment: a
+question with one correct answer that the form was already holding. Now: choose
+how many parts, and the rows are generated exactly, remainder on the first
+payment. Every row stays editable, because a large first payment and two smaller
+ones is normal and a wizard that cannot express it is worse than none. What the
+applicant will see is shown beside the table rather than discovered by
+publishing.
+
+**ANNOUNCEMENTS HAD TWO STATES AND NEEDED THREE.** `isUrgent` did real work —
+BR-COM-02 makes an urgent notice ignore quiet hours — and rendered as the word
+"Urgent · " in small text before the title, at the same weight as the date
+beside it. That is a way of mentioning that something matters, not a way of
+saying it. Everything between a room change and an emergency had two homes:
+dressed as an emergency, or lost. Three levels now, with a red or amber band
+carrying a WORD as well as a colour, and the flag derived from the level so the
+two can never disagree. The composer shows the consequence of each level before
+it is chosen — an author picking red should know they are waking somebody up.
+
+**AND THE DISCUSSION WAS A FORUM FROM 2004.** A card headed "3 answers" above a
+bulleted list reads as a document rather than a conversation, and nothing about
+it invites a reply. It is a chat now: bubbles, own messages on the right, an
+initial for an avatar, a date rule so a thread spanning a fortnight does not
+read as one afternoon, and the reply box pinned at the bottom where every person
+using this has been trained to look for one. What is deliberately NOT copied
+from a messaging app: read receipts, because "seen by 14" turns a question into
+an attendance check; and disappearing messages, because a thread that silently
+loses its question reads as answers to nothing.
+
+**One defect found by looking at it, and it had been waiting since the first
+stylesheet.** `.field input { width: 100% }` treats every input inside a field
+as a text box. No `.field` had ever contained a radio — every checkbox in the
+app lives in `.option` or `.field-inline` — so the first radio group put inside
+one rendered as three full-width empty rectangles with the labels pushed clean
+off the card. Excluding checkboxes and radios belongs in that rule rather than
+as an override in each component: the next person to put a radio in a field
+should not have to find this out.
+
+**Also noticed and NOT changed, because it is a queue and the brief was not to
+build one:** an urgent announcement to fourteen recipients takes about two
+minutes, because the notification fan-out sends inline and synchronously and
+urgency is the one level that genuinely attempts delivery. At three hundred
+students that is not a slow request, it is a broken one. It needs a job queue,
+which is a change of a different size from this one.
+
+Thirty-one defects and four absences. The number found by reading rather than
 running is still zero.

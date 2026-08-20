@@ -129,6 +129,81 @@ export const sectionUpdateSchema = sectionCreateSchema
   });
 export type SectionUpdateInput = z.infer<typeof sectionUpdateSchema>;
 
+/**
+ * ONE CALL THAT MAKES A BATCH — the shape the interface actually needs.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * WHY THIS EXISTS BESIDE `sectionCreateSchema` RATHER THAN REPLACING IT.
+ *
+ * The System's real hierarchy is five deep:
+ *
+ *   Programme → AcademicSession → Batch → Section → Subject
+ *
+ * An administrator's is three:
+ *
+ *   Subjects → Course → Batches      "a female batch and a male batch"
+ *
+ * What they call a batch is a SECTION — that is where the gender restriction,
+ * the capacity and the shift live. What the System calls a Batch is a fourth
+ * layer between the term and the section, and in every piece of real data this
+ * Institute has, each term contains exactly ONE of them. It is a grouping
+ * nobody has ever needed to think about, and making somebody invent a term, a
+ * delivery group and a section — in that order, on three different screens,
+ * each refusing to start until the one above exists — is why creating a class
+ * has needed somebody who already knew the model.
+ *
+ * So this takes the three things an administrator knows and fills in the two
+ * they do not. The layers are still there and still editable under Structure;
+ * they simply stop being a prerequisite for the common case.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+export const quickBatchCreateSchema = z.object({
+  programmeId: z.string().uuid(),
+  /**
+   * The term this runs in. Omitted, the System uses the programme's current
+   * term, or creates one — see the service. An administrator adding "Batch 2"
+   * in March is not making a statement about academic terms.
+   */
+  academicSessionId: z.string().uuid().optional(),
+
+  /** "Morning A (Female)", "Batch 2", "Evening — Male". Their words. */
+  name: z.string().trim().min(2, "Give the batch a name students will recognise.").max(150),
+  /**
+   * Left out, the System derives one from the programme and the name. A code
+   * is a filing detail; asking for it up front is asking somebody to invent an
+   * identifier before they have decided what the thing is.
+   */
+  code: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z0-9-]{3,40}$/, "Use letters, digits and hyphens only.")
+    .optional(),
+
+  capacity: z.coerce
+    .number()
+    .int()
+    .positive("A batch needs at least one seat.")
+    .max(500, "500 seats is the most a single batch may hold."),
+  genderRestriction: z.enum(GENDER_RESTRICTION).default("MIXED"),
+  shift: z.enum(SHIFT),
+  deliveryMode: z.enum(DELIVERY_MODE).default("ONLINE"),
+
+  /**
+   * The subjects taught to this batch.
+   *
+   * OFFERED AT CREATION rather than afterwards, because a batch with no
+   * subjects has no register, no attendance and nothing on a course page — it
+   * looks created and does nothing, which is the state an inexperienced
+   * administrator leaves it in when the two steps live on different screens.
+   */
+  subjectIds: z.array(z.string().uuid()).default([]),
+
+  whatsappChannelUrl: z.string().trim().url().max(500).optional().or(z.literal("")),
+  whatsappGroupUrl: z.string().trim().url().max(500).optional().or(z.literal("")),
+});
+export type QuickBatchCreateInput = z.infer<typeof quickBatchCreateSchema>;
+
 // -------------------------------------------------------------- subjects ---
 
 export const subjectCreateSchema = z.object({
