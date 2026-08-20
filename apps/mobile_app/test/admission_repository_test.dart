@@ -163,7 +163,8 @@ void main() {
       'gender': 'FEMALE',
       'phone': '+923001234567',
       'email': 'sara@example.com',
-      'claimedAmount': 25000,
+      // Prisma Decimal serializes to a string — the mobile client accepts it.
+      'claimedAmount': '25000.00',
       'acquisitionSource': 'INSTAGRAM',
       'createdAt': '2026-08-10T10:00:00.000Z',
       'isOverdue': true,
@@ -171,13 +172,13 @@ void main() {
       'desiredSection': {'id': 'sec-1', 'code': 'SP26DM-EVE-A', 'name': 'SP26-DM-EVE-A (Female)'},
     };
 
-    test('queue parses rows and keeps the default open-state filter', () async {
+    test('queue parses rows, accepts the Decimal-as-string amount, and keeps the default open-state filter', () async {
       final adapter = FakeAdapter([
         (o) {
-          expect(o.path, '/registration-requests');
+          expect(o.path, '/registration-requests?page=1&pageSize=100');
           return Future.value(jsonResponse(200, {
                 'data': [queueRow],
-                'pagination': {'page': 1, 'pageSize': 25, 'total': 1},
+                'pagination': {'page': 1, 'pageSize': 100, 'totalItems': 1, 'totalPages': 1, 'hasNext': false, 'hasPrevious': false},
                 'meta': {},
               }));
         },
@@ -188,8 +189,37 @@ void main() {
 
       expect(rows, hasLength(1));
       expect(rows.single.fullName, 'Sara Ali');
+      expect(rows.single.claimedAmount, 25000);
       expect(rows.single.isOverdue, isTrue);
       expect(rows.single.desiredSection?.code, 'SP26DM-EVE-A');
+    });
+
+    test('queue walks paginated pages instead of dropping the tail', () async {
+      final adapter = FakeAdapter([
+        (o) {
+          expect(o.path, '/registration-requests?page=1&pageSize=100&q=Ali');
+          return Future.value(jsonResponse(200, {
+                'data': [queueRow],
+                'pagination': {'page': 1, 'pageSize': 100, 'totalItems': 2, 'totalPages': 2, 'hasNext': true, 'hasPrevious': false},
+                'meta': {},
+              }));
+        },
+        (o) {
+          expect(o.path, '/registration-requests?page=2&pageSize=100&q=Ali');
+          return Future.value(jsonResponse(200, {
+                'data': [{...queueRow, 'id': 'r2', 'trackingRef': 'LMS-2026-000008'}],
+                'pagination': {'page': 2, 'pageSize': 100, 'totalItems': 2, 'totalPages': 2, 'hasNext': false, 'hasPrevious': true},
+                'meta': {},
+              }));
+        },
+      ]);
+      final repository = AdmissionRepository(api: client(adapter));
+
+      final rows = await repository.queue(q: 'Ali');
+
+      expect(rows, hasLength(2));
+      expect(rows.first.id, 'r1');
+      expect(rows.last.id, 'r2');
     });
 
     test('detail parses every submitted field and the slip documents', () async {

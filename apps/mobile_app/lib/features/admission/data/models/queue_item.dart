@@ -41,7 +41,9 @@ class QueueItem extends Equatable {
       gender: json['gender'] as String? ?? '',
       phone: json['phone'] as String? ?? '',
       email: json['email'] as String? ?? '',
-      claimedAmount: json['claimedAmount'] as num? ?? 0,
+      // The server serializes Prisma Decimal as a string, and older rows or
+      // fixtures may carry a plain number — accept both.
+      claimedAmount: num.tryParse('${json['claimedAmount']}') ?? 0,
       acquisitionSource: json['acquisitionSource'] as String? ?? '',
       createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '')?.toLocal() ??
           DateTime.now(),

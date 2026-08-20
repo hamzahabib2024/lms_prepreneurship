@@ -124,7 +124,23 @@ class ApiClient {
     }
   }
 
+  /// GET that keeps the whole envelope — `data` and `pagination` — for the
+  /// paged endpoints (§9.2 Figures 9-1/9-2). Plain [get] returns only the
+  /// `data` payload, which loses the pagination block.
+  Future<Map<String, dynamic>> getEnvelope(String path) => _requestRaw(path);
+
   Future<T> _request<T>(
+    String path, {
+    String method = 'GET',
+    Object? body,
+  }) async {
+    final envelope = await _requestRaw(path, method: method, body: body);
+    return (envelope['data'] as T);
+  }
+
+  /// The wire-level request: the full response body (envelope and all),
+  /// with the same session, refresh and error mapping as [_request].
+  Future<Map<String, dynamic>> _requestRaw(
     String path, {
     String method = 'GET',
     Object? body,
@@ -134,12 +150,8 @@ class ApiClient {
 
     try {
       final response = await _dio.request<dynamic>(path, data: body, options: options);
-
-      if (response.statusCode == 204) return null as T;
-
-      final envelope = response.data as Map<String, dynamic>? ?? const {};
-      // §9.2 — every success is wrapped. Screens receive the payload itself.
-      return (envelope['data'] as T);
+      if (response.statusCode == 204) return const {};
+      return response.data as Map<String, dynamic>? ?? const {};
     } on DioException catch (error) {
       final apiError = _mapError(error);
 
@@ -149,7 +161,7 @@ class ApiClient {
           apiError.code == 'AUTH_TOKEN_EXPIRED' &&
           !retried) {
         if (await _refreshAccessToken()) {
-          return _request<T>(path, method: method, body: body, retried: true);
+          return _requestRaw(path, method: method, body: body, retried: true);
         }
         onUnauthenticated?.call();
       }

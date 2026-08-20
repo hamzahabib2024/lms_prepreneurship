@@ -282,65 +282,100 @@ class _SubjectFormState extends State<_SubjectForm> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 20),
-      child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (_error != null) ...[
-              AppAlert(
-                title: 'That did not work',
-                message: _error!.message,
-                reference: _error!.reference,
-                details: serverDetailLines(_error!),
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final muted = dark ? AppColorsDark.muted : AppColors.muted;
+
+    // A keyboard-aware, scrollable sheet: the whole form lives in a SafeArea,
+    // the scroll viewport shrinks by the keyboard inset so the submit button
+    // is always reachable above it, and the content sizes the sheet itself —
+    // it scrolls instead of being pushed off a small screen.
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          20,
+          6,
+          20,
+          MediaQuery.viewInsetsOf(context).bottom + 20,
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Create a subject',
+                style: Theme.of(context).textTheme.titleMedium,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 4),
+              Text(
+                'A subject is created once; a section offers it afterwards. '
+                'The code can never change later.',
+                style: TextStyle(fontSize: 12.5, color: muted, height: 1.5),
+              ),
+              const SizedBox(height: 18),
+              if (_error != null) ...[
+                AppAlert(
+                  title: 'That did not work',
+                  message: _error!.message,
+                  reference: _error!.reference,
+                  details: serverDetailLines(_error!),
+                ),
+                const SizedBox(height: 12),
+              ],
+              AdmissionFormField(
+                label: 'Name',
+                value: _name,
+                hint: 'Digital Marketing',
+                onChanged: (v) => setState(() => _name = v),
+              ),
+              const SizedBox(height: 20),
+              AdmissionFormField(
+                label: 'Code',
+                value: _code,
+                hint: 'DM — letters and digits only',
+                onChanged: (v) => setState(() => _code = v.toUpperCase()),
+              ),
+              const SizedBox(height: 20),
+              AdmissionFormField(
+                label: 'Credits (optional)',
+                value: _credits,
+                hint: '3',
+                keyboardType: TextInputType.number,
+                onChanged: (v) => setState(() => _credits = v),
+              ),
+              const SizedBox(height: 20),
+              AdmissionFormField(
+                label: 'Description (optional)',
+                value: _description,
+                hint: 'What the subject is about',
+                maxLines: 3,
+                onChanged: (v) => setState(() => _description = v),
+              ),
+              const SizedBox(height: 22),
+              FilledButton(
+                onPressed: _busy || !_canSave ? null : () => _submit(),
+                // A ghosted state that stays legible (muted on surface-2) so
+                // the disabled button reads as unfilled, not invisible.
+                style: FilledButton.styleFrom(
+                  disabledBackgroundColor:
+                      dark ? AppColorsDark.surface2 : AppColors.surface2,
+                  disabledForegroundColor:
+                      dark ? AppColorsDark.muted : AppColors.muted,
+                ),
+                child: _busy
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : const Text('Create subject'),
+              ),
             ],
-            AdmissionFormField(
-              label: 'Name',
-              value: _name,
-              hint: 'Digital Marketing',
-              onChanged: (v) => setState(() => _name = v),
-            ),
-            const SizedBox(height: 12),
-            AdmissionFormField(
-              label: 'Code',
-              value: _code,
-              hint: 'DM — letters and digits only',
-              onChanged: (v) => setState(() => _code = v.toUpperCase()),
-            ),
-            const SizedBox(height: 12),
-            AdmissionFormField(
-              label: 'Credits (optional)',
-              value: _credits,
-              hint: '3',
-              keyboardType: TextInputType.number,
-              onChanged: (v) => setState(() => _credits = v),
-            ),
-            const SizedBox(height: 12),
-            AdmissionFormField(
-              label: 'Description (optional)',
-              value: _description,
-              hint: 'What the subject is about',
-              maxLines: 3,
-              onChanged: (v) => setState(() => _description = v),
-            ),
-            const SizedBox(height: 16),
-            FilledButton(
-              onPressed: _busy || !_canSave ? null : () => _submit(),
-              child: _busy
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                      ),
-                    )
-                  : const Text('Create subject'),
-            ),
-          ],
+          ),
         ),
       ),
     );

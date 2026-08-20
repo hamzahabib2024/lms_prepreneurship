@@ -52,7 +52,9 @@ class _FieldLabel extends StatelessWidget {
   }
 }
 
-/// A labelled text field with a hint beneath it.
+/// A labelled text field. The hint — when there is one — is helper text
+/// shown once, beneath the field, never also as an in-field placeholder, so
+/// a half-typed value can never be mistaken for a prompt (FR-REG-018).
 class AdmissionFormField extends StatelessWidget {
   const AdmissionFormField({
     super.key,
@@ -92,7 +94,7 @@ class AdmissionFormField extends StatelessWidget {
       children: [
         if (label.isNotEmpty) ...[
           _FieldLabel(label),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
         ],
         TextField(
           controller: TextEditingController(text: value)
@@ -102,17 +104,17 @@ class AdmissionFormField extends StatelessWidget {
           maxLength: maxLength,
           style: TextStyle(fontSize: 15, color: ink),
           cursorColor: brand,
-          decoration: _decoration(context, hint, hasError: errorText != null),
+          decoration: _decoration(context, null, hasError: errorText != null),
           onChanged: onChanged,
         ),
         if (errorText != null) ...[
-          const SizedBox(height: 4),
+          const SizedBox(height: 6),
           Text(
             errorText!,
             style: TextStyle(fontSize: 12, color: error, fontWeight: FontWeight.w500),
           ),
         ] else if (hint != null && hint!.isNotEmpty) ...[
-          const SizedBox(height: 4),
+          const SizedBox(height: 6),
           Text(hint!, style: TextStyle(fontSize: 12, color: muted)),
         ],
       ],

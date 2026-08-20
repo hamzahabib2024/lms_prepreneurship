@@ -124,7 +124,7 @@ class AcademicRepository {
       if (batchId != null && batchId.isNotEmpty) {
         query.write('&batchId=${Uri.encodeQueryComponent(batchId)}');
       }
-      final envelope = await api.get<Map<String, dynamic>>(query.toString());
+      final envelope = await api.getEnvelope(query.toString());
       out.addAll(
         (envelope['data'] as List<dynamic>? ?? const [])
             .whereType<Map<String, dynamic>>()
@@ -257,7 +257,7 @@ class AcademicRepository {
     final out = <OfferingChoice>[];
     var page = 1;
     while (true) {
-      final envelope = await api.get<Map<String, dynamic>>(
+      final envelope = await api.getEnvelope(
         '/sections?pageSize=100&page=$page',
       );
       for (final s in (envelope['data'] as List<dynamic>? ?? const [])
