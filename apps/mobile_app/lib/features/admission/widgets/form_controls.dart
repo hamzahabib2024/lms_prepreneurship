@@ -184,6 +184,7 @@ class AdmissionDateField extends StatelessWidget {
     required this.hint,
     required this.firstDate,
     required this.lastDate,
+    this.initialDate,
     required this.onChanged,
   });
 
@@ -192,6 +193,9 @@ class AdmissionDateField extends StatelessWidget {
   final String hint;
   final DateTime firstDate;
   final DateTime lastDate;
+
+  /// Where the calendar opens when [value] is unset — today by default.
+  final DateTime? initialDate;
   final ValueChanged<DateTime?> onChanged;
 
   @override
@@ -209,7 +213,10 @@ class AdmissionDateField extends StatelessWidget {
           onTap: () async {
             final picked = await showDatePicker(
               context: context,
-              initialDate: value ?? lastDate,
+              // Open on the current value, otherwise on today — never on the
+              // far end of a wide range, which stranded the calendar two
+              // years out and made future dates look unreachable.
+              initialDate: _pickerInitial(),
               firstDate: firstDate,
               lastDate: lastDate,
             );
@@ -239,6 +246,16 @@ class AdmissionDateField extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  /// The value, else [initialDate], else today — always clamped to the
+  /// pickable range (Material throws on an out-of-range initial date).
+  DateTime _pickerInitial() {
+    final now = DateTime.now();
+    final candidate = value ?? initialDate ?? now;
+    if (candidate.isBefore(firstDate)) return firstDate;
+    if (candidate.isAfter(lastDate)) return lastDate;
+    return candidate;
   }
 
   static String _month(int m) =>
