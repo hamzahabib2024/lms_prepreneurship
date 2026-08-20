@@ -93,6 +93,22 @@ export function Icon({ name, className }: { name: string; className?: string }) 
   return (
     <svg
       viewBox="0 0 24 24"
+      /*
+       * A SIZE, SO A CALLER THAT FORGETS ONE GETS AN ICON RATHER THAN A POSTER.
+       *
+       * An SVG with a viewBox and no width or height fills whatever box it is
+       * in. Every existing use of this component sets a size in CSS, so the
+       * omission was invisible — until a new one did not, and rendered a
+       * folder glyph EIGHT HUNDRED PIXELS TALL down a list of twelve rows.
+       * There is no global `.btn svg` rule to catch it either, so the same
+       * mistake was waiting in every button an icon is ever put inside.
+       *
+       * These are PRESENTATION ATTRIBUTES, which lose to any CSS rule — so the
+       * forty places that already say `width: 17px` are untouched, and this is
+       * only what happens when nothing else has an opinion.
+       */
+      width="1em"
+      height="1em"
       fill="none"
       stroke="currentColor"
       strokeWidth="1.7"

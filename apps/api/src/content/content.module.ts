@@ -9,6 +9,7 @@ import { StorageRegistry } from "./storage/storage.registry";
 import { LocalStorageProvider } from "./storage/local.storage";
 import { GoogleDriveStorageProvider } from "./storage/google-drive.storage";
 import { CourseMediaService } from "./course-media.service";
+import { LectureStorageService } from "./lecture-storage.service";
 import { CourseMediaController } from "./course-media.controller";
 
 /**
@@ -25,6 +26,7 @@ import { CourseMediaController } from "./course-media.controller";
     GoogleDriveStorageProvider,
     LessonResourceService,
     CourseMediaService,
+    LectureStorageService,
   ],
   // CourseMediaService is exported because the academic module attaches a
   // picture to a programme or a subject, and the public prospectus turns an

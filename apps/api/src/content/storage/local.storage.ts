@@ -1,6 +1,8 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { createHmac, randomUUID } from "node:crypto";
+import { createWriteStream } from "node:fs";
+import { pipeline } from "node:stream/promises";
 import { existsSync, readFileSync } from "node:fs";
 import { mkdir, readFile, readdir, stat, unlink, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, resolve, sep } from "node:path";
@@ -11,6 +13,8 @@ import type {
   StorageHealth,
   StorageProvider,
   StoredObjectRef,
+  UploadCapability,
+  UploadInput,
 } from "./storage.provider";
 
 /**
@@ -219,6 +223,61 @@ export class LocalStorageProvider implements StorageProvider {
       contentType,
       durationSeconds: null,
       lastModified: new Date(),
+    };
+  }
+
+  /**
+   * ALWAYS, and that is the point of it.
+   *
+   * The System's own disk has no quota rule to trip over and no sharing model
+   * to get wrong, so this is the destination that works while Google Drive is
+   * being sorted out — or instead of it. A deployment that never connects
+   * Drive can still put a recording in front of a class.
+   */
+  canAcceptUploads(): Promise<UploadCapability> {
+    return Promise.resolve({ accepted: true, destination: "this server" });
+  }
+
+  /**
+   * A recording, streamed to disk — never buffered.
+   *
+   * `put()` above takes a Buffer, which is right for a payment slip and wrong
+   * for a 360 MB lecture: reading one into memory to write it out again costs
+   * the whole application tier per upload. `pipeline` also unlinks nothing on
+   * failure, so a half-written file is removed explicitly — otherwise a
+   * dropped connection leaves a truncated video that the catalogue believes in
+   * and a student discovers.
+   */
+  async putStream(input: UploadInput): Promise<StoredObjectRef> {
+    // SEC-FIL-005 — a System-generated name. What the uploader called the file
+    // is a label, and never any part of a path.
+    const prefix = input.folderRef ? `${input.folderRef}` : "lectures";
+    const ref = `${prefix}/${randomUUID()}`;
+    const full = this.safePath(ref);
+    await mkdir(dirname(full), { recursive: true });
+
+    try {
+      await pipeline(input.body, createWriteStream(full));
+    } catch (err) {
+      await unlink(full).catch(() => undefined);
+      throw new AppError("STORAGE_UNAVAILABLE", {
+        message: "The recording could not be saved.",
+        internal: `Local putStream failed for ${ref}: ${
+          err instanceof Error ? err.message : "unknown error"
+        }`,
+      });
+    }
+
+    const written = await stat(full);
+    return {
+      storageRef: ref,
+      sizeBytes: written.size,
+      contentType: input.contentType,
+      // Local disk cannot read a video's duration without decoding it, and
+      // decoding a 360 MB file to fill in a label is not worth the CPU. The
+      // catalogue carries null and the player reports the real length.
+      durationSeconds: null,
+      lastModified: written.mtime,
     };
   }
 

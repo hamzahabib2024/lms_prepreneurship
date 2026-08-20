@@ -1,6 +1,6 @@
 # Project status
 
-Last updated: 20 August 2026 (courses, fees, and the student nobody wrote to)
+Last updated: 20 August 2026 (lecture folders, uploads, and a dashboard you can act on)
 
 **Roughly 96% built, and that figure has arithmetic behind it.**
 
@@ -838,4 +838,109 @@ like a model nobody has needed yet. The web-routes test failed because a new
 page was not documented. Neither fault would have been visible by reading.
 
 Twenty-seven defects and three absences. The number found by reading rather than
+running is still zero.
+
+---
+
+## 20 August 2026 — lecture folders, uploads, and a dashboard you can act on
+
+**THE DASHBOARD WAS A DEAD END.** It is the first screen everybody sees and its
+whole job is to say what needs doing — "2 waiting for review", "3 registers not
+marked" — and every one of those was a number and nothing else. The answer to
+"what do I do about it" was: read it, remember it, find the right entry in the
+sidebar, and start again from a list that does not know why you came. A figure
+that names an action and cannot reach it is a worse affordance than no figure,
+because it looks finished. Every counter, every exception and four of the card
+headings are now links, role-gated in one table so a student is never offered a
+destination that would answer 403. "Waiting over 48 hours" opens the queue
+**already filtered to those**, because arriving at the unfiltered list and
+finding them again by eye is the work the figure existed to save.
+
+**THE FOLDER IDS WERE IN THE SYSTEM ALL ALONG AND IT NEVER SHOWED ANYBODY.**
+Connecting a class to its recordings meant opening Drive in another tab, finding
+the right folder among a dozen named things like "(Sec D) English Class" and
+"(Sec I) English Class", copying the address bar and pasting it back. The
+adapter could list that folder the entire time. There is now an index — name,
+id, Drive link, copy buttons, and **which class already uses each folder**,
+because twelve near-identical names with no indication of what is spoken for is
+how two cohorts end up reading one folder and each seeing the other's classes.
+
+It is behind a NEW resource, `lecture_storage_index`, held only by Super Admin
+and Admin. A teacher holds `recorded_lecture:create` at ASSIGNED scope so they
+can catalogue a recording for their own class, and it does not follow that they
+should be handed the identifier of every other class's folder — a folder id is
+close to a bearer token for that folder's contents. Reusing the existing
+resource would have been one line and would have given every teacher the lot.
+
+**A RECORDING FROM A LAPTOP COULD NOT BE ADDED AT ALL**, and the reason it is
+now possible comes with a constraint that had to be measured rather than
+assumed:
+
+> A Google service account HAS NO DRIVE STORAGE QUOTA. It lists the Institute's
+> folder, reads every file in it, and Drive answers `canAddChildren: true` — and
+> refuses every upload with `storageQuotaExceeded`, because a file in an
+> ordinary My Drive must be charged to somebody and a service account is nobody.
+
+Probed before a line of the feature was written, which is the only reason the
+design is honest: the panel asks whether the upload would be accepted **before**
+offering a file picker, names both ways out — a Shared Drive, or domain-wide
+delegation — and offers to store the recording in the System instead. A person
+never waits for 300 MB to cross their connection to be told it was never going
+to work.
+
+**A DELIBERATE SAFETY INVARIANT WAS NARROWED, and that is worth stating
+plainly.** `drive-readonly.spec.ts` pinned "the System never writes to the
+Institute's Drive", with a read-only OAuth scope as a second barrier so that
+even a mistake in the adapter would be refused by Google. Uploading required
+changing that. What replaced it is narrower rather than absent: the adapter may
+CREATE a new file through `putStream` and through nothing else; it may never
+delete, trash, move, rename or overwrite; the writable scope is minted only for
+an actual upload, so a deployment that never uploads never asks Google for a
+writable token at all. The suite now fails if any of those three stops holding.
+
+**Three defects found by running it, none visible by reading.**
+
+The first: a failed catalogue left the bytes orphaned. The very first real
+upload failed at the database write **after** the file had been streamed to
+storage, leaving 3 MB that nothing referenced and nothing would collect.
+Repeated by anybody retrying a failing upload, that fills a disk with files no
+screen can see. A failure after the write now removes what was written — except
+on Drive, where `delete()` still makes no request, because an orphan there is a
+file somebody can see and remove and that is a far better failure than this code
+deleting from the Institute's only copy of its recordings.
+
+The second: **an SVG with a viewBox and no size fills its container**, and the
+`Icon` component set neither. Every existing use happened to size it in CSS, so
+the omission was invisible for the life of the project — until a new one did
+not, and rendered a folder glyph eight hundred pixels tall down a list of twelve
+rows. There is no global `.btn svg` rule either, so the same mistake was waiting
+in every button an icon is ever put inside. The component now carries `1em` as a
+presentation attribute, which loses to every CSS rule that already exists and
+only applies where nothing has an opinion.
+
+The third is the largest, and it had been there from the beginning: **a page
+reload always signed the user out.** The access token lives in memory only — by
+design, so it dies with the tab — so the first request after any reload carries
+no Authorization header, and the server answers `AUTH_TOKEN_INVALID` because
+there was no token to expire. The client's refresh branch required
+`AUTH_TOKEN_EXPIRED`, so it never fired; `AuthContext` caught the error and ran
+`clear()`, **destroying the stored refresh token**. The rotation, the 30-day
+lifetime, the session that is supposed to survive a reload — none of it had ever
+worked once. It looked exactly like a session timing out, which is why nobody
+questioned it. The condition that matters is not which 401 it is; it is whether
+there is a refresh token to try.
+
+**And one thing found that is not fixed, because fixing it destroys data.** The
+local development database was created with **WIN1252** encoding, and a WIN1252
+database cannot store Urdu at all — `عائشہ` is refused by Postgres before the
+application sees it. Latin-1 accents survive, so "Zoë" stores fine, which is
+precisely what makes it dangerous: every test anybody is likely to type passes,
+and the failure waits for a student whose name is written in the script most of
+this Institute's students actually use. `db-local.mjs` now forces
+`--encoding=UTF8` for any database it creates from now on, and warns loudly when
+it starts an existing cluster that is not UTF-8. An existing one cannot be
+converted in place — encoding is fixed at creation — so that call belongs to
+whoever owns the data.
+
+Thirty defects and three absences. The number found by reading rather than
 running is still zero.

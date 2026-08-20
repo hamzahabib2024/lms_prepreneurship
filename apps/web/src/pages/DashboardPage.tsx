@@ -1,8 +1,10 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { text } from "../api/text";
 import { ApiError, api } from "../api/client";
 import { ProgressRing, SkeletonCards } from "../components/Ui";
+import { Icon } from "../components/Icon";
+import { useAuth } from "../auth/AuthContext";
 
 /**
  * The dashboard — SRS §5.18, §13.3, §13.4.
@@ -38,9 +40,90 @@ const WIDGET_TITLES: Record<string, string> = {
   exceptions: "Exceptions",
 };
 
+/**
+ * WHERE EACH CARD GOES — one table, read by the heading and by every row.
+ *
+ * THE DASHBOARD WAS A DEAD END. It is the first screen everybody sees and its
+ * whole job is to say what needs doing: "8 waiting for review", "3 registers
+ * not marked". Every one of those was a number and nothing more, so the answer
+ * to "what do I do about it" was to read it, remember it, find the right entry
+ * in the sidebar, and start again from a list that does not know why you came.
+ * A figure that names an action and cannot reach it is a worse affordance than
+ * no figure at all, because it looks finished.
+ *
+ * ROLE-AWARE, and that is not decoration either. A destination a student would
+ * be refused is worse than no link: it turns a dashboard figure into a 403.
+ * `roles` is a whitelist and an absent `roles` means everybody — the same
+ * convention navigation.ts uses, deliberately, so there is one idea to learn.
+ *
+ * IT IS STILL NOT SECURITY (UI-002, ARC-003). Hiding a link stops the
+ * interface offering something that would be refused; the server refuses it.
+ */
+interface Destination {
+  to: string;
+  roles?: readonly string[];
+}
+
+const OFFICE = ["super_admin", "admin"] as const;
+const TEACHING = ["super_admin", "admin", "teacher"] as const;
+
+/** Where a whole card leads, when it leads anywhere. */
+const WIDGET_LINKS: Record<string, Destination> = {
+  registrationQueue: { to: "/admissions", roles: OFFICE },
+  instituteKpis: { to: "/reports", roles: OFFICE },
+  acquisitionMix: { to: "/reports", roles: OFFICE },
+  exceptions: { to: "/sections", roles: OFFICE },
+  actionQueue: { to: "/marking", roles: TEACHING },
+  mySections: { to: "/courses", roles: TEACHING },
+  announcements: { to: "/announcements" },
+  workDue: { to: "/subjects", roles: ["student"] },
+  progress: { to: "/subjects", roles: ["student"] },
+  attendance: { to: "/attendance", roles: ["student"] },
+};
+
+/**
+ * Where an individual figure leads.
+ *
+ * More specific than the card's own link wherever the System can be more
+ * specific — "waiting over 48 hours" opens the queue already filtered to
+ * those, because arriving at an unfiltered list and re-finding them by eye is
+ * the work the figure was supposed to save.
+ */
+const COUNTER_LINKS: Record<string, Destination> = {
+  "registrationQueue.pending": { to: "/admissions", roles: OFFICE },
+  "registrationQueue.overdue": { to: "/admissions?overdue=1", roles: OFFICE },
+  "registrationQueue.decidedToday": { to: "/admissions", roles: OFFICE },
+  "actionQueue.unmarkedRegisters": { to: "/attendance", roles: TEACHING },
+  "actionQueue.ungradedSubmissions": { to: "/marking", roles: TEACHING },
+  "actionQueue.quizzesAwaitingMarking": { to: "/marking", roles: TEACHING },
+  "instituteKpis.activeStudents": { to: "/users?role=student", roles: OFFICE },
+  "instituteKpis.activeTeachers": { to: "/users?role=teacher", roles: OFFICE },
+  "instituteKpis.activeSections": { to: "/sections", roles: OFFICE },
+  "instituteKpis.sectionsAtCapacity": { to: "/sections", roles: OFFICE },
+  "exceptions.sections_without_teacher": { to: "/sections", roles: OFFICE },
+  "exceptions.lectures_missing": { to: "/content", roles: TEACHING },
+};
+
 export function DashboardPage() {
+  const { hasRole } = useAuth();
   const [data, setData] = useState<DashboardResponse | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
+
+  /**
+   * A destination, or null when this reader may not go there.
+   *
+   * One place decides, so no widget can quietly offer a link its reader would
+   * be refused — which turns a dashboard figure into a 403 and is worse than
+   * the number having stayed inert.
+   */
+  const may = useCallback(
+    (d?: Destination): Destination | null => {
+      if (!d) return null;
+      if (!d.roles) return d;
+      return hasRole(...d.roles) ? d : null;
+    },
+    [hasRole],
+  );
 
   useEffect(() => {
     api
@@ -90,14 +173,22 @@ export function DashboardPage() {
 
       <div className="grid">
         {Object.entries(data.widgets).map(([key, value]) => (
-          <Widget key={key} name={key} value={value} />
+          <Widget key={key} name={key} value={value} may={may} />
         ))}
       </div>
     </>
   );
 }
 
-function Widget({ name, value }: { name: string; value: unknown }) {
+function Widget({
+  name,
+  value,
+  may,
+}: {
+  name: string;
+  value: unknown;
+  may: (d?: Destination) => Destination | null;
+}) {
   const title = WIDGET_TITLES[name] ?? name;
   const v = (value ?? {}) as Record<string, unknown>;
 
@@ -110,15 +201,43 @@ function Widget({ name, value }: { name: string; value: unknown }) {
     );
   }
 
+  const link = may(WIDGET_LINKS[name]);
+
   return (
-    <section className="card widget">
-      <h2>{title}</h2>
-      <WidgetBody name={name} v={v} />
+    <section className={link ? "card widget widget-linked" : "card widget"}>
+      {/*
+        THE HEADING IS THE LINK, not the whole card.
+
+        A card-sized click target sounds friendlier and is worse: this card
+        contains its own links, and a person aiming at "waiting over 48 hours"
+        who misses by four pixels lands somewhere else entirely. Nested
+        interactive elements are also invalid — an anchor inside an anchor —
+        and screen readers announce the outer one over everything inside it.
+      */}
+      <h2>
+        {link ? (
+          <Link to={link.to} className="widget-title-link">
+            {title}
+            <Icon name="chevron-right" />
+          </Link>
+        ) : (
+          title
+        )}
+      </h2>
+      <WidgetBody name={name} v={v} may={may} />
     </section>
   );
 }
 
-function WidgetBody({ name, v }: { name: string; v: Record<string, unknown> }) {
+function WidgetBody({
+  name,
+  v,
+  may,
+}: {
+  name: string;
+  v: Record<string, unknown>;
+  may: (d?: Destination) => Destination | null;
+}) {
   // NFR-USE-009 — every widget states why it is empty rather than showing
   // nothing at all.
   const emptyMessage = typeof v["message"] === "string" ? (v["message"] as string) : null;
@@ -165,9 +284,21 @@ function WidgetBody({ name, v }: { name: string; v: Record<string, unknown> }) {
       if (total === 0) return <p className="muted">{emptyMessage ?? "You are up to date."}</p>;
       return (
         <ul className="list">
-          <Counter n={v["unmarkedRegisters"]} label="registers not marked" />
-          <Counter n={v["ungradedSubmissions"]} label="submissions to grade" />
-          <Counter n={v["quizzesAwaitingMarking"]} label="quiz answers to mark" />
+          <Counter
+            n={v["unmarkedRegisters"]}
+            label="registers not marked"
+            to={may(COUNTER_LINKS["actionQueue.unmarkedRegisters"])}
+          />
+          <Counter
+            n={v["ungradedSubmissions"]}
+            label="submissions to grade"
+            to={may(COUNTER_LINKS["actionQueue.ungradedSubmissions"])}
+          />
+          <Counter
+            n={v["quizzesAwaitingMarking"]}
+            label="quiz answers to mark"
+            to={may(COUNTER_LINKS["actionQueue.quizzesAwaitingMarking"])}
+          />
         </ul>
       );
     }
@@ -175,20 +306,53 @@ function WidgetBody({ name, v }: { name: string; v: Record<string, unknown> }) {
     case "registrationQueue":
       return (
         <ul className="list">
-          <Counter n={v["pending"]} label="waiting for review" />
-          {/* FR-REG-038 — an application nobody has looked at for two days. */}
-          <Counter n={v["overdue"]} label="waiting over 48 hours" warn />
-          <Counter n={v["decidedToday"]} label="decided today" />
+          <Counter
+            n={v["pending"]}
+            label="waiting for review"
+            to={may(COUNTER_LINKS["registrationQueue.pending"])}
+          />
+          {/* FR-REG-038 — an application nobody has looked at for two days.
+              It opens the queue ALREADY FILTERED to them: arriving at the
+              whole list and finding them again by eye is the work this figure
+              exists to save. */}
+          <Counter
+            n={v["overdue"]}
+            label="waiting over 48 hours"
+            warn
+            to={may(COUNTER_LINKS["registrationQueue.overdue"])}
+          />
+          <Counter
+            n={v["decidedToday"]}
+            label="decided today"
+            to={may(COUNTER_LINKS["registrationQueue.decidedToday"])}
+          />
         </ul>
       );
 
     case "instituteKpis":
       return (
         <ul className="list">
-          <Counter n={v["activeStudents"]} label="students" />
-          <Counter n={v["activeTeachers"]} label="teachers" />
-          <Counter n={v["activeSections"]} label="active sections" />
-          <Counter n={v["sectionsAtCapacity"]} label="sections full" warn />
+          <Counter
+            n={v["activeStudents"]}
+            label="students"
+            to={may(COUNTER_LINKS["instituteKpis.activeStudents"])}
+          />
+          <Counter
+            n={v["activeTeachers"]}
+            label="teachers"
+            to={may(COUNTER_LINKS["instituteKpis.activeTeachers"])}
+          />
+          <Counter
+            n={v["activeSections"]}
+            label="active sections"
+            to={may(COUNTER_LINKS["instituteKpis.activeSections"])}
+          />
+          <Counter
+            n={v["sectionsAtCapacity"]}
+            label="sections full"
+            warn
+            to={may(COUNTER_LINKS["instituteKpis.sectionsAtCapacity"])}
+          />
         </ul>
       );
 
@@ -214,11 +378,21 @@ function WidgetBody({ name, v }: { name: string; v: Record<string, unknown> }) {
       if (items.length === 0) return <p className="muted">{emptyMessage ?? "Nothing to action."}</p>;
       return (
         <ul className="list">
-          {items.map((i) => (
-            <li key={i.key} className={i.severity === "high" ? "warn" : ""}>
-              {i.message}
-            </li>
-          ))}
+          {items.map((i) => {
+            const to = may(COUNTER_LINKS[`exceptions.${i.key}`]);
+            return (
+              <li key={i.key} className={i.severity === "high" ? "warn" : ""}>
+                {to ? (
+                  <Link className="row-link" to={to.to}>
+                    {i.message}
+                    <Icon name="chevron-right" />
+                  </Link>
+                ) : (
+                  i.message
+                )}
+              </li>
+            );
+          })}
         </ul>
       );
     }
@@ -242,10 +416,14 @@ function WidgetBody({ name, v }: { name: string; v: Record<string, unknown> }) {
         <ul className="list">
           {sections.map((s) => (
             <li key={s.sectionSubjectId}>
-              <span>
-                {s.subject.name} <span className="muted small">{s.section.code}</span>
-              </span>
-              <strong>{s.enrolled}</strong>
+              {/* Straight to that class, which is the only reason anybody
+                  reads this list. */}
+              <Link className="row-link" to={`/courses/${s.sectionSubjectId}`}>
+                <span>
+                  {s.subject.name} <span className="muted small">{s.section.code}</span>
+                </span>
+                <strong>{s.enrolled}</strong>
+              </Link>
             </li>
           ))}
         </ul>
@@ -337,13 +515,51 @@ function WidgetBody({ name, v }: { name: string; v: Record<string, unknown> }) {
   }
 }
 
-function Counter({ n, label, warn }: { n: unknown; label: string; warn?: boolean }) {
+/**
+ * One figure, and the way to act on it.
+ *
+ * NOT A LINK WHEN THERE IS NOTHING TO DO. Zero submissions to grade is a
+ * finished job, and offering a route to an empty list dressed as an action
+ * makes the dashboard cry wolf — the reader learns to ignore the affordance,
+ * which is the one thing it cannot afford. So the number still shows and the
+ * link does not appear.
+ */
+function Counter({
+  n,
+  label,
+  warn,
+  to,
+}: {
+  n: unknown;
+  label: string;
+  warn?: boolean;
+  to?: Destination | null;
+}) {
   const value = Number(n ?? 0);
   if (value === 0 && warn) return null; // do not shout about zero problems
-  return (
-    <li className="counter-row">
+
+  const body = (
+    <>
       <strong className={warn && value > 0 ? "warn" : ""}>{value}</strong>
       <span className="muted">{label}</span>
+    </>
+  );
+
+  if (!to || value === 0) {
+    return <li className="counter-row">{body}</li>;
+  }
+
+  return (
+    <li className="counter-row">
+      {/*
+        The whole row is the target, not just the number. A four-character
+        figure is a small thing to hit on a phone, and the label is what the
+        reader is actually looking at when they decide to act on it.
+      */}
+      <Link className="row-link" to={to.to}>
+        {body}
+        <Icon name="chevron-right" />
+      </Link>
     </li>
   );
 }

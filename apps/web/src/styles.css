@@ -2600,6 +2600,113 @@ details > summary:hover { text-decoration: underline; }
   .fee-headline-amount { font-size: 1.6rem; }
 }
 
+/* ------------------------------------------------- the lecture folders ----
+   FR-VID-003. Office only — a folder id is close to a bearer token for that
+   folder's contents. The id is shown rather than hidden behind a copy button
+   because clipboard access can be refused and the value still has to be
+   gettable by selecting it. */
+.folder-picker {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  padding: .85rem 1rem;
+  margin: .75rem 0;
+}
+.folder-picker-head {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: .75rem; margin-bottom: .6rem;
+}
+
+.folder-list { list-style: none; margin: 0; padding: 0; display: grid; gap: .5rem; }
+.folder-row {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  gap: 1rem; flex-wrap: wrap;
+  padding: .6rem .75rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+/* The one this class already reads from, marked with a rule and a word — the
+   row says "Used by this class" too, never colour alone (NFR-ACC-007). */
+.folder-row.is-current { border-left: 3px solid var(--ok); }
+
+.folder-row-main { display: flex; gap: .6rem; align-items: flex-start; min-width: 0; flex: 1 1 18rem; }
+.folder-row-main > svg { width: 17px; height: 17px; flex: 0 0 17px; margin-top: .15rem; opacity: .6; }
+.folder-row-text { display: grid; gap: .15rem; min-width: 0; }
+.folder-row-text strong { overflow-wrap: anywhere; }
+
+/* An id is copied by hand off a screen when the clipboard is unavailable, and
+   a misread character connects a class to nothing. Monospaced, selectable in
+   one click, and allowed to wrap rather than overflow its row. */
+.folder-id {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: .78rem;
+  overflow-wrap: anywhere;
+  user-select: all;
+  color: var(--ink-2);
+}
+
+.folder-row-actions { display: flex; gap: .35rem; flex-wrap: wrap; flex: 0 0 auto; }
+
+/* --------------------------------------------------- uploading one ------- */
+.lecture-upload .field { margin-bottom: .75rem; }
+/* .bar and .bar-fill already exist and are what every other progress in the
+   app uses. The only change here is the transition: .4s easing is right for a
+   figure that jumps to a new value, and wrong for one updating continuously
+   from an upload — it lags behind the bytes and reads as stuttering. */
+.upload-progress { margin: .5rem 0 .75rem; display: grid; gap: .3rem; }
+.upload-progress .bar { margin: 0; }
+.upload-progress .bar-fill { transition: width .15s linear; }
+
+@media (max-width: 640px) {
+  .folder-row { flex-direction: column; }
+  .folder-row-actions { width: 100%; }
+}
+
+/* ------------------------------------------- a dashboard you can act on ---
+   The dashboard was a dead end: it is the first screen everybody sees, its
+   whole job is to say what needs doing, and every figure on it was a number
+   and nothing more. These rules are what makes a figure reachable — and they
+   are deliberately quiet, because a card of twelve loud links is harder to
+   read than the list of numbers it replaced. */
+
+/* The heading, when the whole card leads somewhere. */
+.widget-title-link {
+  display: inline-flex; align-items: center; gap: .3rem;
+  color: inherit; text-decoration: none;
+}
+.widget-title-link svg {
+  width: 1em; height: 1em; opacity: .45;
+  transition: transform .18s var(--ease), opacity .18s var(--ease);
+}
+.widget-linked h2:hover .widget-title-link { text-decoration: underline; }
+.widget-linked h2:hover .widget-title-link svg { transform: translateX(2px); opacity: .9; }
+
+/* A whole row as one target. The number is four characters wide and a poor
+   thing to aim at on a phone; the label is what the reader is looking at when
+   they decide to act. */
+.row-link {
+  display: flex; align-items: baseline; gap: .5rem; width: 100%;
+  color: inherit; text-decoration: none;
+  padding: .1rem .25rem; margin: -.1rem -.25rem;
+  border-radius: var(--radius-sm);
+  transition: background .15s var(--ease);
+}
+.row-link > svg {
+  width: .85em; height: .85em; margin-left: auto; flex: 0 0 auto;
+  opacity: 0; transform: translateX(-2px);
+  transition: opacity .18s var(--ease), transform .18s var(--ease);
+  align-self: center;
+}
+.row-link:hover { background: var(--surface-2); }
+.row-link:hover > svg, .row-link:focus-visible > svg { opacity: .6; transform: translateX(0); }
+/* The global rule at the top already gives every anchor a focus ring; this
+   only adds the offset, so the ring clears the row's own hover ground. */
+.row-link:focus-visible { outline-offset: 1px; }
+/* The counter's own layout has to survive being wrapped in an anchor. */
+.counter-row .row-link > strong { flex: 0 0 auto; }
+.counter-row .row-link > .muted { flex: 1 1 auto; }
+
 /* ------------------------------------------------- courses and their fees --
    FR-CRS-004/015, FR-PAY-033. Creating a course, illustrating it and pricing
    it are one job done in one sitting, so the card carries all three and the
@@ -2662,7 +2769,7 @@ details > summary:hover { text-decoration: underline; }
 }
 .thumb-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .thumb-actions { flex: 1 1 16rem; display: grid; gap: .35rem; align-content: start; }
-.thumb-actions .btn svg { margin-right: .35rem; }
+.thumb-actions .btn svg { width: 15px; height: 15px; margin-right: .35rem; }
 
 /* ------------------------------------------------------- the fee editor ---
    Running totals as they type, because the rule that decides whether this can

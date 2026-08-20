@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { SkeletonList } from "../components/Ui";
 import { ApiError, api } from "../api/client";
 import { SlipViewer } from "../components/SlipViewer";
@@ -57,6 +58,18 @@ interface ApprovalResult {
 }
 
 export function AdmissionsPage() {
+  /**
+   * `?overdue=1` — arrived at from the dashboard.
+   *
+   * The dashboard says "3 waiting over 48 hours" and that figure is now a
+   * link. Sending it to the unfiltered queue would make the reader find those
+   * three again by eye among forty, which is exactly the work the figure
+   * existed to save. The filter is in the ADDRESS rather than in component
+   * state so the link carries it and the view can be shared or bookmarked.
+   */
+  const [params, setParams] = useSearchParams();
+  const overdueOnly = params.get("overdue") === "1";
+
   const [queue, setQueue] = useState<QueueRow[] | null>(null);
   const [sections, setSections] = useState<SectionRow[]>([]);
   const [selected, setSelected] = useState<QueueRow | null>(null);
@@ -91,6 +104,7 @@ export function AdmissionsPage() {
   if (!queue) return <SkeletonList rows={6} />;
 
   const overdue = queue.filter((r) => r.isOverdue).length;
+  const shown = overdueOnly ? queue.filter((r) => r.isOverdue) : queue;
 
   return (
     <>
@@ -104,9 +118,29 @@ export function AdmissionsPage() {
         </span>
       </header>
 
+      {/* A filter arrived at from elsewhere SAYS SO and offers the way out.
+          Landing on a filtered list with no sign that it is filtered is how
+          somebody concludes the other thirty applications have vanished. */}
+      {overdueOnly && (
+        <div className="alert alert-warn" role="status">
+          <strong>Showing only the {overdue} waiting over 48 hours.</strong>
+          <div className="row-actions">
+            <button
+              className="btn btn-sm"
+              onClick={() => {
+                params.delete("overdue");
+                setParams(params, { replace: true });
+              }}
+            >
+              Show all {queue.length}
+            </button>
+          </div>
+        </div>
+      )}
+
       {approved && <ApprovalReceipt result={approved} onDismiss={() => setApproved(null)} />}
 
-      {queue.length === 0 ? (
+      {shown.length === 0 ? (
         <div className="card">
           <p className="muted">
             No applications are waiting for review. New applications appear here as soon as they are
@@ -119,7 +153,7 @@ export function AdmissionsPage() {
             <h2>Queue</h2>
             <p className="muted small">Oldest first — nobody waits unnoticed.</p>
             <ul className="list queue-list">
-              {queue.map((r) => (
+              {shown.map((r) => (
                 <li key={r.id}>
                   <button
                     className={`queue-item ${selected?.id === r.id ? "is-selected" : ""}`}
