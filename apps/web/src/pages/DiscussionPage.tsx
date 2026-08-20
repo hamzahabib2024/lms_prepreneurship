@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { Skeleton } from "../components/Ui";
+import { Icon } from "../components/Icon";
 import { useParams } from "react-router-dom";
 import { ApiError, api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
@@ -164,27 +165,42 @@ export function DiscussionPage() {
               </p>
             </div>
           ) : (
-            <section className="card">
-              <ul className="list">
+            /*
+              THE LIST OF CONVERSATIONS, arranged the way a messaging app
+              arranges one: an initial, who asked and what about, and the
+              answer count on the right where an unread badge would be. The
+              whole row is the target — a title-only link is a small thing to
+              hit on a phone, which is where these are read.
+            */
+            <section className="card chat-list-card">
+              <ul className="chat-list">
                 {threads.map((t) => (
-                  <li key={t.id} className="assignment">
-                    <div className="assignment-head">
-                      <span>
-                        <button className="link-button" onClick={() => void openThread(t.id)}>
+                  <li key={t.id}>
+                    <button className="chat-list-row" onClick={() => void openThread(t.id)}>
+                      <span className="chat-avatar" aria-hidden="true">
+                        {(t.removed ? "?" : (t.author ?? "?")).trim().charAt(0).toUpperCase()}
+                      </span>
+                      <span className="chat-list-text">
+                        <span className="chat-list-title">
+                          {t.isPinned && <Icon name="panel" />}
                           {t.removed ? "Question removed" : (t.title ?? "Untitled")}
-                        </button>
-                        <br />
+                        </span>
                         <span className="muted small">
                           {t.removed ? "—" : (t.author ?? "Unknown")} ·{" "}
-                          {new Date(t.createdAt).toLocaleDateString()} · {t.replyCount}{" "}
-                          {t.replyCount === 1 ? "answer" : "answers"}
+                          {new Date(t.createdAt).toLocaleDateString(undefined, {
+                            day: "numeric",
+                            month: "short",
+                          })}
+                          {t.isLocked && " · Closed"}
                         </span>
                       </span>
-                      <span className="row-actions">
-                        {t.isPinned && <span className="pill">Pinned</span>}
-                        {t.isLocked && <span className="muted small">Closed</span>}
+                      {/* Where the unread badge sits in every messaging app.
+                          Zero shows as a dash rather than a 0 in a circle,
+                          which would read as an unread nobody can clear. */}
+                      <span className={t.replyCount > 0 ? "chat-count has-any" : "chat-count"}>
+                        {t.replyCount > 0 ? t.replyCount : "—"}
                       </span>
-                    </div>
+                    </button>
                   </li>
                 ))}
               </ul>
@@ -272,6 +288,31 @@ function Ask({
   );
 }
 
+/**
+ * A thread, as a conversation.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * WHY IT LOOKS LIKE A CHAT. The people using this have a messaging app open on
+ * the same phone, and the shape of a conversation — who said it, on which
+ * side, in what order, with the box to reply pinned at the bottom — is the one
+ * interface pattern every single student already knows. The previous rendering
+ * was a card headed "3 answers" above a bulleted list, which is a forum from
+ * 2004: it reads as a document rather than a conversation, and nothing about
+ * it invites a reply.
+ *
+ * WHAT IS NOT COPIED FROM A MESSAGING APP, and deliberately:
+ *
+ *   NO DELIVERY OR READ RECEIPTS. This is a class discussion, not a private
+ *   message, and "seen by 14" would turn a question into an attendance check.
+ *
+ *   NOTHING DISAPPEARS. A removed post keeps its place and says it was removed
+ *   — a thread that silently loses its question reads as answers to nothing.
+ *
+ *   MODERATION IS VISIBLE. Pin, close, edit and remove stay exactly where they
+ *   were and mean exactly what they did; chat styling is presentation, and the
+ *   rules underneath it are unchanged.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
 function ThreadView({
   thread,
   myUserId,
@@ -287,6 +328,7 @@ function ThreadView({
 }) {
   const [reply, setReply] = useState("");
   const [busy, setBusy] = useState(false);
+  const endRef = useRef<HTMLDivElement | null>(null);
 
   const act = (run: Promise<unknown>) => {
     setBusy(true);
@@ -305,90 +347,171 @@ function ThreadView({
       .finally(() => setBusy(false));
   };
 
+  /*
+   * THE NEWEST MESSAGE, IN VIEW. A conversation opened at the top is one where
+   * the answer somebody came for is below the fold — which is the whole reason
+   * messaging apps open at the bottom. `auto` rather than `smooth` on first
+   * paint: watching a long thread scroll past on arrival is slower than being
+   * there.
+   */
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ block: "end" });
+  }, [thread.id, thread.replies.length]);
+
+  const messages = [thread, ...thread.replies];
+
   return (
-    <>
-      <section className="card">
-        <div className="assignment-head">
+    <section className="card chat">
+      <header className="chat-head">
+        <div className="chat-head-text">
           <h2>{thread.removed ? "Question removed" : (thread.title ?? "Untitled")}</h2>
-          <span className="row-actions">
-            {isTeacher && !thread.removed && (
-              <>
-                <button
-                  className="btn btn-quiet"
-                  disabled={busy}
-                  onClick={() =>
-                    act(api.post(`/discussions/${thread.id}/moderate`, { isPinned: !thread.isPinned }))
-                  }
-                >
-                  {thread.isPinned ? "Unpin" : "Pin"}
-                </button>
-                <button
-                  className="btn btn-quiet"
-                  disabled={busy}
-                  onClick={() =>
-                    act(api.post(`/discussions/${thread.id}/moderate`, { isLocked: !thread.isLocked }))
-                  }
-                >
-                  {thread.isLocked ? "Reopen" : "Close"}
-                </button>
-              </>
-            )}
-          </span>
-        </div>
-        <PostBody post={thread} myUserId={myUserId} isTeacher={isTeacher} onAct={act} busy={busy} />
-      </section>
-
-      <section className="card">
-        <h2>
-          {thread.replies.length} {thread.replies.length === 1 ? "answer" : "answers"}
-        </h2>
-        {thread.replies.length === 0 ? (
-          <p className="muted small">Nobody has answered yet.</p>
-        ) : (
-          <ul className="list">
-            {thread.replies.map((r) => (
-              <li key={r.id}>
-                <PostBody post={r} myUserId={myUserId} isTeacher={isTeacher} onAct={act} busy={busy} />
-              </li>
-            ))}
-          </ul>
-        )}
-
-        {thread.isLocked ? (
           <p className="muted small">
-            This thread is closed. Start a new question if yours is still open.
+            {thread.replies.length === 0
+              ? "No answers yet"
+              : `${thread.replies.length} ${thread.replies.length === 1 ? "answer" : "answers"}`}
+            {thread.isPinned && " · Pinned"}
+            {thread.isLocked && " · Closed"}
           </p>
-        ) : (
-          <>
-            <label className="field">
-              <span>Your answer</span>
-              <textarea rows={3} value={reply} onChange={(e) => setReply(e.target.value)} />
-            </label>
+        </div>
+        {isTeacher && !thread.removed && (
+          <span className="row-actions">
             <button
-              className="btn btn-primary"
-              disabled={busy || reply.trim().length < 2}
-              onClick={() => {
+              className="btn btn-quiet btn-sm"
+              disabled={busy}
+              onClick={() =>
+                act(api.post(`/discussions/${thread.id}/moderate`, { isPinned: !thread.isPinned }))
+              }
+            >
+              {thread.isPinned ? "Unpin" : "Pin"}
+            </button>
+            <button
+              className="btn btn-quiet btn-sm"
+              disabled={busy}
+              onClick={() =>
+                act(api.post(`/discussions/${thread.id}/moderate`, { isLocked: !thread.isLocked }))
+              }
+            >
+              {thread.isLocked ? "Reopen" : "Close"}
+            </button>
+          </span>
+        )}
+      </header>
+
+      <div className="chat-transcript">
+        {messages.map((m, i) => {
+          const previous = messages[i - 1];
+          const newDay =
+            !previous || dayOf(previous.createdAt) !== dayOf(m.createdAt);
+          return (
+            <Fragment key={m.id}>
+              {/* A date rule, as every messaging app has: without it a thread
+                  spanning a fortnight reads as one afternoon. */}
+              {newDay && (
+                <p className="chat-day">
+                  <span>{dayLabel(m.createdAt)}</span>
+                </p>
+              )}
+              <Bubble
+                post={m}
+                isQuestion={i === 0}
+                myUserId={myUserId}
+                isTeacher={isTeacher}
+                onAct={act}
+                busy={busy}
+              />
+            </Fragment>
+          );
+        })}
+        <div ref={endRef} />
+      </div>
+
+      {thread.isLocked ? (
+        <p className="chat-closed muted small">
+          This thread is closed. Start a new question if yours is still open.
+        </p>
+      ) : (
+        /* PINNED AT THE BOTTOM, which is where a reply box belongs and where
+           every person using this has been trained to look for one. */
+        <div className="chat-composer">
+          <textarea
+            rows={1}
+            value={reply}
+            placeholder="Write an answer…"
+            onChange={(e) => setReply(e.target.value)}
+            onKeyDown={(e) => {
+              // Enter sends, Shift+Enter breaks the line — the messaging
+              // convention. A textarea is kept rather than an input so a long
+              // answer with paragraphs is still possible.
+              if (e.key === "Enter" && !e.shiftKey && reply.trim().length >= 2) {
+                e.preventDefault();
                 act(api.post(`/discussions/${thread.id}/replies`, { body: reply }));
                 setReply("");
-              }}
-            >
-              Answer
-            </button>
-          </>
-        )}
-      </section>
-    </>
+              }
+            }}
+          />
+          <button
+            className="btn btn-primary chat-send"
+            disabled={busy || reply.trim().length < 2}
+            aria-label="Send"
+            onClick={() => {
+              act(api.post(`/discussions/${thread.id}/replies`, { body: reply }));
+              setReply("");
+            }}
+          >
+            <Icon name="chevron-right" />
+          </button>
+        </div>
+      )}
+    </section>
   );
 }
 
-function PostBody({
+/** The day a message was sent, for grouping. Local, because the reader is. */
+function dayOf(iso: string): string {
+  return new Date(iso).toDateString();
+}
+
+/**
+ * "Today", "Yesterday", or the date.
+ *
+ * The two relative words carry almost all the traffic in a class discussion and
+ * are what a reader actually wants; a bare date for those makes them work out
+ * whether a question is live.
+ */
+function dayLabel(iso: string): string {
+  const d = new Date(iso);
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+
+  if (d.toDateString() === today.toDateString()) return "Today";
+  if (d.toDateString() === yesterday.toDateString()) return "Yesterday";
+  return d.toLocaleDateString(undefined, { day: "numeric", month: "long" });
+}
+
+/** The clock time under a bubble. Nobody needs the seconds. */
+function timeOf(iso: string): string {
+  return new Date(iso).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+}
+
+/**
+ * One message.
+ *
+ * MINE ON THE RIGHT, everyone else's on the left, which is the arrangement that
+ * makes a conversation readable without reading the names. The author's name is
+ * shown only on other people's — on your own it is you, and repeating it down
+ * the right-hand side is noise.
+ */
+function Bubble({
   post: p,
+  isQuestion,
   myUserId,
   isTeacher,
   onAct,
   busy,
 }: {
   post: Post;
+  isQuestion: boolean;
   myUserId: string;
   isTeacher: boolean;
   onAct: (run: Promise<unknown>) => void;
@@ -401,73 +524,92 @@ function PostBody({
     // Said, not hidden. A thread that silently loses its question reads as
     // answers to nothing.
     return (
-      <p className="muted small">
-        {p.removedByModerator ? "Removed by a teacher." : "Removed by the person who wrote it."}
-      </p>
+      <div className={mine ? "chat-row is-mine" : "chat-row"}>
+        <p className="chat-bubble is-removed muted small">
+          {p.removedByModerator ? "Removed by a teacher." : "Removed by the person who wrote it."}
+        </p>
+      </div>
     );
   }
 
   return (
-    <div>
-      <p className="muted small">
-        {p.author ?? "Unknown"} · {new Date(p.createdAt).toLocaleString()}
-        {/* Wherever the post appears. It is why the server records it. */}
-        {p.editedAt && <span> · edited {new Date(p.editedAt).toLocaleString()}</span>}
-      </p>
+    <div className={mine ? "chat-row is-mine" : "chat-row"}>
+      {/* The initial, not a photograph: there is no avatar in this System and
+          a coloured circle with a letter is honest about that. */}
+      {!mine && <span className="chat-avatar" aria-hidden="true">{initial(p.author)}</span>}
 
-      {editing === null ? (
-        <p style={{ whiteSpace: "pre-wrap" }}>{p.body}</p>
-      ) : (
-        <>
-          <textarea
-            rows={4}
-            className="field"
-            value={editing}
-            onChange={(e) => setEditing(e.target.value)}
-          />
-          <span className="row-actions">
+      <div className={isQuestion ? "chat-bubble is-question" : "chat-bubble"}>
+        {!mine && <span className="chat-author">{p.author ?? "Unknown"}</span>}
+
+        {editing === null ? (
+          <p className="chat-text">{p.body}</p>
+        ) : (
+          <>
+            <textarea
+              rows={4}
+              className="field"
+              value={editing}
+              onChange={(e) => setEditing(e.target.value)}
+            />
+            <span className="row-actions">
+              <button
+                className="btn btn-primary btn-sm"
+                disabled={busy || editing.trim().length < 2}
+                onClick={() => {
+                  onAct(api.patch(`/discussions/${p.id}`, { body: editing }));
+                  setEditing(null);
+                }}
+              >
+                Save
+              </button>
+              <button className="btn btn-quiet btn-sm" onClick={() => setEditing(null)}>
+                Cancel
+              </button>
+            </span>
+          </>
+        )}
+
+        <span className="chat-meta">
+          {timeOf(p.createdAt)}
+          {/* Wherever the post appears. It is why the server records it. */}
+          {p.editedAt && <span> · edited</span>}
+        </span>
+
+        {editing === null && (mine || isTeacher) && (
+          <span className="chat-actions">
+            {mine && (
+              <button
+                className="link-button small"
+                disabled={busy}
+                onClick={() => setEditing(p.body ?? "")}
+              >
+                Edit
+              </button>
+            )}
             <button
-              className="btn btn-primary"
-              disabled={busy || editing.trim().length < 2}
+              className="link-button small"
+              disabled={busy}
               onClick={() => {
-                onAct(api.patch(`/discussions/${p.id}`, { body: editing }));
-                setEditing(null);
+                // A teacher removing somebody else's post gives a reason; the
+                // author is told what it was.
+                const reason =
+                  !mine && isTeacher
+                    ? (window.prompt("Why is this being removed? The author is told.") ?? undefined)
+                    : undefined;
+                if (!mine && isTeacher && !reason) return;
+                onAct(api.del(`/discussions/${p.id}`, reason ? { reason } : {}));
               }}
             >
-              Save
-            </button>
-            <button className="btn btn-quiet" onClick={() => setEditing(null)}>
-              Cancel
+              {mine ? "Remove" : "Remove as moderator"}
             </button>
           </span>
-        </>
-      )}
-
-      {editing === null && (mine || isTeacher) && (
-        <span className="row-actions">
-          {mine && (
-            <button className="btn btn-quiet" disabled={busy} onClick={() => setEditing(p.body ?? "")}>
-              Edit
-            </button>
-          )}
-          <button
-            className="btn btn-quiet"
-            disabled={busy}
-            onClick={() => {
-              // A teacher removing somebody else's post gives a reason; the
-              // author is told what it was.
-              const reason =
-                !mine && isTeacher
-                  ? window.prompt("Why is this being removed? The author is told.") ?? undefined
-                  : undefined;
-              if (!mine && isTeacher && !reason) return;
-              onAct(api.del(`/discussions/${p.id}`, reason ? { reason } : {}));
-            }}
-          >
-            {mine ? "Remove" : "Remove as moderator"}
-          </button>
-        </span>
-      )}
+        )}
+      </div>
     </div>
   );
+}
+
+/** One letter, for a System that holds no photographs. */
+function initial(name: string | null): string {
+  return (name ?? "?").trim().charAt(0).toUpperCase() || "?";
 }

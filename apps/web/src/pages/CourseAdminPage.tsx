@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { ApiError, api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { EmptyState, ErrorState, SkeletonCards } from "../components/Ui";
 import { CourseCover } from "../components/CourseCover";
 import { Icon } from "../components/Icon";
 import { money, whenDue, type Fee } from "../components/FeePanel";
+import { CourseHierarchy } from "../components/CourseHierarchy";
+import { BatchForm } from "../components/BatchForm";
 
 /**
  * Courses — creating them, illustrating them, and pricing them (FR-CRS-004,
@@ -44,10 +47,36 @@ interface Programme {
   durationWeeks: number | null;
   isActive: boolean;
   thumbnailAssetId: string | null;
-  thumbnail: MediaRef | null;
+  thumbnail?: MediaRef | null;
   _count?: { sessions: number };
   /** Whether a price is actually live, and how many drafts are waiting. */
   fee?: { published: boolean; drafts: number };
+}
+
+/** One group of students. What an administrator calls a batch. */
+interface Batch {
+  id: string;
+  code: string;
+  name: string;
+  status: string;
+  capacity: number;
+  enrolled: number;
+  genderRestriction: string;
+  shift: string;
+  subjects: Array<{ sectionSubjectId: string; id: string; code: string; name: string }>;
+  term: { id: string; code: string; name: string };
+}
+
+/**
+ * A course as the screen shows it — the System's five levels flattened to the
+ * three an administrator thinks in. Built by /course-tree; see the service for
+ * why the middle two are folded away rather than dropped.
+ */
+interface CourseNode extends Programme {
+  terms: Array<{ id: string; code: string; name: string; status: string }>;
+  subjects: Array<{ id: string; code: string; name: string; batches: number }>;
+  batches: Batch[];
+  totals: { batches: number; seats: number; enrolled: number };
 }
 
 interface Subject {
@@ -87,6 +116,7 @@ export function CourseAdminPage() {
   const mayEdit = hasRole("super_admin", "admin");
 
   const [programmes, setProgrammes] = useState<Programme[] | null>(null);
+  const [courses, setCourses] = useState<CourseNode[] | null>(null);
   const [subjects, setSubjects] = useState<Subject[] | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
   const [note, setNote] = useState<string | null>(null);
@@ -94,14 +124,20 @@ export function CourseAdminPage() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      const [p, s] = await Promise.all([
-        api.get<Programme[]>("/programmes"),
+      // ONE request for the whole hierarchy rather than one per level. A
+      // screen built level by level ends up making a request per course for
+      // its terms, per term for its groups and per group for its batches,
+      // which is slow in exactly the case that matters — a real institute.
+      const [c, s] = await Promise.all([
+        api.get<CourseNode[]>("/course-tree"),
         api.get<Subject[]>("/subjects"),
       ]);
-      setProgrammes(p);
+      setCourses(c);
+      setProgrammes(c);
       setSubjects(s);
     } catch (e) {
       setError(e instanceof ApiError ? e : null);
+      setCourses([]);
       setProgrammes([]);
       setSubjects([]);
     }
@@ -139,11 +175,14 @@ export function CourseAdminPage() {
         <div>
           <h1>Courses</h1>
           <p className="muted">
-            The programmes the Institute offers, the subjects taught in them, and what each one
-            costs. A course needs a published fee before anybody can be told what to pay for it.
+            Everything the Institute teaches, and who it teaches it to.
           </p>
         </div>
       </header>
+
+      {/* Shown at the top, once, because the order is the thing an
+          inexperienced administrator does not have and cannot guess. */}
+      <CourseHierarchy />
 
       {note && (
         <div className="alert alert-ok" role="status">
@@ -162,8 +201,12 @@ export function CourseAdminPage() {
         </div>
       )}
 
-      <ProgrammesPanel
-        programmes={programmes}
+      {/* The order down the page is the order of the work: courses first,
+          because that is what somebody came to make, and the subject library
+          under it because it is a store to draw from rather than a step. */}
+      <CoursesPanel
+        courses={courses}
+        subjects={subjects ?? []}
         mayEdit={mayEdit}
         run={run}
         onChanged={() => void load()}
@@ -176,28 +219,50 @@ export function CourseAdminPage() {
 
 // ═══════════════════════════════════════════════════════════ programmes ═══
 
-function ProgrammesPanel({
-  programmes,
+/**
+ * The courses, each showing what it teaches and who it teaches it to.
+ *
+ * A CARD IS A WHOLE COURSE rather than a row in a table, because a course is
+ * not one fact — it is a picture, a fee, a set of subjects and a set of
+ * batches, and the question an administrator arrives with is almost always
+ * "what state is this course in", which no single column answers.
+ *
+ * THE THREE THINGS THAT CAN BE MISSING ARE SAID ON THE CARD: no fee, no
+ * subjects, no batches. Each is a course that looks finished and does nothing
+ * — applicants are told to telephone for a price, students have no register,
+ * or there is nowhere to admit anybody. They are the whole reason this screen
+ * exists, so they are not two clicks inside it.
+ */
+function CoursesPanel({
+  courses,
+  subjects,
   mayEdit,
   run,
   onChanged,
 }: {
-  programmes: Programme[] | null;
+  courses: CourseNode[] | null;
+  subjects: Subject[];
   mayEdit: boolean;
   run: (work: () => Promise<unknown>, ok: string) => Promise<boolean>;
   onChanged: () => void;
 }) {
   const [creating, setCreating] = useState(false);
-  const [editing, setEditing] = useState<string | null>(null);
-  const [pricing, setPricing] = useState<string | null>(null);
+  const [open, setOpen] = useState<{ id: string; panel: "edit" | "fees" | "batch" } | null>(null);
+
+  const close = () => setOpen(null);
+  const toggle = (id: string, panel: "edit" | "fees" | "batch") =>
+    setOpen((o) => (o && o.id === id && o.panel === panel ? null : { id, panel }));
 
   return (
     <section className="card">
       <div className="card-head">
-        <h2>Programmes</h2>
+        <div>
+          <h2>Courses</h2>
+          <p className="muted small">What a student applies for.</p>
+        </div>
         {mayEdit && (
           <button className="btn btn-primary" onClick={() => setCreating((c) => !c)}>
-            {creating ? "Cancel" : "New programme"}
+            {creating ? "Cancel" : "New course"}
           </button>
         )}
       </div>
@@ -205,7 +270,7 @@ function ProgrammesPanel({
       {creating && (
         <ProgrammeForm
           onDone={async (body) => {
-            const ok = await run(() => api.post("/programmes", body), "Programme created.");
+            const ok = await run(() => api.post("/programmes", body), "Course created.");
             if (ok) setCreating(false);
             return ok;
           }}
@@ -213,106 +278,216 @@ function ProgrammesPanel({
         />
       )}
 
-      {!programmes ? (
+      {!courses ? (
         <SkeletonCards count={3} />
-      ) : programmes.length === 0 ? (
-        <EmptyState icon="book" title="No programmes yet">
+      ) : courses.length === 0 ? (
+        <EmptyState icon="layers" title="No courses yet">
           {mayEdit
-            ? "A programme is the course a student applies to — a diploma, a short course. Create one, then give it a term and a section under Structure."
-            : "The office has not set up any programmes yet."}
+            ? "A course is what a student applies for — a diploma, a short course. Create one, then add the batches that actually run it."
+            : "The office has not set up any courses yet."}
         </EmptyState>
       ) : (
         <ul className="course-grid">
-          {programmes.map((p) => (
-            <li key={p.id} className="course-card">
-              <CourseCover
-                code={p.code}
-                name={p.name}
-                thumbnailUrl={mediaUrl(p.thumbnailAssetId)}
-              />
-              <div className="course-card-body">
-                <div className="course-card-head">
-                  <div>
-                    <strong>{p.name}</strong>
-                    <span className="muted small"> {p.code}</span>
+          {courses.map((c) => {
+            const isOpen = open?.id === c.id;
+            return (
+              <li key={c.id} className="course-card">
+                <CourseCover code={c.code} name={c.name} thumbnailUrl={mediaUrl(c.thumbnailAssetId)} />
+
+                <div className="course-card-body">
+                  <div className="course-card-head">
+                    <div>
+                      <strong>{c.name}</strong>
+                      <span className="muted small"> {c.code}</span>
+                    </div>
+                    {!c.isActive && <span className="pill pill-warn">Not offered</span>}
                   </div>
-                  {!p.isActive && <span className="pill pill-warn">Not offered</span>}
+
+                  {c.description && <p className="small muted">{c.description}</p>}
+
+                  {/* ---- what it teaches ------------------------------- */}
+                  <div className="course-facet">
+                    <span className="course-facet-label">
+                      <Icon name="book" /> Subjects
+                    </span>
+                    {c.subjects.length === 0 ? (
+                      <span className="pill pill-warn">None yet</span>
+                    ) : (
+                      <span className="course-facet-values">
+                        {c.subjects.map((s) => (
+                          <span key={s.id} className="pill" title={s.name}>
+                            {s.code}
+                          </span>
+                        ))}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* ---- who it teaches -------------------------------- */}
+                  <div className="course-facet">
+                    <span className="course-facet-label">
+                      <Icon name="users" /> Batches
+                    </span>
+                    {c.batches.length === 0 ? (
+                      <span className="pill pill-warn">None yet</span>
+                    ) : (
+                      <span className="muted small">
+                        {c.totals.batches} · {c.totals.enrolled} of {c.totals.seats} seats taken
+                      </span>
+                    )}
+                  </div>
+
+                  {/* ---- what it costs --------------------------------- */}
+                  <div className="course-facet">
+                    <span className="course-facet-label">
+                      <Icon name="money" /> Fee
+                    </span>
+                    {c.fee?.published ? (
+                      <span className="pill pill-ok">Published</span>
+                    ) : (
+                      <span className="pill pill-warn">
+                        {c.fee && c.fee.drafts > 0
+                          ? `Not published — ${c.fee.drafts} draft${c.fee.drafts === 1 ? "" : "s"}`
+                          : "Not set"}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* The batches themselves, listed rather than counted: the
+                      names ARE the answer to "is the female batch set up". */}
+                  {c.batches.length > 0 && (
+                    <ul className="batch-list">
+                      {c.batches.map((b) => (
+                        <li key={b.id} className="batch-row">
+                          {/*
+                            STRAIGHT TO THE CLASS, when there is one to go to.
+                            A batch has no page of its own — its register, its
+                            recordings and its timetable all hang off a SUBJECT
+                            being taught to it, so the first offering is the
+                            nearest real destination. A batch with no subjects
+                            has nowhere to go, and is rendered as plain text
+                            rather than a link that lands on nothing.
+                          */}
+                          <BatchRowBody batch={b} />
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  {mayEdit && (
+                    <div className="row-actions">
+                      <button className="btn btn-primary" onClick={() => toggle(c.id, "batch")}>
+                        {isOpen && open.panel === "batch" ? "Close" : "Add a batch"}
+                      </button>
+                      <button className="btn btn-quiet" onClick={() => toggle(c.id, "fees")}>
+                        {isOpen && open.panel === "fees" ? "Close" : "Fees"}
+                      </button>
+                      <button className="btn btn-quiet" onClick={() => toggle(c.id, "edit")}>
+                        {isOpen && open.panel === "edit" ? "Close" : "Edit course"}
+                      </button>
+                    </div>
+                  )}
                 </div>
 
-                {/*
-                  WHETHER THIS COURSE HAS A PRICE, on the card rather than two
-                  clicks inside it.
-
-                  A programme on offer with no published fee is the failure this
-                  whole page exists to prevent: the application form then tells
-                  every applicant to telephone the office and ask what to pay,
-                  and nothing anywhere says so. It has to be visible in the same
-                  glance that shows the course exists.
-                */}
-                {p.fee &&
-                  (p.fee.published ? (
-                    <span className="pill pill-ok">Fee published</span>
-                  ) : (
-                    <span className="pill pill-warn">
-                      {p.fee.drafts > 0
-                        ? `No fee published — ${p.fee.drafts} draft${p.fee.drafts === 1 ? "" : "s"}`
-                        : "No fee set"}
-                    </span>
-                  ))}
-
-                {p.description && <p className="small muted">{p.description}</p>}
-                <p className="muted small">
-                  {p.durationWeeks ? `${p.durationWeeks} weeks` : "Duration not set"}
-                  {p._count ? ` · ${p._count.sessions} term${p._count.sessions === 1 ? "" : "s"}` : ""}
-                </p>
-
-                {mayEdit && (
-                  <div className="row-actions">
-                    <button
-                      className="btn btn-quiet"
-                      onClick={() => setEditing(editing === p.id ? null : p.id)}
-                    >
-                      {editing === p.id ? "Close" : "Edit"}
-                    </button>
-                    <button
-                      className="btn btn-quiet"
-                      onClick={() => setPricing(pricing === p.id ? null : p.id)}
-                    >
-                      {pricing === p.id ? "Close fees" : "Fees"}
-                    </button>
+                {isOpen && open.panel === "edit" && (
+                  <div className="course-card-editor">
+                    <ProgrammeForm
+                      initial={c}
+                      onDone={async (body) => {
+                        const ok = await run(
+                          () => api.patch(`/programmes/${c.id}`, body),
+                          `${c.name} updated.`,
+                        );
+                        if (ok) close();
+                        return ok;
+                      }}
+                      onCancel={close}
+                    />
                   </div>
                 )}
-              </div>
 
-              {editing === p.id && (
-                <div className="course-card-editor">
-                  <ProgrammeForm
-                    initial={p}
-                    onDone={async (body) => {
-                      const ok = await run(
-                        () => api.patch(`/programmes/${p.id}`, body),
-                        `${p.name} updated.`,
-                      );
-                      if (ok) setEditing(null);
-                      return ok;
-                    }}
-                    onCancel={() => setEditing(null)}
-                  />
-                </div>
-              )}
+                {isOpen && open.panel === "batch" && (
+                  <div className="course-card-editor">
+                    <h3>Add a batch to {c.name}</h3>
+                    <BatchForm
+                      programmeId={c.id}
+                      programmeName={c.name}
+                      subjects={subjects.filter((s) => s.isActive !== false)}
+                      // The subjects this course already teaches elsewhere.
+                      // A second batch of the same course almost always
+                      // teaches the same things, and starting from blank makes
+                      // somebody re-pick six subjects they just picked.
+                      suggestedSubjectIds={c.subjects.map((s) => s.id)}
+                      onCreated={(message) => {
+                        close();
+                        void run(() => Promise.resolve(), message).then(() => onChanged());
+                      }}
+                      onCancel={close}
+                    />
+                  </div>
+                )}
 
-              {pricing === p.id && (
-                <div className="course-card-editor">
-                  <FeeStructures programme={p} run={run} onChanged={onChanged} />
-                </div>
-              )}
-            </li>
-          ))}
+                {isOpen && open.panel === "fees" && (
+                  <div className="course-card-editor">
+                    <FeeStructures programme={c} run={run} onChanged={onChanged} />
+                  </div>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
     </section>
   );
 }
+
+/**
+ * One batch in the list on a course card.
+ *
+ * A LINK ONLY WHEN THERE IS SOMEWHERE TO GO. A batch has no page of its own;
+ * its register, recordings and timetable hang off a subject being taught to
+ * it. So the first subject offering is the real destination, and a batch with
+ * no subjects — which is the state this screen is trying to make visible — is
+ * plain text rather than a link that lands nowhere.
+ */
+function BatchRowBody({ batch }: { batch: Batch }) {
+  const body = (
+    <>
+      <span className="batch-row-main">
+        <strong>{batch.name}</strong>
+        <span className="muted small">
+          {AUDIENCE_LABEL[batch.genderRestriction] ?? batch.genderRestriction} ·{" "}
+          {batch.shift.toLowerCase()} · {batch.term.name}
+        </span>
+        {batch.subjects.length === 0 ? (
+          <span className="warn small">No subjects — this batch has no register</span>
+        ) : (
+          <span className="muted small">{batch.subjects.map((s) => s.code).join(", ")}</span>
+        )}
+      </span>
+      <span className="batch-seats">
+        <strong>{batch.enrolled}</strong>
+        <span className="muted small">of {batch.capacity}</span>
+      </span>
+    </>
+  );
+
+  const first = batch.subjects[0];
+  if (!first) return <span className="row-link is-flat">{body}</span>;
+
+  return (
+    <Link className="row-link" to={`/courses/${first.sectionSubjectId}`}>
+      {body}
+    </Link>
+  );
+}
+
+/** FR-CRS-009 in the words a reader uses, not the enum's. */
+const AUDIENCE_LABEL: Record<string, string> = {
+  MIXED: "Anyone",
+  FEMALE: "Female only",
+  MALE: "Male only",
+};
 
 /**
  * One form for creating and for editing.
@@ -888,13 +1063,25 @@ function FeeStructures({
 }
 
 /**
- * The fee table editor.
+ * The fee table, for somebody who has not built one before.
  *
- * RUNNING TOTALS AS THEY TYPE, because the rule that decides whether this can
- * be published is "the lines add up to the total" and finding that out only on
- * publish means re-adding twelve numbers by hand to see which one is wrong.
- * The counters below say which way it is out and by how much, which is usually
- * enough to spot the line on sight.
+ * ─────────────────────────────────────────────────────────────────────────────
+ * WHAT WAS WRONG WITH THE PREVIOUS FORM. It asked for a total, then for a list
+ * of instalments, and refused to publish unless they added up — with no help
+ * whatsoever in making them add up. An administrator entering a 90,000 fee in
+ * three parts had to divide it themselves, and an administrator entering
+ * 100,000 in three had to work out that one instalment must carry the extra
+ * paisa or the table would be a rupee short. It also asked separately for "the
+ * amount payable to apply" and then refused any value that was not exactly the
+ * first instalment, which is a question with one correct answer that the form
+ * already knew.
+ *
+ * So: the arithmetic is offered rather than demanded. Choose how many parts and
+ * how far apart, and the rows are generated exactly — remainder included. Every
+ * row stays editable afterwards, because an institute with a large first
+ * payment and two smaller ones is normal and a wizard that cannot express it is
+ * worse than none.
+ * ─────────────────────────────────────────────────────────────────────────────
  */
 function FeeStructureForm({
   programmeId,
@@ -912,12 +1099,9 @@ function FeeStructureForm({
   const [name, setName] = useState(initial?.name ?? "");
   const [currency] = useState(initial?.currency ?? "PKR");
   const [total, setTotal] = useState(initial ? String(initial.totalAmount) : "");
-  const [dueNow, setDueNow] = useState(initial ? String(initial.dueAtApplication) : "");
   const [notes, setNotes] = useState(initial?.notes ?? "");
   const [lines, setLines] = useState<FeeLineDraft[]>(() => {
-    if (!initial) {
-      return [{ kind: "INSTALMENT", label: "Full fee", amount: "", dueAfterDays: "0" }];
-    }
+    if (!initial) return [];
     return [
       ...initial.components.map((c) => ({
         kind: "COMPONENT" as const,
@@ -934,28 +1118,72 @@ function FeeStructureForm({
     ];
   });
   const [busy, setBusy] = useState(false);
+  const [showBreakdown, setShowBreakdown] = useState(
+    (initial?.components.length ?? 0) > 0,
+  );
 
   const num = (v: string) => {
-    const n = Number(v.replace(/,/g, ""));
+    const n = Number(String(v).replace(/,/g, ""));
     return Number.isFinite(n) ? n : 0;
   };
 
   const totalNum = num(total);
-  const componentSum = lines.filter((l) => l.kind === "COMPONENT").reduce((n, l) => n + num(l.amount), 0);
-  const instalmentSum = lines.filter((l) => l.kind === "INSTALMENT").reduce((n, l) => n + num(l.amount), 0);
-  const hasComponents = lines.some((l) => l.kind === "COMPONENT");
+  const instalments = lines.filter((l) => l.kind === "INSTALMENT");
+  const components = lines.filter((l) => l.kind === "COMPONENT");
+  const instalmentSum = instalments.reduce((n, l) => n + num(l.amount), 0);
+  const componentSum = components.reduce((n, l) => n + num(l.amount), 0);
+
+  /*
+   * WHAT THE APPLICANT PAYS TO APPLY IS THE FIRST INSTALMENT. It is not a
+   * separate decision, and asking for it as one produced a form where the only
+   * accepted answer was already on screen. It is shown, not asked.
+   */
+  const dueNow = instalments.length > 0 ? num(instalments[0]!.amount) : 0;
 
   const setLine = (i: number, patch: Partial<FeeLineDraft>) =>
     setLines((ls) => ls.map((l, j) => (j === i ? { ...l, ...patch } : l)));
 
-  const addLine = (kind: FeeLineDraft["kind"]) =>
+  /**
+   * SPLIT IT, EXACTLY — the helper that does the arithmetic nobody should be
+   * doing by hand.
+   *
+   * IN PAISA, AS INTEGERS, and the remainder goes to the FIRST instalment.
+   * 100,000 in three is 33,333.34 + 33,333.33 + 33,333.33, and three
+   * independently-rounded thirds are 99,999.99 — the Institute a rupee short,
+   * discovered when a student with a zero balance is still shown as owing.
+   * Giving the odd paisa to the first payment rather than the last also means
+   * the amount somebody transfers today is never the one that looks wrong.
+   */
+  const split = (count: number, gapMonths: number) => {
+    const paisa = Math.round(totalNum * 100);
+    if (paisa <= 0 || count < 1) return;
+
+    const each = Math.floor(paisa / count);
+    const remainder = paisa - each * count;
+
+    setLines((ls) => [
+      ...ls.filter((l) => l.kind === "COMPONENT"),
+      ...Array.from({ length: count }, (_, i) => ({
+        kind: "INSTALMENT" as const,
+        label:
+          count === 1
+            ? "Full fee"
+            : `${ORDINAL[i] ?? `${i + 1}th`} instalment`,
+        amount: ((each + (i === 0 ? remainder : 0)) / 100).toFixed(2).replace(/\.00$/, ""),
+        // The first is due on admission; the rest at even intervals after it.
+        dueAfterDays: String(i * gapMonths * 30),
+      })),
+    ]);
+  };
+
+  const addInstalment = () =>
     setLines((ls) => [
       ...ls,
       {
-        kind,
-        label: kind === "COMPONENT" ? "" : `Instalment ${ls.filter((l) => l.kind === "INSTALMENT").length + 1}`,
+        kind: "INSTALMENT",
+        label: `${ORDINAL[instalments.length] ?? `${instalments.length + 1}th`} instalment`,
         amount: "",
-        dueAfterDays: kind === "INSTALMENT" ? "30" : "",
+        dueAfterDays: String((instalments.length || 1) * 30),
       },
     ]);
 
@@ -966,7 +1194,7 @@ function FeeStructureForm({
       name: name.trim(),
       currency,
       totalAmount: totalNum,
-      dueAtApplication: num(dueNow),
+      dueAtApplication: dueNow,
       notes: notes.trim() || null,
       lines: lines
         .filter((l) => l.label.trim() !== "" || l.amount !== "")
@@ -983,13 +1211,13 @@ function FeeStructureForm({
         initial
           ? api.patch(`/fee-structures/${initial.id}`, body)
           : api.post("/fee-structures", body),
-      initial ? "Fee structure saved." : "Fee structure created as a draft.",
+      initial ? "Fee saved as a draft." : "Fee created as a draft.",
     );
     setBusy(false);
     if (ok) await onSaved();
   };
 
-  /** Which way the table is out. Says nothing at all when it is right. */
+  /** Which way a set of lines is out. Silent when it is right. */
   const balance = (sum: number, label: string) => {
     if (totalNum <= 0) return null;
     const diff = Math.round((sum - totalNum) * 100) / 100;
@@ -1008,146 +1236,236 @@ function FeeStructureForm({
     );
   };
 
+  const readyToPublish = totalNum > 0 && instalments.length > 0 && instalmentSum === totalNum;
+
   return (
-    <div className="course-form">
-      <div className="form-row">
-        <label className="field">
-          <span>Name of this fee structure</span>
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Spring 2026 fee"
-          />
-          <span className="muted small">
-            For the office, not the applicant — something you will recognise next year.
-          </span>
-        </label>
-      </div>
-
-      <div className="form-row">
-        <label className="field">
-          <span>Total fee</span>
-          <input
-            inputMode="decimal"
-            value={total}
-            onChange={(e) => setTotal(e.target.value)}
-            placeholder="90000"
-          />
-        </label>
-        <label className="field">
-          <span>Payable to apply</span>
-          <input
-            inputMode="decimal"
-            value={dueNow}
-            onChange={(e) => setDueNow(e.target.value)}
-            placeholder="30000"
-          />
-          <span className="muted small">
-            What the applicant transfers before submitting the form. Must match the first
-            instalment.
-          </span>
-        </label>
-      </div>
-
-      {/* ------------------------------------------------------ instalments */}
-      <div className="fee-editor-block">
-        <div className="card-head">
-          <h4>Instalments — when it is paid</h4>
-          <button className="btn btn-quiet" onClick={() => addLine("INSTALMENT")}>
-            Add instalment
-          </button>
+    <div className="course-form fee-form">
+      {/* ─────────────────────────────────────────────── 1. what it costs */}
+      <div className="fee-step">
+        <h4>
+          <span className="fee-step-num">1</span> What does the course cost?
+        </h4>
+        <div className="form-row">
+          <label className="field">
+            <span>Name of this fee</span>
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Spring 2026 fee"
+            />
+            <span className="muted small">
+              For the office. Something you will recognise next year.
+            </span>
+          </label>
+          <label className="field">
+            <span>Total fee</span>
+            <input
+              inputMode="decimal"
+              value={total}
+              onChange={(e) => setTotal(e.target.value)}
+              placeholder="90000"
+            />
+            <span className="muted small">The whole cost, in {currency}.</span>
+          </label>
         </div>
-        {lines.map((l, i) =>
-          l.kind !== "INSTALMENT" ? null : (
-            <div key={`inst-${i}`} className="fee-editor-row">
-              <input
-                className="fee-editor-label"
-                value={l.label}
-                onChange={(e) => setLine(i, { label: e.target.value })}
-                placeholder="First instalment"
-                aria-label="Instalment name"
-              />
-              <input
-                className="fee-editor-amount"
-                inputMode="decimal"
-                value={l.amount}
-                onChange={(e) => setLine(i, { amount: e.target.value })}
-                placeholder="30000"
-                aria-label="Amount"
-              />
-              <label className="fee-editor-due">
-                <input
-                  type="number"
-                  min={0}
-                  value={l.dueAfterDays}
-                  onChange={(e) => setLine(i, { dueAfterDays: e.target.value })}
-                  aria-label="Days after enrolling"
-                />
-                <span className="muted small">{whenDue(Number(l.dueAfterDays || "0"))}</span>
-              </label>
-              <button
-                className="btn btn-quiet"
-                onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))}
-                aria-label={`Remove ${l.label || "instalment"}`}
-              >
-                ✕
-              </button>
-            </div>
-          ),
-        )}
-        {balance(instalmentSum, "Instalments")}
       </div>
 
-      {/* ------------------------------------------------------- components */}
-      <div className="fee-editor-block">
-        <div className="card-head">
-          <h4>Breakdown — what the fee covers (optional)</h4>
-          <button className="btn btn-quiet" onClick={() => addLine("COMPONENT")}>
-            Add line
-          </button>
-        </div>
-        <p className="muted small">
-          Shown to applicants so the total is not a mystery figure. Leave it empty for a flat fee.
-        </p>
-        {lines.map((l, i) =>
-          l.kind !== "COMPONENT" ? null : (
-            <div key={`comp-${i}`} className="fee-editor-row">
-              <input
-                className="fee-editor-label"
-                value={l.label}
-                onChange={(e) => setLine(i, { label: e.target.value })}
-                placeholder="Tuition"
-                aria-label="What this covers"
-              />
-              <input
-                className="fee-editor-amount"
-                inputMode="decimal"
-                value={l.amount}
-                onChange={(e) => setLine(i, { amount: e.target.value })}
-                placeholder="80000"
-                aria-label="Amount"
-              />
-              <button
-                className="btn btn-quiet"
-                onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))}
-                aria-label={`Remove ${l.label || "line"}`}
-              >
-                ✕
-              </button>
+      {/* ─────────────────────────────────────────────── 2. how it is paid */}
+      <div className="fee-step">
+        <h4>
+          <span className="fee-step-num">2</span> How is it paid?
+        </h4>
+
+        {totalNum <= 0 ? (
+          <p className="muted small">Enter the total above first.</p>
+        ) : (
+          <>
+            {/* THE HELPER. One click does the division, the remainder and the
+                due dates — the arithmetic an administrator should not be
+                doing by hand at all. */}
+            <div className="fee-split">
+              <span className="muted small">Split it evenly into</span>
+              {[1, 2, 3, 4, 6].map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  className="btn btn-sm"
+                  onClick={() => split(n, n === 1 ? 0 : 1)}
+                >
+                  {n === 1 ? "one payment" : `${n} parts`}
+                </button>
+              ))}
+              <span className="muted small">— then adjust any row.</span>
             </div>
-          ),
+
+            {instalments.length === 0 ? (
+              <p className="warn small">
+                No payments set yet. Choose a split above, or add one by hand.
+              </p>
+            ) : (
+              <ul className="fee-rows">
+                {lines.map((l, i) =>
+                  l.kind !== "INSTALMENT" ? null : (
+                    <li key={`inst-${i}`} className="fee-row">
+                      <span className="fee-row-n">{instalments.indexOf(l) + 1}</span>
+                      <input
+                        className="fee-editor-label"
+                        value={l.label}
+                        onChange={(e) => setLine(i, { label: e.target.value })}
+                        placeholder="First instalment"
+                        aria-label="What this payment is called"
+                      />
+                      <input
+                        className="fee-editor-amount"
+                        inputMode="decimal"
+                        value={l.amount}
+                        onChange={(e) => setLine(i, { amount: e.target.value })}
+                        placeholder="30000"
+                        aria-label="Amount"
+                      />
+                      <label className="fee-editor-due">
+                        <input
+                          type="number"
+                          min={0}
+                          step={30}
+                          value={l.dueAfterDays}
+                          onChange={(e) => setLine(i, { dueAfterDays: e.target.value })}
+                          aria-label="Days after enrolling"
+                        />
+                        <span className="muted small">{whenDue(Number(l.dueAfterDays || "0"))}</span>
+                      </label>
+                      <button
+                        type="button"
+                        className="btn btn-quiet btn-sm"
+                        onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))}
+                        aria-label={`Remove ${l.label || "this payment"}`}
+                      >
+                        ✕
+                      </button>
+                    </li>
+                  ),
+                )}
+              </ul>
+            )}
+
+            <div className="row-actions">
+              <button type="button" className="btn btn-quiet btn-sm" onClick={addInstalment}>
+                Add another payment
+              </button>
+              {balance(instalmentSum, "The payments")}
+            </div>
+          </>
         )}
-        {hasComponents && balance(componentSum, "Breakdown")}
+      </div>
+
+      {/* ─────────────────────────────────────── 3. the breakdown, optional */}
+      <div className="fee-step">
+        <h4>
+          <span className="fee-step-num">3</span> What does the fee cover?{" "}
+          <span className="muted small">optional</span>
+        </h4>
+        {!showBreakdown ? (
+          <button
+            type="button"
+            className="btn btn-quiet btn-sm"
+            onClick={() => {
+              setShowBreakdown(true);
+              if (components.length === 0) {
+                setLines((ls) => [
+                  { kind: "COMPONENT", label: "Tuition", amount: "", dueAfterDays: "" },
+                  ...ls,
+                ]);
+              }
+            }}
+          >
+            Itemise it
+          </button>
+        ) : (
+          <>
+            <p className="muted small">
+              Shown to applicants so the total is not a mystery figure. Leave it out for a flat
+              fee.
+            </p>
+            <ul className="fee-rows">
+              {lines.map((l, i) =>
+                l.kind !== "COMPONENT" ? null : (
+                  <li key={`comp-${i}`} className="fee-row">
+                    <input
+                      className="fee-editor-label"
+                      value={l.label}
+                      onChange={(e) => setLine(i, { label: e.target.value })}
+                      placeholder="Tuition"
+                      aria-label="What this covers"
+                    />
+                    <input
+                      className="fee-editor-amount"
+                      inputMode="decimal"
+                      value={l.amount}
+                      onChange={(e) => setLine(i, { amount: e.target.value })}
+                      placeholder="80000"
+                      aria-label="Amount"
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-quiet btn-sm"
+                      onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))}
+                      aria-label={`Remove ${l.label || "this line"}`}
+                    >
+                      ✕
+                    </button>
+                  </li>
+                ),
+              )}
+            </ul>
+            <div className="row-actions">
+              <button
+                type="button"
+                className="btn btn-quiet btn-sm"
+                onClick={() =>
+                  setLines((ls) => [
+                    { kind: "COMPONENT", label: "", amount: "", dueAfterDays: "" },
+                    ...ls,
+                  ])
+                }
+              >
+                Add a line
+              </button>
+              {components.length > 0 && balance(componentSum, "The breakdown")}
+            </div>
+          </>
+        )}
       </div>
 
       <label className="field">
-        <span>Notes for the applicant</span>
+        <span>Anything the applicant should know</span>
         <textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
-          placeholder="Refund policy, what the fee includes, anything they should know before paying."
+          placeholder="Refund policy, what the fee includes, when late payment is charged."
         />
       </label>
+
+      {/*
+        WHAT THE APPLICANT WILL ACTUALLY SEE. The form is a table of numbers;
+        this is the sentence they read on the apply page, and showing it here
+        is what turns "does this add up" into a question somebody can answer by
+        looking rather than by publishing and checking.
+      */}
+      {totalNum > 0 && instalments.length > 0 && (
+        <div className={readyToPublish ? "fee-preview is-ready" : "fee-preview"}>
+          <span className="fee-preview-label">The applicant will see</span>
+          <p>
+            <strong>{money(dueNow, currency)}</strong> to apply
+            {dueNow < totalNum && <> · {money(totalNum, currency)} in total</>}
+            {instalments.length > 1 && <> · {instalments.length} payments</>}
+          </p>
+          {!readyToPublish && (
+            <p className="warn small">
+              The payments do not add up to the total yet, so this cannot be published.
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="row-actions">
         <button className="btn btn-primary" disabled={busy || !name.trim()} onClick={() => void save()}>
@@ -1157,10 +1475,14 @@ function FeeStructureForm({
           Cancel
         </button>
       </div>
+
       <p className="muted small">
-        Saved as a draft. Applicants see nothing until you publish it, and publishing checks that
-        the figures add up.
+        Saved as a draft — applicants see nothing until you publish it, and publishing checks the
+        figures once more.
       </p>
     </div>
   );
 }
+
+/** Read aloud by the office, so words rather than "Instalment 1". */
+const ORDINAL = ["First", "Second", "Third", "Fourth", "Fifth", "Sixth"];

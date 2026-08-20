@@ -17,6 +17,16 @@ export interface CreateAnnouncementInput {
   title: string;
   body: string;
   isPinned?: boolean;
+  /**
+   * NORMAL | IMPORTANT | URGENT.
+   *
+   * `isUrgent` below says the same thing about the top level and is kept
+   * because it carries a BEHAVIOUR rather than a colour — BR-COM-02 makes an
+   * urgent announcement ignore a recipient's quiet hours. Either may be given
+   * and `resolvePriority` reconciles them, so there is one decision however it
+   * arrives.
+   */
+  priority?: "NORMAL" | "IMPORTANT" | "URGENT";
   isUrgent?: boolean;
   /** FR-PUB — also shown on the public page. INSTITUTE audience only. */
   isPublic?: boolean;
@@ -52,7 +62,21 @@ export class AnnouncementService {
    * teacher could post to any class in the Institute. See
    * assertOwnsSectionSubject.
    */
+  /**
+   * One answer from two ways of asking.
+   *
+   * `priority` is what the interface sends now. `isUrgent` is what everything
+   * written before it sends, and it still means URGENT. Whichever is present
+   * decides both, so the column and the flag can never disagree — which they
+   * would within a week if each were written from its own field.
+   */
+  private resolvePriority(input: CreateAnnouncementInput): "NORMAL" | "IMPORTANT" | "URGENT" {
+    if (input.priority) return input.priority;
+    return input.isUrgent ? "URGENT" : "NORMAL";
+  }
+
   async create(input: CreateAnnouncementInput) {
+    const priority = this.resolvePriority(input);
     const actor = getActor();
     if (!actor) throw new AppError("AUTH_TOKEN_INVALID");
 
@@ -73,7 +97,9 @@ export class AnnouncementService {
         title: input.title,
         body: input.body,
         isPinned: input.isPinned ?? false,
-        isUrgent: input.isUrgent ?? false,
+        priority,
+        // Derived, never independently set: one decision, two representations.
+        isUrgent: priority === "URGENT",
         // Belt and braces with the schema and the CHECK constraint. Three
         // places agree that a sectional notice is not public, and the cheapest
         // one to get wrong later is the schema.
@@ -94,7 +120,8 @@ export class AnnouncementService {
       // paragraphs is worse than one that does not.
       body: firstLine(input.body),
       linkPath: "/announcements",
-      isUrgent: input.isUrgent ?? false,
+      // BR-COM-02 — this is the one that ignores quiet hours.
+      isUrgent: priority === "URGENT",
       announcementId: announcement.id,
     });
 
@@ -106,7 +133,7 @@ export class AnnouncementService {
         audience: input.audience,
         title: input.title,
         recipients: recipientUserIds.length,
-        urgent: input.isUrgent ?? false,
+        priority,
       },
     });
 
@@ -144,6 +171,7 @@ export class AnnouncementService {
       title: a.title,
       body: a.body,
       isPinned: a.isPinned,
+      priority: a.priority,
       isUrgent: a.isUrgent,
       publishedAt: a.publishedAt,
       expiresAt: a.expiresAt,
