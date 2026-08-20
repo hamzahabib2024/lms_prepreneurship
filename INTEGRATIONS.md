@@ -49,6 +49,15 @@ importing a cohort, creating a staff account, and resetting somebody's password.
 **All four email it to the person it belongs to**, and all four still show it
 once on the administrator's screen, because delivery is never certain.
 
+A fifth message carries no password at all and matters just as much: a student
+the Institute **already has**, enrolled in another course. Their account is
+untouched, so sending them credentials would be a lie about their sign-in — but
+saying nothing, which is what the System used to do, leaves somebody who has
+just paid a fee and attached a slip hearing absolutely nothing back while a
+first-time applicant doing the same thing gets a welcome. They are told they are
+enrolled, that their registration number is unchanged, and — in as many words —
+that there is no new password and none is coming.
+
 Without email configured, none of them can send. The password is then shown on
 screen and nowhere else, so the only way it reaches its owner is somebody
 reading it aloud or pasting it into a chat — the password to a student record,
@@ -94,6 +103,13 @@ INSTITUTE_NAME=Prepreneurship
 ```
 
 `SMTP_USER` must be **the same account** the App Password was created on.
+
+> **Where an applicant sends the money is NOT here.** The bank account, the
+> account name and the payment instructions live in **Settings → Payments**,
+> not in `.env`, because an institute changes bank and that should not need a
+> deployment. Until they are filled in, the application form tells applicants to
+> ask the office — which is honest, and was the only thing it could say before
+> the fee panel existed at all.
 
 > **`PUBLIC_WEB_URL` is not decoration.** It is the address a new student is told
 > to sign in at, and the address of the "track your application" link. Left at

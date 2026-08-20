@@ -135,6 +135,7 @@ states as a sweep across all pages after the role work.
 
 | Page | What it got |
 |---|---|
+| **CourseAdminPage** | A page that did not exist. `POST /programmes` and `POST /subjects` had always been there and nothing in the running app could call either, so the only courses that ever existed were the four the seed wrote. Cards carry the course's own picture — `Subject.thumbnailUrl` had been in the schema since the beginning with nothing ever writing to it — and the upload previews at the size it will actually appear, rather than reporting "uploaded" and showing nothing. The fee editor keeps a running total under each block, in a word and a colour, because the rule that decides whether it can be published is "the lines add up" and learning that on publish means re-adding twelve numbers by hand |
 | **DashboardPage** | Cards stagger in; list rows became label-and-value with lining figures and a hover ground; figures tinted with the page colour |
 | **TimetablePage** | Ruled-paper texture, page blue |
 | **AttendancePage** | **A real defect fixed** — present, absent, late and excused were all the same indigo. Now green, red, amber and slate, with the letter drawn in each cell |

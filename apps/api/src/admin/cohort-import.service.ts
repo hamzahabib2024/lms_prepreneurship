@@ -234,14 +234,38 @@ export class CohortImportService {
      * also arrived by email.
      */
     for (const outcome of outcomes) {
-      if (!outcome.temporaryPassword || !outcome.email) continue;
-      const posted = await this.credentials.sendNewAccount({
-        to: outcome.email,
-        fullName: outcome.fullName,
-        temporaryPassword: outcome.temporaryPassword,
-        registrationNo: outcome.registrationNo ?? null,
-      });
-      outcome.emailSent = posted.sent;
+      if (!outcome.email) continue;
+
+      if (outcome.temporaryPassword) {
+        const posted = await this.credentials.sendNewAccount({
+          to: outcome.email,
+          fullName: outcome.fullName,
+          temporaryPassword: outcome.temporaryPassword,
+          registrationNo: outcome.registrationNo ?? null,
+        });
+        outcome.emailSent = posted.sent;
+        continue;
+      }
+
+      /*
+       * A REJOINING STUDENT IS TOLD TOO, and with the opposite message.
+       *
+       * They have no temporary password because their account was not touched,
+       * which is exactly why the loop used to skip them entirely. But a student
+       * put into a new section by an import has no way of knowing it happened:
+       * nothing on their dashboard announces itself, and they are not sitting
+       * with the operator who ran the file. The one thing this must not do is
+       * imply their sign-in changed — so it carries no password and says so.
+       */
+      if (outcome.status === "REJOINED") {
+        const posted = await this.credentials.sendCourseAdded({
+          to: outcome.email,
+          fullName: outcome.fullName,
+          registrationNo: outcome.registrationNo ?? null,
+          sectionName: section.name,
+        });
+        outcome.emailSent = posted.sent;
+      }
     }
 
     outcomes.sort((a, b) => a.line - b.line);

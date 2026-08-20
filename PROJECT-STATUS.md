@@ -1,6 +1,6 @@
 # Project status
 
-Last updated: 20 August 2026 (the integrations, tested against the real thing)
+Last updated: 20 August 2026 (courses, fees, and the student nobody wrote to)
 
 **Roughly 96% built, and that figure has arithmetic behind it.**
 
@@ -765,3 +765,77 @@ tracking page by opening it in a browser at every state an application can
 reach; and the honest-failure path by turning email off and confirming the
 import says `NOBODY WAS EMAILED` rather than reporting success. Twenty-seven
 defects, and the number found by reading rather than running is still zero.
+
+---
+
+## 20 August 2026 — courses, fees, and the student nobody wrote to
+
+Three things the Institute could not do, and none of them was broken. All three
+were **missing**, which is a harder fault to see: nothing errored, no test
+failed, and every screen involved looked finished.
+
+**A STUDENT WHO ENROLLED IN A SECOND COURSE WAS TOLD NOTHING AT ALL.** Both
+places that can enrol somebody who is already a student — an admission approval
+and a cohort import — deliberately sent them no email. The reasoning was
+half right and had been written down: their account is not touched, there is no
+temporary password, and mailing "here are your new details" to somebody whose
+sign-in is unchanged is how a working account gets abandoned. All true, and the
+conclusion drawn from it was still wrong. From where the applicant sits, they
+filled in a form, paid a fee, attached a slip — and then heard nothing, while a
+first-time applicant doing the identical thing got a welcome. Silence after
+payment is indistinguishable from a lost application. They now get the news
+without the password, and are told in as many words that there is no new one
+and none is coming, because the likeliest thing they would otherwise do is wait
+for it and then telephone the office to ask where it is.
+
+**THE APPLICATION FORM ASKED FOR "THE AMOUNT YOU PAID" AND COULD NOT SAY WHAT
+THAT WAS.** Fees existed only as `FeeCharge` rows raised against students who
+were *already enrolled*, so the number was known to the office and to nobody
+else. The form told applicants to "pay the fee into the Institute's account"
+and named neither the fee nor the account. In practice they telephoned to ask,
+or they guessed — and `AMOUNT_INSUFFICIENT`, a rejection reason the admission
+module has carried since the beginning, is what a guess looks like from the
+other end. There is now a `FeeStructure` per programme: a total, a breakdown, an
+instalment schedule, and the amount due on application, published as a whole or
+not at all. The apply page shows the figure at the moment the course is chosen
+rather than four steps later, and the full table with the bank details on the
+step where the money actually moves.
+
+**AND THE ENDPOINTS TO CREATE A COURSE HAD NEVER BEEN REACHABLE.** `POST
+/programmes` and `POST /subjects` have been there, correctly guarded, since the
+beginning, and nothing in the running System could call either — the same fault
+StructurePage was built to fix, one level up. Every programme that has ever
+existed is one the seed script wrote. `Subject.thumbnailUrl` has been in the
+schema just as long with **nothing anywhere ever writing to it**, so every card
+on the landing page fell back to generated artwork and the Institute had no way
+to change that. There is now one page for all of it, and one page deliberately:
+creating a course, giving it a picture and setting its price are one job done in
+one sitting, and split across three screens the third is the one that gets
+forgotten — leaving a course on sale with no fee.
+
+**THE ARITHMETIC IS THE PART THAT IS ACTUALLY DANGEROUS.** These numbers are
+read by members of the public who then transfer money against them. A fee table
+that does not add up is not cosmetic: the applicant pays what the instalments
+said, the office checks the slip against the total, and the difference becomes a
+rejection of somebody who did exactly what they were asked. So it is checked in
+paisa as integers, on publication rather than on save — a half-typed table is
+unfinished, not wrong — and every problem is reported at once, because an
+administrator gets three things wrong at a time and one-per-save is three round
+trips. The two numbers that must agree are enforced: the first instalment and
+the amount the form will ask for. Left free to differ, the table says 25,000,
+the form asks 30,000, and whichever the applicant believes makes their slip
+wrong.
+
+**FIXING ONE THING EXPOSED A SECOND, AGAIN.** Adding fee status to the
+programmes list made it obvious that nothing on the courses screen said which
+courses had a published price — the exact failure the page exists to prevent,
+invisible on the page built to prevent it. It is now a badge on every card.
+
+**And two guards in this codebase earned their keep.** The scope-coverage test
+failed the moment the three new models existed, because an unclassified model is
+readable by anyone who passes the role check and a missing entry looks exactly
+like a model nobody has needed yet. The web-routes test failed because a new
+page was not documented. Neither fault would have been visible by reading.
+
+Twenty-seven defects and three absences. The number found by reading rather than
+running is still zero.

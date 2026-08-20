@@ -81,6 +81,20 @@ export class AdmissionController {
    * reason: everything it returns is already published by the Institute
    * elsewhere. There is nothing about any person in it.
    */
+  /**
+   * FR-REG-007 — where an applicant sends the money.
+   *
+   * Public for the same reason the prospectus is: somebody deciding whether to
+   * apply needs to know what it costs and where to pay, and neither is a
+   * secret. A bank account that receives fees is printed on every prospectus
+   * the Institute has ever handed out.
+   */
+  @Public()
+  @Get("public/payment-details")
+  paymentDetails() {
+    return this.admission.paymentDetails();
+  }
+
   @Public()
   @Get("public/showcase")
   showcase() {

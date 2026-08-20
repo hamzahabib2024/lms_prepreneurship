@@ -9,9 +9,11 @@ import {
   type BatchUpdateInput,
   type OfferingCreateInput,
   type ProgrammeCreateInput,
+  type ProgrammeUpdateInput,
   type SectionCreateInput,
   type SectionUpdateInput,
   type SubjectCreateInput,
+  type SubjectUpdateInput,
 } from "@lms/shared";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
@@ -41,6 +43,7 @@ export class AcademicService {
         code: input.code,
         description: input.description ?? null,
         durationWeeks: input.durationWeeks ?? null,
+        thumbnailAssetId: input.thumbnailAssetId ?? null,
       },
     });
     await this.audit.record({
@@ -52,12 +55,79 @@ export class AcademicService {
     return created;
   }
 
-  listProgrammes() {
-    return this.prisma.scoped.programme.findMany({
+  /**
+   * FR-CRS-004 — correct a programme after it exists.
+   *
+   * THE CODE CANNOT BE CHANGED and the schema does not offer it: a programme
+   * code is baked into every registration number issued against it (Appendix
+   * B), several of which are printed on certificates in people's hands.
+   *
+   * `undefined` leaves a field alone and `null` clears it, which is why the
+   * spread is conditional rather than a blanket assignment — sending only a
+   * new name must not blank the description.
+   */
+  async updateProgramme(id: string, input: ProgrammeUpdateInput) {
+    const before = await this.prisma.scoped.programme.findFirst({
+      where: { id, deletedAt: null },
+    });
+    if (!before) throw new AppError("RESOURCE_NOT_FOUND");
+
+    const updated = await this.prisma.scoped.programme.update({
+      where: { id },
+      data: {
+        ...(input.name !== undefined ? { name: input.name } : {}),
+        ...(input.description !== undefined ? { description: input.description ?? null } : {}),
+        ...(input.durationWeeks !== undefined
+          ? { durationWeeks: input.durationWeeks ?? null }
+          : {}),
+        ...(input.thumbnailAssetId !== undefined
+          ? { thumbnailAssetId: input.thumbnailAssetId ?? null }
+          : {}),
+        ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
+      },
+    });
+
+    await this.audit.record({
+      action: "programme.update",
+      entityType: "Programme",
+      entityId: id,
+      before: { name: before.name, isActive: before.isActive },
+      after: { name: updated.name, isActive: updated.isActive },
+    });
+    return updated;
+  }
+
+  /**
+   * WITH ENOUGH TO SEE WHAT IS MISSING.
+   *
+   * The fee structures come back as a status list rather than as a count,
+   * because the question the courses screen has to answer is not "how many"
+   * but "is there a published one". A programme on offer with no published fee
+   * is the failure that matters: the application form then tells every
+   * applicant to telephone and ask what to pay, and nothing on any screen says
+   * so. Counting drafts would report that programme as having a fee.
+   */
+  async listProgrammes() {
+    const rows = await this.prisma.scoped.programme.findMany({
       where: { deletedAt: null },
       orderBy: { name: "asc" },
-      include: { _count: { select: { sessions: true } } },
+      include: {
+        _count: { select: { sessions: true } },
+        thumbnail: { select: { id: true } },
+        feeStructures: {
+          where: { deletedAt: null },
+          select: { id: true, status: true },
+        },
+      },
     });
+
+    return rows.map(({ feeStructures, ...p }) => ({
+      ...p,
+      fee: {
+        published: feeStructures.some((f) => f.status === "PUBLISHED"),
+        drafts: feeStructures.filter((f) => f.status === "DRAFT").length,
+      },
+    }));
   }
 
   // ------------------------------------------------------------- subjects --
@@ -69,6 +139,8 @@ export class AcademicService {
         code: input.code,
         description: input.description ?? null,
         credits: input.credits ?? null,
+        thumbnailAssetId: input.thumbnailAssetId ?? null,
+        thumbnailUrl: input.thumbnailUrl ?? null,
       },
     });
     await this.audit.record({
@@ -80,10 +152,40 @@ export class AcademicService {
     return created;
   }
 
+  /** FR-CRS-015 — correct a subject. The code is immutable, as a programme's is. */
+  async updateSubject(id: string, input: SubjectUpdateInput) {
+    const before = await this.prisma.scoped.subject.findFirst({ where: { id, deletedAt: null } });
+    if (!before) throw new AppError("RESOURCE_NOT_FOUND");
+
+    const updated = await this.prisma.scoped.subject.update({
+      where: { id },
+      data: {
+        ...(input.name !== undefined ? { name: input.name } : {}),
+        ...(input.description !== undefined ? { description: input.description ?? null } : {}),
+        ...(input.credits !== undefined ? { credits: input.credits ?? null } : {}),
+        ...(input.thumbnailAssetId !== undefined
+          ? { thumbnailAssetId: input.thumbnailAssetId ?? null }
+          : {}),
+        ...(input.thumbnailUrl !== undefined ? { thumbnailUrl: input.thumbnailUrl ?? null } : {}),
+        ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
+      },
+    });
+
+    await this.audit.record({
+      action: "subject.update",
+      entityType: "Subject",
+      entityId: id,
+      before: { name: before.name, isActive: before.isActive },
+      after: { name: updated.name, isActive: updated.isActive },
+    });
+    return updated;
+  }
+
   listSubjects() {
     return this.prisma.scoped.subject.findMany({
       where: { deletedAt: null },
       orderBy: { name: "asc" },
+      include: { thumbnail: { select: { id: true } } },
     });
   }
 

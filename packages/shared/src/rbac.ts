@@ -95,6 +95,11 @@ export const RESOURCES = [
   "registration_queue",
   "payment_slip",
   "payment",
+  /** A course's PUBLISHED PRICE — what an applicant is quoted before they pay.
+   *  Separate from `payment`, which is money that has actually moved. Setting
+   *  the price and recording a receipt are different authorities: the first is
+   *  a decision about the Institute, the second is bookkeeping. */
+  "fee_structure",
   "registration_number_series",
   // academic — §4.5.3
   "programme",
@@ -102,6 +107,10 @@ export const RESOURCES = [
   "batch",
   "section",
   "subject",
+  /** A course thumbnail — the one file in the System the public may read
+   *  without an account. Held apart from `lesson_resource` for exactly that
+   *  reason: everything there is deliberately not public. */
+  "course_media",
   "section_subject",
   "teacher_assignment",
   "enrolment",
@@ -293,6 +302,24 @@ export const PERMISSION_MATRIX: Record<Resource, ResourcePolicy> = {
     admin: { actions: FULL, scope: "ALL", requiresStepUp: true },
     student: { actions: ["read"], scope: "OWN" },
   },
+  /**
+   * SETTING A PRICE IS NOT THE SAME AUTHORITY AS TAKING A PAYMENT.
+   *
+   * `payment` is behind step-up because it moves money that already exists.
+   * This decides what a member of the public will be ASKED to transfer, which
+   * is a different risk: getting it wrong does not misplace a receipt, it
+   * quotes the whole next intake the wrong figure on a public page.
+   *
+   * A teacher may read it — students ask them what the course costs — and a
+   * student may read their own programme's, which is what the fee panel on
+   * their dashboard shows. Neither may change one.
+   */
+  fee_structure: {
+    super_admin: { actions: FULL, scope: "ALL" },
+    admin: { actions: FULL, scope: "ALL" },
+    teacher: { actions: ["read"], scope: "ASSIGNED" },
+    student: { actions: ["read"], scope: "ENROLLED" },
+  },
   registration_number_series: {
     super_admin: { actions: ["configure", "read"], scope: "ALL", requiresStepUp: true },
     admin: { actions: ["read"], scope: "ALL" },
@@ -304,6 +331,16 @@ export const PERMISSION_MATRIX: Record<Resource, ResourcePolicy> = {
     admin: { actions: FULL, scope: "ALL" },
     teacher: { actions: ["read"], scope: "ASSIGNED" },
     student: { actions: ["read"], scope: "ENROLLED" },
+  },
+  /**
+   * Uploading a course picture. Create and delete only — a thumbnail is
+   * replaced rather than edited, and READING one needs no permission at all
+   * because the whole point is that a stranger on the landing page can see it.
+   */
+  course_media: {
+    super_admin: { actions: ["create", "delete", "read"], scope: "ALL" },
+    admin: { actions: ["create", "delete", "read"], scope: "ALL" },
+    teacher: { actions: ["read"], scope: "ASSIGNED" },
   },
   /**
    * A NOTE ON THESE TWO SCOPES, because they do not mean what they appear to.

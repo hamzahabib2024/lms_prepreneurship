@@ -13,11 +13,11 @@ get it. The **What changed** column records what was done *beyond* that.
 
 | | |
 |---|---|
-| Pages | **41** |
-| On the brand palette and type scale | **41 of 41** |
-| Loading state shaped like its content | **32 of 41** |
-| Explained empty state | **14 of 41** |
-| Announced error state | **39 of 41** |
+| Pages | **42** |
+| On the brand palette and type scale | **42 of 42** |
+| Loading state shaped like its content | **33 of 42** |
+| Explained empty state | **15 of 42** |
+| Announced error state | **40 of 42** |
 | Still carrying known work | **14** |
 
 ## Legend
@@ -46,6 +46,7 @@ get it. The **What changed** column records what was done *beyond* that.
 | **ClassPage** | everyone | ✅ | ✅ | — | ✅ | Card skeleton. Join button becomes the amber call to action — the highest-value action in the product now carries the one accent colour. |
 | **CohortImportPage** | Admin, Super Admin | ✅ | — | — | ✅ | The submit button now names what it is loading — “Loading 312 students…” rather than a bare “Loading…”. A button label during a single action is the correct pattern, so no placeholder here. |
 | **ContentPage** | Teacher, Admin, Super Admin | ✅ | — | — | ✅ | Palette and type only; violet page hue removed. |
+| **CourseAdminPage** | Admin, Super Admin | ✅ | ✅ | ✅ | ✅ | New page. The endpoints to create a programme or a subject had always existed and nothing in the running app could call either. Card grid with the course's own picture, an upload that previews at the size it will appear, and a fee editor with a running total under each block. |
 | **CoursePage** | everyone | ✅ | ✅ | ✅ | ✅ | Card skeleton. The Drive-permissions alert keeps its wording, which is the best error copy in the codebase. |
 | **CoursesPage** | everyone | ✅ | ✅ | ✅ | ✅ | Six-card skeleton matching the tile grid. Cover art moved off the twelve-hue rainbow. |
 | **DashboardPage** | everyone | ✅ | ✅ | — | ✅ | Both empty widget bodies now say why they are empty. Card skeleton was already correct. |

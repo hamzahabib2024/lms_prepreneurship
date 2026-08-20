@@ -573,6 +573,11 @@ model Programme {
   durationWeeks Int?    @map("duration_weeks")
   isActive      Boolean @default(true) @map("is_active")
 
+  /// The picture on the landing page and the application form. Uploaded through
+  /// the System rather than pasted as a URL, so the Institute does not depend on
+  /// somebody's Drive share staying public for its own prospectus to render.
+  thumbnailAssetId String? @map("thumbnail_asset_id") @db.Uuid
+
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
@@ -580,7 +585,10 @@ model Programme {
   sessions      AcademicSession[]
   registrations RegistrationRequest[]
   certificates  Certificate[]
+  feeStructures FeeStructure[]
+  thumbnail     MediaAsset?          @relation(fields: [thumbnailAssetId], references: [id], onDelete: SetNull)
 
+  @@index([thumbnailAssetId])
   @@map("programmes")
 }
 
@@ -597,9 +605,10 @@ model AcademicSession {
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
 
-  programme Programme @relation(fields: [programmeId], references: [id], onDelete: Restrict)
-  feeCharges FeeCharge[]
-  batches   Batch[]
+  programme     Programme      @relation(fields: [programmeId], references: [id], onDelete: Restrict)
+  feeCharges    FeeCharge[]
+  feeStructures FeeStructure[]
+  batches       Batch[]
 
   @@unique([programmeId, code])
   @@map("academic_sessions")
@@ -665,8 +674,12 @@ model Subject {
   code         String  @unique @db.VarChar(20)
   description  String? @db.Text
   credits      Int?    @db.SmallInt
-  thumbnailUrl String? @map("thumbnail_url") @db.VarChar(500)
-  isActive     Boolean @default(true) @map("is_active")
+  /// An EXTERNAL picture, pasted as a URL. Kept because some subjects are
+  /// illustrated from the Institute's own site, and dropping it would break
+  /// those. `thumbnailAssetId` below is the uploaded one, and wins when set.
+  thumbnailUrl     String? @map("thumbnail_url") @db.VarChar(500)
+  thumbnailAssetId String? @map("thumbnail_asset_id") @db.Uuid
+  isActive         Boolean @default(true) @map("is_active")
 
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
@@ -674,7 +687,9 @@ model Subject {
 
   sectionSubjects SectionSubject[]
   modules         Module[]
+  thumbnail       MediaAsset?      @relation(fields: [thumbnailAssetId], references: [id], onDelete: SetNull)
 
+  @@index([thumbnailAssetId])
   @@map("subjects")
 }
 
@@ -2063,4 +2078,145 @@ model QuizAnswer {
   @@unique([attemptId, questionId])
   @@index([attemptId])
   @@map("quiz_answers")
+}
+
+// ===========================================================================
+//  COURSE MEDIA AND FEE STRUCTURES
+// ===========================================================================
+
+/// A picture the public is MEANT to see — a course thumbnail, and nothing else.
+///
+/// EVERY OTHER FILE IN THIS SYSTEM IS DELIBERATELY NOT PUBLIC. A payment slip,
+/// a submission, a lecture recording: all of them are reached through an
+/// authenticated request and a storage reference that never leaves the server
+/// (SEC-FIL-009, ARC-041). A course thumbnail is the exact opposite — it is
+/// shown to anonymous visitors on the landing page, and putting it behind the
+/// same machinery would mean either a broken image for everybody who has not
+/// signed in, or a hole punched in the rule that protects everything else.
+///
+/// So it is a SEPARATE MODEL rather than another DocumentType. The difference
+/// between "readable by anyone with the link" and "readable only by the people
+/// entitled to it" is the most consequential distinction in the file layer, and
+/// it belongs in the schema rather than in an enum value whose significance
+/// somebody has to remember.
+///
+/// `contentHash` is unique, so uploading the same picture twice reuses the row
+/// instead of filling storage with copies of one logo.
+model MediaAsset {
+  id String @id @default(uuid()) @db.Uuid
+
+  /// COURSE_THUMBNAIL today. Named rather than assumed, so the next public
+  /// image has somewhere to go that is not "reuse the thumbnail one".
+  kind String @default("COURSE_THUMBNAIL") @db.VarChar(40)
+
+  storageKey       String @map("storage_key") @db.VarChar(500)
+  originalFilename String @map("original_filename") @db.VarChar(255)
+  /// Determined by CONTENT, not by the extension (SEC-FIL-003).
+  contentType String @map("content_type") @db.VarChar(100)
+  sizeBytes   BigInt @map("size_bytes")
+  contentHash String @unique @map("content_hash") @db.VarChar(64)
+
+  createdBy String    @map("created_by") @db.Uuid
+  createdAt DateTime  @default(now()) @map("created_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  programmes Programme[]
+  subjects   Subject[]
+
+  @@index([kind])
+  @@map("media_assets")
+}
+
+/// What a course costs, in full, BEFORE anybody applies — FR-PAY-033.
+///
+/// THE GAP THIS FILLS. The application form asked for "the amount you paid"
+/// and a bank slip, and the System had no idea what either should be: fees
+/// existed only as FeeCharge rows raised against a student who was ALREADY
+/// enrolled. An applicant was therefore asked to pay a number nobody had told
+/// them, into an account nobody had named, and the office found out whether
+/// they had got it right by reading the slip afterwards. The
+/// AMOUNT_INSUFFICIENT rejection reason in the admission module exists because
+/// of this.
+///
+/// ONE ACTIVE STRUCTURE PER PROGRAMME PER SESSION. `academicSessionId` null
+/// means "this programme's standing fee", used by any session that has not
+/// been given its own — so raising fees for one term does not require
+/// re-entering them for every other programme.
+///
+/// AMOUNTS ARE NOT EDITED IN PLACE ONCE PUBLISHED. A published structure that
+/// an applicant has already paid against is superseded by a new one rather
+/// than rewritten, because the old numbers are what somebody was told and what
+/// their slip will be checked against. `supersededAt` records that.
+model FeeStructure {
+  id          String  @id @default(uuid()) @db.Uuid
+  programmeId String  @map("programme_id") @db.Uuid
+  /// Null = the programme's standing structure, used by any session without
+  /// one of its own.
+  academicSessionId String? @map("academic_session_id") @db.Uuid
+
+  name     String @db.VarChar(150)
+  currency String @default("PKR") @db.Char(3)
+
+  /// The whole cost of the course. The COMPONENT lines must add up to exactly
+  /// this, and so must the INSTALMENT lines — checked before it can be
+  /// published, because a fee table that does not add up is worse than none.
+  totalAmount Decimal @map("total_amount") @db.Decimal(12, 2)
+
+  /// What the applicant pays NOW, to apply. Usually the first instalment.
+  /// This is the number the application form checks the slip against.
+  dueAtApplication Decimal @map("due_at_application") @db.Decimal(12, 2)
+
+  /// Shown to the applicant under the table — refund policy, late fees, what
+  /// the price includes. Free text because every institute's caveats differ.
+  notes String? @db.Text
+
+  /// DRAFT is invisible to applicants. PUBLISHED is what the apply page shows.
+  /// The arithmetic is checked when it moves to PUBLISHED, not while it is
+  /// being typed — a half-entered table is not an error, it is unfinished.
+  status String @default("DRAFT") @db.VarChar(20)
+
+  supersededAt DateTime? @map("superseded_at")
+
+  createdBy String    @map("created_by") @db.Uuid
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  programme       Programme        @relation(fields: [programmeId], references: [id], onDelete: Restrict)
+  academicSession AcademicSession? @relation(fields: [academicSessionId], references: [id], onDelete: SetNull)
+  lines           FeeStructureLine[]
+
+  @@index([programmeId, status])
+  @@index([academicSessionId])
+  @@map("fee_structures")
+}
+
+/// One row of a fee table — either what the money is FOR, or WHEN it is due.
+///
+/// ONE TABLE FOR BOTH, distinguished by `kind`, because they are edited
+/// together on one screen and validated by the same rule: each set must sum to
+/// the structure's total. Two tables would mean two editors, two sort orders,
+/// and two places to get the arithmetic check wrong.
+model FeeStructureLine {
+  id             String @id @default(uuid()) @db.Uuid
+  feeStructureId String @map("fee_structure_id") @db.Uuid
+
+  /// COMPONENT — "Tuition", "Registration", "Materials". What it is for.
+  /// INSTALMENT — "First instalment". When it is due.
+  kind String @db.VarChar(20)
+
+  label  String  @db.VarChar(120)
+  amount Decimal @db.Decimal(12, 2)
+
+  /// INSTALMENT only: days after enrolment that this falls due. 0 is "on
+  /// admission". Stored as an OFFSET rather than a date because one structure
+  /// serves every applicant, and each of them enrols on a different day.
+  dueAfterDays Int? @map("due_after_days")
+
+  sortOrder Int @default(0) @map("sort_order")
+
+  feeStructure FeeStructure @relation(fields: [feeStructureId], references: [id], onDelete: Cascade)
+
+  @@index([feeStructureId, kind, sortOrder])
+  @@map("fee_structure_lines")
 }

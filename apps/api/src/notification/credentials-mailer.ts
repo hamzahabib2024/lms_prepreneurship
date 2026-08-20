@@ -125,6 +125,57 @@ export class CredentialsMailer {
   }
 
   /**
+   * An existing student, added to another course — FR-REG-042's other half.
+   *
+   * THE MESSAGE THAT USED TO NOT EXIST. Both places that can enrol somebody who
+   * is already a student — an admission approval and a cohort import — sent
+   * them nothing whatsoever. The reasoning was right about the password and
+   * wrong about the silence: their account genuinely was not touched, so the
+   * credentials mail would have been a lie, but a person who has just paid a
+   * fee and attached a slip hearing nothing back cannot tell that from their
+   * application having been lost.
+   *
+   * IT CARRIES NO PASSWORD, AND SAYS SO IN WORDS. The likeliest thing this
+   * student does otherwise is wait for a temporary password that is never
+   * coming, then ring the office to ask where it is — which is the support call
+   * the message exists to prevent, not cause.
+   */
+  async sendCourseAdded(input: {
+    to: string;
+    fullName: string;
+    sectionName: string;
+    registrationNo?: string | null;
+  }): Promise<{ sent: boolean; detail: string }> {
+    const institute = this.instituteName();
+    const body = [
+      `Good news ${input.fullName} — you are enrolled in ${input.sectionName}.`,
+      "",
+      `You are already a student at ${institute}, so nothing about your account`,
+      "has changed.",
+      "",
+      ...(input.registrationNo
+        ? [`  Your registration number stays ${input.registrationNo}.`]
+        : []),
+      `  Sign in at ${this.signInUrl()} with your EXISTING email and password.`,
+      "",
+      "There is no new password. We have not sent you one and you do not need",
+      "one — use the same details you already sign in with. If you have",
+      "forgotten them, use 'Forgot password' on the sign-in page.",
+      "",
+      "The new course appears on your dashboard alongside the one you are",
+      "already taking.",
+      "",
+      "If you did not ask to join this course, tell the office at once.",
+    ].join("\n");
+
+    return this.send(input.to, input.fullName, {
+      kind: "registration.course-added",
+      title: `You are enrolled in ${input.sectionName}`,
+      body,
+    });
+  }
+
+  /**
    * FR-USR-012 — somebody's password was reset for them.
    *
    * DELIBERATELY DIFFERENT WORDING from a new account. A reset ends every

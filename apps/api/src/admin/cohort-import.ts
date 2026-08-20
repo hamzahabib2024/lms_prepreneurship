@@ -579,13 +579,21 @@ export function describePlan(plan: ImportPlan): string {
  *
  * PURE, AND HERE RATHER THAN ON THE SERVICE, because the half of it that
  * matters is a claim about the outside world that nobody can check by looking
- * at the screen: whether each student was actually sent their own password.
+ * at the screen: whether each student was actually told.
  *
  * THE FAILURE THIS GUARDS. An operator told "300 students loaded" closes the
  * page. If forty of those were never emailed, forty people hold an account
  * they cannot reach, and nobody finds out until the term starts. A message
  * that does not distinguish "all of them" from "260 of them" leaves the reader
  * assuming the first, every time.
+ *
+ * THE DELIVERY COUNTS COVER BOTH KINDS OF STUDENT, which is why they are
+ * separate arguments rather than being derived from `loaded`. A new student is
+ * emailed a temporary password; a REJOINING student is emailed to say they are
+ * enrolled and should use the sign-in they already have. Both were owed a
+ * message, both can fail to get one, and phrasing this in terms of "new
+ * students" — as it was when only new students were written to — would report
+ * a partial failure among rejoins as complete success.
  */
 export function importResultMessage(counts: {
   loaded: number;
@@ -607,16 +615,20 @@ export function importResultMessage(counts: {
   if (skipped > 0) parts.push(`${skipped} skipped`);
   if (parts.length === 0) return "Nothing was loaded.";
 
+  // Everyone who was owed a message: a new student their password, a rejoining
+  // student the news that they are enrolled and keep their existing sign-in.
+  const owed = emailed + notEmailed;
+
   const delivery =
-    loaded === 0
+    owed === 0
       ? ""
-      : notEmailed === 0 && emailed > 0
-        ? " Every new student has been emailed their own sign-in details."
+      : notEmailed === 0
+        ? " Every one of them has been emailed."
         : emailed === 0
-          ? " NOBODY WAS EMAILED — read each temporary password below and relay it yourself. " +
-            "Check Integrations if you expected email to be working."
-          : ` ${emailed} ${emailed === 1 ? "student was" : "students were"} emailed their ` +
-            `sign-in details; ${notEmailed} could not be reached and must be told by hand.`;
+          ? " NOBODY WAS EMAILED — tell each of them yourself, reading any temporary password " +
+            "below. Check Integrations if you expected email to be working."
+          : ` ${emailed} of them ${emailed === 1 ? "was" : "were"} emailed; ` +
+            `${notEmailed} could not be reached and must be told by hand.`;
 
   return (
     parts.join(", ") +

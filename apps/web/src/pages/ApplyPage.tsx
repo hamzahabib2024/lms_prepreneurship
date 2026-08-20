@@ -3,6 +3,7 @@ import { Skeleton } from "../components/Ui";
 import { Link } from "react-router-dom";
 import { ApiError, api } from "../api/client";
 import { EDUCATION_LEVEL, EDUCATION_LEVEL_LABEL } from "@lms/shared";
+import { FeePanel, money, type Fee, type PaymentDetails } from "../components/FeePanel";
 
 /**
  * The public application — SRS §13.2, FR-REG-001..010.
@@ -40,6 +41,8 @@ interface Programme {
   name: string;
   code: string;
   sections: Section[];
+  /** Null when the office has not published a price for this course yet. */
+  fee: Fee | null;
 }
 
 const SHIFT: Record<string, string> = {
@@ -97,6 +100,7 @@ export function ApplyPage() {
   });
   const [documentIds, setDocumentIds] = useState<string[]>([]);
   const [consent, setConsent] = useState(false);
+  const [payment, setPayment] = useState<PaymentDetails | null>(null);
 
   const set = (k: keyof typeof f) => (v: string) => setF((p) => ({ ...p, [k]: v }));
 
@@ -105,6 +109,14 @@ export function ApplyPage() {
       .get<Programme[]>("/public/prospectus")
       .then(setProgrammes)
       .catch(() => setProgrammes([]));
+
+    // Separately, and failing quietly. The bank details are context for the
+    // fee; if they cannot be fetched the applicant should still be able to
+    // apply, and the panel says "ask the office" rather than showing nothing.
+    api
+      .get<PaymentDetails>("/public/payment-details")
+      .then(setPayment)
+      .catch(() => setPayment(null));
   }, []);
 
   const programme = programmes?.find((p) => p.id === f.desiredProgrammeId);
@@ -260,6 +272,38 @@ export function ApplyPage() {
                     </label>
                   )}
 
+                  {/*
+                    THE PRICE, AT THE MOMENT THEY CHOOSE — not four steps later.
+                    Somebody who finds out the fee only after filling in
+                    nineteen fields and fetching a bank slip has been made to
+                    do all of that before being told the one thing that decides
+                    whether they wanted to. It is a summary here and the full
+                    table on the payment step; this one has to fit in a glance.
+                  */}
+                  {programme &&
+                    (programme.fee ? (
+                      <p className="fee-inline">
+                        <strong>{money(programme.fee.dueAtApplication, programme.fee.currency)}</strong>{" "}
+                        to apply
+                        {programme.fee.dueAtApplication < programme.fee.totalAmount && (
+                          <>
+                            {" "}
+                            &middot; {money(programme.fee.totalAmount, programme.fee.currency)} in
+                            total
+                            {programme.fee.instalments.length > 1
+                              ? `, payable in ${programme.fee.instalments.length} instalments`
+                              : ""}
+                          </>
+                        )}
+                        . <span className="muted">Full breakdown at the payment step.</span>
+                      </p>
+                    ) : (
+                      <p className="muted small">
+                        The fee for this course is not published yet — please ask the office what
+                        to pay before you transfer anything.
+                      </p>
+                    ))}
+
                   {/* FR-CRS-009 is absolute, so it is said BEFORE they fill in
                       the rest rather than as a rejection afterwards. */}
                   {section && section.genderRestriction !== "MIXED" && (
@@ -381,9 +425,18 @@ export function ApplyPage() {
             <>
               <h2>Your payment</h2>
               <p className="muted small">
-                Pay the fee into the Institute's account, then attach a photo of the slip. The
-                office checks it against the bank before your place is confirmed.
+                Pay the amount below into the Institute's account, then attach a photo of the slip.
+                The office checks it against the bank before your place is confirmed.
               </p>
+
+              {/* FR-PAY-033 — what to pay and where, on the step where they
+                  actually pay it. This used to say "pay the fee" and name
+                  neither a figure nor an account. */}
+              <FeePanel
+                fee={programme?.fee ?? null}
+                payment={payment}
+                programmeName={programme?.name}
+              />
 
               <SlipUpload
                 documentIds={documentIds}
@@ -396,7 +449,14 @@ export function ApplyPage() {
                   label="Amount you paid"
                   value={f.claimedAmount}
                   onChange={set("claimedAmount")}
-                  hint="In rupees."
+                  hint={
+                    programme?.fee
+                      ? `In rupees. The fee to apply is ${money(
+                          programme.fee.dueAtApplication,
+                          programme.fee.currency,
+                        )}.`
+                      : "In rupees."
+                  }
                 />
                 <Field
                   label="Date you paid"

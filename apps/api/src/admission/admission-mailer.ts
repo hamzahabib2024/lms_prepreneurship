@@ -109,6 +109,63 @@ export class AdmissionMailer {
   }
 
   /**
+   * FR-REG-042, the OTHER half — a student the Institute already has, added to
+   * another course.
+   *
+   * WHY THIS EXISTS. A returning student used to be told nothing at all. The
+   * reasoning was sound as far as it went: their account was not touched, there
+   * is no new password, and sending "here are your new details" to somebody
+   * whose sign-in is unchanged is how a working account gets abandoned. But the
+   * conclusion drawn from it was wrong. The applicant filled in a form, paid a
+   * fee, attached a slip and then heard NOTHING — while a first-time applicant
+   * doing the same thing got a welcome. From where they sit, silence after
+   * payment is indistinguishable from the application having been lost, and the
+   * next thing that happens is a telephone call to the office.
+   *
+   * So: the same news, without the part that would do harm. It confirms the
+   * course, names the registration number they already hold, and says plainly
+   * to sign in with the password they already have. THE ONE THING IT MUST NOT
+   * DO is imply their credentials changed, which is why there is no password
+   * here, no "temporary" anything, and no sign-in form to fill in twice.
+   */
+  async sendCourseAdded(input: {
+    to: string;
+    fullName: string;
+    registrationNo: string;
+    sectionName: string;
+    subjectCount: number;
+    signInUrl: string;
+  }): Promise<{ sent: boolean; detail: string }> {
+    const body = [
+      `Good news ${input.fullName} — you are enrolled in ${input.sectionName}.`,
+      "",
+      `You are already a student here, so nothing about your account has changed.`,
+      "",
+      `  Your registration number stays ${input.registrationNo}.`,
+      `  Sign in at ${input.signInUrl} with your EXISTING email and password.`,
+      "",
+      // Said explicitly, because the single most likely thing this student does
+      // next is wait for a temporary password that is never coming, and then
+      // ask the office for one.
+      "There is no new password. We have not sent you one and you do not need",
+      "one — use the same details you already sign in with. If you have",
+      "forgotten them, use 'Forgot password' on the sign-in page.",
+      "",
+      input.subjectCount === 1
+        ? "The new course appears on your dashboard alongside the one you are already taking."
+        : `Its ${input.subjectCount} subjects appear on your dashboard alongside the course you are already taking.`,
+      "",
+      "If you did not ask to join this course, tell the office at once.",
+    ].join("\n");
+
+    return this.send(input.to, input.fullName, {
+      kind: "registration.course-added",
+      title: `You are enrolled in ${input.sectionName}`,
+      body,
+    });
+  }
+
+  /**
    * FR-REG-035 — "we need something else from you", to the person who can
    * supply it.
    *

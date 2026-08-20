@@ -10,9 +10,11 @@ import {
   noteUpdateSchema,
   offeringCreateSchema,
   programmeCreateSchema,
+  programmeUpdateSchema,
   sectionCreateSchema,
   sectionUpdateSchema,
   subjectCreateSchema,
+  subjectUpdateSchema,
   suspendSchema,
   transferSchema,
   reinstateSchema,
@@ -26,9 +28,11 @@ import {
   type NoteUpdateInput,
   type OfferingCreateInput,
   type ProgrammeCreateInput,
+  type ProgrammeUpdateInput,
   type SectionCreateInput,
   type SectionUpdateInput,
   type SubjectCreateInput,
+  type SubjectUpdateInput,
   type TransferInput,
 } from "@lms/shared";
 import { AcademicService } from "./academic.service";
@@ -63,6 +67,16 @@ export class AcademicController {
     return this.academic.createProgramme(dto);
   }
 
+  /** FR-CRS-004. The code is not editable — see the schema for why. */
+  @RequirePermission("programme", "update")
+  @Patch("programmes/:id")
+  updateProgramme(
+    @Param("id") id: string,
+    @Body(zodBody(programmeUpdateSchema)) dto: ProgrammeUpdateInput,
+  ) {
+    return this.academic.updateProgramme(id, dto);
+  }
+
   // ------------------------------------------------------------- subjects --
 
   @RequirePermission("subject", "read")
@@ -76,6 +90,15 @@ export class AcademicController {
   @Post("subjects")
   createSubject(@Body(zodBody(subjectCreateSchema)) dto: SubjectCreateInput) {
     return this.academic.createSubject(dto);
+  }
+
+  @RequirePermission("subject", "update")
+  @Patch("subjects/:id")
+  updateSubject(
+    @Param("id") id: string,
+    @Body(zodBody(subjectUpdateSchema)) dto: SubjectUpdateInput,
+  ) {
+    return this.academic.updateSubject(id, dto);
   }
 
   // ------------------------------------------------- sessions and batches --

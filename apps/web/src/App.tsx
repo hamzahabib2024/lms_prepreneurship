@@ -39,6 +39,7 @@ import { DiscussionPage } from "./pages/DiscussionPage";
 import { BackupPage } from "./pages/BackupPage";
 import { VerifyPage } from "./pages/VerifyPage";
 import { TrackPage } from "./pages/TrackPage";
+import { CourseAdminPage } from "./pages/CourseAdminPage";
 import { CertificatesPage } from "./pages/CertificatesPage";
 import { AnnouncementsPage } from "./pages/AnnouncementsPage";
 import { NotificationBell } from "./components/NotificationBell";
@@ -614,6 +615,17 @@ export function App() {
           <Route path="/announcements" element={<AnnouncementsPage />} />
           <Route path="/sections" element={<SectionsPage />} />
           <Route path="/structure" element={<StructurePage />} />
+          {/* FR-CRS-004/015, FR-PAY-033 — creating the courses themselves,
+              giving them a picture and setting their price. A teacher may read
+              programmes and subjects but holds no create on either and no
+              fee_structure grant beyond read, so offering them this page would
+              be offering three refusals. */}
+          <Route
+            path="/courses-admin"
+            element={
+              hasRole("super_admin", "admin") ? <CourseAdminPage /> : <Navigate to="/" replace />
+            }
+          />
           {/* One class's recordings. Everyone: a student sees the published
               ones on classes they are enrolled in and staff see drafts too,
               which the server decides — the scope predicate refuses a class
