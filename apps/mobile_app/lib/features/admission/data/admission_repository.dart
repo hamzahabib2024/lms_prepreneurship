@@ -59,19 +59,32 @@ class AdmissionRepository {
 
   // ---------------------------------------------------------- administrative --
 
-  /// FR-REG-022/023 — the review queue, oldest first.
+  /// FR-REG-022/023 — the review queue, oldest first. Walks the pages so a
+  /// queue is not truncated at the first page of twenty-five.
   Future<List<QueueItem>> queue({String? status, String? q}) async {
-    final query = <String, String>{
-      if (status != null && status.isNotEmpty) 'status': status,
-      if (q != null && q.trim().isNotEmpty) 'q': q.trim(),
-    };
-    final joined = query.entries.map((e) => '${e.key}=${Uri.encodeQueryComponent(e.value)}').join('&');
-    final path = joined.isEmpty ? '/registration-requests' : '/registration-requests?$joined';
-    final data = await api.get<List<dynamic>>(path);
-    return data
-        .whereType<Map<String, dynamic>>()
-        .map(QueueItem.fromJson)
-        .toList();
+    final out = <QueueItem>[];
+    var page = 1;
+    while (true) {
+      final query = <String, String>{
+        'page': '$page',
+        'pageSize': '100',
+        if (status != null && status.isNotEmpty) 'status': status,
+        if (q != null && q.trim().isNotEmpty) 'q': q.trim(),
+      };
+      final joined = query.entries
+          .map((e) => '${e.key}=${Uri.encodeQueryComponent(e.value)}')
+          .join('&');
+      final envelope = await api.getEnvelope('/registration-requests?$joined');
+      out.addAll(
+        (envelope['data'] as List<dynamic>? ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .map(QueueItem.fromJson),
+      );
+      final pagination = envelope['pagination'] as Map<String, dynamic>? ?? const {};
+      if (pagination['hasNext'] != true) break;
+      page += 1;
+    }
+    return out;
   }
 
   /// FR-REG-025 — one application with its slips.
@@ -86,13 +99,23 @@ class AdmissionRepository {
     return api.bytes('/registration-requests/$requestId/documents/$documentId');
   }
 
-  /// FR-CRS-010 — sections with occupancy, for the assignment control.
+  /// FR-CRS-010 — sections with occupancy, for the assignment control. Walks
+  /// the pages so the control is never short of a section to offer.
   Future<List<SectionSummary>> sections() async {
-    final data = await api.get<List<dynamic>>('/sections');
-    return data
-        .whereType<Map<String, dynamic>>()
-        .map(SectionSummary.fromJson)
-        .toList();
+    final out = <SectionSummary>[];
+    var page = 1;
+    while (true) {
+      final envelope = await api.getEnvelope('/sections?pageSize=100&page=$page');
+      out.addAll(
+        (envelope['data'] as List<dynamic>? ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .map(SectionSummary.fromJson),
+      );
+      final pagination = envelope['pagination'] as Map<String, dynamic>? ?? const {};
+      if (pagination['hasNext'] != true) break;
+      page += 1;
+    }
+    return out;
   }
 
   /// FR-REG-039 — verify payment and provision the account, atomically.
