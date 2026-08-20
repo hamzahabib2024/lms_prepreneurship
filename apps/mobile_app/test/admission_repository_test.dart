@@ -244,7 +244,7 @@ void main() {
                 'occupation': null,
                 'acquisitionSource': 'REFERRAL',
                 'acquisitionDetail': 'My sister studied here.',
-                'claimedAmount': 25000,
+                'claimedAmount': '25000.00',
                 'claimedPaymentDate': '2026-08-01T00:00:00.000Z',
                 'claimedBankRef': 'TRX-8899',
                 'createdAt': '2026-08-10T10:00:00.000Z',
@@ -271,6 +271,7 @@ void main() {
 
       expect(detail.fullName, 'Sara Ali');
       expect(detail.acquisitionDetail, 'My sister studied here.');
+      // The server's Decimal arrives as a string; the reviewer still sees a number.
       expect(detail.claimedAmount, 25000);
       expect(detail.documents.single.originalFilename, 'slip.jpg');
       expect(detail.documents.single.isPdf, isFalse);
