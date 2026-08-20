@@ -1,6 +1,6 @@
 # Project status
 
-Last updated: 20 August 2026 (the hierarchy, said in three words instead of five)
+Last updated: 20 August 2026 (the database converted to UTF-8, without losing a row)
 
 **Roughly 96% built, and that figure has arithmetic behind it.**
 
@@ -1032,4 +1032,64 @@ students that is not a slow request, it is a broken one. It needs a job queue,
 which is a change of a different size from this one.
 
 Thirty-one defects and four absences. The number found by reading rather than
+running is still zero.
+
+---
+
+## 20 August 2026 — the database that could not hold its own students' names
+
+The development database had been created with **WIN1252** encoding, and a
+WIN1252 database cannot store Urdu at all:
+
+    ERROR: character with byte sequence 0xd8 0xb9 in encoding "UTF8"
+           has no equivalent in encoding "WIN1252"
+
+For an institute in Pakistan that is not a rough edge, it is a database that
+cannot register a student named in the script most of its students use. And the
+reason it survived this long is the reason it was worth fixing rather than
+noting: **Latin-1 accents pass**. `Zoë` stores perfectly. Every name anybody is
+likely to type while testing works, and the failure waits for a real applicant.
+It surfaces as a 500 from Postgres, from a constraint nothing in the application
+layer mentions.
+
+**ENCODING IS FIXED WHEN A CLUSTER IS CREATED AND CANNOT BE ALTERED.** There is
+no `ALTER DATABASE ... SET ENCODING`. The only way out is to move the data into
+a new cluster, which is a destructive operation on somebody's data and was
+therefore left to them to authorise rather than done unilaterally.
+
+**THE CONVERSION USED THIS SYSTEM'S OWN BACKUP SERVICE**, which turned out to be
+exactly the right tool and had never been used in anger. `pg_dump` was not an
+option — the embedded PostgreSQL package ships only `initdb` and `postgres`, no
+client binaries at all — and hand-rolling a dump across fifty-seven models with
+foreign keys between them would have been a worse bet than the tested code
+already in the repository. `restoreOrder` topologically sorts the schema; the
+manifest records a row count per model; `verify` re-reads the archive and checks
+both before anything is loaded.
+
+The order was: take a backup and verify it; copy the archives out of the
+repository; stop every Postgres process and confirm the data directory is
+unheld; **move** the old cluster aside rather than delete it; create a new one
+with `--encoding=UTF8`; migrate; seed, because a restore needs an account to
+authorise it and the new database has none; then restore.
+
+3,235 rows loaded, and every count matches what went in — 7 programmes, 9
+sections, 21 users, 15 students, 13 announcements, 4 fee structures, 13
+lectures. The audit log is deliberately not restored: it is append-only, and it
+still holds the record of the restore itself.
+
+Proved by writing a real row rather than by a `SELECT`, because the original
+failure was on INSERT into a varchar column:
+
+    stored subject name : اردو زبان
+    stored description  : اردو پڑھنے اور لکھنے کی بنیادی مہارت۔
+
+**The old cluster is still on disk** at `pgdata.win1252.bak`, gitignored, and is
+nobody's to delete but the person whose data it is.
+
+`db-local.mjs` already forced UTF-8 for anything it creates from now on and
+warns when it starts a cluster that is not; that fix is what stops this
+recurring on the next machine, and the conversion above is what fixes the one
+that already exists.
+
+Thirty-two defects and four absences. The number found by reading rather than
 running is still zero.

@@ -99,8 +99,8 @@ export function BatchForm({
   return (
     <div className="course-form batch-form">
       <p className="muted small">
-        A batch of <strong>{programmeName}</strong>. Students are admitted into a batch, and the
-        subjects below are what it teaches.
+        Another section of <strong>{programmeName}</strong> — same course, different group of
+        students. Students are admitted into a batch, and the subjects below are what it teaches.
       </p>
 
       {error && (
@@ -124,8 +124,9 @@ export function BatchForm({
           autoFocus
         />
         <span className="muted small">
-          Whatever staff and students will call it — &ldquo;Batch 2&rdquo;, &ldquo;Evening
-          Male&rdquo;, &ldquo;Morning A&rdquo;. A short code is generated for you.
+          The section letter, or whatever staff and students call it —
+          &ldquo;A&rdquo;, &ldquo;Section B&rdquo;, &ldquo;Morning A (Female)&rdquo;,
+          &ldquo;Batch 2&rdquo;. A short code is generated for you.
         </span>
       </label>
 

@@ -55,8 +55,8 @@ export function CourseHierarchy({ compact = false }: { compact?: boolean }) {
               <Icon name="layers" /> Course
             </strong>
             <p className="muted small">
-              What a student applies for — <em>Diploma in Graphic Designing</em>. It has a fee, a
-              picture on the public page, and the subjects taught in it.
+              Two or more subjects taught together — <em>Diploma in Graphic Designing</em>. This is
+              what a student applies for, and what carries the fee and the public page.
             </p>
           </div>
         </li>
@@ -72,8 +72,9 @@ export function CourseHierarchy({ compact = false }: { compact?: boolean }) {
               <Icon name="users" /> Batches
             </strong>
             <p className="muted small">
-              The actual group of students — <em>Morning A (Female)</em>, <em>Batch 2</em>. One
-              course can run as many batches at once, each with its own seats and timetable.
+              The same course, run as separate groups — <em>Section A</em>, <em>Section B</em>,{" "}
+              <em>Section C</em>. Same subjects, different students: one morning, one evening, one
+              female, one male. Each has its own seats, register and timetable.
             </p>
           </div>
         </li>
@@ -81,10 +82,11 @@ export function CourseHierarchy({ compact = false }: { compact?: boolean }) {
 
       {!compact && (
         <p className="hierarchy-example small">
-          <strong>For example:</strong> <em>Photoshop</em> and <em>English</em> are{" "}
-          <strong>subjects</strong>. Together they make the <strong>course</strong>{" "}
-          <em>Diploma in Graphic Designing</em>. That course runs as two <strong>batches</strong> —
-          one female, one male — both teaching the same subjects.
+          <strong>For example:</strong> <em>Photoshop</em> and <em>English</em> are two{" "}
+          <strong>subjects</strong>. Together they make one <strong>course</strong>,{" "}
+          <em>Diploma in Graphic Designing</em>. That one course then runs as several{" "}
+          <strong>batches</strong> — <em>A</em>, <em>B</em>, <em>C</em> — all teaching the same two
+          subjects to different groups of students.
         </p>
       )}
     </section>

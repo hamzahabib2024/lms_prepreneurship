@@ -39,6 +39,9 @@ client_secret*.json
 .DS_Store
 Thumbs.db
 pgdata/
+# The pre-UTF8 cluster, kept until somebody is satisfied the conversion took.
+# 73 MB of database files that must never reach a commit.
+pgdata.*/
 redisdata/
 uploads/
 
