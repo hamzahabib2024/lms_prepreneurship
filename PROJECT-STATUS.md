@@ -1,6 +1,6 @@
 # Project status
 
-Last updated: 12 August 2026 (email; load testing; accessibility; two reports)
+Last updated: 20 August 2026 (courses, fees, and the student nobody wrote to)
 
 **Roughly 96% built, and that figure has arithmetic behind it.**
 
@@ -630,3 +630,212 @@ That is the pattern holding at twenty: **the defect was in the seam between
 two things that were each correct.** nginx forwarded the address properly and
 the throttler keyed on the address properly; nothing had told Express to read
 the header. Seams are only visible when both sides are actually running.
+
+---
+
+## 17 August 2026 — the admission emails
+
+An applicant now hears from the System four times: the tracking reference when
+they submit, the sign-in details when they are admitted, a request when
+something is missing, and the reason when they are refused. Before today the
+first two were shown on a screen and nowhere else, and the last two were not
+told to the applicant at all — the state changed to NEEDS_INFO and both sides
+waited for the other. `ADMISSION-EMAILS.md` is the checklist, and every line in
+it was verified by running the flow over HTTP against the Docker stack, to a
+real Gmail address, rather than by reading the code.
+
+Both messages go straight through the mail adapter rather than the notification
+service, for two reasons that are really the same reason: an applicant has no
+account to write an inbox row against, and a temporary password must not be
+stored in a row that outlives its usefulness by years. Both are sent after
+their transaction commits and neither can fail it — an approval that rolled
+back because Gmail was slow would be far worse than an email that did not
+arrive — and the administrator is still shown the password on screen, now
+beside a line saying whether it actually went.
+
+**Three faults, and all three were in seams.** The pattern from the twentieth
+defect held exactly.
+
+The first: **email was never configured inside Docker**. `docker-compose.yml`
+named no mail settings, and compose gives a container only what it names —
+`.env` is read to interpolate the compose file, not injected into services. So
+the credentials worked from the host, the check script passed, a test message
+arrived, and the same code in the container had no mail server and correctly
+suppressed everything. Each side was right; nothing joined them.
+
+The second: **the first admission on a seeded database was refused**. The seed
+writes eight students with their registration numbers spelled out and never
+advanced the counter, so the first real approval was allocated a number already
+in use and came back as `409 DUPLICATE_RESOURCE` on the System's most
+consequential transaction, naming nothing an administrator could act on. This
+is precisely the disagreement OPN-01 describes on the Institute's own data.
+The allocator now checks that the number it was handed is free and steps over
+any that are not, one atomic statement per attempt so concurrent approvals
+still cannot collide. It walked past eight once, and will not walk again.
+
+The third: **the application could not start, and 1,143 tests said it could.**
+A service gained a constructor argument and the provider was never registered
+in its module. Nest resolves that graph at run time, TypeScript cannot see it,
+and every unit test builds its subject by hand with fakes — which is what makes
+them fast and exactly why none of them could see this. There is now a test that
+compiles the whole module graph, and it fails with the same message the
+container did.
+
+**A green check that could not have failed** appeared again, in my own work.
+The check proving the password never reaches a log passed on its first run
+because the mutation meant to break it was applied by a tool that does not
+exist on this machine — the file was never modified at all. Re-run properly, it
+fails on the leak. Every check written today was afterwards run against
+deliberately broken code before being believed.
+
+Twenty-three defects, and the number found by reading rather than running is
+still zero.
+
+---
+
+## 20 August 2026 — the integrations, tested against the real thing
+
+Four defects, and the pattern held for the fourth session running: **every one
+was in a seam between two things that were each correct, and not one was
+visible by reading either side.**
+
+**Google Drive had been "blocked on DEP-01" for months and was not.** The key
+was valid, the service account was right, and the Institute's folder was
+already shared with it — twelve class folders, readable, with real recordings
+in them. What was wrong was the name of a variable. The Drive provider, the
+Meet provider and the integrations screen all asked for
+`GOOGLE_SERVICE_ACCOUNT_JSON`, which **only `docker-compose.yml` sets** — it
+composes it out of the `GOOGLE_CREDENTIALS_DIR` and `GOOGLE_SERVICE_ACCOUNT_FILE`
+pair that a person actually writes in `.env`. Started any other way, which is
+every `npm run dev` anybody has ever run, nothing composed it. So the status
+screen said SIMULATED, `check-integrations.mjs` said "not configured", and
+lectures fell back to local storage — each of them reporting honestly on the
+question it had been asked, and all three asking the wrong question. Three
+tools agreeing is why nobody suspected the answer. Resolution now lives in one
+place and accepts all three forms.
+
+**Fixing that immediately exposed a second defect the first had been hiding.**
+The moment Drive worked, the integrations screen announced that Meet was live
+too — because that entry also derived itself from "are there Google
+credentials?". `google-meet.provider.ts` documents this exact trap at length:
+Drive and Meet share a service account, so *the credentials arriving for one
+integration silently arm another*. The provider had been fixed; the screen
+describing the provider had not. It was claiming that meeting links were
+created automatically while `LIVE_PROVIDER=manual` and every teacher was still
+pasting links in by hand. It now asks the provider that will actually be used
+whether it can create a meeting, which is the question a reader of that screen
+is really asking.
+
+**The temporary password reached its owner from one of the four places that
+mint one.** Admission approval emailed it. Cohort import, staff account
+creation and password reset each returned it to the administrator's screen and
+stopped there — which is survivable for eight students in a room and is not
+survivable for the hundred-row import that `FR-OPS-026` exists to serve. An
+operator will not relay a hundred passwords by hand, so in practice the
+passwords travelled by WhatsApp and stayed in the chat history, or they did not
+travel and the accounts were never used. There is now one `CredentialsMailer`
+that all four go through, and every screen that issues a password says whether
+it also arrived. The cohort import marks the rows that did not, in the list and
+in the downloaded file, because those are the only ones anybody has to chase.
+
+**Every sign-in link the System has ever emailed pointed at `localhost`.**
+`PUBLIC_WEB_URL` is set by `docker-compose.yml` and by nothing else, and the
+approval read it with a `http://localhost:5173` default — an address that in an
+email means *the student's own computer* and works for nobody. It now falls
+back to `WEB_ORIGIN`, which every deployment sets because CORS does not
+function without it, before falling back to localhost. The same omission had
+emails signing off "The Institute" rather than "Prepreneurship".
+
+**And one thing that was missing rather than broken.** `FR-REG-020` has had a
+public endpoint since the beginning, the confirmation email has always told
+applicants to keep their reference, and the landing page has always promised
+"a tracking reference you can check at any time". Nothing in the web app could
+check one. An applicant holding a reference had exactly one way to use it —
+telephone the office — which is the cost that requirement exists to remove.
+There is now a `/track` page, linked from the landing nav, the closing band,
+the page shown after submitting, and the confirmation email itself. It is
+routed *before* the authentication gate rather than only in the signed-out
+branch, because an emailed link gets opened on whatever device is to hand and
+falling through would answer a stranger's link with a student's dashboard.
+
+**Nothing here was found by reading.** The Drive key was proved by exchanging a
+real assertion for a real token and listing the Institute's own folders; the
+mail path by sending real messages and watching the server accept them; the
+tracking page by opening it in a browser at every state an application can
+reach; and the honest-failure path by turning email off and confirming the
+import says `NOBODY WAS EMAILED` rather than reporting success. Twenty-seven
+defects, and the number found by reading rather than running is still zero.
+
+---
+
+## 20 August 2026 — courses, fees, and the student nobody wrote to
+
+Three things the Institute could not do, and none of them was broken. All three
+were **missing**, which is a harder fault to see: nothing errored, no test
+failed, and every screen involved looked finished.
+
+**A STUDENT WHO ENROLLED IN A SECOND COURSE WAS TOLD NOTHING AT ALL.** Both
+places that can enrol somebody who is already a student — an admission approval
+and a cohort import — deliberately sent them no email. The reasoning was
+half right and had been written down: their account is not touched, there is no
+temporary password, and mailing "here are your new details" to somebody whose
+sign-in is unchanged is how a working account gets abandoned. All true, and the
+conclusion drawn from it was still wrong. From where the applicant sits, they
+filled in a form, paid a fee, attached a slip — and then heard nothing, while a
+first-time applicant doing the identical thing got a welcome. Silence after
+payment is indistinguishable from a lost application. They now get the news
+without the password, and are told in as many words that there is no new one
+and none is coming, because the likeliest thing they would otherwise do is wait
+for it and then telephone the office to ask where it is.
+
+**THE APPLICATION FORM ASKED FOR "THE AMOUNT YOU PAID" AND COULD NOT SAY WHAT
+THAT WAS.** Fees existed only as `FeeCharge` rows raised against students who
+were *already enrolled*, so the number was known to the office and to nobody
+else. The form told applicants to "pay the fee into the Institute's account"
+and named neither the fee nor the account. In practice they telephoned to ask,
+or they guessed — and `AMOUNT_INSUFFICIENT`, a rejection reason the admission
+module has carried since the beginning, is what a guess looks like from the
+other end. There is now a `FeeStructure` per programme: a total, a breakdown, an
+instalment schedule, and the amount due on application, published as a whole or
+not at all. The apply page shows the figure at the moment the course is chosen
+rather than four steps later, and the full table with the bank details on the
+step where the money actually moves.
+
+**AND THE ENDPOINTS TO CREATE A COURSE HAD NEVER BEEN REACHABLE.** `POST
+/programmes` and `POST /subjects` have been there, correctly guarded, since the
+beginning, and nothing in the running System could call either — the same fault
+StructurePage was built to fix, one level up. Every programme that has ever
+existed is one the seed script wrote. `Subject.thumbnailUrl` has been in the
+schema just as long with **nothing anywhere ever writing to it**, so every card
+on the landing page fell back to generated artwork and the Institute had no way
+to change that. There is now one page for all of it, and one page deliberately:
+creating a course, giving it a picture and setting its price are one job done in
+one sitting, and split across three screens the third is the one that gets
+forgotten — leaving a course on sale with no fee.
+
+**THE ARITHMETIC IS THE PART THAT IS ACTUALLY DANGEROUS.** These numbers are
+read by members of the public who then transfer money against them. A fee table
+that does not add up is not cosmetic: the applicant pays what the instalments
+said, the office checks the slip against the total, and the difference becomes a
+rejection of somebody who did exactly what they were asked. So it is checked in
+paisa as integers, on publication rather than on save — a half-typed table is
+unfinished, not wrong — and every problem is reported at once, because an
+administrator gets three things wrong at a time and one-per-save is three round
+trips. The two numbers that must agree are enforced: the first instalment and
+the amount the form will ask for. Left free to differ, the table says 25,000,
+the form asks 30,000, and whichever the applicant believes makes their slip
+wrong.
+
+**FIXING ONE THING EXPOSED A SECOND, AGAIN.** Adding fee status to the
+programmes list made it obvious that nothing on the courses screen said which
+courses had a published price — the exact failure the page exists to prevent,
+invisible on the page built to prevent it. It is now a badge on every card.
+
+**And two guards in this codebase earned their keep.** The scope-coverage test
+failed the moment the three new models existed, because an unclassified model is
+readable by anyone who passes the role check and a missing entry looks exactly
+like a model nobody has needed yet. The web-routes test failed because a new
+page was not documented. Neither fault would have been visible by reading.
+
+Twenty-seven defects and three absences. The number found by reading rather than
+running is still zero.

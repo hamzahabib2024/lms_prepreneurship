@@ -52,20 +52,46 @@ line(`\n${"═".repeat(64)}\n  1. EMAIL — passwords, receipts, notifications\n
 // -------------------------------------------------------- google drive/meet --
 line(`\n${"═".repeat(64)}\n  2. GOOGLE DRIVE & MEET — lecture video, class links\n${"═".repeat(64)}\n`);
 {
-  const path = env("GOOGLE_SERVICE_ACCOUNT_JSON");
+  /*
+   * RESOLVED THE WAY THE API RESOLVES IT — see
+   * apps/api/src/common/google-credentials.ts, which this mirrors.
+   *
+   * This script used to read GOOGLE_SERVICE_ACCOUNT_JSON alone, and so did the
+   * API. That variable is composed by docker-compose out of the two below and
+   * by nothing else, so a valid key sitting in GOOGLE_CREDENTIALS_DIR was
+   * reported "not configured" — by the script, by the integrations screen, and
+   * by the Drive provider, which then silently fell back to local storage.
+   * Three tools agreeing on a wrong answer is why nobody suspected the answer.
+   */
+  const direct = env("GOOGLE_SERVICE_ACCOUNT_JSON");
+  const dir = env("GOOGLE_CREDENTIALS_DIR");
+  const file = env("GOOGLE_SERVICE_ACCOUNT_FILE");
+  const isNone = (v) => v === "none.json" || v.endsWith("/none.json") || v.endsWith("\\none.json");
+
+  const path =
+    direct && !direct.startsWith("{") && !isNone(direct)
+      ? direct
+      : file && !isNone(file)
+        ? dir
+          ? `${dir.replace(/[\\/]+$/, "")}/${file}`
+          : file
+        : "";
   const store = env("LECTURE_STORAGE", "local");
 
   if (!path) {
     no("Not configured");
-    tip("Needs: GOOGLE_SERVICE_ACCOUNT_JSON pointing at the key file");
+    tip("Needs: GOOGLE_CREDENTIALS_DIR (the folder holding the key) and");
+    tip("GOOGLE_SERVICE_ACCOUNT_FILE (its filename) — or the key's JSON pasted");
+    tip("whole into GOOGLE_SERVICE_ACCOUNT_JSON.");
     tip("Lectures are served from this server instead. Meet links are pasted in");
     tip("by hand. Everything else about lessons and the timetable works.");
     report.push(["Google Drive", "not configured", "A Google Cloud service account"]);
   } else if (!existsSync(path)) {
-    no(`GOOGLE_SERVICE_ACCOUNT_JSON points at a file that does not exist`);
+    no(`The key file does not exist`);
     tip(`Looked for: ${path}`);
-    tip("Use an absolute path. A relative one is resolved from wherever the");
-    tip("server was started, which is rarely where you think.");
+    tip("Use an absolute path for GOOGLE_CREDENTIALS_DIR. A relative one is");
+    tip("resolved from wherever the server was started, which is rarely where");
+    tip("you think — and inside Docker the folder is mounted at /run/credentials.");
     report.push(["Google Drive", "key file missing", "Fix the path"]);
   } else {
     try {

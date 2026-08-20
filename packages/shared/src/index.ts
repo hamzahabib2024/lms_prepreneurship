@@ -5,3 +5,4 @@ export * from "./rbac";
 export * from "./schemas/auth";
 export * from "./schemas/registration";
 export * from "./schemas/academic";
+export * from "./schemas/finance";

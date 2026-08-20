@@ -3,6 +3,8 @@ import { ConfigService } from "@nestjs/config";
 import { StorageRegistry } from "../content/storage/storage.registry";
 import { ChannelRegistry } from "../notification/channel/channel.registry";
 import { SimulatedOutbox } from "./simulated-outbox";
+import { hasGoogleCredentials } from "../common/google-credentials";
+import { ProviderRegistry } from "../live/provider/provider.registry";
 
 /** LIVE talks to the real provider. The other two do not, differently. */
 export type IntegrationMode = "LIVE" | "SIMULATED" | "NOT_CONFIGURED";
@@ -44,20 +46,38 @@ export class IntegrationService {
     private readonly storage: StorageRegistry,
     private readonly channels: ChannelRegistry,
     private readonly outbox: SimulatedOutbox,
+    // Asked, not re-derived. See the live_classroom entry below.
+    private readonly liveProviders: ProviderRegistry,
   ) {}
 
   private isSet(key: string): boolean {
     return (this.config.get<string>(key, "") ?? "").trim() !== "";
   }
 
+  /** One question, one answer — shared with the Drive and Meet providers. */
+  private get googleConfigured(): boolean {
+    return hasGoogleCredentials((k) => this.config.get<string>(k, ""));
+  }
+
   async statuses(): Promise<IntegrationStatus[]> {
     const lectureStore = this.config.get<string>("LECTURE_STORAGE", "local");
-    const driveConfigured = this.isSet("GOOGLE_SERVICE_ACCOUNT_JSON");
+    // Asked the SAME way the Drive provider asks, so this screen cannot report
+    // "not configured" for a key the provider is happily using — or the
+    // reverse, which is what happened: GOOGLE_CREDENTIALS_DIR +
+    // GOOGLE_SERVICE_ACCOUNT_FILE in .env are only composed into
+    // GOOGLE_SERVICE_ACCOUNT_JSON by docker-compose.
+    const driveConfigured = this.googleConfigured;
     const whatsappConfigured = this.channels.get("WHATSAPP")?.isConfigured() ?? false;
     // Asked of the adapter, not re-derived from the environment here — one
     // source of truth for "is this set up", so the screen cannot disagree with
     // what actually happens at send time.
     const emailConfigured = this.channels.get("EMAIL")?.isConfigured() ?? false;
+
+    // Whether a link is MADE for the teacher or pasted in BY them — the one
+    // thing a reader of this screen wants to know about live classes.
+    const liveIsAutomatic = this.liveProviders
+      .resolve(null)
+      .capabilities().canCreateScheduledMeeting;
 
     const storageHealth = await this.storage.listWithHealth();
     const driveHealth = storageHealth.find((s) => s.key === "google_drive");
@@ -78,7 +98,8 @@ export class IntegrationService {
         toGoLive:
           driveConfigured && lectureStore === "google_drive"
             ? null
-            : "Set GOOGLE_SERVICE_ACCOUNT_JSON to a service account with Drive API access, " +
+            : "Point GOOGLE_CREDENTIALS_DIR and GOOGLE_SERVICE_ACCOUNT_FILE at a service " +
+              "account key with Drive API access, " +
               "then set LECTURE_STORAGE=google_drive.",
       },
       {
@@ -133,17 +154,37 @@ export class IntegrationService {
       },
       {
         key: "live_classroom",
-        name: "Live classes (Google Meet)",
+        /*
+         * ASKED OF THE PROVIDER THAT WILL ACTUALLY BE USED, not derived from
+         * the environment here.
+         *
+         * This entry used to read "are there Google credentials?" and answer
+         * LIVE if so — the precise mistake google-meet.provider.ts documents
+         * at length: THE CREDENTIALS ARRIVING FOR ONE INTEGRATION SILENTLY
+         * ARM ANOTHER. Drive and Meet share a service account, so the moment
+         * a key was added for lecture video this screen began promising that
+         * meeting links were created automatically, while LIVE_PROVIDER was
+         * still `manual` and every teacher was still pasting links in by
+         * hand. Meet additionally needs a Workspace user to act as
+         * (GOOGLE_IMPERSONATE_SUBJECT) — a service account cannot create a
+         * conference alone — so a key on its own is never enough.
+         *
+         * `canCreateScheduledMeeting` is exactly the question a reader of this
+         * screen is asking: does the System make the link, or does a person?
+         */
+        name: `Live classes (${this.liveProviders.resolve(null).key})`,
         dependency: "DEP-01",
-        mode: this.isSet("GOOGLE_SERVICE_ACCOUNT_JSON") ? "LIVE" : "SIMULATED",
-        behaviour: this.isSet("GOOGLE_SERVICE_ACCOUNT_JSON")
-          ? "Meeting links are created through the Google API."
+        mode: liveIsAutomatic ? "LIVE" : "SIMULATED",
+        behaviour: liveIsAutomatic
+          ? "Meeting links are created through the Google API when a class is scheduled."
           : "Meeting links are entered by hand by whoever schedules the class, and " +
             "attendance is taken manually or by student check-in. Every other part of the " +
             "timetable, the register and the attendance rules works normally.",
-        toGoLive: this.isSet("GOOGLE_SERVICE_ACCOUNT_JSON")
+        toGoLive: liveIsAutomatic
           ? null
-          : "The same service account as lecture storage, with the Calendar and Meet scopes.",
+          : "Set LIVE_PROVIDER=google_meet, and GOOGLE_IMPERSONATE_SUBJECT to a Workspace " +
+            "user the service account may act as — a service account cannot create a Meet " +
+            "conference on its own. The key itself is the same one lecture storage uses.",
       },
     ];
   }

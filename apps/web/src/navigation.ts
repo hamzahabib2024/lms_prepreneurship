@@ -101,6 +101,10 @@ export const DESTINATIONS: readonly Destination[] = [
    * address, exactly as before. This is the interface declining to offer
    * something, which is all it was ever able to do.
    */
+  /* Creating the courses themselves — the level above Sections. OFFICE only:
+     a teacher holds `programme:read` but no create on programme or subject, and
+     nothing but read on fee_structure. */
+  { to: "/courses-admin", label: "Courses & fees", icon: "book", group: "Institute", roles: OFFICE, also: ["programmes", "subjects", "fee", "fees", "price", "instalments", "thumbnail", "picture"] },
   { to: "/sections", label: "Sections", icon: "layers", group: "Institute", roles: STAFF, also: ["subjects", "classes"] },
   { to: "/structure", label: "Structure", icon: "calendar", group: "Institute", roles: STAFF, also: ["terms", "batches", "sessions"] },
   /* A TEACHER holds no `payment` grant at all (§4.5) — offering them the page

@@ -6,9 +6,11 @@ import { AuthService } from "../auth/auth.service";
 import { RegistrationNumberService } from "../admission/registration-number.service";
 import { getActor } from "../prisma/actor-context";
 import { AppError } from "@lms/shared";
+import { CredentialsMailer } from "../notification/credentials-mailer";
 import {
   countAgainstSection,
   describePlan,
+  importResultMessage,
   planImport,
   type ImportPlan,
   type ImportRow,
@@ -25,6 +27,15 @@ export interface RowOutcome {
   reason?: string;
   /** Shown once, never again — the account is created with it hashed. */
   temporaryPassword?: string;
+  /**
+   * Whether the password reached the student's own address.
+   *
+   * Set only for rows that minted one. Absent means nothing was sent because
+   * nothing needed to be (a returning student, or a skipped row); false means
+   * a send was attempted and did not succeed, and the operator must relay it
+   * by hand from the list on screen.
+   */
+  emailSent?: boolean;
 }
 
 export interface ImportResult {
@@ -34,6 +45,9 @@ export interface ImportResult {
   rejoined: number;
   skipped: number;
   outcomes: RowOutcome[];
+  /** How many students were sent their own password, and how many were not. */
+  emailed: number;
+  notEmailed: number;
   message: string;
 }
 
@@ -68,6 +82,9 @@ export class CohortImportService {
     private readonly audit: AuditService,
     private readonly auth: AuthService,
     private readonly numbers: RegistrationNumberService,
+    // FR-OPS-026 — a hundred students whose passwords never leave the
+    // operator's screen are a hundred accounts nobody signs in to.
+    private readonly credentials: CredentialsMailer,
   ) {}
 
   /**
@@ -198,10 +215,65 @@ export class CohortImportService {
       outcomes.push(await this.loadOne(row, section, options, actor.userId, ip));
     }
 
+    /*
+     * The passwords, to the students — FR-OPS-026, and the point of importing
+     * a cohort rather than typing it.
+     *
+     * AFTER EVERY ROW IS WRITTEN, not inside the per-row transaction. Three
+     * hundred SMTP handshakes interleaved with three hundred transactions
+     * would hold the section lock across the mail server's latency, and one
+     * slow send would stall the roll-number sequence for the whole import.
+     *
+     * SEQUENTIAL, deliberately. nodemailer pools connections, and firing three
+     * hundred sends at once is how a Gmail account gets rate-limited into a
+     * temporary block — which looks exactly like the integration being broken.
+     *
+     * NOTHING HERE CAN FAIL THE IMPORT. Every student in this list already has
+     * an account and a registration number. The password is still in the
+     * result for the operator to read out, and each row now says whether it
+     * also arrived by email.
+     */
+    for (const outcome of outcomes) {
+      if (!outcome.email) continue;
+
+      if (outcome.temporaryPassword) {
+        const posted = await this.credentials.sendNewAccount({
+          to: outcome.email,
+          fullName: outcome.fullName,
+          temporaryPassword: outcome.temporaryPassword,
+          registrationNo: outcome.registrationNo ?? null,
+        });
+        outcome.emailSent = posted.sent;
+        continue;
+      }
+
+      /*
+       * A REJOINING STUDENT IS TOLD TOO, and with the opposite message.
+       *
+       * They have no temporary password because their account was not touched,
+       * which is exactly why the loop used to skip them entirely. But a student
+       * put into a new section by an import has no way of knowing it happened:
+       * nothing on their dashboard announces itself, and they are not sitting
+       * with the operator who ran the file. The one thing this must not do is
+       * imply their sign-in changed — so it carries no password and says so.
+       */
+      if (outcome.status === "REJOINED") {
+        const posted = await this.credentials.sendCourseAdded({
+          to: outcome.email,
+          fullName: outcome.fullName,
+          registrationNo: outcome.registrationNo ?? null,
+          sectionName: section.name,
+        });
+        outcome.emailSent = posted.sent;
+      }
+    }
+
     outcomes.sort((a, b) => a.line - b.line);
     const loaded = outcomes.filter((o) => o.status === "LOADED").length;
     const rejoined = outcomes.filter((o) => o.status === "REJOINED").length;
     const skipped = outcomes.filter((o) => o.status === "SKIPPED").length;
+    const emailed = outcomes.filter((o) => o.emailSent === true).length;
+    const notEmailed = outcomes.filter((o) => o.emailSent === false).length;
 
     // One entry for the import itself, in addition to the per-student ones.
     // Without it, three hundred separate creations have no single thing an
@@ -229,7 +301,9 @@ export class CohortImportService {
       rejoined,
       skipped,
       outcomes,
-      message: this.resultMessage(loaded, rejoined, skipped),
+      emailed,
+      notEmailed,
+      message: importResultMessage({ loaded, rejoined, skipped, emailed, notEmailed }),
     };
   }
 
@@ -522,26 +596,5 @@ export class CohortImportService {
       parts.push(`${wouldLoad} would be created in this section.`);
     }
     return parts.join(" ");
-  }
-
-  private resultMessage(loaded: number, rejoined: number, skipped: number): string {
-    const parts: string[] = [];
-    if (loaded > 0) parts.push(`${loaded} new ${loaded === 1 ? "student" : "students"} loaded`);
-    if (rejoined > 0) {
-      parts.push(
-        `${rejoined} existing ${rejoined === 1 ? "student" : "students"} joined this section ` +
-          "keeping their registration number",
-      );
-    }
-    if (skipped > 0) parts.push(`${skipped} skipped`);
-    if (parts.length === 0) return "Nothing was loaded.";
-    return (
-      parts.join(", ") +
-      "." +
-      (loaded > 0
-        ? " Each new student has a temporary password shown once below and must change it when " +
-          "they first sign in."
-        : "")
-    );
   }
 }

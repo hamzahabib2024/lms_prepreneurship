@@ -171,6 +171,28 @@ const DELIBERATELY_UNSCOPED = [
   // it at all needs notification_config:configure, which only a Super Admin or
   // an Admin holds.
   "NotificationTemplate",
+  /*
+   * WHAT A COURSE COSTS, AND THE PICTURE ON ITS CARD.
+   *
+   * Both are the Institute talking about itself, not about anybody. A fee
+   * structure is a price list and a media asset is a course cover; neither
+   * carries one word of personal information, and both are shown to members of
+   * the public who have not signed in — a thumbnail on the landing page, a fee
+   * table on the application form. There is no actor to scope them BY.
+   *
+   * The protection that matters for these is not row-level and never could be.
+   * For a fee structure it is the DRAFT/PUBLISHED distinction: the public
+   * endpoint selects published rows only, so an administrator part-way through
+   * next year's prices is not quoting them to applicants. For a media asset it
+   * is the upload path — `course_media:create`, held by Admin and Super Admin,
+   * and an image-signature check — because reading one is meant to be open.
+   *
+   * FeeStructureLine follows its parent. A line has no meaning apart from the
+   * table it belongs to and is never queried on its own.
+   */
+  "FeeStructure",
+  "FeeStructureLine",
+  "MediaAsset",
 ] as const;
 
 /**

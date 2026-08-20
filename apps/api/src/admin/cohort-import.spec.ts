@@ -2,6 +2,7 @@ import {
   MAX_IMPORT,
   countAgainstSection,
   describePlan,
+  importResultMessage,
   parseCsv,
   planImport,
   templateCsv,
@@ -488,5 +489,82 @@ describe("the template offered on the screen", () => {
   it("names every required column", () => {
     const header = templateCsv().split("\n")[0] ?? "";
     for (const c of ["fullName", "email", "gender", "phone"]) expect(header).toContain(c);
+  });
+});
+
+/**
+ * What the operator is told afterwards — FR-OPS-026.
+ *
+ * THE CLAIM THAT CANNOT BE CHECKED BY LOOKING. Whether a hundred students were
+ * actually sent their passwords is invisible on the screen, so the sentence
+ * has to be exact about it. An operator told "300 students loaded" closes the
+ * page; if forty were never emailed, forty people hold an account they cannot
+ * reach, and nobody finds out until the term starts.
+ */
+describe("the sentence the operator reads afterwards", () => {
+  const msg = (o: Partial<Parameters<typeof importResultMessage>[0]>) =>
+    importResultMessage({ loaded: 0, rejoined: 0, skipped: 0, emailed: 0, notEmailed: 0, ...o });
+
+  it("says everyone was emailed when everyone was", () => {
+    const m = msg({ loaded: 3, emailed: 3 });
+    expect(m).toContain("3 new students loaded");
+    expect(m).toMatch(/Every one of them has been emailed/);
+  });
+
+  it("NAMES THE NUMBER that could not be reached rather than rounding it away", () => {
+    // The defect this exists to prevent: a partial failure reported as a
+    // success, because the sentence only mentioned how many were loaded.
+    const m = msg({ loaded: 300, emailed: 260, notEmailed: 40 });
+    expect(m).toContain("260 of them were emailed");
+    expect(m).toContain("40 could not be reached");
+    expect(m).not.toMatch(/Every one of them has been emailed/);
+  });
+
+  it("is unmistakable when email is off entirely", () => {
+    // Not a footnote. If nothing was sent, relaying every password by hand is
+    // the operator's next hour, and they have to know before they close it.
+    const m = msg({ loaded: 12, emailed: 0, notEmailed: 12 });
+    expect(m).toContain("NOBODY WAS EMAILED");
+    expect(m).toMatch(/Integrations/);
+  });
+
+  it("reports delivery for an import of nothing but rejoining students", () => {
+    // THE REGRESSION THIS PINS. Delivery used to be reported only when new
+    // students were created, because only new students were written to. A
+    // rejoining student is now emailed too — they are enrolled in something
+    // they did not know about — so a file of nothing but rejoins can have a
+    // delivery failure, and saying nothing would hide all of it.
+    const m = msg({ rejoined: 4, emailed: 4 });
+    expect(m).toContain("4 existing students joined this section");
+    expect(m).toMatch(/Every one of them has been emailed/);
+
+    const partial = msg({ rejoined: 4, emailed: 3, notEmailed: 1 });
+    expect(partial).toContain("3 of them were emailed");
+    expect(partial).toContain("1 could not be reached");
+  });
+
+  it("says nothing about email when nobody was owed a message", () => {
+    // Every row skipped: nothing was written and nobody was told, so there is
+    // no delivery to report either way.
+    const m = msg({ skipped: 3 });
+    expect(m).toContain("3 skipped");
+    expect(m).not.toMatch(/email/i);
+  });
+
+  it("counts one student in the singular", () => {
+    expect(msg({ loaded: 1, emailed: 1 })).toContain("1 new student loaded");
+    expect(msg({ loaded: 2, emailed: 1, notEmailed: 1 })).toContain("1 of them was emailed");
+  });
+
+  it("does not pretend an empty file did something", () => {
+    expect(msg({})).toBe("Nothing was loaded.");
+  });
+
+  it("still reports the skipped rows beside the delivery count", () => {
+    // Both, always. "298 of 300 loaded" beside a tick is how somebody closes
+    // the page believing all three hundred went in.
+    const m = msg({ loaded: 298, skipped: 2, emailed: 298 });
+    expect(m).toContain("2 skipped");
+    expect(m).toMatch(/Every one of them has been emailed/);
   });
 });

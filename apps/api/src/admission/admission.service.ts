@@ -20,6 +20,7 @@ import { StorageRegistry } from "../content/storage/storage.registry";
 import { SettingsService } from "../settings/settings.service";
 import { parseImageLinks, parseVideoLinks } from "./video-links";
 import { AdmissionMailer } from "./admission-mailer";
+import { CredentialsMailer } from "../notification/credentials-mailer";
 
 /** Unambiguous alphabet — no O/0, I/l/1 — because these are read aloud
  *  over WhatsApp and mis-transcribed characters generate support calls. */
@@ -39,6 +40,9 @@ export class AdmissionService {
     private readonly config: ConfigService,
     private readonly settings: SettingsService,
     private readonly mailer: AdmissionMailer,
+    // For the public base URL only. One implementation of "where is this
+    // System reachable", shared with every other email that carries a link.
+    private readonly credentials: CredentialsMailer,
   ) {}
 
   /**
@@ -142,6 +146,7 @@ export class AdmissionService {
           code: true,
           description: true,
           durationWeeks: true,
+          thumbnailAssetId: true,
           sessions: {
             where: { deletedAt: null },
             select: {
@@ -170,29 +175,153 @@ export class AdmissionService {
       }),
     );
 
+    /*
+     * THE FEE, WITH THE PROSPECTUS — FR-PAY-033.
+     *
+     * Until now the application form asked "the amount you paid" and the
+     * System had no idea what that should be: fees existed only as charges
+     * raised against students who were ALREADY enrolled. An applicant was
+     * asked to transfer a number nobody had told them, and the office found
+     * out whether they had guessed right by reading the slip afterwards. Every
+     * AMOUNT_INSUFFICIENT rejection is a consequence of that.
+     *
+     * ONE QUERY FOR ALL OF THEM, not one per programme. The prospectus is the
+     * busiest unauthenticated route in the System, and a per-programme lookup
+     * is a database round trip per card on the landing page.
+     *
+     * PUBLISHED ONLY, never a draft. An administrator part-way through next
+     * year's fee table must not have it quoted to the public; that is the
+     * whole reason the status column exists.
+     */
+    const fees = await this.prisma.asSystem((db) =>
+      db.feeStructure.findMany({
+        where: {
+          status: "PUBLISHED",
+          deletedAt: null,
+          supersededAt: null,
+          programmeId: { in: programmes.map((p) => p.id) },
+        },
+        select: {
+          programmeId: true,
+          academicSessionId: true,
+          currency: true,
+          totalAmount: true,
+          dueAtApplication: true,
+          notes: true,
+          lines: {
+            select: { kind: true, label: true, amount: true, dueAfterDays: true, sortOrder: true },
+          },
+        },
+      }),
+    );
+
+    // A session-specific structure beats the programme's standing one. Both can
+    // be published at once — that is the point of the nullable session id — so
+    // the more specific has to win rather than whichever the query returned first.
+    const feeFor = new Map<string, (typeof fees)[number]>();
+    for (const f of fees) {
+      const held = feeFor.get(f.programmeId);
+      if (!held || (held.academicSessionId === null && f.academicSessionId !== null)) {
+        feeFor.set(f.programmeId, f);
+      }
+    }
+
     return programmes
-      .map((p) => ({
-        id: p.id,
-        name: p.name,
-        code: p.code,
-        description: p.description,
-        durationWeeks: p.durationWeeks,
-        sections: p.sessions.flatMap((session) =>
-          session.batches.flatMap((batch) =>
-            batch.sections.map((sec) => ({
-              id: sec.id,
-              name: sec.name,
-              code: sec.code,
-              shift: sec.shift,
-              genderRestriction: sec.genderRestriction,
-              session: session.name,
-            })),
+      .map((p) => {
+        const fee = feeFor.get(p.id);
+        return {
+          id: p.id,
+          name: p.name,
+          code: p.code,
+          description: p.description,
+          durationWeeks: p.durationWeeks,
+          // The URL, not the id. A landing page should not have to know how
+          // this System addresses its own files.
+          thumbnailUrl: p.thumbnailAssetId
+            ? `/api/v1/public/course-media/${p.thumbnailAssetId}`
+            : null,
+          /*
+           * NULL WHEN NO FEE IS PUBLISHED, rather than a zero.
+           *
+           * "Rs 0" is a price, and it is one no institute charges. A programme
+           * whose fee has not been set yet must say so — the apply page then
+           * tells the applicant to ask the office, which is true, instead of
+           * inviting them to transfer nothing.
+           */
+          fee: fee
+            ? {
+                currency: fee.currency,
+                totalAmount: Number(fee.totalAmount),
+                dueAtApplication: Number(fee.dueAtApplication),
+                notes: fee.notes,
+                components: fee.lines
+                  .filter((l) => l.kind === "COMPONENT")
+                  .sort((a, b) => a.sortOrder - b.sortOrder)
+                  .map((l) => ({ label: l.label, amount: Number(l.amount) })),
+                instalments: fee.lines
+                  .filter((l) => l.kind === "INSTALMENT")
+                  .sort(
+                    (a, b) =>
+                      (a.dueAfterDays ?? 0) - (b.dueAfterDays ?? 0) || a.sortOrder - b.sortOrder,
+                  )
+                  .map((l) => ({
+                    label: l.label,
+                    amount: Number(l.amount),
+                    dueAfterDays: l.dueAfterDays ?? 0,
+                  })),
+              }
+            : null,
+          sections: p.sessions.flatMap((session) =>
+            session.batches.flatMap((batch) =>
+              batch.sections.map((sec) => ({
+                id: sec.id,
+                name: sec.name,
+                code: sec.code,
+                shift: sec.shift,
+                genderRestriction: sec.genderRestriction,
+                session: session.name,
+              })),
+            ),
           ),
-        ),
-      }))
+        };
+      })
       // A programme with nowhere to enrol is not on offer, whatever the
       // prospectus says.
       .filter((p) => p.sections.length > 0);
+  }
+
+  /**
+   * Where to send the money — FR-REG-007.
+   *
+   * THE OTHER HALF OF THE FEE, and the half that was missing altogether.
+   * Knowing a course costs 90,000 is useless without an account to pay it
+   * into, and the application form has been telling applicants to "pay the fee
+   * into the Institute's account" without ever naming one. In practice they
+   * telephoned to ask, which is the support call this removes.
+   *
+   * FROM SETTINGS, so the Institute can change bank without a deployment, and
+   * every field is optional — an institute that takes cash at the desk fills
+   * in the instructions and leaves the account blank.
+   */
+  async paymentDetails() {
+    const [bankName, accountName, accountNumber, iban, instructions] = await Promise.all([
+      this.settings.text("finance.bankName"),
+      this.settings.text("finance.bankAccountName"),
+      this.settings.text("finance.bankAccountNumber"),
+      this.settings.text("finance.bankIban"),
+      this.settings.text("finance.paymentInstructions"),
+    ]);
+
+    return {
+      bankName: bankName.trim() || null,
+      accountName: accountName.trim() || null,
+      accountNumber: accountNumber.trim() || null,
+      iban: iban.trim() || null,
+      instructions: instructions.trim() || null,
+      // So the page can say "ask the office" rather than rendering an empty
+      // panel that looks like it failed to load.
+      configured: Boolean(accountNumber.trim() || iban.trim() || instructions.trim()),
+    };
   }
 
   async submit(input: RegistrationSubmitInput, campaignRef?: Record<string, unknown>) {
@@ -344,6 +473,10 @@ export class AdmissionService {
         to: submitted.email,
         fullName: input.fullName,
         trackingRef: submitted.trackingRef,
+        // FR-REG-020 — the reference is only useful with somewhere to type it.
+        // Before this the email said "you can check at any time" and named no
+        // way to, which is the whole complaint the tracking page answers.
+        trackUrl: `${this.credentials.signInUrl()}/track/${submitted.trackingRef}`,
       });
       return { ...submitted, emailSent: posted.sent };
     }
@@ -913,10 +1046,15 @@ export class AdmissionService {
      * negotiates — and an approval that rolled back because Gmail was slow
      * would be a far worse fault than an email that did not arrive.
      *
-     * A RETURNING STUDENT GETS NOTHING. Their account was not touched, there
-     * is no temporary password, and sending "here are your new details" to
-     * somebody whose sign-in is unchanged is how a working account gets
-     * abandoned.
+     * A RETURNING STUDENT GETS A DIFFERENT MESSAGE, NOT NO MESSAGE. Their
+     * account was not touched and there is no temporary password, so sending
+     * them the credentials mail would be a lie about their sign-in. But saying
+     * nothing at all — which is what this did — leaves somebody who has just
+     * filled in a form, paid a fee and attached a slip hearing absolutely
+     * nothing back, while a first-time applicant doing the same thing gets a
+     * welcome. Silence after payment reads as a lost application, and the next
+     * thing that happens is a telephone call. They get the news without the
+     * password, and are told in as many words to use the sign-in they have.
      *
      * The password is still shown on the administrator's screen either way,
      * which is the point of FR-REG-042: delivery is not certain, so the
@@ -929,10 +1067,30 @@ export class AdmissionService {
         fullName: result.applicantName,
         registrationNo: result.registrationNo,
         temporaryPassword: tempPassword,
-        signInUrl: this.config.get<string>("PUBLIC_WEB_URL", "http://localhost:5173"),
+        // PUBLIC_WEB_URL, then WEB_ORIGIN, then localhost. Reading only
+        // PUBLIC_WEB_URL — which nothing but docker-compose sets — emailed
+        // every new student a sign-in link to http://localhost:5173.
+        signInUrl: this.credentials.signInUrl(),
       });
       if (posted.sent) sent.push(`Sign-in details emailed to ${result.applicantEmail}.`);
       else sent.push(`Could NOT email ${result.applicantEmail} — ${posted.detail}`);
+    } else if (result.returningStudent) {
+      const posted = await this.mailer.sendCourseAdded({
+        to: result.applicantEmail,
+        fullName: result.applicantName,
+        registrationNo: result.registrationNo,
+        sectionName: result.section.name,
+        subjectCount: result.subjectCount,
+        signInUrl: this.credentials.signInUrl(),
+      });
+      if (posted.sent) {
+        sent.push(
+          `${result.applicantEmail} was emailed to say they are enrolled and should use ` +
+            `their existing sign-in.`,
+        );
+      } else {
+        sent.push(`Could NOT email ${result.applicantEmail} — ${posted.detail}`);
+      }
     }
 
     return {
@@ -954,7 +1112,10 @@ export class AdmissionService {
             // though the existing credentials had been reset.
             temporaryPassword: null,
             mustChangePassword: false,
-            note: "This student already has an account. Their existing sign-in is unchanged.",
+            note:
+              "This student already has an account, and their existing sign-in is unchanged. " +
+              "They have been emailed to say they are enrolled and should use the password " +
+              "they already have — see the delivery line below.",
           }
         : {
             email: undefined as string | undefined,

@@ -13,11 +13,11 @@ get it. The **What changed** column records what was done *beyond* that.
 
 | | |
 |---|---|
-| Pages | **40** |
-| On the brand palette and type scale | **40 of 40** |
-| Loading state shaped like its content | **32 of 40** |
-| Explained empty state | **14 of 40** |
-| Announced error state | **38 of 40** |
+| Pages | **42** |
+| On the brand palette and type scale | **42 of 42** |
+| Loading state shaped like its content | **33 of 42** |
+| Explained empty state | **15 of 42** |
+| Announced error state | **40 of 42** |
 | Still carrying known work | **14** |
 
 ## Legend
@@ -46,6 +46,7 @@ get it. The **What changed** column records what was done *beyond* that.
 | **ClassPage** | everyone | ✅ | ✅ | — | ✅ | Card skeleton. Join button becomes the amber call to action — the highest-value action in the product now carries the one accent colour. |
 | **CohortImportPage** | Admin, Super Admin | ✅ | — | — | ✅ | The submit button now names what it is loading — “Loading 312 students…” rather than a bare “Loading…”. A button label during a single action is the correct pattern, so no placeholder here. |
 | **ContentPage** | Teacher, Admin, Super Admin | ✅ | — | — | ✅ | Palette and type only; violet page hue removed. |
+| **CourseAdminPage** | Admin, Super Admin | ✅ | ✅ | ✅ | ✅ | New page. The endpoints to create a programme or a subject had always existed and nothing in the running app could call either. Card grid with the course's own picture, an upload that previews at the size it will appear, and a fee editor with a running total under each block. |
 | **CoursePage** | everyone | ✅ | ✅ | ✅ | ✅ | Card skeleton. The Drive-permissions alert keeps its wording, which is the best error copy in the codebase. |
 | **CoursesPage** | everyone | ✅ | ✅ | ✅ | ✅ | Six-card skeleton matching the tile grid. Cover art moved off the twelve-hue rainbow. |
 | **DashboardPage** | everyone | ✅ | ✅ | — | ✅ | Both empty widget bodies now say why they are empty. Card skeleton was already correct. |
@@ -70,6 +71,7 @@ get it. The **What changed** column records what was done *beyond* that.
 | **SubjectPage** | Student | ✅ | ✅ | — | ✅ | List skeleton. |
 | **TemplatesPage** | Admin, Super Admin | ✅ | ✅ | — | ✅ | List skeleton. Live preview kept. |
 | **TimetablePage** | everyone | ✅ | ✅ | — | ✅ | List skeleton. Ruled-paper texture now drawn from the amber accent. |
+| **TrackPage** | public | ✅ | — | — | ✅ | New page. FR-REG-020 had an endpoint and no screen, so a tracking reference could only be used by telephoning the office. One field, one button, and a plain-language verdict rather than a status enum. |
 | **UsersPage** | Admin, Super Admin | ✅ | ✅ | ✅ | ✅ | Table skeleton at the directory's column count, and an empty state with a Clear the filters action — the directory is not empty, the filters exclude it. |
 | **VerifyPage** | public | ✅ | — | — | ✅ | Palette and type only. Public, and unchanged in behaviour. |
 | **WatchPage** | everyone | ✅ | ✅ | — | ✅ | Card skeleton. No autoplay, no cross-class recommendations — both kept. |
