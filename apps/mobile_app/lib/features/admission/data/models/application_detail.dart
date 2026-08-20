@@ -77,7 +77,8 @@ class ApplicationDetail extends Equatable {
       occupation: json['occupation'] as String?,
       acquisitionSource: json['acquisitionSource'] as String? ?? '',
       acquisitionDetail: json['acquisitionDetail'] as String?,
-      claimedAmount: json['claimedAmount'] as num? ?? 0,
+      // Prisma Decimal serializes as a string; accept both forms.
+      claimedAmount: num.tryParse('${json['claimedAmount']}') ?? 0,
       claimedPaymentDate:
           DateTime.tryParse(json['claimedPaymentDate'] as String? ?? ''),
       claimedBankRef: json['claimedBankRef'] as String?,

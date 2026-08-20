@@ -582,7 +582,8 @@ class _AssignSheetState extends State<_AssignSheet> {
                     label: 'Starts',
                     value: _startDate,
                     hint: 'Today',
-                    firstDate: DateTime.now().subtract(const Duration(days: 30)),
+                    // A new assignment cannot start in the past.
+                    firstDate: DateTime.now(),
                     lastDate: DateTime.now().add(const Duration(days: 730)),
                     onChanged: (v) => setState(() => _startDate = v),
                   ),
@@ -591,7 +592,12 @@ class _AssignSheetState extends State<_AssignSheet> {
                     label: 'Ends (optional)',
                     value: _endDate,
                     hint: 'No end date',
-                    firstDate: DateTime.now().subtract(const Duration(days: 30)),
+                    // An end date is the point of an assignment — the whole
+                    // range after the start is offered (FR-CRS-025 requires
+                    // it to be strictly after the start, so a same-day end
+                    // is not offered and the server rule is never tripped).
+                    firstDate: (_startDate ?? DateTime.now())
+                        .add(const Duration(days: 1)),
                     lastDate: DateTime.now().add(const Duration(days: 730)),
                     onChanged: (v) => setState(() => _endDate = v),
                   ),
