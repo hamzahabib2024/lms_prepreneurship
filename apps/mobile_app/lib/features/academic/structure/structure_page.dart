@@ -12,6 +12,14 @@ import '../data/models/structure.dart';
 
 const _sessionStatuses = ['PLANNED', 'ACTIVE', 'COMPLETED', 'CANCELLED'];
 
+/// Shared code-column typography — letters, digits and hyphens, monospace.
+const _codeStyle = TextStyle(
+  fontSize: 13,
+  fontWeight: FontWeight.w700,
+  fontFamily: 'monospace',
+  letterSpacing: 0.4,
+);
+
 /// Academic structure — the mobile equivalent of the web's Structure screen.
 ///
 /// Programmes hold terms; terms hold batches; batches hold sections. The
@@ -366,19 +374,35 @@ class _StructurePageState extends State<StructurePage> {
       ? _batches
       : _batches.where((b) => b.session.id == _termFilter).toList();
 
-  /// The code column — letters, digits and hyphens, always monospace.
-  Widget _code(BuildContext context, String code) => Text(
-        code,
-        style: TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w700,
-          fontFamily: 'monospace',
-          letterSpacing: 0.4,
-          color: Theme.of(context).brightness == Brightness.dark
-              ? AppColorsDark.brand600
-              : AppColors.brand600,
+  /// The code column — letters, digits and hyphens, always monospace, in a
+  /// fixed-width cell measured against the widest valid code (10 characters).
+  /// Codes therefore never change the card's height or push the text that
+  /// follows: every programme name starts at the same x whatever the code.
+  Widget _code(BuildContext context, String code) => SizedBox(
+        width: _codeColumnWidth(context),
+        child: Text(
+          code,
+          maxLines: 1,
+          overflow: TextOverflow.clip,
+          style: _codeStyle.copyWith(
+            color: Theme.of(context).brightness == Brightness.dark
+                ? AppColorsDark.brand600
+                : AppColors.brand600,
+          ),
         ),
       );
+
+  /// The width one 10-character code needs under the real font in use —
+  /// measured, not guessed, so it fits any monospace and text scale.
+  double _codeColumnWidth(BuildContext context) {
+    final painter = TextPainter(
+      text: const TextSpan(text: 'MMMMMMMMMM', style: _codeStyle),
+      maxLines: 1,
+      textDirection: TextDirection.ltr,
+      textScaler: MediaQuery.textScalerOf(context),
+    )..layout();
+    return painter.width;
+  }
 }
 
 // ------------------------------------------------------------------- pieces ---
