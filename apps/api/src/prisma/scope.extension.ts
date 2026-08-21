@@ -193,6 +193,19 @@ const DELIBERATELY_UNSCOPED = [
   "FeeStructure",
   "FeeStructureLine",
   "MediaAsset",
+  /*
+   * WHICH SUBJECTS A COURSE TEACHES — its syllabus.
+   *
+   * Reference data about the Institute's own offering, in the same class as
+   * Programme and Subject themselves, both of which are already here: it names
+   * no person, carries nothing about anybody, and is quoted on a prospectus
+   * that strangers read. There is no actor to scope it BY.
+   *
+   * What a PARTICULAR BATCH teaches is a different question and a different
+   * model — SectionSubject, which IS policed, because that is where enrolments,
+   * registers and coursework attach and a teacher must only reach their own.
+   */
+  "ProgrammeSubject",
 ] as const;
 
 /**

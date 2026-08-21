@@ -43,6 +43,7 @@ import { CourseAdminPage } from "./pages/CourseAdminPage";
 import { CertificatesPage } from "./pages/CertificatesPage";
 import { AnnouncementsPage } from "./pages/AnnouncementsPage";
 import { NotificationBell } from "./components/NotificationBell";
+import { ThemeToggle } from "./components/ThemeToggle";
 import { Icon } from "./components/Icon";
 import { ImpersonationBanner } from "./components/ImpersonationBanner";
 import { AccountMenu } from "./components/AccountMenu";
@@ -406,6 +407,11 @@ export function App() {
               <span className="kbd">{modKey}K</span>
             </button>
             <div className="topbar-right">
+              {/* Before the inbox and the account menu, because it is the one
+                  control here that changes the SCREEN rather than showing
+                  something — and because "this is too bright" is not a thing
+                  anybody thinks to look for under their own name. */}
+              <ThemeToggle />
               <NotificationBell />
               <AccountMenu initials={initials} roleLabel={roleLabel} />
             </div>

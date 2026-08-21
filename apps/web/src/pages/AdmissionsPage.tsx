@@ -363,11 +363,14 @@ function ReviewPanel({
         </label>
       )}
 
-      <h3 className="section-label">Section</h3>
+      {/* "Batch", to match the word used everywhere else now. A student is
+          admitted INTO a batch — that is what gives them a register, a
+          timetable and the subjects the batch teaches. */}
+      <h3 className="section-label">Batch</h3>
       <label className="field">
-        <span>Assign to</span>
+        <span>Admit into</span>
         <select value={sectionId} onChange={(e) => setSectionId(e.target.value)}>
-          <option value="">Choose a section…</option>
+          <option value="">Choose a batch…</option>
           {sections.map((s) => (
             <option key={s.id} value={s.id}>
               {s.code} — {s.enrolledCount}/{s.capacity}

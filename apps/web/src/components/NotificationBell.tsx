@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
+import { useDismissable } from "./useDismissable";
 
 /**
  * The inbox — SRS §13.2, FR-COM-014/015.
@@ -28,6 +29,8 @@ const POLL_MS = 60_000;
 
 export function NotificationBell() {
   const [open, setOpen] = useState(false);
+  const wrap = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
   const [unread, setUnread] = useState(0);
   const [items, setItems] = useState<InboxItem[]>([]);
   const navigate = useNavigate();
@@ -50,6 +53,15 @@ export function NotificationBell() {
     return () => window.clearInterval(id);
   }, [load]);
 
+  /*
+   * CLICK AWAY AND IT CLOSES — which it did not, and the account menu six
+   * pixels to its right always did. Opening the inbox and then clicking
+   * anywhere else left it hanging over the page, and the only way out was to
+   * find the Inbox button again and press it a second time.
+   */
+  const close = useCallback(() => setOpen(false), []);
+  useDismissable(open, close, { wrap, trigger });
+
   const openItem = async (item: InboxItem) => {
     if (!item.readAt) {
       await api.patch("/me/notifications/read", { notificationIds: [item.id] }).catch(() => undefined);
@@ -65,8 +77,9 @@ export function NotificationBell() {
   };
 
   return (
-    <div className="bell">
+    <div className="bell" ref={wrap}>
       <button
+        ref={trigger}
         className="btn btn-quiet"
         onClick={() => setOpen(!open)}
         aria-expanded={open}

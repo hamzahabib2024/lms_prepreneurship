@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { Icon } from "./Icon";
 import { useTheme } from "./useTheme";
 import type { Theme } from "./useTheme";
+import { useDismissable } from "./useDismissable";
 
 /**
  * Who you are, and the three things you do about it.
@@ -40,27 +41,10 @@ export function AccountMenu({ initials, roleLabel }: { initials: string; roleLab
    * next Tab starts from the skip link — which is how a menu becomes a thing
    * keyboard users stop opening.
    */
-  useEffect(() => {
-    if (!open) return;
-
-    const onPointer = (e: MouseEvent) => {
-      if (!wrap.current?.contains(e.target as Node)) setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      setOpen(false);
-      trigger.current?.focus();
-    };
-
-    document.addEventListener("mousedown", onPointer);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onPointer);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
-
   const close = useCallback(() => setOpen(false), []);
+  // The same behaviour the inbox now has, from the same place — see the note
+  // on the hook for why it stopped living in this file.
+  useDismissable(open, close, { wrap, trigger });
 
   if (!user) return null;
 
