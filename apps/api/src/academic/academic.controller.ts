@@ -91,7 +91,21 @@ export class AcademicController {
     return this.builder.createBatch(dto);
   }
 
-  /** FR-CRS-016 — which subjects a batch teaches. */
+  /**
+   * FR-CRS-004 — which subjects a COURSE teaches. Its syllabus.
+   *
+   * `programme:update`, not `section_subject`: this changes what the course IS,
+   * which is a decision about the Institute's offering. It touches no batch —
+   * a running batch keeps teaching exactly what it was teaching, because its
+   * register and its coursework hang off its own rows.
+   */
+  @RequirePermission("programme", "update")
+  @Put("programmes/:id/subjects")
+  setProgrammeSubjects(@Param("id") id: string, @Body() body: { subjectIds?: string[] }) {
+    return this.builder.setProgrammeSubjects(id, body.subjectIds ?? []);
+  }
+
+  /** FR-CRS-016 — which subjects one BATCH actually teaches. */
   @RequirePermission("section_subject", "create")
   @Put("course-batches/:id/subjects")
   setBatchSubjects(@Param("id") id: string, @Body() body: { subjectIds?: string[] }) {

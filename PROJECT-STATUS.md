@@ -1,6 +1,6 @@
 # Project status
 
-Last updated: 20 August 2026 (the database converted to UTF-8, without losing a row)
+Last updated: 21 August 2026 (a course now owns its subjects)
 
 **Roughly 96% built, and that figure has arithmetic behind it.**
 
@@ -1092,4 +1092,61 @@ recurring on the next machine, and the conversion above is what fixes the one
 that already exists.
 
 Thirty-two defects and four absences. The number found by reading rather than
+running is still zero.
+
+---
+
+## 21 August 2026 — a course now owns its subjects
+
+**A SUBJECT COULD ONLY EVER BE ATTACHED TO A BATCH.** There was no way to say
+"the Diploma in Graphic Designing teaches Photoshop and English" — only "batch A
+teaches them", said again for B, and again for C. Three consequences, all
+visible on screen and none of them explicable to the person seeing them:
+
+  a course with no batches yet showed **"Subjects: none yet"**, for a course
+  somebody had just finished defining;
+
+  creating the second batch meant re-picking the same six subjects from memory,
+  with nothing to check against;
+
+  and two batches of one course could quietly teach different things, which
+  means one cohort gets less of the course than the other and nothing anywhere
+  said so.
+
+`ProgrammeSubject` is the course's own syllabus — what it *is*, what a
+prospectus quotes, and what a new batch is seeded from. It does **not** replace
+`SectionSubject`: a batch still owns what it actually teaches, because a batch
+legitimately differs and every register, assignment and recording hangs off that
+row rather than this one. Removing a subject from a syllabus must never delete a
+term's work, and the panel says so rather than leaving it to be discovered.
+
+The migration backfills from what each course's batches already taught, so no
+existing course lost anything: GD kept ENG101 and GD101, PREP kept all six.
+
+**AND IT IMMEDIATELY FOUND REAL DRIFT IN LIVE DATA.** Graphic Designing lists
+two subjects and each reaches only two of its three batches — the third is a
+batch created earlier with one subject. Nothing had ever been able to notice
+that, because there was no course-level list to compare a batch against. It is
+now a marked pill on the card and a sentence in the panel; whether it is
+deliberate is the office's call, and the System does not reconcile it silently.
+
+A batch created without naming subjects now inherits the syllabus rather than
+being created empty — an empty batch has no register, no attendance and nothing
+on a course page, and it is the state an inexperienced administrator leaves one
+in.
+
+**THE INBOX DID NOT CLOSE WHEN YOU CLICKED AWAY**, and the account menu six
+pixels to its right always had. Opening the inbox and then clicking anywhere
+else left it hanging over the page; the only way out was to find the Inbox
+button again. The behaviour lived inside one component, so the next panel was
+written without it. It is a hook now, used by both, and the next panel gets it
+by asking.
+
+**AND LIGHT/DARK WAS TWO CLICKS INSIDE A MENU LABELLED WITH SOMEBODY'S NAME** —
+which is where you look for "sign out", not for "this screen is too bright". One
+button in the top bar, cycling system → light → dark. The third state is kept,
+because "system" is not a fallback for people who have not chosen: it tracks the
+machine at dusk without anybody touching anything.
+
+Thirty-three defects and five absences. The number found by reading rather than
 running is still zero.

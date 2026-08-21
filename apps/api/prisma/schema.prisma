@@ -586,6 +586,7 @@ model Programme {
   registrations RegistrationRequest[]
   certificates  Certificate[]
   feeStructures FeeStructure[]
+  programmeSubjects ProgrammeSubject[]
   thumbnail     MediaAsset?          @relation(fields: [thumbnailAssetId], references: [id], onDelete: SetNull)
 
   @@index([thumbnailAssetId])
@@ -685,9 +686,10 @@ model Subject {
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
 
-  sectionSubjects SectionSubject[]
-  modules         Module[]
-  thumbnail       MediaAsset?      @relation(fields: [thumbnailAssetId], references: [id], onDelete: SetNull)
+  sectionSubjects   SectionSubject[]
+  programmeSubjects ProgrammeSubject[]
+  modules           Module[]
+  thumbnail         MediaAsset?      @relation(fields: [thumbnailAssetId], references: [id], onDelete: SetNull)
 
   @@index([thumbnailAssetId])
   @@map("subjects")
@@ -2232,4 +2234,46 @@ model FeeStructureLine {
 
   @@index([feeStructureId, kind, sortOrder])
   @@map("fee_structure_lines")
+}
+
+/// WHICH SUBJECTS A COURSE TEACHES — the course's own syllabus.
+///
+/// THE GAP THIS FILLS. A subject could only ever be attached to a BATCH
+/// (SectionSubject). There was no way to say "the Diploma in Graphic Designing
+/// teaches Photoshop and English" — only "batch A teaches them", repeated for
+/// every batch. So a course with no batches yet showed no subjects at all;
+/// creating a second batch meant re-picking the same six subjects from memory;
+/// and two batches of one course could silently teach different things, which
+/// means one cohort quietly gets less of the course than the other.
+///
+/// IT DOES NOT REPLACE SectionSubject, and the distinction is the whole design:
+///
+///   ProgrammeSubject is what the course IS — the syllabus, the thing quoted on
+///   a prospectus, and the list a new batch is seeded from.
+///
+///   SectionSubject is what a particular batch ACTUALLY teaches. A batch may
+///   legitimately differ — a subject dropped for one intake — and every
+///   register, assignment, recording and discussion hangs off that row, not
+///   this one. Removing a subject here must never delete a batch's history.
+model ProgrammeSubject {
+  id          String @id @default(uuid()) @db.Uuid
+  programmeId String @map("programme_id") @db.Uuid
+  subjectId   String @map("subject_id") @db.Uuid
+
+  /// The order they are taught in, which is how a prospectus lists them.
+  sortOrder Int @default(0) @map("sort_order")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  /// CASCADE from the programme — the list has no meaning without the course.
+  programme Programme @relation(fields: [programmeId], references: [id], onDelete: Cascade)
+  /// RESTRICT from the subject, deliberately asymmetric: deleting a subject a
+  /// course still teaches should be refused and looked at, not quietly removed
+  /// from every syllabus that named it.
+  subject   Subject   @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+
+  @@unique([programmeId, subjectId])
+  @@index([programmeId, sortOrder])
+  @@index([subjectId])
+  @@map("programme_subjects")
 }

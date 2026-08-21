@@ -2616,6 +2616,14 @@ details > summary:hover { text-decoration: underline; }
   .fee-headline-amount { font-size: 1.6rem; }
 }
 
+/* The appearance control. Square, so it reads as an icon button beside the
+   text ones rather than as a button with a very short label. */
+.theme-toggle {
+  width: 36px; height: 36px; padding: 0;
+  display: grid; place-items: center; flex: 0 0 auto;
+}
+.theme-toggle svg { width: 17px; height: 17px; }
+
 /* ------------------------------------------- building a fee, step by step --
    The previous form asked for a total and a list of instalments and refused to
    publish unless they added up — with no help in making them add up. These
@@ -3008,6 +3016,10 @@ details > summary:hover { text-decoration: underline; }
 }
 .course-facet-label svg { width: 13px; height: 13px; }
 .course-facet-values { display: flex; gap: .25rem; flex-wrap: wrap; }
+
+/* The "choose subjects" link sits at the end of the facet row, so the row
+   reads as a fact with a way to change it rather than as a control. */
+.course-facet-edit { margin-left: auto; flex: 0 0 auto; white-space: nowrap; }
 
 /* ------------------------------------------------------------- the batches -- */
 .batch-list { list-style: none; margin: .4rem 0 0; padding: 0; display: grid; gap: .3rem; }

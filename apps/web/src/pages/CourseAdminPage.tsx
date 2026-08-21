@@ -8,6 +8,7 @@ import { Icon } from "../components/Icon";
 import { money, whenDue, type Fee } from "../components/FeePanel";
 import { CourseHierarchy } from "../components/CourseHierarchy";
 import { BatchForm } from "../components/BatchForm";
+import { CourseSubjects, type CourseSubject } from "../components/CourseSubjects";
 
 /**
  * Courses — creating them, illustrating them, and pricing them (FR-CRS-004,
@@ -74,7 +75,10 @@ interface Batch {
  */
 interface CourseNode extends Programme {
   terms: Array<{ id: string; code: string; name: string; status: string }>;
-  subjects: Array<{ id: string; code: string; name: string; batches: number }>;
+  /** The course's OWN syllabus, with how many batches actually teach each. */
+  subjects: CourseSubject[];
+  /** Taught by a batch but missing from the syllabus — drift, surfaced. */
+  unlistedSubjects: CourseSubject[];
   batches: Batch[];
   totals: { batches: number; seats: number; enrolled: number };
 }
@@ -247,10 +251,13 @@ function CoursesPanel({
   onChanged: () => void;
 }) {
   const [creating, setCreating] = useState(false);
-  const [open, setOpen] = useState<{ id: string; panel: "edit" | "fees" | "batch" } | null>(null);
+  const [open, setOpen] = useState<{
+    id: string;
+    panel: "edit" | "fees" | "batch" | "subjects";
+  } | null>(null);
 
   const close = () => setOpen(null);
-  const toggle = (id: string, panel: "edit" | "fees" | "batch") =>
+  const toggle = (id: string, panel: "edit" | "fees" | "batch" | "subjects") =>
     setOpen((o) => (o && o.id === id && o.panel === panel ? null : { id, panel }));
 
   return (
@@ -315,11 +322,35 @@ function CoursesPanel({
                     ) : (
                       <span className="course-facet-values">
                         {c.subjects.map((s) => (
-                          <span key={s.id} className="pill" title={s.name}>
+                          <span
+                            key={s.id}
+                            /* A subject the course lists but not every batch
+                               teaches is marked, because that is one cohort
+                               getting less of the course than the others and
+                               nothing else on the page would say so. */
+                            className={
+                              c.totals.batches > 0 && s.batches < c.totals.batches
+                                ? "pill pill-warn"
+                                : "pill"
+                            }
+                            title={
+                              c.totals.batches > 0 && s.batches < c.totals.batches
+                                ? `${s.name} — taught by ${s.batches} of ${c.totals.batches} batches`
+                                : s.name
+                            }
+                          >
                             {s.code}
                           </span>
                         ))}
                       </span>
+                    )}
+                    {mayEdit && (
+                      <button
+                        className="link-button small course-facet-edit"
+                        onClick={() => toggle(c.id, "subjects")}
+                      >
+                        {isOpen && open.panel === "subjects" ? "Close" : "Choose subjects"}
+                      </button>
                     )}
                   </div>
 
@@ -406,6 +437,25 @@ function CoursesPanel({
                   </div>
                 )}
 
+                {isOpen && open.panel === "subjects" && (
+                  <div className="course-card-editor">
+                    <h3>What {c.name} teaches</h3>
+                    <CourseSubjects
+                      programmeId={c.id}
+                      programmeName={c.name}
+                      current={c.subjects}
+                      unlisted={c.unlistedSubjects ?? []}
+                      batchCount={c.totals.batches}
+                      allSubjects={subjects.filter((x) => x.isActive !== false)}
+                      onSaved={(message) => {
+                        close();
+                        void run(() => Promise.resolve(), message).then(() => onChanged());
+                      }}
+                      onCancel={close}
+                    />
+                  </div>
+                )}
+
                 {isOpen && open.panel === "batch" && (
                   <div className="course-card-editor">
                     <h3>Add a batch to {c.name}</h3>
@@ -413,10 +463,10 @@ function CoursesPanel({
                       programmeId={c.id}
                       programmeName={c.name}
                       subjects={subjects.filter((s) => s.isActive !== false)}
-                      // The subjects this course already teaches elsewhere.
-                      // A second batch of the same course almost always
-                      // teaches the same things, and starting from blank makes
-                      // somebody re-pick six subjects they just picked.
+                      // THE COURSE'S OWN SYLLABUS, which is what a batch of
+                      // it should teach. Previously this was derived from what
+                      // other batches happened to teach, so the first batch of
+                      // a course started from nothing at all.
                       suggestedSubjectIds={c.subjects.map((s) => s.id)}
                       onCreated={(message) => {
                         close();

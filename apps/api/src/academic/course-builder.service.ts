@@ -60,6 +60,14 @@ export class CourseBuilderService {
       include: {
         thumbnail: { select: { id: true } },
         feeStructures: { where: { deletedAt: null }, select: { status: true } },
+        // The course's OWN syllabus — what it teaches, whether or not any
+        // batch of it exists yet. Derived-from-batches was the previous
+        // answer and it reported "no subjects" for a course somebody had just
+        // finished defining.
+        programmeSubjects: {
+          orderBy: { sortOrder: "asc" },
+          include: { subject: { select: { id: true, code: true, name: true } } },
+        },
         sessions: {
           where: { deletedAt: null },
           orderBy: { startDate: "desc" },
@@ -118,17 +126,38 @@ export class CourseBuilderService {
         ),
       );
 
-      // Every subject taught anywhere in this course. What an administrator
-      // means by "the subjects in this course" — the System only ever attaches
-      // a subject to a batch, never to the course itself.
-      const subjectMap = new Map<string, { id: string; code: string; name: string; batches: number }>();
+      /*
+       * THE COURSE'S SYLLABUS, and how far each subject has actually reached.
+       *
+       * `batches` counts how many batches teach it, which is the number that
+       * makes a real disagreement visible: a course listing six subjects where
+       * one of them is taught by two batches out of three means a cohort is
+       * quietly getting less of the course than the others. Nothing surfaced
+       * that before, because there was no course-level list to compare against.
+       */
+      const taughtBy = new Map<string, number>();
       for (const b of batches) {
-        for (const s of b.subjects) {
-          const held = subjectMap.get(s.id);
-          if (held) held.batches += 1;
-          else subjectMap.set(s.id, { id: s.id, code: s.code, name: s.name, batches: 1 });
-        }
+        for (const s of b.subjects) taughtBy.set(s.id, (taughtBy.get(s.id) ?? 0) + 1);
       }
+
+      const subjects = p.programmeSubjects.map((ps) => ({
+        id: ps.subject.id,
+        code: ps.subject.code,
+        name: ps.subject.name,
+        sortOrder: ps.sortOrder,
+        batches: taughtBy.get(ps.subject.id) ?? 0,
+      }));
+
+      // Anything a batch teaches that the course does not list. Usually a
+      // subject added to one batch and never added to the syllabus, and worth
+      // showing rather than hiding — it is the other half of the same drift.
+      const listed = new Set(subjects.map((s) => s.id));
+      const unlisted = [...taughtBy.keys()]
+        .filter((id) => !listed.has(id))
+        .map((id) => {
+          const found = batches.flatMap((b) => b.subjects).find((s) => s.id === id)!;
+          return { id, code: found.code, name: found.name, batches: taughtBy.get(id) ?? 0 };
+        });
 
       return {
         id: p.id,
@@ -150,7 +179,8 @@ export class CourseBuilderService {
           startDate: t.startDate,
           endDate: t.endDate,
         })),
-        subjects: [...subjectMap.values()].sort((a, b) => a.code.localeCompare(b.code)),
+        subjects,
+        unlistedSubjects: unlisted,
         batches,
         // The two numbers a course card leads with.
         totals: {
@@ -160,6 +190,69 @@ export class CourseBuilderService {
         },
       };
     });
+  }
+
+  /**
+   * Set which subjects a COURSE teaches — FR-CRS-004.
+   *
+   * REPLACED WHOLESALE, and it touches no batch. This is the syllabus: what
+   * the course is, what a prospectus quotes, and what a new batch is seeded
+   * from. A batch that is already running keeps teaching exactly what it was
+   * teaching, because its register, assignments and recordings hang off its
+   * own rows and removing a subject from the syllabus must not delete a term's
+   * work.
+   *
+   * The Courses screen shows the difference where one exists, which is the
+   * honest way to handle it: the office decides whether a running batch should
+   * be brought into line, and the System does not decide that silently.
+   */
+  async setProgrammeSubjects(programmeId: string, subjectIds: string[]) {
+    const programme = await this.prisma.scoped.programme.findFirst({
+      where: { id: programmeId, deletedAt: null },
+      select: { id: true, name: true },
+    });
+    if (!programme) throw new AppError("RESOURCE_NOT_FOUND");
+
+    if (subjectIds.length > 0) {
+      const found = await this.prisma.scoped.subject.findMany({
+        where: { id: { in: subjectIds }, deletedAt: null },
+        select: { id: true },
+      });
+      if (found.length !== subjectIds.length) {
+        throw new AppError("VALIDATION_FAILED", {
+          message: "One of the subjects chosen no longer exists. Reload the page and try again.",
+          details: [{ field: "subjectIds", code: "NOT_FOUND", message: "Unknown subject." }],
+        });
+      }
+    }
+
+    await this.prisma.asSystem((db) =>
+      db.$transaction(async (tx) => {
+        await tx.programmeSubject.deleteMany({ where: { programmeId } });
+        if (subjectIds.length > 0) {
+          await tx.programmeSubject.createMany({
+            data: subjectIds.map((subjectId, i) => ({ programmeId, subjectId, sortOrder: i })),
+          });
+        }
+      }),
+    );
+
+    await this.audit.record({
+      action: "course.subjects",
+      entityType: "Programme",
+      entityId: programmeId,
+      after: { subjects: subjectIds.length },
+    });
+
+    return {
+      total: subjectIds.length,
+      message:
+        subjectIds.length === 0
+          ? `${programme.name} now lists no subjects. Add some — a course with no subjects has nothing to teach.`
+          : `${programme.name} now teaches ${subjectIds.length} subject${
+              subjectIds.length === 1 ? "" : "s"
+            }. New batches start with these.`,
+    };
   }
 
   /**
@@ -180,15 +273,37 @@ export class CourseBuilderService {
       });
     }
 
+    /*
+     * NO SUBJECTS GIVEN MEANS "the ones this course teaches", not "none".
+     *
+     * A batch with no subjects has no register, no attendance and nothing on a
+     * course page — it looks created and does nothing. The course already
+     * carries its syllabus, so the sensible default is the course's own list
+     * rather than an empty batch somebody has to notice and fix. Passing an
+     * explicit list still wins, because a batch that genuinely differs is a
+     * real case.
+     */
+    let subjectIds = input.subjectIds;
+    if (subjectIds.length === 0) {
+      const syllabus = await this.prisma.asSystem((db) =>
+        db.programmeSubject.findMany({
+          where: { programmeId: programme.id },
+          orderBy: { sortOrder: "asc" },
+          select: { subjectId: true },
+        }),
+      );
+      subjectIds = syllabus.map((r) => r.subjectId);
+    }
+
     // Subjects are checked BEFORE anything is written. Offering a subject that
     // does not exist would otherwise fail halfway, leaving a batch with some of
     // its subjects and no indication which are missing.
-    if (input.subjectIds.length > 0) {
+    if (subjectIds.length > 0) {
       const found = await this.prisma.scoped.subject.findMany({
-        where: { id: { in: input.subjectIds }, deletedAt: null },
+        where: { id: { in: subjectIds }, deletedAt: null },
         select: { id: true },
       });
-      if (found.length !== input.subjectIds.length) {
+      if (found.length !== subjectIds.length) {
         throw new AppError("VALIDATION_FAILED", {
           message: "One of the subjects chosen no longer exists. Reload the page and try again.",
           details: [{ field: "subjectIds", code: "NOT_FOUND", message: "Unknown subject." }],
@@ -273,9 +388,9 @@ export class CourseBuilderService {
         });
 
         // ---- its subjects --------------------------------------------------
-        if (input.subjectIds.length > 0) {
+        if (subjectIds.length > 0) {
           await tx.sectionSubject.createMany({
-            data: input.subjectIds.map((subjectId) => ({
+            data: subjectIds.map((subjectId) => ({
               sectionId: section.id,
               subjectId,
               isCompulsory: true,
@@ -283,7 +398,7 @@ export class CourseBuilderService {
           });
         }
 
-        return { section, sessionId, groupId: group.id, subjectCount: input.subjectIds.length };
+        return { section, sessionId, groupId: group.id, subjectCount: subjectIds.length };
       }),
     );
 
