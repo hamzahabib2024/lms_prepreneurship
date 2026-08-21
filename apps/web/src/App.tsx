@@ -40,6 +40,9 @@ import { BackupPage } from "./pages/BackupPage";
 import { VerifyPage } from "./pages/VerifyPage";
 import { TrackPage } from "./pages/TrackPage";
 import { CourseAdminPage } from "./pages/CourseAdminPage";
+import { CourseEditPage } from "./pages/CourseEditPage";
+import { SubjectEditPage } from "./pages/SubjectEditPage";
+import { BatchEditPage } from "./pages/BatchEditPage";
 import { CertificatesPage } from "./pages/CertificatesPage";
 import { AnnouncementsPage } from "./pages/AnnouncementsPage";
 import { NotificationBell } from "./components/NotificationBell";
@@ -630,6 +633,37 @@ export function App() {
             path="/courses-admin"
             element={
               hasRole("super_admin", "admin") ? <CourseAdminPage /> : <Navigate to="/" replace />
+            }
+          />
+          {/*
+            A PAGE PER THING, rather than a panel inside a card.
+
+            The panels had no address, so a half-finished course could not be
+            linked to, bookmarked or refreshed; the card had to swallow the
+            whole row to give the form any width; and there was no room for the
+            fields that matter — which is how twenty of twenty-four batches
+            ended up with no teacher.
+
+            `/new` and `/:id` share a component: creating and editing a course
+            ask almost the same questions, and two components would be two
+            places for the answer to drift.
+          */}
+          <Route
+            path="/courses-admin/course/:courseId"
+            element={
+              hasRole("super_admin", "admin") ? <CourseEditPage /> : <Navigate to="/" replace />
+            }
+          />
+          <Route
+            path="/courses-admin/subject/:subjectId"
+            element={
+              hasRole("super_admin", "admin") ? <SubjectEditPage /> : <Navigate to="/" replace />
+            }
+          />
+          <Route
+            path="/courses-admin/batch/new"
+            element={
+              hasRole("super_admin", "admin") ? <BatchEditPage /> : <Navigate to="/" replace />
             }
           />
           {/* One class's recordings. Everyone: a student sees the published

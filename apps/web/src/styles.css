@@ -2936,6 +2936,87 @@ details > summary:hover { text-decoration: underline; }
 }
 .priority-option.is-on.priority-urgent strong { color: var(--error); }
 
+/* ------------------------------------------------- a page per thing --------
+   Creating a course, a subject or a batch used to be a panel inside a card:
+   no address to link or bookmark, the card swallowing the whole row to get any
+   width, and no room for the fields that matter — which is how twenty of
+   twenty-four batches ended up with no teacher. */
+.editor-page {
+  max-width: 62rem;
+  /* Clearance for the sticky save bar, so the last field of the last step can
+     always be scrolled out from under it rather than hiding there. */
+  padding-bottom: 4.5rem;
+}
+
+.editor-back {
+  display: inline-flex; align-items: center; gap: .25rem;
+  margin-bottom: .5rem;
+  color: var(--muted); text-decoration: none; font-size: .875rem;
+}
+.editor-back:hover { color: var(--ink); text-decoration: underline; }
+.editor-back svg { width: 14px; height: 14px; }
+
+.editor-head { align-items: flex-start; }
+.editor-intro {
+  padding: .75rem 1rem; margin-bottom: 1rem;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.editor-intro p { margin: 0; }
+.editor-intro .alert { margin: 0; }
+
+.editor-body { display: grid; gap: 1rem; }
+
+/* Each step is a card of its own, so the eye can count them. */
+.editor-section {
+  padding: 1.1rem 1.25rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-1);
+}
+
+.editor-section-head { margin-bottom: .75rem; }
+.editor-section-head h2 {
+  display: flex; align-items: center; gap: .5rem;
+  margin: 0; font-size: 1rem;
+}
+.editor-section-head p { margin: .15rem 0 0; }
+.editor-step {
+  display: grid; place-items: center;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: var(--brand-700); color: var(--primary-ink);
+  font-size: .72rem; font-weight: 700; flex: 0 0 22px;
+}
+
+/* The save stays in view. These forms scroll, and a save button below the fold
+   is one people hunt for — or assume is not there and leave without saving. */
+.editor-actions {
+  position: sticky; bottom: 0; z-index: 2;
+  display: flex; gap: .5rem; align-items: center; flex-wrap: wrap;
+  margin-top: 1rem; padding: .75rem 1rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-2);
+}
+
+/* The picture beside what it will actually look like — so a wrong crop is seen
+   here rather than on the public page. */
+.editor-preview-row { display: flex; gap: 1.25rem; flex-wrap: wrap; align-items: flex-start; }
+.editor-preview-row > .thumb-field { flex: 1 1 20rem; margin-bottom: 0; }
+.editor-preview { flex: 0 0 220px; display: grid; gap: .3rem; }
+.editor-preview .cover { border-radius: var(--radius-sm); }
+
+.editor-facets { display: flex; gap: 1.5rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.editor-facets > div { flex: 1 1 16rem; display: grid; gap: .4rem; align-content: start; }
+
+@media (max-width: 700px) {
+  .editor-preview { flex: 1 1 100%; }
+  .editor-actions { padding: .6rem .75rem; }
+}
+
 /* --------------------------------------------- subjects → course → batches --
    The order is the thing being explained, so it is drawn rather than
    described: a numbered row with arrows between, which reads in one glance and
