@@ -551,32 +551,38 @@ class _CandidateRow extends StatelessWidget {
               child: CircularProgressIndicator(strokeWidth: 2),
             )
           else if (candidate.canIssue)
-            FilledButton(
-              onPressed: onIssue,
-              style: FilledButton.styleFrom(
-                visualDensity: VisualDensity.compact,
+            Flexible(
+              child: FilledButton(
+                onPressed: onIssue,
+                style: FilledButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                ),
+                child: const Text('Issue'),
               ),
-              child: const Text('Issue'),
             )
           else if (candidate.hasIssuedCertificate &&
               canRevoke &&
               onRevoke != null)
-            OutlinedButton(
-              onPressed: onRevoke,
-              style: OutlinedButton.styleFrom(
-                visualDensity: VisualDensity.compact,
-                foregroundColor: AppColors.error,
+            Flexible(
+              child: OutlinedButton(
+                onPressed: onRevoke,
+                style: OutlinedButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  foregroundColor: AppColors.error,
+                ),
+                child: const Text('Revoke'),
               ),
-              child: const Text('Revoke'),
             )
           else
-            Pill(
-              text: candidate.hasRevokedCertificate
-                  ? 'Revoked'
-                  : 'Not eligible',
-              kind: candidate.hasRevokedCertificate
-                  ? PillKind.warn
-                  : PillKind.neutral,
+            Flexible(
+              child: Pill(
+                text: candidate.hasRevokedCertificate
+                    ? 'Revoked'
+                    : 'Not eligible',
+                kind: candidate.hasRevokedCertificate
+                    ? PillKind.warn
+                    : PillKind.neutral,
+              ),
             ),
         ],
       ),

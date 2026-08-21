@@ -36,6 +36,7 @@ class _LoginFormState extends State<LoginForm> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  bool _obscurePassword = true;
 
   @override
   void dispose() {
@@ -111,7 +112,7 @@ class _LoginFormState extends State<LoginForm> {
           const SizedBox(height: 6),
           TextFormField(
             controller: _passwordController,
-            obscureText: true,
+            obscureText: _obscurePassword,
             autofillHints: const [AutofillHints.password],
             textInputAction: TextInputAction.done,
             validator: (value) {
@@ -121,6 +122,18 @@ class _LoginFormState extends State<LoginForm> {
               return null;
             },
             onFieldSubmitted: (_) => _submit(),
+            decoration: InputDecoration(
+              suffixIcon: IconButton(
+                icon: Icon(
+                  _obscurePassword
+                      ? Icons.visibility_off_outlined
+                      : Icons.visibility_outlined,
+                  size: 20,
+                ),
+                onPressed: () =>
+                    setState(() => _obscurePassword = !_obscurePassword),
+              ),
+            ),
           ),
           const SizedBox(height: 20),
           SizedBox(
