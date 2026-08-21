@@ -8,6 +8,8 @@ import '../../academic/academic_panel.dart';
 import '../../admission/review/admissions_page.dart';
 import '../../auth/bloc/auth_bloc.dart';
 import '../../courses/presentation/courses_page.dart';
+import '../../certificates/presentation/my_certificates_page.dart';
+import '../../certificates/presentation/issuance_page.dart';
 import '../../auth/data/models/auth_session.dart';
 import '../../auth/presentation/change_password_page.dart';
 import '../bloc/dashboard_bloc.dart';
@@ -134,6 +136,7 @@ class _Header extends StatelessWidget {
               // The web gates Admissions behind the admin role; the server
               // still enforces the permission on every request (FR-REG-022).
               _CoursesButton(api: api, user: user),
+              _CertificatesButton(api: api, user: user),
               if (isAdmin) _AdmissionsButton(api: api),
               if (isStaff) _AcademicButton(user: user, api: api),
             ],
@@ -292,6 +295,58 @@ class _CoursesButton extends StatelessWidget {
               const SizedBox(width: 6),
               Text(
                 'Courses',
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Certificates entry — students see their certificates, admins see the
+/// issuance worklist.
+class _CertificatesButton extends StatelessWidget {
+  const _CertificatesButton({required this.api, required this.user});
+
+  final ApiClient api;
+  final AuthUser user;
+
+  @override
+  Widget build(BuildContext context) {
+    final isAdmin = user.isAdmin || user.isSuperAdmin;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => isAdmin
+                  ? IssuancePage(api: api, user: user)
+                  : MyCertificatesPage(api: api),
+            ),
+          );
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.emoji_events_outlined, size: 16),
+              const SizedBox(width: 6),
+              Text(
+                'Certificates',
                 style: TextStyle(
                   fontSize: 12.5,
                   fontWeight: FontWeight.w600,
