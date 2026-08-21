@@ -5,7 +5,7 @@ import '../../../core/network/api_client.dart';
 import '../../../core/network/token_store.dart';
 import '../bloc/auth_bloc.dart';
 import '../data/repositories/auth_repository.dart';
-import '../../dashboard/presentation/dashboard_page.dart';
+import 'app_shell.dart';
 import 'change_password_page.dart';
 import 'login_page.dart';
 import 'splash_page.dart';
@@ -57,7 +57,7 @@ class _AppRootState extends State<AppRoot> {
               if (state.mustChangePassword) {
                 return const ChangePasswordPage(forced: true);
               }
-              return DashboardPage(user: state.user!, api: _api);
+              return AppShell(user: state.user!, api: _api);
             case AuthStatus.failure:
               return const LoginPage();
           }
