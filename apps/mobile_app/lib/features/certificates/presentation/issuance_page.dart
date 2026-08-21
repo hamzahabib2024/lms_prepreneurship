@@ -113,6 +113,7 @@ class _IssuanceViewState extends State<_IssuanceView> {
               child: _loadingSections
                   ? const SkeletonCards(count: 1)
                   : DropdownButtonFormField<String>(
+                      isExpanded: true,
                       decoration: InputDecoration(
                         labelText: 'Section',
                         filled: true,
@@ -134,6 +135,7 @@ class _IssuanceViewState extends State<_IssuanceView> {
                           .map((s) => DropdownMenuItem(
                                 value: s.id,
                                 child: Text('${s.code} — ${s.name}',
+                                    overflow: TextOverflow.ellipsis,
                                     style:
                                         const TextStyle(fontSize: 14)),
                               ))
@@ -151,6 +153,7 @@ class _IssuanceViewState extends State<_IssuanceView> {
                 child: _loadingOfferings
                     ? const SkeletonCards(count: 1)
                     : DropdownButtonFormField<String>(
+                        isExpanded: true,
                         decoration: InputDecoration(
                           labelText: 'Subject',
                           filled: true,
@@ -175,6 +178,7 @@ class _IssuanceViewState extends State<_IssuanceView> {
                                   value: o.id,
                                   child: Text(
                                       '${o.subjectCode} — ${o.subjectName}',
+                                      overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
                                           fontSize: 14)),
                                 ))
