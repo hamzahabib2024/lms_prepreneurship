@@ -7,6 +7,7 @@ import '../../../core/widgets/ui.dart';
 import '../../academic/academic_panel.dart';
 import '../../admission/review/admissions_page.dart';
 import '../../auth/bloc/auth_bloc.dart';
+import '../../courses/presentation/courses_page.dart';
 import '../../auth/data/models/auth_session.dart';
 import '../../auth/presentation/change_password_page.dart';
 import '../bloc/dashboard_bloc.dart';
@@ -132,6 +133,7 @@ class _Header extends StatelessWidget {
                 Pill(text: 'as at ${_time(state.data!.generatedAt)}'),
               // The web gates Admissions behind the admin role; the server
               // still enforces the permission on every request (FR-REG-022).
+              _CoursesButton(api: api, user: user),
               if (isAdmin) _AdmissionsButton(api: api),
               if (isStaff) _AcademicButton(user: user, api: api),
             ],
@@ -257,6 +259,53 @@ class _AcademicButton extends StatelessWidget {
 
 /// The avatar — the web's `.avatar` initials tile. Opens the profile sheet,
 /// the mobile equivalent of the sidebar foot (avatar, name, role, sign-out).
+class _CoursesButton extends StatelessWidget {
+  const _CoursesButton({required this.api, required this.user});
+
+  final ApiClient api;
+  final AuthUser user;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => CoursesPage(api: api, user: user),
+            ),
+          );
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.play_circle_outline, size: 16),
+              const SizedBox(width: 6),
+              Text(
+                'Courses',
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _ProfileButton extends StatelessWidget {
   const _ProfileButton({required this.user});
 
