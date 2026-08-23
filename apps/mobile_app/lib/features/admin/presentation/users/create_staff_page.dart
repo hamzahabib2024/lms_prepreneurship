@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/theme/app_theme.dart';
-import '../../../../core/widgets/ui.dart';
 import '../../cubit/admin_cubit.dart';
 import '../../data/models/staff_creation_result.dart';
 
@@ -57,13 +56,11 @@ class _CreateStaffPageState extends State<CreateStaffPage> {
         ),
         body: BlocBuilder<AdminCubit, AdminState>(
           builder: (context, state) {
-            return ListView(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+            return Form(
+              key: _formKey,
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+                children: [
                     Text('Account details', style: Theme.of(context).textTheme.titleMedium),
                     const SizedBox(height: 14),
                     _FormField(
@@ -172,12 +169,11 @@ class _CreateStaffPageState extends State<CreateStaffPage> {
                     ),
                   ],
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
-      ),
-    );
+      );
   }
 
   void _showReceipt(BuildContext context, StaffCreationResult result) {

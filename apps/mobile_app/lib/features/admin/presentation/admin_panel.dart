@@ -23,13 +23,15 @@ class AdminPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocProvider(
       create: (_) => AdminCubit(repository: AdminRepository(api: api)),
-      child: const _AdminPanelView(),
+      child: _AdminPanelView(user: user),
     );
   }
 }
 
 class _AdminPanelView extends StatelessWidget {
-  const _AdminPanelView();
+  const _AdminPanelView({required this.user});
+
+  final AuthUser user;
 
   @override
   Widget build(BuildContext context) {

@@ -430,9 +430,6 @@ class _PreviewReport extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
-    final muted = dark ? AppColorsDark.muted : AppColors.muted;
-    final ok = dark ? AppColorsDark.ok : AppColors.ok;
-    final error = dark ? AppColorsDark.error : AppColors.error;
 
     return Container(
       padding: const EdgeInsets.all(14),

@@ -4,7 +4,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/ui.dart';
-import '../../../auth/data/models/auth_session.dart';
 import '../../cubit/admin_cubit.dart';
 import '../../data/models/user_directory_item.dart';
 
