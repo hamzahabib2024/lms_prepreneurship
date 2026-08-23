@@ -15,8 +15,6 @@ class PrepreneurshipApp extends StatelessWidget {
     return MaterialApp(
       title: 'Prepreneurship LMS',
       debugShowCheckedModeBanner: false,
-      // Dark mode by OS preference only, exactly like the web client — there
-      // is no toggle.
       themeMode: ThemeMode.system,
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
