@@ -9,6 +9,7 @@ import '../../admission/review/admissions_page.dart';
 import '../../academic/academic_panel.dart';
 import '../../certificates/presentation/my_certificates_page.dart';
 import '../../certificates/presentation/issuance_page.dart';
+import '../../communication/presentation/communication_panel.dart';
 
 /// Persistent bottom navigation shell for authenticated users.
 ///
@@ -57,6 +58,12 @@ class _AppShellState extends State<AppShell> {
             label: 'Academic',
             page: AcademicPanel(user: widget.user, api: widget.api),
           ),
+        _TabEntry(
+          icon: Icons.notifications_outlined,
+          activeIcon: Icons.notifications,
+          label: 'Alerts',
+          page: CommunicationPanel(api: widget.api, user: widget.user),
+        ),
         _TabEntry(
           icon: Icons.emoji_events_outlined,
           activeIcon: Icons.emoji_events,
