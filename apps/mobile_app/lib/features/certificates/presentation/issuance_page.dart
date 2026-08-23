@@ -113,6 +113,7 @@ class _IssuanceViewState extends State<_IssuanceView> {
               child: _loadingSections
                   ? const SkeletonCards(count: 1)
                   : DropdownButtonFormField<String>(
+                      isExpanded: true,
                       decoration: InputDecoration(
                         labelText: 'Section',
                         filled: true,
@@ -134,6 +135,7 @@ class _IssuanceViewState extends State<_IssuanceView> {
                           .map((s) => DropdownMenuItem(
                                 value: s.id,
                                 child: Text('${s.code} — ${s.name}',
+                                    overflow: TextOverflow.ellipsis,
                                     style:
                                         const TextStyle(fontSize: 14)),
                               ))
@@ -151,6 +153,7 @@ class _IssuanceViewState extends State<_IssuanceView> {
                 child: _loadingOfferings
                     ? const SkeletonCards(count: 1)
                     : DropdownButtonFormField<String>(
+                        isExpanded: true,
                         decoration: InputDecoration(
                           labelText: 'Subject',
                           filled: true,
@@ -175,6 +178,7 @@ class _IssuanceViewState extends State<_IssuanceView> {
                                   value: o.id,
                                   child: Text(
                                       '${o.subjectCode} — ${o.subjectName}',
+                                      overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
                                           fontSize: 14)),
                                 ))
@@ -551,32 +555,38 @@ class _CandidateRow extends StatelessWidget {
               child: CircularProgressIndicator(strokeWidth: 2),
             )
           else if (candidate.canIssue)
-            FilledButton(
-              onPressed: onIssue,
-              style: FilledButton.styleFrom(
-                visualDensity: VisualDensity.compact,
+            Flexible(
+              child: FilledButton(
+                onPressed: onIssue,
+                style: FilledButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                ),
+                child: const Text('Issue'),
               ),
-              child: const Text('Issue'),
             )
           else if (candidate.hasIssuedCertificate &&
               canRevoke &&
               onRevoke != null)
-            OutlinedButton(
-              onPressed: onRevoke,
-              style: OutlinedButton.styleFrom(
-                visualDensity: VisualDensity.compact,
-                foregroundColor: AppColors.error,
+            Flexible(
+              child: OutlinedButton(
+                onPressed: onRevoke,
+                style: OutlinedButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  foregroundColor: AppColors.error,
+                ),
+                child: const Text('Revoke'),
               ),
-              child: const Text('Revoke'),
             )
           else
-            Pill(
-              text: candidate.hasRevokedCertificate
-                  ? 'Revoked'
-                  : 'Not eligible',
-              kind: candidate.hasRevokedCertificate
-                  ? PillKind.warn
-                  : PillKind.neutral,
+            Flexible(
+              child: Pill(
+                text: candidate.hasRevokedCertificate
+                    ? 'Revoked'
+                    : 'Not eligible',
+                kind: candidate.hasRevokedCertificate
+                    ? PillKind.warn
+                    : PillKind.neutral,
+              ),
             ),
         ],
       ),
