@@ -28,6 +28,9 @@ import { UsersPage } from "./pages/UsersPage";
 import { AuditPage } from "./pages/AuditPage";
 import { RubricsPage } from "./pages/RubricsPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { PublicPageEditorPage } from "./pages/PublicPageEditorPage";
+import { PaymentSubmitPage } from "./pages/PaymentSubmitPage";
+import { PaymentVerificationPage } from "./pages/PaymentVerificationPage";
 import { SecurityPage } from "./pages/SecurityPage";
 import { BulkPage } from "./pages/BulkPage";
 import { CohortImportPage } from "./pages/CohortImportPage";
@@ -38,8 +41,12 @@ import { TimetablePage } from "./pages/TimetablePage";
 import { DiscussionPage } from "./pages/DiscussionPage";
 import { BackupPage } from "./pages/BackupPage";
 import { VerifyPage } from "./pages/VerifyPage";
+import { MyCertificatesPage } from "./pages/MyCertificatesPage";
 import { TrackPage } from "./pages/TrackPage";
 import { CourseAdminPage } from "./pages/CourseAdminPage";
+import { CourseEditPage } from "./pages/CourseEditPage";
+import { SubjectEditPage } from "./pages/SubjectEditPage";
+import { BatchEditPage } from "./pages/BatchEditPage";
 import { CertificatesPage } from "./pages/CertificatesPage";
 import { AnnouncementsPage } from "./pages/AnnouncementsPage";
 import { NotificationBell } from "./components/NotificationBell";
@@ -126,6 +133,13 @@ export function App() {
   if (location.pathname.startsWith("/verify/")) {
     return (
       <Routes>
+        {/* TWO SHAPES, ONE PAGE. The QR code on every certificate encodes
+            /verify/certificate/<code>, which is the address a stranger's
+            camera will open and the one to keep working forever. The bare
+            /verify/<code> is what earlier links used, and it still resolves
+            — a printed certificate cannot be reissued because an address was
+            tidied up. */}
+        <Route path="/verify/certificate/:code" element={<VerifyPage />} />
         <Route path="/verify/:code" element={<VerifyPage />} />
       </Routes>
     );
@@ -543,6 +557,31 @@ export function App() {
               hasRole("super_admin", "admin", "student") ? <FeesPage /> : <Navigate to="/" replace />
             }
           />
+          {/* STUDENTS ALONE, and that is not a permission decision — an
+              administrator holds `payment_submission:create` too. It is that
+              this form submits AS THE PERSON FILLING IT IN: the service takes
+              the student from the session, so a clerk who opened it would be
+              claiming a payment against their own record. An administrator
+              recording money over the counter uses "Record a payment" on the
+              student's statement, which is a different act with a different
+              permission. */}
+          <Route
+            path="/fees/submit"
+            element={hasRole("student") ? <PaymentSubmitPage /> : <Navigate to="/fees" replace />}
+          />
+          {/* The fee desk. `payment_submission:approve` is Super Admin and
+              Admin at step-up; the server asks for the password, and this test
+              only decides whether the door is offered (UI-002). */}
+          <Route
+            path="/fees/verification"
+            element={
+              hasRole("super_admin", "admin") ? (
+                <PaymentVerificationPage />
+              ) : (
+                <Navigate to="/fees" replace />
+              )
+            }
+          />
           {/* Admin too: bulk_operation reaches an Admin holding the
               bulk_operator sub-permission, and the server decides. Hiding the
               page from every Admin would hide it from the ones who may. */}
@@ -601,6 +640,25 @@ export function App() {
             path="/settings"
             element={hasRole("super_admin", "admin") ? <SettingsPage /> : <Navigate to="/" replace />}
           />
+          {/*
+            FR-PUB — what a stranger sees, edited by the people who know it is
+            wrong.
+
+            BOTH ROLES, unlike /settings above, and that difference is the whole
+            point of the screen. Writing a setting is Super Admin only because a
+            setting decides when a student is warned; nothing reachable here
+            decides anything about anybody, and the person who knows a new reel
+            went up this morning is the one running admissions. The server
+            grants `public_page:configure` to both and narrows what it reaches
+            to the Public page settings alone — this test only decides whether
+            the destination is offered (UI-002).
+          */}
+          <Route
+            path="/public-page"
+            element={
+              hasRole("super_admin", "admin") ? <PublicPageEditorPage /> : <Navigate to="/" replace />
+            }
+          />
           {/* Teacher and above. A student may READ a rubric they are marked
               against, but that belongs beside their grade, not on an
               authoring screen. */}
@@ -616,6 +674,25 @@ export function App() {
               hasRole("super_admin", "admin") ? <CertificatesPage /> : <Navigate to="/" replace />
             }
           />
+          {/*
+            FR-CRT-015 — a student's own certificates, at their own address.
+
+            SEPARATE FROM /certificates ABOVE, deliberately. That one is the
+            REGISTER: every holder's name and course on one screen, guarded by
+            the issuing permission because reading it is reading about other
+            students. This one is `certificate:read` at OWN scope, which the
+            server narrows to their own rows — so the two screens cannot be
+            made to show each other's data whatever this test says (UI-002).
+
+            Students only, because /me/certificates resolves the holder from
+            the signed-in account's student record and refuses an account that
+            has none. Offering the destination to a teacher would be offering
+            them a refusal.
+          */}
+          <Route
+            path="/my-certificates"
+            element={hasRole("student") ? <MyCertificatesPage /> : <Navigate to="/" replace />}
+          />
           {/* Everyone: reading is universal, and the composer inside decides
               for itself whether this user may post. */}
           <Route path="/announcements" element={<AnnouncementsPage />} />
@@ -630,6 +707,37 @@ export function App() {
             path="/courses-admin"
             element={
               hasRole("super_admin", "admin") ? <CourseAdminPage /> : <Navigate to="/" replace />
+            }
+          />
+          {/*
+            A PAGE PER THING, rather than a panel inside a card.
+
+            The panels had no address, so a half-finished course could not be
+            linked to, bookmarked or refreshed; the card had to swallow the
+            whole row to give the form any width; and there was no room for the
+            fields that matter — which is how twenty of twenty-four batches
+            ended up with no teacher.
+
+            `/new` and `/:id` share a component: creating and editing a course
+            ask almost the same questions, and two components would be two
+            places for the answer to drift.
+          */}
+          <Route
+            path="/courses-admin/course/:courseId"
+            element={
+              hasRole("super_admin", "admin") ? <CourseEditPage /> : <Navigate to="/" replace />
+            }
+          />
+          <Route
+            path="/courses-admin/subject/:subjectId"
+            element={
+              hasRole("super_admin", "admin") ? <SubjectEditPage /> : <Navigate to="/" replace />
+            }
+          />
+          <Route
+            path="/courses-admin/batch/new"
+            element={
+              hasRole("super_admin", "admin") ? <BatchEditPage /> : <Navigate to="/" replace />
             }
           />
           {/* One class's recordings. Everyone: a student sees the published

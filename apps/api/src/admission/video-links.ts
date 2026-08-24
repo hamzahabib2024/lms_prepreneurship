@@ -166,6 +166,26 @@ export interface ImageLink {
 }
 
 /**
+ * A picture the Institute UPLOADED rather than linked to.
+ *
+ * `/api/v1/public/course-media/<id>` — the one endpoint in this System that
+ * serves a file to somebody with no account, and the only place an uploaded
+ * photograph can live. It has to be recognised here or the upload button on the
+ * public page editor would accept a file, store it, hand back its address, and
+ * then have the address silently dropped by the check below — because the path
+ * carries no `.jpg` on the end and no hostname at all. The administrator would
+ * see "uploaded", save, and find the gallery unchanged, with nothing anywhere
+ * saying why.
+ *
+ * Anchored, and the id is matched as a UUID rather than as "anything". A
+ * pattern that merely CONTAINED this path would let `https://evil.example/
+ * ?x=/api/v1/public/course-media/1` through, which is the shape of mistake
+ * that turns a relaxation into a hole.
+ */
+const UPLOADED_IMAGE =
+  /^\/api\/v1\/public\/course-media\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
  * Photographs for the public gallery.
  *
  * ONLY https, and only what looks like an image. An http image on an https page
@@ -176,13 +196,27 @@ export interface ImageLink {
  * An optional caption after a pipe becomes the alt text, because a gallery of
  * six images announced as "image, image, image" is a gallery a blind visitor
  * cannot use (NFR-ACC-002).
+ *
+ * The one exception to both rules is a picture uploaded INTO this System, which
+ * is served from this origin and carries no file extension — see UPLOADED_IMAGE
+ * above for why it is matched exactly rather than loosely.
  */
 export function parseImageLinks(values: readonly string[] | undefined): ImageLink[] {
   return (values ?? [])
     .flatMap((v) => v.split(/[\r\n]+/))
     .map((raw) => {
       const [link, ...rest] = raw.split("|");
-      const url = safeUrl((link ?? "").trim());
+      const trimmed = (link ?? "").trim();
+
+      // Ours, served from this origin. No protocol and no host to check —
+      // it is the same site — and the id is proof of nothing but that a
+      // MediaAsset row was created by staff holding `course_media:create`,
+      // from a buffer that passed the image signature check.
+      if (UPLOADED_IMAGE.test(trimmed)) {
+        return { url: trimmed, alt: rest.join("|").trim() };
+      }
+
+      const url = safeUrl(trimmed);
       if (!url) return null;
       if (url.protocol !== "https:") return null;
       if (!url.hostname.includes(".")) return null;

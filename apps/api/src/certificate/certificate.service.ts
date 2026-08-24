@@ -1,10 +1,19 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { randomBytes } from "node:crypto";
-import { AppError } from "@lms/shared";
+import type { Prisma } from "@prisma/client";
+import {
+  AppError,
+  CERTIFICATE_KIND_COPY,
+  type CertificateDocument,
+  type CertificateIssueInput,
+  type CertificateKind,
+  type CertificateQueryInput,
+} from "@lms/shared";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { ProgressService } from "../progress/progress.service";
+import { SettingsService } from "../settings/settings.service";
 import { getActor } from "../prisma/actor-context";
 import { assertOwnStudent } from "../rbac/ownership";
 import { RegistrationNumberService } from "../admission/registration-number.service";
@@ -14,20 +23,29 @@ import { TemplateService } from "../notification/template.service";
 /**
  * Completion certificates — SRS §5.15, FR-CRT-001..020.
  *
- * Two rules shape everything here.
+ * Three rules shape everything here.
  *
- * A CERTIFICATE IS EARNED, NOT GRANTED. Issue recomputes the student's standing
- * and refuses if the criteria are not met, listing exactly what is outstanding.
- * An administrator cannot hand one out because they were asked nicely; if the
- * Institute wants to waive a requirement, that is a change to the criteria,
- * which is configuration and is audited as such.
+ * A CERTIFICATE IS NORMALLY EARNED. `issueForSubject` and `issueForProgramme`
+ * recompute the student's standing and refuse if the criteria are not met,
+ * listing exactly what is outstanding. Neither can be talked into handing one
+ * out because somebody asked nicely.
  *
- * A CERTIFICATE IS A SNAPSHOT. Progress is derived and recomputed on every read
- * (ARC-007), so it moves as content is published and registers are corrected.
- * The document says "this student met the requirements on this date", and it
- * carries its own copies of the figures AND of the criteria that were applied,
- * so a challenge years later can be answered with the rule that was actually
- * used rather than today's configuration.
+ * BUT AN INSTITUTE ALSO CERTIFIES THINGS THE LMS NEVER TAUGHT. A weekend
+ * workshop, a guest seminar, a course that ran before the System existed —
+ * these are real qualifications and the office has to be able to issue them.
+ * `issueManual` is that path. It is not the earned path with the checks
+ * switched off: it writes `type: CUSTOM` or the anchor the administrator
+ * chose, sets `issuedManually`, records the act in the audit log as its own
+ * action, and takes no progress figures because there are none. A reader years
+ * later can always tell which of the two a certificate was.
+ *
+ * A CERTIFICATE IS A SNAPSHOT, AND NOW THAT MEANS THE WORDS TOO. Progress is
+ * derived and recomputed on every read (ARC-007), and so, it turns out, was
+ * everything else the document said: the holder's name, the course title, the
+ * teacher, the Institute. All of it is copied onto the row at issue, so a
+ * reprint in 2031 produces the same piece of paper it produced in 2026 — after
+ * a marriage, a course rename, a change of director, or the erasure of the
+ * student record itself.
  */
 @Injectable()
 export class CertificateService {
@@ -38,10 +56,13 @@ export class CertificateService {
     private readonly audit: AuditService,
     private readonly progress: ProgressService,
     private readonly config: ConfigService,
+    private readonly settings: SettingsService,
     private readonly numbers: RegistrationNumberService,
     private readonly notifications: NotificationService,
     private readonly templates: TemplateService,
   ) {}
+
+  // ---------------------------------------------------------- issuance ----
 
   /**
    * FR-CRT-002 — issues a subject certificate, or explains why it cannot.
@@ -57,7 +78,7 @@ export class CertificateService {
     const existing = await this.prisma.scoped.certificate.findFirst({
       where: { studentId, sectionSubjectId, status: "ISSUED" },
     });
-    if (existing) return this.present(existing, { alreadyIssued: true });
+    if (existing) return this.document(existing.id, { alreadyIssued: true });
 
     // Recomputed HERE rather than trusting anything the caller sent. This is
     // the check that makes the certificate mean something.
@@ -68,7 +89,7 @@ export class CertificateService {
         message: "This student has not met the requirements for this subject.",
         // The specific gaps, so an administrator can tell the student what is
         // missing rather than only that something is (NFR-USE-007).
-        details: standing.completionCriteria.outstanding.map((reason) => ({
+        details: standing.completionCriteria.outstanding.map((reason: string) => ({
           field: "completion",
           code: "NOT_MET",
           message: reason,
@@ -76,6 +97,7 @@ export class CertificateService {
       });
     }
 
+    const snapshot = await this.snapshot({ studentId, sectionSubjectId });
     const certificateNo = await this.nextCertificateNo();
 
     const created = await this.prisma.scoped.certificate.create({
@@ -83,7 +105,9 @@ export class CertificateService {
         certificateNo,
         studentId,
         type: "SUBJECT",
+        kind: "COMPLETION",
         sectionSubjectId,
+        ...snapshot,
         progressPercent: standing.overallPercent,
         attendancePercent: standing.attendance.percentage,
         averageGradePercent: standing.averageGradePercent,
@@ -111,46 +135,13 @@ export class CertificateService {
       },
     });
 
-    // DEP-04 — earning a qualification is the one notification a student would
-    // be sorry to miss, so it is URGENT: it reaches them past quiet hours.
-    const student = await this.prisma.asSystem((db) =>
-      db.student.findUnique({ where: { id: studentId }, select: { userId: true } }),
-    );
-    if (student) {
-      // The Institute's own wording if it has set any, and the System's
-      // otherwise (FR-NOT-020). The fallback is the literal that used to be
-      // here, so a kind the catalogue has not adopted still sends what it
-      // always sent rather than nothing.
-      const worded = await this.templates.renderFor("certificate.issued", {
-        certificateNo,
-        subject: (created as { sectionSubjectId?: string | null }).sectionSubjectId
-          ? await this.subjectNameFor(sectionSubjectId)
-          : null,
-      });
+    await this.announce(studentId, certificateNo, {
+      kind: "certificate.issued",
+      title: "Your certificate has been issued",
+      subject: snapshot.awardTitleSnapshot,
+    });
 
-      await this.notifications.notify({
-        recipientUserIds: [student.userId],
-        kind: "certificate.issued",
-        title: worded?.title || "Your certificate has been issued",
-        body:
-          worded?.body ||
-          `Certificate ${certificateNo} is now available, with a link you can give to an employer.`,
-        linkPath: "/subjects",
-        isUrgent: true,
-      });
-    }
-
-    return this.present(created, { alreadyIssued: false });
-  }
-
-  private async subjectNameFor(sectionSubjectId: string): Promise<string | null> {
-    const ss = await this.prisma.asSystem((db) =>
-      db.sectionSubject.findUnique({
-        where: { id: sectionSubjectId },
-        select: { subject: { select: { name: true } } },
-      }),
-    );
-    return ss?.subject.name ?? null;
+    return this.document(created.id, { alreadyIssued: false });
   }
 
   /**
@@ -183,11 +174,11 @@ export class CertificateService {
     const existing = await this.prisma.scoped.certificate.findFirst({
       where: { studentId, programmeId, status: "ISSUED" },
     });
-    if (existing) return this.present(existing, { alreadyIssued: true });
+    if (existing) return this.document(existing.id, { alreadyIssued: true });
 
     const programme = await this.prisma.scoped.programme.findFirst({
       where: { id: programmeId },
-      select: { id: true, name: true },
+      select: { id: true, name: true, code: true, durationWeeks: true },
     });
     if (!programme) throw new AppError("RESOURCE_NOT_FOUND");
 
@@ -226,7 +217,9 @@ export class CertificateService {
     }
 
     const perSubject = await Promise.all(
-      enrolments.map((e) => this.progress.forSubject(studentId, e.sectionSubjectId)),
+      enrolments.map((e: { sectionSubjectId: string }) =>
+        this.progress.forSubject(studentId, e.sectionSubjectId),
+      ),
     );
 
     const unmet = perSubject.filter((p) => !p.completionCriteria.met);
@@ -237,7 +230,7 @@ export class CertificateService {
         // Named subject by subject. "Requirements not met" leaves an
         // administrator with nothing to tell the student (NFR-USE-007).
         details: unmet.flatMap((p) =>
-          p.completionCriteria.outstanding.map((reason) => ({
+          p.completionCriteria.outstanding.map((reason: string) => ({
             field: "completion",
             code: "NOT_MET",
             message: `${p.subject?.name ?? "A subject"}: ${reason}`,
@@ -256,13 +249,16 @@ export class CertificateService {
       return Math.round((values.reduce((a, b) => a + b, 0) / values.length) * 10) / 10;
     };
 
+    const snapshot = await this.snapshot({ studentId, programmeId });
     const certificateNo = await this.nextCertificateNo();
     const created = await this.prisma.scoped.certificate.create({
       data: {
         certificateNo,
         studentId,
         type: "PROGRAMME",
+        kind: "COMPLETION",
         programmeId,
+        ...snapshot,
         progressPercent: mean((p) => p.overallPercent) ?? 0,
         attendancePercent: mean((p) => p.attendance.percentage),
         averageGradePercent: mean((p) => p.averageGradePercent),
@@ -295,22 +291,364 @@ export class CertificateService {
       },
     });
 
-    const student = await this.prisma.asSystem((db) =>
-      db.student.findUnique({ where: { id: studentId }, select: { userId: true } }),
-    );
-    if (student) {
-      await this.notifications.notify({
-        recipientUserIds: [student.userId],
+    await this.announce(studentId, certificateNo, {
+      kind: "certificate.issued",
+      title: `You have completed ${programme.name}`,
+      subject: programme.name,
+    });
+
+    return this.document(created.id, { alreadyIssued: false });
+  }
+
+  /**
+   * FR-CRT-002, the manual route — an administrator issuing by hand.
+   *
+   * THE DELIBERATE EXCEPTION, and the reasoning is worth keeping beside the
+   * code. The earned path exists so a certificate means something; this one
+   * exists because an institute certifies more than the LMS teaches. A weekend
+   * workshop, a seminar, a cohort that finished before the System was
+   * installed — refusing those would not make the System stricter, it would
+   * make it useless for a fifth of what the office actually does, and the
+   * office would go back to Word.
+   *
+   * WHAT KEEPS IT HONEST is not friction but the record. `issuedManually` is
+   * written on the row, the audit action is its own name rather than the
+   * earned one, and the type is CUSTOM unless the administrator anchored it to
+   * real structure. Nobody reading a certificate later has to guess.
+   *
+   * ONLY THREE THINGS ARE REQUIRED: a name, a title and a kind. Everything
+   * else has a good answer already, and an office issuing forty workshop
+   * certificates should type forty names rather than four hundred fields.
+   */
+  async issueManual(input: CertificateIssueInput) {
+    const actor = getActor();
+    if (!actor) throw new AppError("AUTH_TOKEN_INVALID");
+
+    // The anchors are validated BEFORE a number is allocated. A certificate
+    // number is permanent and never reused, so burning one on a request that
+    // was going to fail anyway leaves a visible gap in the year's series that
+    // nobody can explain.
+    if (input.sectionSubjectId) await this.requireSectionSubject(input.sectionSubjectId);
+    if (input.programmeId) await this.requireProgramme(input.programmeId);
+    if (input.studentId) await this.requireStudent(input.studentId);
+
+    const snapshot = await this.snapshot({
+      studentId: input.studentId ?? null,
+      sectionSubjectId: input.sectionSubjectId ?? null,
+      programmeId: input.programmeId ?? null,
+      overrides: {
+        studentName: input.studentName,
+        registrationNo: input.registrationNo ?? null,
+        rollNo: input.rollNo ?? null,
+        title: input.title,
+        instructorName: input.instructorName ?? null,
+        instructorTitle: input.instructorTitle ?? null,
+      },
+    });
+
+    const type = input.sectionSubjectId ? "SUBJECT" : input.programmeId ? "PROGRAMME" : "CUSTOM";
+    const issuedAt = input.issueDate ? new Date(input.issueDate) : new Date();
+    const certificateNo = await this.nextCertificateNo();
+
+    let created;
+    try {
+      created = await this.prisma.scoped.certificate.create({
+        data: {
+          certificateNo,
+          type,
+          kind: input.kind,
+          issuedManually: true,
+          ...(input.studentId ? { studentId: input.studentId } : {}),
+          ...(input.sectionSubjectId ? { sectionSubjectId: input.sectionSubjectId } : {}),
+          ...(input.programmeId ? { programmeId: input.programmeId } : {}),
+          ...snapshot,
+          ...(input.completionDate ? { completionDate: new Date(input.completionDate) } : {}),
+          ...(input.durationText ? { durationText: input.durationText } : {}),
+          status: "ISSUED",
+          issuedAt,
+          issuedBy: actor.userId,
+          verificationCode: this.newVerificationCode(),
+        },
+      });
+    } catch (error) {
+      // FR-CRT-004 — the partial unique index. Reported as a conflict with the
+      // certificate that is in the way, because "unique constraint violated"
+      // tells an administrator nothing they can act on.
+      if ((error as { code?: string }).code === "P2002") {
+        throw new AppError("RESOURCE_CONFLICT", {
+          message:
+            "That student already holds a valid certificate for this course. Revoke the existing one first if it needs replacing.",
+        });
+      }
+      throw error;
+    }
+
+    // SEC-LOG-009 — its own action, never folded into `certificate.issue`. The
+    // whole point of the manual route is that it is distinguishable.
+    await this.audit.record({
+      action: "certificate.issue.manual",
+      entityType: "Certificate",
+      entityId: created.id,
+      after: {
+        certificateNo,
+        type,
+        kind: input.kind,
+        holder: input.studentName,
+        award: input.title,
+        studentId: input.studentId ?? null,
+        note: input.note ?? null,
+      },
+    });
+
+    if (input.studentId) {
+      await this.announce(input.studentId, certificateNo, {
         kind: "certificate.issued",
-        title: `You have completed ${programme.name}`,
-        body: `Certificate ${certificateNo} is now available, with a link you can give to an employer.`,
-        linkPath: "/subjects",
-        isUrgent: true,
+        title: "A certificate has been issued to you",
+        subject: input.title,
       });
     }
 
-    return this.present(created, { alreadyIssued: false });
+    return this.document(created.id, { alreadyIssued: false });
   }
+
+  // -------------------------------------------------------- the register --
+
+  /**
+   * FR-CRT-006 — every certificate the Institute has issued.
+   *
+   * Read straight off the snapshot columns rather than joined out to students
+   * and subjects, and that is not only a performance choice: a certificate
+   * whose student has been erased still has to appear in this list, with the
+   * name it was issued under. A join would silently drop exactly the rows an
+   * administrator most needs to find.
+   */
+  async register(query: CertificateQueryInput) {
+    const page = Math.max(1, query.page ?? 1);
+    const pageSize = 25;
+
+    const issuedAt: Prisma.DateTimeFilter = {};
+    if (query.issuedFrom) issuedAt.gte = new Date(query.issuedFrom);
+    if (query.issuedTo) {
+      // Inclusive of the day somebody typed. A date filter that silently
+      // excludes today is the commonest "the search is broken" report there is.
+      const end = new Date(query.issuedTo);
+      end.setUTCHours(23, 59, 59, 999);
+      issuedAt.lte = end;
+    }
+
+    const where: Prisma.CertificateWhereInput = {
+      ...(query.status ? { status: query.status } : {}),
+      ...(query.kind ? { kind: query.kind } : {}),
+      ...(query.type ? { type: query.type } : {}),
+      ...(Object.keys(issuedAt).length > 0 ? { issuedAt } : {}),
+      ...(query.q
+        ? {
+            OR: [
+              { certificateNo: { contains: query.q, mode: "insensitive" as const } },
+              { studentNameSnapshot: { contains: query.q, mode: "insensitive" as const } },
+              { studentRegistrationNoSnapshot: { contains: query.q, mode: "insensitive" as const } },
+              { awardTitleSnapshot: { contains: query.q, mode: "insensitive" as const } },
+            ],
+          }
+        : {}),
+    };
+
+    const [rows, total] = await Promise.all([
+      this.prisma.scoped.certificate.findMany({
+        where,
+        orderBy: { issuedAt: "desc" },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      this.prisma.scoped.certificate.count({ where }),
+    ]);
+
+    return {
+      // §9.2 names this `data`; the envelope interceptor reads that key.
+      data: await Promise.all(rows.map((row: (typeof rows)[number]) => this.present(row))),
+      pagination: {
+        page,
+        pageSize,
+        totalItems: total,
+        totalPages: Math.max(1, Math.ceil(total / pageSize)),
+        hasNext: page * pageSize < total,
+        hasPrevious: page > 1,
+      },
+    };
+  }
+
+  /**
+   * The four figures at the top of the register.
+   *
+   * Counted rather than derived from the current page: an administrator
+   * looking at page three of a filtered list still needs to know how many
+   * certificates the Institute has issued altogether.
+   */
+  async summary() {
+    const startOfMonth = new Date();
+    startOfMonth.setUTCDate(1);
+    startOfMonth.setUTCHours(0, 0, 0, 0);
+
+    const [total, valid, revoked, archived, thisMonth] = await Promise.all([
+      this.prisma.scoped.certificate.count(),
+      this.prisma.scoped.certificate.count({ where: { status: "ISSUED" } }),
+      this.prisma.scoped.certificate.count({ where: { status: "REVOKED" } }),
+      this.prisma.scoped.certificate.count({ where: { status: "ARCHIVED" } }),
+      this.prisma.scoped.certificate.count({ where: { issuedAt: { gte: startOfMonth } } }),
+    ]);
+
+    return { total, valid, revoked, archived, thisMonth };
+  }
+
+  /**
+   * One certificate, ready to be drawn.
+   *
+   * Goes through the scoped client, which is what stops a student opening a
+   * classmate's: the Certificate scope policy narrows a student to their own
+   * rows, so the record simply is not there. RESOURCE_NOT_FOUND rather than
+   * FORBIDDEN, because at this point the two are indistinguishable and saying
+   * "forbidden" would confirm the id is real (SEC-AUZ-006).
+   */
+  async document(id: string, meta: { alreadyIssued: boolean } = { alreadyIssued: false }) {
+    const row = await this.prisma.scoped.certificate.findFirst({ where: { id } });
+    if (!row) throw new AppError("RESOURCE_NOT_FOUND");
+    return { ...(await this.present(row)), alreadyIssued: meta.alreadyIssued };
+  }
+
+  /**
+   * Students an administrator can attach a manual certificate to.
+   *
+   * Its own narrow lookup rather than the user directory, because the directory
+   * returns User ids and a certificate hangs off a Student. Guarded by the
+   * issuing permission, and it returns a name, a number and an id — nothing a
+   * certificate screen does not need.
+   */
+  async studentLookup(q: string) {
+    const term = q.trim();
+    if (term.length < 2) return [];
+
+    const rows = await this.prisma.scoped.student.findMany({
+      where: {
+        deletedAt: null,
+        OR: [
+          { registrationNo: { contains: term, mode: "insensitive" } },
+          { user: { fullName: { contains: term, mode: "insensitive" } } },
+        ],
+      },
+      take: 20,
+      orderBy: { registrationNo: "asc" },
+      select: {
+        id: true,
+        registrationNo: true,
+        currentRollNo: true,
+        user: { select: { fullName: true } },
+      },
+    });
+
+    return rows.map((s: (typeof rows)[number]) => ({
+      id: s.id,
+      name: s.user.fullName,
+      registrationNo: s.registrationNo,
+      rollNo: s.currentRollNo,
+    }));
+  }
+
+  // ------------------------------------------------------- state changes --
+
+  /**
+   * FR-CRT-012 — revokes, never deletes.
+   *
+   * A certificate that vanished would leave an employer holding a document the
+   * System denies exists. Revocation keeps the record and gives verification
+   * something truthful to say (BR-DAT-02).
+   */
+  async revoke(certificateId: string, reason: string) {
+    const actor = getActor();
+    if (!actor) throw new AppError("AUTH_TOKEN_INVALID");
+
+    const certificate = await this.prisma.scoped.certificate.findFirst({
+      where: { id: certificateId },
+    });
+    if (!certificate) throw new AppError("RESOURCE_NOT_FOUND");
+
+    if (certificate.status === "REVOKED") {
+      throw new AppError("RESOURCE_CONFLICT", {
+        message: "That certificate has already been revoked.",
+      });
+    }
+
+    await this.prisma.scoped.certificate.update({
+      where: { id: certificateId },
+      data: {
+        status: "REVOKED",
+        revokedAt: new Date(),
+        revokedBy: actor.userId,
+        revocationReason: reason,
+      },
+    });
+
+    // SEC-LOG-009 — revoking a qualification is a privileged act; the reason is
+    // recorded with it, because "why" is the first question anyone will ask.
+    await this.audit.record({
+      action: "certificate.revoke",
+      entityType: "Certificate",
+      entityId: certificateId,
+      before: { status: certificate.status },
+      after: { status: "REVOKED", reason },
+    });
+
+    return this.document(certificateId);
+  }
+
+  /**
+   * FR-CRT-012 — archived, which is not revoked.
+   *
+   * THE DIFFERENCE MATTERS TO THE PERSON HOLDING THE PAPER. Revoking says the
+   * document should not be relied on; archiving says the Institute has taken it
+   * out of circulation without disputing it — superseded by a reissue, raised
+   * twice by mistake, belonging to a cohort that has been closed off. A
+   * verification of an archived certificate still confirms it is genuine.
+   *
+   * Because it is not a judgement about the holder it carries no reason, and
+   * because it frees the "one live certificate per student per course" slot it
+   * is how a certificate is legitimately replaced without revoking somebody's
+   * qualification to do it.
+   */
+  async archive(certificateId: string) {
+    const actor = getActor();
+    if (!actor) throw new AppError("AUTH_TOKEN_INVALID");
+
+    const certificate = await this.prisma.scoped.certificate.findFirst({
+      where: { id: certificateId },
+    });
+    if (!certificate) throw new AppError("RESOURCE_NOT_FOUND");
+
+    if (certificate.status !== "ISSUED") {
+      throw new AppError("RESOURCE_CONFLICT", {
+        message:
+          certificate.status === "REVOKED"
+            ? "That certificate has been revoked. A revoked certificate is not archived as well — the revocation is the record."
+            : "That certificate is already archived.",
+      });
+    }
+
+    await this.prisma.scoped.certificate.update({
+      where: { id: certificateId },
+      data: { status: "ARCHIVED" },
+    });
+
+    await this.audit.record({
+      action: "certificate.archive",
+      entityType: "Certificate",
+      entityId: certificateId,
+      before: { status: "ISSUED" },
+      after: { status: "ARCHIVED" },
+    });
+
+    return this.document(certificateId);
+  }
+
+  // ------------------------------------------------------------- reading --
 
   /**
    * FR-CRT-011 — is this student ready for a programme certificate, and if
@@ -339,7 +677,9 @@ export class CertificateService {
     });
 
     const perSubject = await Promise.all(
-      enrolments.map((e) => this.progress.forSubject(studentId, e.sectionSubjectId)),
+      enrolments.map((e: { sectionSubjectId: string }) =>
+        this.progress.forSubject(studentId, e.sectionSubjectId),
+      ),
     );
     const complete = perSubject.filter((p) => p.completionCriteria.met);
     const issued = await this.prisma.scoped.certificate.findFirst({
@@ -371,51 +711,6 @@ export class CertificateService {
   }
 
   /**
-   * FR-CRT-012 — revokes, never deletes.
-   *
-   * A certificate that vanished would leave an employer holding a document the
-   * System denies exists. Revocation keeps the record and gives verification
-   * something truthful to say (BR-DAT-02).
-   */
-  async revoke(certificateId: string, reason: string) {
-    const actor = getActor();
-    if (!actor) throw new AppError("AUTH_TOKEN_INVALID");
-
-    const certificate = await this.prisma.scoped.certificate.findFirst({
-      where: { id: certificateId },
-    });
-    if (!certificate) throw new AppError("RESOURCE_NOT_FOUND");
-
-    if (certificate.status === "REVOKED") {
-      throw new AppError("RESOURCE_CONFLICT", {
-        message: "That certificate has already been revoked.",
-      });
-    }
-
-    const updated = await this.prisma.scoped.certificate.update({
-      where: { id: certificateId },
-      data: {
-        status: "REVOKED",
-        revokedAt: new Date(),
-        revokedBy: actor.userId,
-        revocationReason: reason,
-      },
-    });
-
-    // SEC-LOG-009 — revoking a qualification is a privileged act; the reason is
-    // recorded with it, because "why" is the first question anyone will ask.
-    await this.audit.record({
-      action: "certificate.revoke",
-      entityType: "Certificate",
-      entityId: certificateId,
-      before: { status: "ISSUED" },
-      after: { status: "REVOKED", reason },
-    });
-
-    return this.present(updated, { alreadyIssued: false });
-  }
-
-  /**
    * FR-CRT-006 — the issuance worklist for one subject-section.
    *
    * Every enrolled student, whether they have met the criteria, and whether a
@@ -438,8 +733,9 @@ export class CertificateService {
     // Latest first, so a revoked certificate does not mask a live reissue.
     const byStudent = new Map<string, (typeof certificates)[number]>();
     for (const c of certificates) {
+      if (!c.studentId) continue; // an erased holder has no row to line up with
       const held = byStudent.get(c.studentId);
-      if (!held || (held.status === "REVOKED" && c.status === "ISSUED")) {
+      if (!held || (held.status !== "ISSUED" && c.status === "ISSUED")) {
         byStudent.set(c.studentId, c);
       }
     }
@@ -483,17 +779,9 @@ export class CertificateService {
     const rows = await this.prisma.scoped.certificate.findMany({
       where: { studentId },
       orderBy: { issuedAt: "desc" },
-      include: {
-        sectionSubject: { include: { subject: { select: { code: true, name: true } } } },
-        programme: { select: { code: true, name: true } },
-      },
     });
 
-    return rows.map((c: (typeof rows)[number]) => ({
-      ...this.present(c, { alreadyIssued: false }),
-      subject: c.sectionSubject?.subject ?? null,
-      programme: c.programme ?? null,
-    }));
+    return Promise.all(rows.map((row: (typeof rows)[number]) => this.present(row)));
   }
 
   /** The signed-in student's own, without needing their id. */
@@ -516,27 +804,45 @@ export class CertificateService {
    * is deliberately minimal — enough to confirm the document is genuine, and
    * nothing that would turn this into a way to mine student records.
    *
-   * Returned: the holder's name, what it is for, when it was issued, and
-   * whether it still stands. NOT returned: marks, attendance, contact details,
-   * registration number, or any identifier that could be used elsewhere.
+   * Returned: what is ALREADY PRINTED ON THE PAPER the caller is holding — the
+   * holder's name, what it was for, who taught it, which institute issued it,
+   * when, and whether it still stands. NOT returned: marks, attendance,
+   * contact details, registration number, or any identifier usable elsewhere.
    *
-   * A wrong code gets the same "not found" as a well-formed one that does not
-   * exist, and the code is 32 random bytes rather than the printed number, so
-   * guessing is impractical (SEC-AUZ-004).
+   * IT ACCEPTS EITHER IDENTIFIER, and the two are not equally private. The
+   * verification code is 32 random bytes and is what the QR code carries, so a
+   * link is unguessable. The certificate NUMBER is sequential and is accepted
+   * as well, because somebody holding paper and no phone must be able to type
+   * something in — the endpoint is rate-limited for exactly that reason
+   * (SEC-RTL-004), and everything it discloses is already on the document in
+   * front of them.
    */
-  async verify(verificationCode: string) {
+  async verify(code: string) {
+    const trimmed = code.trim();
+
     const certificate = await this.prisma.asSystem((db) =>
-      db.certificate.findUnique({
-        where: { verificationCode },
+      db.certificate.findFirst({
+        where: {
+          OR: [
+            { verificationCode: trimmed },
+            // Case-insensitive, because a certificate number read off paper is
+            // typed however the person typing it feels about capitals.
+            { certificateNo: { equals: trimmed, mode: "insensitive" } },
+          ],
+        },
         select: {
           certificateNo: true,
           type: true,
+          kind: true,
           status: true,
           issuedAt: true,
+          completionDate: true,
           revokedAt: true,
-          student: { select: { user: { select: { fullName: true } } } },
-          sectionSubject: { select: { subject: { select: { name: true } } } },
-          programme: { select: { name: true } },
+          studentNameSnapshot: true,
+          awardTitleSnapshot: true,
+          programmeNameSnapshot: true,
+          instructorNameSnapshot: true,
+          instituteNameSnapshot: true,
         },
       }),
     );
@@ -548,14 +854,22 @@ export class CertificateService {
     return {
       found: true as const,
       certificateNo: certificate.certificateNo,
-      holderName: certificate.student.user.fullName,
-      awardedFor:
-        certificate.sectionSubject?.subject.name ?? certificate.programme?.name ?? "",
+      holderName: certificate.studentNameSnapshot,
+      awardedFor: certificate.awardTitleSnapshot,
+      programme: certificate.programmeNameSnapshot,
+      instructorName: certificate.instructorNameSnapshot,
+      instituteName: certificate.instituteNameSnapshot,
       type: certificate.type,
+      kind: certificate.kind,
+      kindLabel: CERTIFICATE_KIND_COPY[certificate.kind as CertificateKind].label,
+      status: certificate.status,
       issuedAt: certificate.issuedAt,
+      completionDate: certificate.completionDate,
       // Stated plainly. An employer checking a revoked certificate must be
-      // told, not left to infer it from a missing field.
-      valid: certificate.status === "ISSUED",
+      // told, not left to infer it from a missing field. An ARCHIVED one is
+      // still genuine, which is the whole reason the two are different states.
+      valid: certificate.status !== "REVOKED",
+      archived: certificate.status === "ARCHIVED",
       revokedAt: certificate.revokedAt,
     };
   }
@@ -563,7 +877,249 @@ export class CertificateService {
   // ------------------------------------------------------------ internals --
 
   /**
-   * The next number in the year's series.
+   * Everything the document will say, copied onto the row.
+   *
+   * THIS FUNCTION IS THE PERMANENCE. Every field it gathers is one the printed
+   * certificate depends on and one that can legitimately change afterwards; a
+   * field read at render time instead is a field that will one day make two
+   * copies of the same certificate disagree.
+   */
+  private async snapshot(input: {
+    studentId?: string | null;
+    sectionSubjectId?: string | null;
+    programmeId?: string | null;
+    overrides?: {
+      studentName?: string;
+      registrationNo?: string | null;
+      rollNo?: number | null;
+      title?: string;
+      instructorName?: string | null;
+      instructorTitle?: string | null;
+    };
+  }) {
+    const overrides = input.overrides ?? {};
+
+    // The Institute, as it names itself today.
+    const [instituteName, signatoryName, signatoryTitle, defaultInstructorTitle] =
+      await Promise.all([
+        this.settings.text("institute.name"),
+        this.settings.text("certificate.signatoryName"),
+        this.settings.text("certificate.signatoryTitle"),
+        this.settings.text("certificate.instructorTitle"),
+      ]);
+
+    let studentName = overrides.studentName ?? "";
+    let registrationNo = overrides.registrationNo ?? null;
+    let rollNo = overrides.rollNo ?? null;
+
+    if (input.studentId) {
+      const student = await this.prisma.asSystem((db) =>
+        db.student.findUnique({
+          where: { id: input.studentId! },
+          select: {
+            registrationNo: true,
+            currentRollNo: true,
+            user: { select: { fullName: true } },
+          },
+        }),
+      );
+      if (student) {
+        // The record wins over a typed name when both exist: an administrator
+        // who picked a student meant that student, and a stale name in the box
+        // would print somebody else's spelling.
+        studentName = student.user.fullName;
+        registrationNo = registrationNo ?? student.registrationNo;
+        rollNo = rollNo ?? student.currentRollNo;
+      }
+    }
+
+    let title = overrides.title ?? "";
+    let awardCode: string | null = null;
+    let programmeName: string | null = null;
+    let instructorName = overrides.instructorName ?? null;
+    const instructorTitle = overrides.instructorTitle ?? null;
+
+    if (input.sectionSubjectId) {
+      const offering = await this.prisma.asSystem((db) =>
+        db.sectionSubject.findUnique({
+          where: { id: input.sectionSubjectId! },
+          select: {
+            subject: { select: { name: true, code: true } },
+            section: {
+              select: {
+                batch: {
+                  select: {
+                    academicSession: { select: { programme: { select: { name: true } } } },
+                  },
+                },
+              },
+            },
+            assignments: {
+              // PRIMARY only, earliest first: a class that once had a
+              // substitute must not credit the wrong person on the paper.
+              where: { deletedAt: null, assignmentRole: "PRIMARY" },
+              orderBy: { startDate: "asc" },
+              take: 1,
+              select: { teacher: { select: { user: { select: { fullName: true } } } } },
+            },
+          },
+        }),
+      );
+
+      if (offering) {
+        title = overrides.title || offering.subject.name;
+        awardCode = offering.subject.code;
+        programmeName = offering.section.batch.academicSession.programme.name;
+        instructorName =
+          instructorName ?? offering.assignments[0]?.teacher.user.fullName ?? null;
+      }
+    } else if (input.programmeId) {
+      const programme = await this.prisma.asSystem((db) =>
+        db.programme.findUnique({
+          where: { id: input.programmeId! },
+          select: { name: true, code: true, durationWeeks: true },
+        }),
+      );
+      if (programme) {
+        title = overrides.title || programme.name;
+        awardCode = programme.code;
+      }
+    }
+
+    return {
+      studentNameSnapshot: studentName || "Unnamed",
+      studentRegistrationNoSnapshot: registrationNo,
+      studentRollNoSnapshot: rollNo,
+      awardTitleSnapshot: title || "Course",
+      awardCodeSnapshot: awardCode,
+      programmeNameSnapshot: programmeName,
+      instructorNameSnapshot: instructorName,
+      // Only when there is a name to sit above it. A designation floating over
+      // a blank signature line is worse than no block at all.
+      instructorTitleSnapshot: instructorName
+        ? (instructorTitle || defaultInstructorTitle || null)
+        : null,
+      instituteNameSnapshot: instituteName || "The Institute",
+      signatoryNameSnapshot: signatoryName || null,
+      signatoryTitleSnapshot: signatoryName ? signatoryTitle || null : null,
+    };
+  }
+
+  /** A stored row, as the thing that gets drawn. */
+  private async present(c: {
+    id: string;
+    certificateNo: string;
+    type: string;
+    kind: string;
+    status: string;
+    issuedAt: Date;
+    completionDate: Date | null;
+    durationText: string | null;
+    studentId: string | null;
+    studentNameSnapshot: string;
+    studentRegistrationNoSnapshot: string | null;
+    studentRollNoSnapshot: number | null;
+    awardTitleSnapshot: string;
+    awardCodeSnapshot: string | null;
+    programmeNameSnapshot: string | null;
+    instructorNameSnapshot: string | null;
+    instructorTitleSnapshot: string | null;
+    instituteNameSnapshot: string;
+    signatoryNameSnapshot: string | null;
+    signatoryTitleSnapshot: string | null;
+    progressPercent: unknown;
+    attendancePercent: unknown;
+    averageGradePercent: unknown;
+    verificationCode: string;
+    revokedAt: Date | null;
+    revocationReason: string | null;
+    issuedManually: boolean;
+  }): Promise<CertificateDocument> {
+    // The two branding lines that are NOT snapshotted, and deliberately so:
+    // a tagline and a web address are how to reach the Institute today, not a
+    // claim about the holder. A moved website should be right on a reprint.
+    const [tagline, website] = await Promise.all([
+      this.settings.text("certificate.tagline"),
+      this.settings.text("certificate.website"),
+    ]);
+
+    const decimal = (value: unknown): number | null =>
+      value === null || value === undefined ? null : Number(value);
+
+    return {
+      id: c.id,
+      certificateNo: c.certificateNo,
+      type: c.type as CertificateDocument["type"],
+      kind: c.kind as CertificateDocument["kind"],
+      status: c.status as CertificateDocument["status"],
+      issuedAt: c.issuedAt.toISOString(),
+      completionDate: c.completionDate ? c.completionDate.toISOString() : null,
+      durationText: c.durationText,
+      student: {
+        id: c.studentId,
+        name: c.studentNameSnapshot,
+        registrationNo: c.studentRegistrationNoSnapshot,
+        rollNo: c.studentRollNoSnapshot,
+      },
+      award: {
+        title: c.awardTitleSnapshot,
+        programme: c.programmeNameSnapshot,
+        code: c.awardCodeSnapshot,
+      },
+      instructor: c.instructorNameSnapshot
+        ? {
+            name: c.instructorNameSnapshot,
+            title: c.instructorTitleSnapshot ?? "Course Instructor",
+          }
+        : null,
+      institute: {
+        name: c.instituteNameSnapshot,
+        tagline,
+        website,
+        signatoryName: c.signatoryNameSnapshot ?? "",
+        signatoryTitle: c.signatoryTitleSnapshot ?? "",
+      },
+      verification: {
+        code: c.verificationCode,
+        url: this.verificationUrl(c.verificationCode),
+      },
+      standing:
+        c.progressPercent === null || c.progressPercent === undefined
+          ? null
+          : {
+              progressPercent: Number(c.progressPercent),
+              attendancePercent: decimal(c.attendancePercent),
+              averageGradePercent: decimal(c.averageGradePercent),
+            },
+      revokedAt: c.revokedAt ? c.revokedAt.toISOString() : null,
+      revocationReason: c.revocationReason,
+      issuedManually: c.issuedManually,
+    };
+  }
+
+  /**
+   * The address printed on the certificate and encoded in the QR code.
+   *
+   * ABSOLUTE, AND BUILT ON THE SERVER. The client knows its own origin, but a
+   * certificate is rendered in one place and read in another — a phone camera
+   * pointed at a sheet of paper has no origin at all — so the URL has to be
+   * the one the Institute is actually reachable at.
+   *
+   * PUBLIC_WEB_URL first, then WEB_ORIGIN, then localhost, which is the same
+   * chain the credentials mailer uses and for the same reason: PUBLIC_WEB_URL
+   * is set by docker-compose and by nothing else, and a QR code pointing at
+   * `localhost` is a QR code that means "this reader's own computer".
+   */
+  private verificationUrl(code: string): string {
+    const configured =
+      (this.config.get<string>("PUBLIC_WEB_URL", "") ?? "").trim() ||
+      ((this.config.get<string>("WEB_ORIGIN", "") ?? "").split(",")[0] ?? "").trim();
+    const base = (configured || "http://localhost:5173").replace(/\/+$/, "");
+    return `${base}/verify/certificate/${code}`;
+  }
+
+  /**
+   * The next number in the year's series — CERT-2026-000001.
    *
    * Reuses RegistrationNumberService.allocateSequence rather than writing a
    * second counter: two administrators issuing at the same moment must not
@@ -571,6 +1127,12 @@ export class CertificateService {
    * INSERT ... ON CONFLICT DO UPDATE ... RETURNING there already solves it and
    * is already tested. A certificate number is printed, permanent and public,
    * so it has exactly the same requirement as a registration number.
+   *
+   * HYPHENS RATHER THAN SLASHES. The number now appears in a URL — an employer
+   * types it into the verification page — and a slash inside a path segment is
+   * a fight with every proxy between here and them. Numbers already issued in
+   * the old CERT/2026/00001 form keep it and still verify, because verification
+   * matches the stored string rather than re-deriving it.
    */
   private async nextCertificateNo(): Promise<string> {
     const prefix = this.config.get<string>("CERTIFICATE_PREFIX", "CERT");
@@ -579,7 +1141,7 @@ export class CertificateService {
     return this.prisma.asSystem((db) =>
       db.$transaction(async (tx) => {
         const sequence = await this.numbers.allocateSequence(tx, `certificate:${year}`);
-        return `${prefix}/${year}/${String(sequence).padStart(5, "0")}`;
+        return `${prefix}-${year}-${String(sequence).padStart(6, "0")}`;
       }),
     );
   }
@@ -594,36 +1156,79 @@ export class CertificateService {
     return randomBytes(32).toString("hex");
   }
 
-  private present(
-    c: {
-      id: string;
-      certificateNo: string;
-      type: string;
-      status: string;
-      issuedAt: Date;
-      revokedAt: Date | null;
-      revocationReason: string | null;
-      progressPercent: unknown;
-      attendancePercent: unknown;
-      averageGradePercent: unknown;
-      verificationCode: string;
-    },
-    meta: { alreadyIssued: boolean },
-  ) {
-    return {
-      id: c.id,
-      certificateNo: c.certificateNo,
-      type: c.type,
-      status: c.status,
-      issuedAt: c.issuedAt,
-      revokedAt: c.revokedAt,
-      revocationReason: c.revocationReason,
-      progressPercent: Number(c.progressPercent),
-      attendancePercent: c.attendancePercent == null ? null : Number(c.attendancePercent),
-      averageGradePercent:
-        c.averageGradePercent == null ? null : Number(c.averageGradePercent),
-      verificationCode: c.verificationCode,
-      alreadyIssued: meta.alreadyIssued,
-    };
+  /**
+   * DEP-04 — earning a qualification is the one notification a student would be
+   * sorry to miss, so it is URGENT: it reaches them past quiet hours.
+   */
+  private async announce(
+    studentId: string,
+    certificateNo: string,
+    what: { kind: string; title: string; subject: string | null },
+  ): Promise<void> {
+    const student = await this.prisma.asSystem((db) =>
+      db.student.findUnique({ where: { id: studentId }, select: { userId: true } }),
+    );
+    if (!student) return;
+
+    // The Institute's own wording if it has set any, and the System's
+    // otherwise (FR-NOT-020). The fallback is the literal that used to be
+    // here, so a kind the catalogue has not adopted still sends what it
+    // always sent rather than nothing.
+    const worded = await this.templates.renderFor(what.kind, {
+      certificateNo,
+      subject: what.subject,
+    });
+
+    await this.notifications.notify({
+      recipientUserIds: [student.userId],
+      kind: what.kind,
+      title: worded?.title || what.title,
+      body:
+        worded?.body ||
+        `Certificate ${certificateNo} is now available, with a link you can give to an employer.`,
+      linkPath: "/my-certificates",
+      isUrgent: true,
+    });
+  }
+
+  private async requireStudent(studentId: string): Promise<void> {
+    const found = await this.prisma.scoped.student.findFirst({
+      where: { id: studentId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!found) {
+      throw new AppError("VALIDATION_FAILED", {
+        message: "That student could not be found.",
+        details: [{ field: "studentId", code: "NOT_FOUND", message: "No such student." }],
+      });
+    }
+  }
+
+  private async requireSectionSubject(sectionSubjectId: string): Promise<void> {
+    const found = await this.prisma.scoped.sectionSubject.findFirst({
+      where: { id: sectionSubjectId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!found) {
+      throw new AppError("VALIDATION_FAILED", {
+        message: "That subject could not be found.",
+        details: [
+          { field: "sectionSubjectId", code: "NOT_FOUND", message: "No such subject-section." },
+        ],
+      });
+    }
+  }
+
+  private async requireProgramme(programmeId: string): Promise<void> {
+    const found = await this.prisma.scoped.programme.findFirst({
+      where: { id: programmeId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!found) {
+      throw new AppError("VALIDATION_FAILED", {
+        message: "That course could not be found.",
+        details: [{ field: "programmeId", code: "NOT_FOUND", message: "No such course." }],
+      });
+    }
   }
 }

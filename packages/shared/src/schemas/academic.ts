@@ -199,8 +199,28 @@ export const quickBatchCreateSchema = z.object({
    */
   subjectIds: z.array(z.string().uuid()).default([]),
 
+  /**
+   * FR-REG-044 — the links a student is given the moment they are admitted.
+   *
+   * These are shown on the approval screen and emailed, and until now there was
+   * NO WAY TO SET ONE from the interface at all: the column existed, the API
+   * accepted it, and no form offered it. Every batch created through the System
+   * therefore admitted students and told them nothing about where the class
+   * actually talks to each other.
+   */
   whatsappChannelUrl: z.string().trim().url().max(500).optional().or(z.literal("")),
   whatsappGroupUrl: z.string().trim().url().max(500).optional().or(z.literal("")),
+
+  /**
+   * FR-CRS-021 — who teaches it, decided while the batch is being made.
+   *
+   * TWENTY OF TWENTY-FOUR subject-batches had no teacher, because assigning one
+   * needed an endpoint no screen called. A batch with no teacher has nobody who
+   * can mark its register or its work, and the dashboard could only report the
+   * number — never fix it. One teacher for the whole batch is the ordinary
+   * case; a subject taught by somebody else is changed afterwards.
+   */
+  teacherId: z.string().uuid().optional(),
 });
 export type QuickBatchCreateInput = z.infer<typeof quickBatchCreateSchema>;
 

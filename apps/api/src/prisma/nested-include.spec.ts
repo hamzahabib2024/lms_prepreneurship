@@ -101,6 +101,18 @@ const ACKNOWLEDGED: Record<string, string> = {
     "Every submission reached here is already restricted to the caller by the " +
     "AssignmentSubmission policy, so its files are theirs by construction. " +
     "Only id and filename are projected.",
+  "finance/payment-submission.service.ts::PaymentSubmission.documents":
+    "SAFE BY THE TRAVERSAL ITSELF, and this is the one include where that is " +
+    "literally the policy. RegistrationDocument's student predicate is " +
+    "`registrationRequest.createdStudentId = me OR paymentSubmission.studentId " +
+    "= me` (scope.extension.ts), and every row reached here is reached FROM a " +
+    "PaymentSubmission the parent policy has already restricted to the caller " +
+    "— which is the second branch of that predicate, evaluated by the join. A " +
+    "student cannot open somebody else's submission, so they cannot traverse " +
+    "to its proof. Only id, filename, content type, size and scan status are " +
+    "projected; the bytes are never returned by this query and are streamed " +
+    "separately through `proof()`, which re-scopes the submission before it " +
+    "touches storage.",
   "assessment/assignment.service.ts::AssignmentSubmission.assignment":
     "To-one parent, used to read marksAvailable and the late policy. The " +
     "submission was already scoped, and an assignment a student may not see " +

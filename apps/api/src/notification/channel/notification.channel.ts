@@ -26,6 +26,24 @@ export interface OutboundMessage {
   linkPath: string | null;
   /** BR-COM-02 — an urgent message ignores quiet hours. */
   isUrgent: boolean;
+  /**
+   * Files to travel WITH the message, for the channels that can carry them.
+   *
+   * A channel that cannot attach ignores this and sends the words; the body of
+   * every message that uses it therefore has to stand on its own and name
+   * where the document can be found in the System. A fee receipt is the case
+   * this exists for: the student should get the PDF in the email, and the ones
+   * whose delivery is a WhatsApp message or a line in the outbox must still be
+   * told their receipt is ready and where it is.
+   */
+  attachments?: readonly MessageAttachment[];
+}
+
+export interface MessageAttachment {
+  /** What it is called once it is saved. Never a path. */
+  filename: string;
+  contentType: string;
+  content: Buffer;
 }
 
 export interface Recipient {

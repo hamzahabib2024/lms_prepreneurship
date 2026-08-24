@@ -13,11 +13,11 @@ get it. The **What changed** column records what was done *beyond* that.
 
 | | |
 |---|---|
-| Pages | **42** |
-| On the brand palette and type scale | **42 of 42** |
-| Loading state shaped like its content | **33 of 42** |
-| Explained empty state | **15 of 42** |
-| Announced error state | **40 of 42** |
+| Pages | **45** |
+| On the brand palette and type scale | **45 of 45** |
+| Loading state shaped like its content | **36 of 45** |
+| Explained empty state | **15 of 45** |
+| Announced error state | **43 of 45** |
 | Still carrying known work | **14** |
 
 ## Legend
@@ -40,6 +40,7 @@ get it. The **What changed** column records what was done *beyond* that.
 | **AttendancePage** | Teacher, Admin, Super Admin | ✅ | ✅ | — | ✅ | Two table skeletons at the register's real column count. Present/absent/late/excused keep their four distinct colours; only the page accent moved to amber. |
 | **AuditPage** | Admin, Super Admin | ✅ | ✅ | ✅ | ✅ | Table skeleton, and an empty state that says the log is not empty — the filters exclude it — rather than “Nothing matches that.” |
 | **BackupPage** | Super Admin | ✅ | ✅ | — | ✅ | List skeleton. Red page hue replaced by the single amber accent. |
+| **BatchEditPage** | Admin, Super Admin | ✅ | ✅ | — | ✅ | Five numbered steps. Fills the worst gap in the system: assigning a teacher, which no screen could do, with each teacher's current load shown beside the name. WhatsApp links settable at last. |
 | **BulkPage** | Admin, Super Admin | ✅ | — | ✅ | ✅ | Empty state explains that the section has no students and points at Admissions, with the alternative of choosing another section. |
 | **CertificatesPage** | Admin, Super Admin | ✅ | ✅ | ✅ | ✅ | It rendered nothing at all while loading — no placeholder, no word — so a slow request looked like a subject with no students. List skeleton added, plus a “Choose a subject” state for before anything is picked. The retired certificate gold (#a16207, §3.3) is gone. |
 | **ChangePasswordPage** | everyone | ✅ | — | — | ✅ | Palette and type only. |
@@ -47,6 +48,7 @@ get it. The **What changed** column records what was done *beyond* that.
 | **CohortImportPage** | Admin, Super Admin | ✅ | — | — | ✅ | The submit button now names what it is loading — “Loading 312 students…” rather than a bare “Loading…”. A button label during a single action is the correct pattern, so no placeholder here. |
 | **ContentPage** | Teacher, Admin, Super Admin | ✅ | — | — | ✅ | Palette and type only; violet page hue removed. |
 | **CourseAdminPage** | Admin, Super Admin | ✅ | ✅ | ✅ | ✅ | New page. The endpoints to create a programme or a subject had always existed and nothing in the running app could call either. Card grid with the course's own picture, an upload that previews at the size it will appear, and a fee editor with a running total under each block. |
+| **CourseEditPage** | Admin, Super Admin | ✅ | ✅ | — | ✅ | The course and its syllabus on one page instead of two panels behind two buttons. Gap banner names what is still missing rather than reporting success on a course nobody can enrol in. |
 | **CoursePage** | everyone | ✅ | ✅ | ✅ | ✅ | Card skeleton. The Drive-permissions alert keeps its wording, which is the best error copy in the codebase. |
 | **CoursesPage** | everyone | ✅ | ✅ | ✅ | ✅ | Six-card skeleton matching the tile grid. Cover art moved off the twelve-hue rainbow. |
 | **DashboardPage** | everyone | ✅ | ✅ | — | ✅ | Both empty widget bodies now say why they are empty. Card skeleton was already correct. |
@@ -68,6 +70,7 @@ get it. The **What changed** column records what was done *beyond* that.
 | **SecurityPage** | Super Admin | ✅ | ✅ | ✅ | ✅ | Table skeletons. Empty state reframes a nil result as usually the right answer rather than a failure. Fixed-width timestamps kept. |
 | **SettingsPage** | Admin, Super Admin | ✅ | ✅ | — | ✅ | List skeleton for the 32 settings. The in-page filter is kept — it is the pattern the command palette generalised. |
 | **StructurePage** | Teacher, Admin, Super Admin | ✅ | ✅ | ✅ | ✅ | Table skeleton. |
+| **SubjectEditPage** | Admin, Super Admin | ✅ | ✅ | — | ✅ | A page, not a panel. Adds the two columns the schema always had and no form asked for: isActive to retire a subject, and a cover previewed at tile size. Lists the courses that teach it. |
 | **SubjectPage** | Student | ✅ | ✅ | — | ✅ | List skeleton. |
 | **TemplatesPage** | Admin, Super Admin | ✅ | ✅ | — | ✅ | List skeleton. Live preview kept. |
 | **TimetablePage** | everyone | ✅ | ✅ | — | ✅ | List skeleton. Ruled-paper texture now drawn from the amber accent. |

@@ -62,6 +62,11 @@ export const DESTINATIONS: readonly Destination[] = [
 
   // ------------------------------------------------------------ learning --
   { to: "/subjects", label: "My subjects", icon: "book", group: "Learning", roles: ["student"], also: ["progress", "courses", "grades"] },
+  /* A STUDENT'S OWN, which is not the register on /certificates below. That
+     one lists every holder in the Institute and is guarded by the issuing
+     permission; this one is `certificate:read` at OWN scope. Two addresses
+     because they are two different things, not one thing with a filter. */
+  { to: "/my-certificates", label: "My certificates", icon: "award", group: "Learning", roles: ["student"], also: ["certificate", "award", "diploma", "verify", "download"] },
 
   // ------------------------------------------------------------ teaching --
   { to: "/attendance", label: "Attendance", icon: "check", group: "Teaching", roles: STAFF, also: ["register", "present", "absent"] },
@@ -82,7 +87,7 @@ export const DESTINATIONS: readonly Destination[] = [
   // ------------------------------------------------------------ students --
   { to: "/admissions", label: "Admissions", icon: "clipboard", group: "Students", roles: OFFICE, also: ["applications", "registrations"] },
   { to: "/users", label: "People", icon: "users", group: "Students", roles: OFFICE, also: ["directory", "staff", "accounts"] },
-  { to: "/certificates", label: "Certificates", icon: "award", group: "Students", roles: OFFICE },
+  { to: "/certificates", label: "Certificates", icon: "award", group: "Students", roles: OFFICE, also: ["register", "issue", "revoke", "verification", "award"] },
   { to: "/import", label: "Import", icon: "upload", group: "Students", roles: OFFICE, also: ["cohort", "csv"] },
   { to: "/bulk", label: "Bulk changes", icon: "shuffle", group: "Students", roles: OFFICE },
 
@@ -109,13 +114,35 @@ export const DESTINATIONS: readonly Destination[] = [
   { to: "/structure", label: "Structure", icon: "calendar", group: "Institute", roles: STAFF, also: ["terms", "batches", "sessions"] },
   /* A TEACHER holds no `payment` grant at all (§4.5) — offering them the page
      would be offering a 403. */
-  { to: "/fees", label: "Fees", icon: "money", group: "Institute", roles: ["super_admin", "admin", "student"], also: ["payments", "invoice", "balance", "receipt"] },
+  { to: "/fees", label: "Fees", icon: "money", group: "Institute", roles: ["super_admin", "admin", "student"], also: ["payments", "invoice", "balance", "receipt", "challan", "statement"] },
+  /* SUBMITTING A PAYMENT IS ITS OWN DESTINATION, not a button found only after
+     opening Fees. It is the single most common thing a student comes to this
+     part of the System to do, and the command palette is how many of them
+     navigate — so "easypaisa" and "slip" are search terms that must land
+     somewhere. Students only: the form claims a payment as whoever is signed
+     in, so it is not a screen an administrator has any use for. */
+  { to: "/fees/submit", label: "Submit a fee payment", icon: "upload", group: "Institute", roles: ["student"], also: ["pay", "payment", "easypaisa", "jazzcash", "bank", "transfer", "slip", "proof", "receipt", "challan"] },
+  /* The fee desk. Held apart from /fees because chasing debtors and checking
+     bank slips are different jobs done by different people. */
+  { to: "/fees/verification", label: "Payment verification", icon: "clipboard", group: "Institute", roles: OFFICE, also: ["verify", "approve", "pending", "slips", "proof", "easypaisa", "jazzcash", "challan", "receipts"] },
   { to: "/reports", label: "Reports", icon: "chart", group: "Institute", roles: STAFF, also: ["export", "analytics"] },
   /* A teacher holds provider_binding:read and needs it — whether a Meet link
      is created for them or they must paste one in changes what they do before
      class. A student holds no such grant. */
   { to: "/integrations", label: "Integrations", icon: "shuffle", group: "Institute", roles: STAFF, also: ["google", "meet", "drive", "gmail", "email"] },
-  { to: "/home", label: "Public page", icon: "megaphone", group: "Institute", roles: OFFICE, leavesApp: true, also: ["landing", "website", "preview"] },
+  /*
+   * TWO DESTINATIONS FOR THE PUBLIC PAGE, and they are different acts.
+   *
+   * /public-page EDITS it — the headline, the videos, the photographs, the
+   * cards, the closing band — and is an ordinary route inside the shell.
+   *
+   * /home IS it, with no sidebar and no chrome, because a preview inside the
+   * application would not be a preview of anything. It stays because looking
+   * at the result is a separate thing from changing it, and the editor's own
+   * preview is a frame rather than the page at full width.
+   */
+  { to: "/public-page", label: "Public page", icon: "megaphone", group: "Institute", roles: OFFICE, also: ["landing", "website", "homepage", "hero", "headline", "videos", "photos", "gallery", "marketing"] },
+  { to: "/home", label: "View the public page", icon: "monitor", group: "Institute", roles: OFFICE, leavesApp: true, also: ["preview", "live", "visitors"] },
 
   // ------------------------------------------------------ administration --
   { to: "/settings", label: "Settings", icon: "settings", group: "Administration", roles: OFFICE, also: ["policy", "configuration"] },

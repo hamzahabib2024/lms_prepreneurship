@@ -295,3 +295,94 @@ export const DELIVERY_OUTCOME = [
   "SUPPRESSED",
 ] as const;
 export type DeliveryOutcome = (typeof DELIVERY_OUTCOME)[number];
+
+// ------------------------------------------------------------ certificates --
+
+/**
+ * WHAT a certificate is about — SRS §5.15.
+ *
+ * SUBJECT and PROGRAMME are the two EARNED kinds: the System recomputes the
+ * student's standing and refuses if the criteria are not met, so the document
+ * attests to work the System can still evidence.
+ *
+ * CUSTOM is the third, and it is deliberately a separate value rather than a
+ * SUBJECT certificate with the checks skipped. A manually issued certificate
+ * for a workshop the LMS never taught is a real thing an institute needs, but
+ * it is a DIFFERENT claim — nobody should be able to look at a row later and
+ * be unable to tell which of the two it was.
+ */
+export const CERTIFICATE_TYPE = ["SUBJECT", "PROGRAMME", "CUSTOM"] as const;
+export type CertificateType = (typeof CERTIFICATE_TYPE)[number];
+
+/**
+ * WHICH certificate it is — the wording printed under the title.
+ *
+ * Separate from CERTIFICATE_TYPE because the two answer different questions:
+ * type says what the certificate is anchored to in the data model, kind says
+ * what it says on the paper. A programme certificate can be a completion or a
+ * distinction; a custom one can be a participation slip or a training record.
+ *
+ * This is also the extension point for templates (§19). Adding a kind adds a
+ * title, a subtitle and a sentence — it does not touch the generator, the
+ * numbering, the verification or the store.
+ */
+export const CERTIFICATE_KIND = [
+  "COMPLETION",
+  "EXCELLENCE",
+  "PARTICIPATION",
+  "TRAINING",
+] as const;
+export type CertificateKind = (typeof CERTIFICATE_KIND)[number];
+
+/**
+ * The state of an issued certificate — FR-CRT-012, BR-DAT-02.
+ *
+ * ISSUED reads as "Valid" on screen and on the public verification page; the
+ * stored value is not renamed because it is written into rows, partial unique
+ * indexes and audit entries that already exist, and a rename would be a
+ * migration that buys a synonym.
+ *
+ * ARCHIVED is withdrawn from view WITHOUT being discredited — a superseded
+ * document, a duplicate raised in error, a certificate reissued under a new
+ * number. It still verifies as genuine; REVOKED does not.
+ */
+export const CERTIFICATE_STATUS = ["ISSUED", "REVOKED", "ARCHIVED"] as const;
+export type CertificateStatus = (typeof CERTIFICATE_STATUS)[number];
+
+/** What a person calls each kind, and the sentence the certificate prints. */
+export const CERTIFICATE_KIND_COPY: Record<
+  CertificateKind,
+  { label: string; title: string; subtitle: string; statement: string }
+> = {
+  COMPLETION: {
+    label: "Course completion",
+    title: "Certificate",
+    subtitle: "of Completion",
+    statement: "has successfully completed",
+  },
+  EXCELLENCE: {
+    label: "Excellence",
+    title: "Certificate",
+    subtitle: "of Excellence",
+    statement: "has demonstrated outstanding achievement in",
+  },
+  PARTICIPATION: {
+    label: "Participation",
+    title: "Certificate",
+    subtitle: "of Participation",
+    statement: "took part in",
+  },
+  TRAINING: {
+    label: "Training",
+    title: "Certificate",
+    subtitle: "of Training",
+    statement: "has completed the training programme in",
+  },
+};
+
+/** The word shown for each status. Never colour alone (NFR-ACC-007). */
+export const CERTIFICATE_STATUS_LABEL: Record<CertificateStatus, string> = {
+  ISSUED: "Valid",
+  REVOKED: "Revoked",
+  ARCHIVED: "Archived",
+};

@@ -1,5 +1,5 @@
-import { Body, Controller, Get, Param, Post, HttpCode, Req } from "@nestjs/common";
-import type { Request } from "express";
+import { Body, Controller, Get, Param, Post, HttpCode, Req, Res } from "@nestjs/common";
+import type { Request, Response } from "express";
 import { z } from "zod";
 import { FeeService } from "./fee.service";
 import { InstalmentService } from "./instalment.service";
@@ -20,9 +20,23 @@ const paymentSchema = z.object({
   studentId: z.string().uuid(),
   amount: z.number().positive().max(10_000_000),
   paymentDate: z.coerce.date(),
-  // The four the schema actually has. Inventing "CASH" and "ONLINE" here
+  // The six the schema actually has. Inventing "CASH" and "ONLINE" here
   // would have been accepted by Zod and refused by the database.
-  method: z.enum(["BANK_TRANSFER", "CASH_DEPOSIT", "CHEQUE", "OTHER"]),
+  //
+  // EASYPAISA and JAZZCASH are here because the office records these by hand
+  // too — a student who paid at a shop and brought the printed slip to the
+  // counter. Without them the clerk had to file a wallet transfer as OTHER,
+  // and "Other" on a printed receipt names no transaction its holder can look
+  // up. Kept in step with PAYMENT_METHODS in @lms/shared, which is what the
+  // student's own submission form uses.
+  method: z.enum([
+    "BANK_TRANSFER",
+    "EASYPAISA",
+    "JAZZCASH",
+    "CASH_DEPOSIT",
+    "CHEQUE",
+    "OTHER",
+  ]),
   bankReference: z.string().trim().max(100).optional(),
   note: z.string().trim().max(500).optional(),
 });
@@ -166,5 +180,38 @@ export class FeeController {
   @Get("payments/:id/receipt")
   receipt(@Param("id") id: string, @Req() req: Request) {
     return this.receipts.forPayment(id, req.ip);
+  }
+
+  /**
+   * FR-PAY-040 — the same receipt as a print-ready PDF.
+   *
+   * WHY A SEPARATE ROUTE AND NOT THE BROWSER'S PRINT DIALOG. The screen can be
+   * printed and says so, but what a student attaches to an email, uploads to a
+   * visa application or keeps for seven years has to be a FILE, and one that
+   * looks the same on every machine. A print-to-PDF of a web page carries the
+   * browser's own header, the page's colours and whatever the printer margins
+   * happened to be; this is laid out in points on A4 by the same renderer that
+   * produced the copy already emailed to them, so the document in their inbox
+   * and the document they download are the same document.
+   *
+   * `payment:read`, which a STUDENT holds at OWN scope — so they can fetch
+   * their own without asking the office, and the scope predicate is what stops
+   * them fetching anybody else's.
+   *
+   * ATTACHMENT, not inline: this one is meant to be kept.
+   */
+  @RequirePermission("payment", "read")
+  @Get("payments/:id/receipt.pdf")
+  async receiptPdf(
+    @Param("id") id: string,
+    @Req() req: Request,
+    @Res() res: Response,
+  ): Promise<void> {
+    const { filename, body } = await this.receipts.pdfFor(id, req.ip);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    // Somebody's financial record. Never a shared cache (SEC-FIL-009).
+    res.setHeader("Cache-Control", "private, no-store");
+    res.send(body);
   }
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { Skeleton } from "../components/Ui";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
@@ -30,6 +30,19 @@ import {
  * partly because inventing them would be a lie the Institute has to keep, and
  * partly because a page that overclaims makes a reader doubt the things that
  * are true.
+ *
+ * AND THE WORDS ARE NOT IN THIS FILE ANY MORE. The headline, the paragraph
+ * under it, the two buttons, the six cards, four section headings and the
+ * closing band were string literals here — correct on the day they were
+ * written and changeable only by a developer with a deployment, which is how a
+ * front page comes to describe an Institute as it was two years ago. They come
+ * from `/public/showcase` now, edited on the Public page screen by an Admin.
+ *
+ * THE DEFAULTS ARE THE WORDS THAT WERE HERE, declared in the settings
+ * catalogue, so an Institute that changes nothing gets exactly the page this
+ * file used to render — and the fallbacks below cover the one case that is
+ * left: the showcase request failing outright, where a headline is better than
+ * a blank screen.
  */
 
 interface Section {
@@ -56,18 +69,83 @@ const SHIFT: Record<string, string> = {
   WEEKEND: "Weekend",
 };
 
+/** What the Institute has written on its own front page. */
+interface Copy {
+  heroPill: string;
+  heroHeadline: string;
+  heroBody: string;
+  heroPrimaryCta: string;
+  heroSecondaryCta: string;
+  showStats: boolean;
+  showFeatures: boolean;
+  features: { icon: string; title: string; body: string }[];
+  videosHeading: string;
+  videosBlurb: string;
+  newsHeading: string;
+  newsBlurb: string;
+  programmesHeading: string;
+  programmesBlurb: string;
+  closingHeading: string;
+  closingBody: string;
+  closingCta: string;
+}
+
 interface Showcase {
   instituteName: string;
   tagline: string | null;
   videos: VideoLink[];
   images: ImageLink[];
   news: NewsItem[];
+  copy: Copy;
   social: { platform: string; url: string }[];
 }
+
+/**
+ * THE PAGE STILL RENDERS WHEN THE SHOWCASE REQUEST FAILS.
+ *
+ * A network blip, a restarting API, a setting stored as the wrong shape: any
+ * of them would otherwise leave a visitor looking at a page with no headline
+ * and two unlabelled buttons, which reads as a broken site rather than as one
+ * fact that did not load. These are the same words the settings catalogue
+ * declares as its defaults — the words that were compiled into this file
+ * before the Institute could edit them.
+ */
+const FALLBACK: Copy = {
+  heroPill: "Prepreneurship Institute",
+  heroHeadline: "Learn the craft.\nBuild the business.",
+  heroBody:
+    "Practical programmes in design and digital marketing, taught in small sections with " +
+    "attendance, coursework and progress you can see from the first week — not a mark at the " +
+    "end of the term.",
+  heroPrimaryCta: "Apply now",
+  heroSecondaryCta: "See what we teach",
+  showStats: true,
+  showFeatures: false,
+  // Empty rather than duplicated. The six cards live in the catalogue; copying
+  // them here would be a second version to keep in step, and a page that is
+  // missing one section because the server is down is honest — a page showing
+  // six claims the Institute may since have changed is not.
+  features: [],
+  videosHeading: "See what we do",
+  videosBlurb: "Straight from our own channels. Nothing plays until you press it.",
+  newsHeading: "Latest from the Institute",
+  newsBlurb: "Notices we have published for everyone.",
+  programmesHeading: "What we are running",
+  programmesBlurb: "Straight from the Institute's own records — if a section is listed, it is open.",
+  closingHeading: "Ready when you are.",
+  closingBody:
+    "Applications are open. Fill the form, attach your slip, and we will write to you with a " +
+    "tracking reference you can check at any time.",
+  closingCta: "Start your application",
+};
 
 export function LandingPage() {
   const [programmes, setProgrammes] = useState<Programme[] | null>(null);
   const [showcase, setShowcase] = useState<Showcase | null>(null);
+
+  // One name for "what this page says", whether it came from the Institute or
+  // from the fallback, so nothing below has to ask which.
+  const copy = showcase?.copy ?? FALLBACK;
 
   useEffect(() => {
     api
@@ -115,23 +193,25 @@ export function LandingPage() {
 
       <section className="hero">
         <div className="hero-copy">
-          <span className="pill hero-pill">Prepreneurship Institute</span>
+          <span className="pill hero-pill">{copy.heroPill}</span>
+          {/* Each line of the headline on its own line, because that is how it
+              was typed and how somebody laying out two short phrases means them
+              to break. A single long line still renders as one. */}
           <h1>
-            Learn the craft.
-            <br />
-            Build the business.
+            {copy.heroHeadline.split("\n").map((line, i) => (
+              <Fragment key={i}>
+                {i > 0 && <br />}
+                {line}
+              </Fragment>
+            ))}
           </h1>
-          <p>
-            Practical programmes in design and digital marketing, taught in small sections with
-            attendance, coursework and progress you can see from the first week — not a mark at the
-            end of the term.
-          </p>
+          <p>{copy.heroBody}</p>
           <div className="row-actions">
             <Link className="btn btn-primary btn-lg" to="/apply">
-              Apply now
+              {copy.heroPrimaryCta}
             </Link>
             <a className="btn btn-lg" href="#programmes">
-              See what we teach
+              {copy.heroSecondaryCta}
             </a>
           </div>
         </div>
@@ -184,7 +264,7 @@ export function LandingPage() {
         cannot drift. The band renders only once there is something to count —
         "0 programmes" on a front page is worse than no band at all.
       */}
-      {programmes && programmes.length > 0 && (
+      {copy.showStats && programmes && programmes.length > 0 && (
         <section className="stat-band">
           <div className="landing-inner stat-band-inner">
             <div className="stat-item">
@@ -211,50 +291,37 @@ export function LandingPage() {
         </section>
       )}
 
-      <section className="landing-band">
-        <div className="landing-inner">
-          <div className="feature-grid">
-            <Feature icon="calendar" title="A timetable that is true">
-              Every class, with the room and the teacher, and a join link that appears when the
-              class does rather than in an email nobody can find.
-            </Feature>
-            <Feature icon="check" title="Attendance you can act on">
-              Registers taken in seconds and a warning the moment somebody slips below the
-              requirement — early enough to do something about it.
-            </Feature>
-            <Feature icon="chart" title="Progress from the first week">
-              Lectures watched, work submitted, marks released and attendance, combined into one
-              figure that says what is left rather than only how far along.
-            </Feature>
-            <Feature icon="money" title="Fees without arguments">
-              Instalment plans, receipts printed on the spot, and a statement that shows every
-              charge and every payment — including the ones that were reversed.
-            </Feature>
-            <Feature icon="award" title="Certificates worth holding">
-              Issued only when the requirements are genuinely met, and verifiable by an employer
-              from the printed number without an account.
-            </Feature>
-            <Feature icon="shield" title="Records that keep themselves">
-              An append-only audit log, so who changed what is a question with an answer rather
-              than a matter of recollection.
-            </Feature>
+      {/* Off, or empty, and the band goes entirely — an institute that would
+          rather not make six claims should not be left with an empty grid. */}
+      {copy.showFeatures && copy.features.length > 0 && (
+        <section className="landing-band">
+          <div className="landing-inner">
+            <div className="feature-grid">
+              {copy.features.map((f) => (
+                <Feature key={f.title} icon={f.icon} title={f.title}>
+                  {f.body}
+                </Feature>
+              ))}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* Above the programme list on purpose: somebody deciding whether to
           apply wants to see the place before they read a table of shifts. */}
-      {showcase && <VideoWall videos={showcase.videos} />}
+      {showcase && (
+        <VideoWall videos={showcase.videos} heading={copy.videosHeading} blurb={copy.videosBlurb} />
+      )}
       {showcase && <PhotoStrip images={showcase.images} />}
-      {showcase && <NewsList news={showcase.news} />}
+      {showcase && (
+        <NewsList news={showcase.news} heading={copy.newsHeading} blurb={copy.newsBlurb} />
+      )}
 
       <section className="landing-inner" id="programmes">
         <header className="page-head">
           <div>
-            <h2 className="landing-h2">What we are running</h2>
-            <p className="muted">
-              Straight from the Institute's own records — if a section is listed, it is open.
-            </p>
+            <h2 className="landing-h2">{copy.programmesHeading}</h2>
+            <p className="muted">{copy.programmesBlurb}</p>
           </div>
         </header>
 
@@ -323,7 +390,7 @@ export function LandingPage() {
         {/* The button exists now, and so does the form behind it. */}
         <div className="row-actions">
           <Link className="btn btn-primary btn-lg" to="/apply">
-            Apply now
+            {copy.heroPrimaryCta}
           </Link>
           <span className="muted small">
             No account needed. About five minutes, and a photo of your payment slip.
@@ -340,18 +407,15 @@ export function LandingPage() {
       <section className="closing-band">
         <div className="landing-inner closing-inner">
           <div>
-            <h2>Ready when you are.</h2>
-            <p>
-              Applications are open. Fill the form, attach your slip, and we will write to you with
-              a tracking reference you can check at any time.
-            </p>
+            <h2>{copy.closingHeading}</h2>
+            <p>{copy.closingBody}</p>
             {/* The promise in the sentence above, made good. */}
             <p className="small">
               Already applied? <Link to="/track">Check your application</Link>.
             </p>
           </div>
           <Link className="btn btn-lg closing-cta" to="/apply">
-            Start your application
+            {copy.closingCta}
           </Link>
         </div>
       </section>

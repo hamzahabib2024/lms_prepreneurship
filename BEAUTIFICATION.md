@@ -128,7 +128,7 @@ states as a sweep across all pages after the role work.
 | **LandingPage** | Cover art on every course card, with the artwork lifting on hover. Photographs became a cross-fading stage with a slow drift, arrows and dots. News rotates one notice at a time on a nine-second dwell with named tabs and a progress bar. A counted stat band, a closing band in full brand colour, one entrance on the hero |
 | **ApplyPage** | Stepper with completed steps ticked, per-field validation colour, the education level as a proper list |
 | **LoginPage** | Split panel — the brand on one side, the form on the other. Collapses on a phone so the form stays above the fold |
-| **VerifyPage** | Certificate verification, styled as a result rather than a form |
+| **VerifyPage** | Certificate verification, styled as a **result rather than a form**: the verdict is a sentence in the first line, with a coloured rim and a mark supporting it rather than carrying it. Three outcomes, not two — verified, revoked, and archived, which is genuine but withdrawn and must never be reported as revoked. A number box underneath for somebody holding a photocopy and no camera |
 | **TrackPage** | Application tracking, and a page that did not exist at all — the landing page promised "a tracking reference you can check at any time" and there was nowhere to check it. One field and one button on a single line, the reference set in the same monospace face the confirmation page uses so the two read as the same object. The answer is a plain-language verdict with a coloured pill, not a status enum; the office's own message is set apart as a quotation, which for NEEDS\_INFO is the entire point of the page |
 
 ### The daily screens
@@ -136,6 +136,9 @@ states as a sweep across all pages after the role work.
 | Page | What it got |
 |---|---|
 | **CourseAdminPage** | A page that did not exist. `POST /programmes` and `POST /subjects` had always been there and nothing in the running app could call either, so the only courses that ever existed were the four the seed wrote. Cards carry the course's own picture — `Subject.thumbnailUrl` had been in the schema since the beginning with nothing ever writing to it — and the upload previews at the size it will actually appear, rather than reporting "uploaded" and showing nothing. The fee editor keeps a running total under each block, in a word and a colour, because the rule that decides whether it can be published is "the lines add up" and learning that on publish means re-adding twelve numbers by hand |
+| **SubjectEditPage** | A subject used to be four fields in a panel wedged inside a card. It is a page now, with the two things the schema had always carried and no form ever asked for: `isActive`, so a subject that is no longer taught can be retired instead of deleted or left to clutter every picker, and `thumbnailUrl`, previewed at the size the tile will draw it. "Where it is taught" lists the courses that already teach it, so nobody renames a subject without seeing what they are renaming |
+| **CourseEditPage** | The course and its syllabus, which had been two separate panels behind two separate buttons, on one page in the order the work happens: name it, choose what it teaches, give it a picture, see its batches and its fee. A course with no subjects and no batches now says so in a banner that names the missing pieces, because "created successfully" followed by a course nothing can be enrolled in is the least useful true sentence in the product |
+| **BatchEditPage** | Five numbered steps for the thing that had the worst gap in the system: **twenty of twenty-four subject-batches had no teacher**, because `POST /teacher-assignments` existed and no screen in the app called it. The teacher step lists every teacher with the load they already carry, so the choice is made against the roster rather than from memory. WhatsApp channel and group links, shown to students since FR-REG-044 and unsettable since FR-REG-044, are step five. The subject list starts as the course's own syllabus, since a batch that teaches something else is the exception |
 | **DashboardPage** | Cards stagger in; list rows became label-and-value with lining figures and a hover ground; figures tinted with the page colour |
 | **TimetablePage** | Ruled-paper texture, page blue |
 | **AttendancePage** | **A real defect fixed** — present, absent, late and excused were all the same indigo. Now green, red, amber and slate, with the letter drawn in each cell |
@@ -166,7 +169,10 @@ states as a sweep across all pages after the role work.
 |---|---|
 | **FeesPage** | Green page colour, ledger-grid texture, tables with lining figures |
 | **FeesPanels** | Shares the fees treatment |
-| **ReceiptPage** | **All decoration removed for print.** The page wash was fixed to the viewport and would have repeated on every sheet |
+| **FeesSubmissions** | The four figures as bordered tiles, not filled cards. "Awaiting checking" is dashed rather than tinted: it is the one figure on the screen that is evidence and not money, and a green tile is how a student comes to believe a screenshot settled their fee |
+| **PaymentSubmitPage** | Currency set inside the amount control, large numeric entry, a drag-and-drop target sized for a one-handed tap. Most of these arrive from the phone the screenshot is already on |
+| **PaymentVerificationPage** | Queue treatment: KPI band, filter grid, and a review panel whose decision buttons stay pinned while the reviewer scrolls the proof |
+| **ReceiptPage** | **All decoration removed for print.** The page wash was fixed to the viewport and would have repeated on every sheet. Rebuilt as a document rather than a card: letterhead rule, fixed field rows, the figure larger than anything else, a four-line account, a signature block and a verification QR |
 
 ### Admissions and people
 
@@ -178,7 +184,8 @@ states as a sweep across all pages after the role work.
 | **BulkPage** | As above |
 | **SectionsPage** | Teal page colour; inline create form beneath the table, expanding subject panel |
 | **StructurePage** | As above |
-| **CertificatesPage** | Gold — **darkened from #ca8a04 to #a16207**, which failed contrast at 2.94:1 |
+| **CertificatesPage** | Gold — **darkened from #ca8a04 to #a16207**, which failed contrast at 2.94:1. Now three tabs rather than one long screen, because the register, issuing what was earned and issuing by hand are three different jobs done at three different moments. A five-figure band at the head, a debounced search over name and certificate number, and a register table whose Open action shows the real document rather than a row of fields |
+| **MyCertificatesPage** | A student's shelf. Tiles carrying the **actual certificate**, scaled from the same SVG the download rasterises, so a tile can never show something the file does not — and an empty state that explains how one is earned rather than saying there are none |
 
 ### Reports and operations
 
@@ -189,6 +196,7 @@ states as a sweep across all pages after the role work.
 | **SecurityPage** | As above; timestamps given fixed width so the column stops resizing as events arrive |
 | **BackupPage** | As above |
 | **SettingsPage** | **A filter across 32 settings**, matching key, description and group — findability was the real problem on this page. Deliberately no texture: a form reads better on a plain ground |
+| **PublicPageEditorPage** | The screen that edits another screen, and the only one whose result strangers see. Eight numbered cards in the order a visitor meets the page — first screen, claims, videos, photographs, notices, programmes, closing band, footer — with the preview a real frame of the real page beside the form on a laptop and underneath it on anything narrower. **The lists are rows, not a comma-separated box**, which is the whole reason this exists rather than a filter on Settings: a URL retyped into a shared text field is a URL somebody eventually breaks, and the settings editor lowercased them, which silently killed every YouTube link. Photographs upload and appear at the size they will be, captions beside them because a caption is the alt text. Each field carries its own description, its character count in a word as well as a colour, and its way back to the default |
 | **IntegrationsPage** | Indigo; simulated services marked so nobody mistakes one for a send |
 | **TemplatesPage** | Message wording with a live preview |
 | **ChangePasswordPage** | Card and form treatment |
