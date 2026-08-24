@@ -210,14 +210,32 @@ export const CATALOGUE: SettingDefinition[] = [
   {
     key: "upload.allowedFileTypes",
     type: "string[]",
-    default: ["pdf", "docx", "doc", "pptx", "ppt", "xlsx", "jpg", "jpeg", "png", "mp3", "zip", "txt"],
+    /*
+     * THE THREE AUDIO FORMATS ARE ON BY DEFAULT, and that is deliberate.
+     *
+     * A spoken answer is recorded in the browser, and the browser chooses the
+     * container: webm on Chrome, Edge and Firefox; m4a on Safari and every
+     * iPhone. A student cannot pick, and neither can the teacher who set the
+     * assignment. Leaving these merely ALLOWED rather than DEFAULT would mean
+     * the recorder appears, records, uploads and is refused — on whichever
+     * half of the cohort happens to be on the other operating system.
+     *
+     * ogg is included because Firefox has historically emitted it and still
+     * may, depending on the codecs available on the machine.
+     */
+    default: [
+      "pdf", "docx", "doc", "pptx", "ppt", "xlsx", "jpg", "jpeg", "png",
+      "mp3", "m4a", "webm", "ogg", "zip", "txt",
+    ],
     group: "Submissions",
     allowed: [
       "pdf", "docx", "doc", "pptx", "ppt", "xlsx", "xls",
-      "jpg", "jpeg", "png", "gif", "mp3", "mp4", "zip", "txt", "csv",
+      "jpg", "jpeg", "png", "gif",
+      "mp3", "m4a", "webm", "ogg", "oga", "mp4", "mov", "mkv",
+      "zip", "txt", "csv",
     ],
     description:
-      "The institute-wide ceiling (Appendix H). A teacher may narrow this for one assignment, never widen it. Files are checked by CONTENT, so renaming an extension does not get past it.",
+      "The institute-wide ceiling (Appendix H). A teacher may narrow this for one assignment, never widen it. Files are checked by CONTENT, so renaming an extension does not get past it. The audio formats are what a browser records a spoken answer in — webm on Chrome and Firefox, m4a on Safari and iPhone — and removing either one breaks voice answers for that half of the cohort.",
   },
 
   // ----------------------------------------------------------- maintenance --

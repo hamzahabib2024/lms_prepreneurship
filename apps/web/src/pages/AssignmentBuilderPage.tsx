@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ApiError, api } from "../api/client";
+import { VoiceRecorder, type Recording } from "../components/VoiceRecorder";
 
 /**
  * Setting an assignment — SRS §13.6, FR-ASG-001..014.
@@ -29,6 +30,16 @@ export function AssignmentBuilderPage() {
   const [sections, setSections] = useState<TeacherSection[]>([]);
   const [problems, setProblems] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
+  /*
+   * THE RECORDING IS HELD UNTIL THE ASSIGNMENT EXISTS.
+   *
+   * A brief attaches to an assignment id, and there is no id until the
+   * form is saved. So the blob waits here and is uploaded immediately
+   * after creation, before publishing — a published assignment whose
+   * spoken brief is still uploading is one a student can open and find
+   * half of.
+   */
+  const [brief, setBrief] = useState<Recording | null>(null);
   const [created, setCreated] = useState<{ id: string; title: string } | null>(null);
 
   const [form, setForm] = useState({
@@ -94,6 +105,30 @@ export function AssignmentBuilderPage() {
           : {}),
         resubmissionPolicy: form.resubmissionPolicy,
       });
+
+      /*
+       * BEFORE PUBLISHING, DELIBERATELY. Publishing is what makes the
+       * assignment visible; a student opening it in the seconds between would
+       * find a brief that mentions a recording which is not there yet.
+       *
+       * A failure here does NOT fail the assignment — it exists and is
+       * correct, and losing the whole form because a microphone file did not
+       * upload would be a far worse trade. The teacher is told, and the brief
+       * can be recorded again from the assignment itself.
+       */
+      if (brief) {
+        const body = new FormData();
+        const ext = brief.contentType === "audio/mp4" ? "m4a" : brief.contentType === "audio/ogg" ? "ogg" : "webm";
+        body.append("file", new File([brief.blob], `brief.${ext}`, { type: brief.contentType }));
+        body.append("seconds", String(brief.seconds));
+        await api.upload(`/assignments/${assignment.id}/brief-audio`, body).catch((e: unknown) => {
+          setProblems([
+            e instanceof ApiError
+              ? `The assignment was created, but the recording did not upload: ${e.message}`
+              : "The assignment was created, but the recording did not upload.",
+          ]);
+        });
+      }
 
       if (publish) await api.post(`/assignments/${assignment.id}/publish`);
       setCreated(assignment);
@@ -176,6 +211,26 @@ export function AssignmentBuilderPage() {
             onChange={(e) => set({ instructions: e.target.value })}
           />
         </label>
+
+        {/*
+          A SPOKEN BRIEF — FR-ASG.
+
+          THE WRITTEN INSTRUCTIONS ABOVE STAY REQUIRED, and this sits under
+          them rather than beside them to say so. For design and language work
+          speech carries what text cannot — a tutor explaining what is wrong
+          with a layout says it in forty seconds and says it better — but a
+          brief that exists ONLY as sound is unusable for a deaf student,
+          unsearchable, and unreadable on a metered connection. Audio is an
+          addition to the brief; it is never the brief.
+        */}
+        <VoiceRecorder
+          label="Say it as well (optional)"
+          hint="Explain the task in your own words. Students hear it beside the written instructions — it does not replace them."
+          maxSeconds={300}
+          busy={busy}
+          onRecorded={setBrief}
+          onDiscard={() => setBrief(null)}
+        />
       </section>
 
       <section className="card">

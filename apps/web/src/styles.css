@@ -5009,3 +5009,61 @@ details > summary:hover { text-decoration: underline; }
     min-height: 32px;
   }
 }
+
+
+/* ------------------------------------------------------- recording a note --
+   FR-ASG. One control, both directions: a teacher records the brief for an
+   assignment, a student records the answer to it.
+
+   THE STATE IS NEVER CARRIED BY COLOUR ALONE (NFR-ACC-007). A pulsing red dot
+   says "recording" to somebody who can see it and nothing at all to somebody
+   who cannot, so the dot sits beside the word and a running clock. */
+.voice-recorder { display: grid; gap: .4rem; margin-bottom: .9rem; }
+.field-label {
+  font-size: .8125rem; font-weight: 600; color: var(--ink-2);
+}
+.voice-row { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+.voice-row .btn svg { width: 15px; height: 15px; margin-right: .35rem; }
+/* One width for both states. The button's label runs "Record" -> "Stop" ->
+   "Record again", and letting it size to its text makes the whole row jump
+   twice per take — under a cursor that is about to press it again. */
+.voice-start, .voice-stop { min-width: 9.5rem; justify-content: center; }
+
+.voice-live {
+  display: inline-flex; align-items: center; gap: .4rem;
+  font-size: .875rem; font-weight: 600; color: var(--error);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+.voice-dot {
+  width: 9px; height: 9px; border-radius: 999px; flex: 0 0 9px;
+  background: var(--error);
+  animation: voice-pulse 1.2s var(--ease) infinite;
+}
+@keyframes voice-pulse { 50% { opacity: .25; } }
+
+/* The browser's own player. Restyling it means rebuilding scrubbing, volume
+   and keyboard control from scratch, and the native one is already better at
+   all three than anything worth writing here. */
+.voice-player { height: 34px; max-width: 100%; flex: 1 1 14rem; min-width: 0; }
+
+/* A note already saved, shown to whoever receives it. */
+.voice-note {
+  display: flex; align-items: center; gap: .75rem; flex-wrap: wrap;
+  padding: .6rem .75rem; margin: .5rem 0;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--brand-700);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+.voice-note-mark {
+  display: grid; place-items: center; flex: 0 0 auto;
+  width: 32px; height: 32px; border-radius: 999px;
+  background: var(--brand-050); color: var(--brand-700);
+}
+.voice-note-mark svg { width: 16px; height: 16px; }
+.voice-note-body { flex: 1 1 14rem; min-width: 0; display: grid; gap: .2rem; }
+
+@media (max-width: 600px) {
+  .voice-row { align-items: stretch; }
+  .voice-player { flex-basis: 100%; }
+}

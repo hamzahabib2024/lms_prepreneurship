@@ -785,6 +785,16 @@ export class AssignmentService {
         id: a.id,
         title: a.title,
         instructions: a.instructions,
+        /*
+         * WHETHER THERE IS A SPOKEN BRIEF, never where it lives.
+         *
+         * A boolean and a length, so the card can offer a play button and say
+         * how long it is. The storage reference stays on the server (ARC-041);
+         * the audio itself comes from a guarded route that re-checks scope, so
+         * knowing one exists gives a student nothing they did not already have.
+         */
+        hasBriefAudio: a.briefAudioKey !== null,
+        briefAudioSeconds: a.briefAudioSeconds,
         marksAvailable: Number(a.marksAvailable),
         opensAt: a.opensAt,
         dueAt: a.dueAt,

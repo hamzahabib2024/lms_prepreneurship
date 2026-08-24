@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, api } from "../api/client";
+import { VoiceRecorder, VoiceNote, clock, type Recording } from "./VoiceRecorder";
+import { Icon } from "./Icon";
 
 /**
  * Assignments for one subject — SRS §13.5, FR-ASG-011/013/014.
@@ -18,6 +20,9 @@ interface StudentAssignment {
   id: string;
   title: string;
   instructions: string;
+  /** FR-ASG — whether the teacher also recorded the brief. */
+  hasBriefAudio?: boolean;
+  briefAudioSeconds?: number | null;
   marksAvailable: number;
   opensAt: string;
   dueAt: string;
@@ -135,6 +140,9 @@ function AssignmentRow({
       {expanded && (
         <div id={`assignment-${a.id}`} className="assignment-body">
           <p className="small">{a.instructions}</p>
+          {/* The teacher's own voice, where they recorded one. Under the
+              written brief, because the written brief is the record. */}
+          {a.hasBriefAudio && <BriefAudio assignmentId={a.id} seconds={a.briefAudioSeconds} />}
           <SubmitPanel assignment={a} onChanged={onChanged} />
         </div>
       )}
@@ -215,6 +223,20 @@ function SubmitPanel({
     }
   };
 
+  /**
+   * A recording, uploaded as a file, because that is what it is.
+   *
+   * The blob is wrapped in a File with a generated name and the container's
+   * own extension. The name matters: the server checks the extension against
+   * what the assignment accepts AND verifies the leading bytes really are that
+   * container, so a mismatch here would be refused — correctly — as tampering.
+   */
+  const uploadRecording = async (r: Recording) => {
+    const ext = EXT_FOR_TYPE[r.contentType] ?? "webm";
+    const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-");
+    await upload(new File([r.blob], `spoken-answer-${stamp}.${ext}`, { type: r.contentType }));
+  };
+
   const remove = async (fileId: string) => {
     setError(null);
     try {
@@ -260,6 +282,18 @@ function SubmitPanel({
 
   const accept = a.allowedFileTypes.map((t) => `.${t}`).join(",");
 
+  /*
+   * Whether a spoken answer is even possible for THIS assignment.
+   *
+   * The teacher may narrow the accepted types per assignment and never widen
+   * them, so an assignment set to accept only `pdf` cannot take a recording
+   * however the institute is configured. Asked here rather than at the server,
+   * because the useful moment to know is before somebody records.
+   */
+  const canRecord = a.allowedFileTypes.some((t) =>
+    ["webm", "m4a", "ogg", "oga", "mp4", "mp3"].includes(t.toLowerCase()),
+  );
+
   return (
     <div className="submit-panel">
       {a.submissionType !== "FILE" && (
@@ -295,6 +329,28 @@ function SubmitPanel({
             {a.allowedFileTypes.map((t) => `.${t}`).join(", ")} · up to {a.maxFileSizeMb} MB each ·
             at most {a.maxFileCount} file{a.maxFileCount === 1 ? "" : "s"}
           </p>
+
+          {/*
+            A SPOKEN ANSWER — FR-ASG.
+            Offered only where the teacher's own list of accepted types
+            includes something a browser can record. A recorder that appears
+            on a "PDF only" assignment invites a student to spend two minutes
+            recording an answer that the upload will then refuse, which is a
+            worse experience than never offering it.
+
+            It uploads through exactly the same route as a chosen file, so it
+            inherits the size limit, the count limit, the content check and
+            the removal button below without any of them being written twice.
+          */}
+          {canRecord && (
+            <VoiceRecorder
+              label="Or record your answer"
+              hint="Speak your answer instead of typing it. It is added to the list below like any other file, and you can re-record before you submit."
+              busy={busy || files.length >= a.maxFileCount}
+              maxSeconds={300}
+              onRecorded={(r) => void uploadRecording(r)}
+            />
+          )}
 
           {files.length > 0 && (
             <ul className="list small">
@@ -365,6 +421,74 @@ function latePolicyText(policy: string): string {
       return "It will be marked as late.";
   }
 }
+
+/**
+ * The extension for each container a browser records in.
+ *
+ * The server proves the bytes match the extension, so this table being wrong
+ * shows up as a refused upload rather than as a corrupt file — which is the
+ * right way round, and the reason the check exists.
+ */
+/**
+ * The teacher's spoken brief, fetched rather than linked.
+ *
+ * `<audio src="/api/v1/...">` sends no Authorization header, so pointing it at
+ * a guarded route answers 401 and renders as a player that will not play —
+ * which is exactly the failure the lecture streaming route was built to avoid.
+ * The blob is fetched through the API client, which carries the token and
+ * refreshes it, and turned into an object URL the element can use.
+ *
+ * ON DEMAND, not on render. A class list showing eight assignments should not
+ * pull eight audio files nobody has asked to hear.
+ */
+function BriefAudio({ assignmentId, seconds }: { assignmentId: string; seconds?: number | null }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  // An object URL outlives the component unless it is revoked.
+  useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
+
+  if (url) return <VoiceNote src={url} seconds={seconds} label="Spoken brief" />;
+
+  return (
+    <div className="voice-note">
+      <span className="voice-note-mark" aria-hidden="true">
+        <Icon name="megaphone" />
+      </span>
+      <div className="voice-note-body">
+        <strong className="small">The teacher recorded a brief</strong>
+        {failed && <span className="muted small">It could not be loaded. Try again.</span>}
+      </div>
+      <button
+        type="button"
+        className="btn btn-sm"
+        disabled={busy}
+        onClick={() => {
+          setBusy(true);
+          setFailed(false);
+          api
+            .download(`/assignments/${assignmentId}/brief-audio`)
+            .then((b) => setUrl(URL.createObjectURL(b)))
+            .catch(() => setFailed(true))
+            .finally(() => setBusy(false));
+        }}
+      >
+        {busy ? "Loading…" : "Listen"}
+      </button>
+      {typeof seconds === "number" && seconds > 0 && (
+        <span className="muted small">{clock(seconds)}</span>
+      )}
+    </div>
+  );
+}
+
+const EXT_FOR_TYPE: Record<string, string> = {
+  "audio/webm": "webm",
+  "audio/ogg": "ogg",
+  "audio/mp4": "m4a",
+  "audio/mpeg": "mp3",
+};
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;

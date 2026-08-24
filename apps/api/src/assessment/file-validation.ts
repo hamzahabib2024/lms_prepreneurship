@@ -60,6 +60,30 @@ const SIGNATURES: Array<{ extensions: string[]; bytes: number[]; offset?: number
   { extensions: ["mp3"], bytes: [0xff, 0xfb] }, // bare MPEG frame
   { extensions: ["mp3"], bytes: [0xff, 0xf3] },
   { extensions: ["mp3"], bytes: [0xff, 0xf2] },
+
+  /*
+   * WHAT A BROWSER ACTUALLY RECORDS — FR-ASG-013, for spoken answers.
+   *
+   * The list above accepts mp3, which is the format nothing produces live. A
+   * browser's MediaRecorder writes exactly two things and neither was here:
+   *
+   *   Chrome, Edge, Firefox   audio/webm, Opus inside a Matroska container
+   *   Safari, iOS             audio/mp4, AAC in an ISO-BMFF container (.m4a)
+   *
+   * Without both, a speaking task is a feature that works on one operating
+   * system. Half a cohort in Pakistan is on an iPhone.
+   *
+   * THE CONTAINERS ARE SHARED, and that is stated rather than hidden — the
+   * same honesty the ZIP note above applies to Office formats. WebM is a
+   * profile of Matroska, so `.webm` and `.mkv` are one signature; `ftyp` marks
+   * every ISO base media file, so `.m4a`, `.mp4` and `.mov` are one signature.
+   * This proves the file is the container it claims to be, not which codec is
+   * inside it. That is the same guarantee the rest of this list gives.
+   */
+  { extensions: ["webm", "mkv"], bytes: [0x1a, 0x45, 0xdf, 0xa3] }, // EBML
+  { extensions: ["ogg", "oga"], bytes: [0x4f, 0x67, 0x67, 0x53] }, // OggS
+  // `ftyp` sits at offset 4, after the box length — hence the offset.
+  { extensions: ["m4a", "mp4", "mov"], bytes: [0x66, 0x74, 0x79, 0x70], offset: 4 },
 ];
 
 /** Plain text has no signature, so it is verified by what it must NOT contain. */

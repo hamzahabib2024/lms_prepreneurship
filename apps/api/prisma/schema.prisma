@@ -1845,6 +1845,27 @@ model Assignment {
   submissionType   SubmissionType @default(FILE) @map("submission_type")
   /// Bounded by the institute-wide policy (Appendix H); a teacher may narrow
   /// it but never widen it (FR-ASG-006).
+  /// A SPOKEN BRIEF, where the teacher recorded one — FR-ASG.
+  ///
+  /// A tutor explaining what they want from a logo says it in forty seconds
+  /// and says it better than four paragraphs. `instructions` stays required
+  /// and is still the record: audio is an addition to the brief, never a
+  /// replacement for it, because a deaf student and a search index both need
+  /// the words.
+  ///
+  /// Reached only through an authenticated route — a brief belongs to the
+  /// students enrolled in that class. There is no public endpoint, which is
+  /// what separates this from MediaAsset.
+  briefAudioKey     String? @map("brief_audio_key") @db.VarChar(500)
+  /// Reported by the recorder and clamped: measuring an Opus stream needs
+  /// ffmpeg, which this System does not ship. A display hint only -- nothing
+  /// is decided by it, so an unverifiable value is acceptable here in a way it
+  /// would not be on a lecture, where watch progress depends on the duration.
+  briefAudioSeconds Int?    @map("brief_audio_seconds") @db.SmallInt
+  /// webm on Chrome and Firefox, m4a on Safari — kept so playback answers
+  /// with the true type rather than guessing from a generated filename.
+  briefAudioType    String? @map("brief_audio_type") @db.VarChar(100)
+
   allowedFileTypes Json           @map("allowed_file_types")
   maxFileSizeMb    Int            @default(10) @map("max_file_size_mb") @db.SmallInt
   maxFileCount     Int            @default(5) @map("max_file_count") @db.SmallInt

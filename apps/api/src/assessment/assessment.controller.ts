@@ -17,6 +17,7 @@ import { z } from "zod";
 import { AppError } from "@lms/shared";
 import { AssignmentService } from "./assignment.service";
 import { SubmissionFileService } from "./submission-file.service";
+import { VoiceBriefService, MAX_BRIEF_BYTES } from "./voice-brief.service";
 import { zodBody } from "../common/zod-validation.pipe";
 import { RequirePermission } from "../rbac/permissions.guard";
 
@@ -82,6 +83,7 @@ export class AssessmentController {
   constructor(
     private readonly assignments: AssignmentService,
     private readonly files: SubmissionFileService,
+    private readonly voiceBrief: VoiceBriefService,
   ) {}
 
   @RequirePermission("assignment", "create")
@@ -219,6 +221,104 @@ export class AssessmentController {
       "Content-Disposition",
       `attachment; filename*=UTF-8''${encodeURIComponent(file.filename)}`,
     );
+    res.end(file.body);
+  }
+
+  // ------------------------------------------------------------- voice ----
+
+  /**
+   * FR-ASG — A SPOKEN BRIEF, recorded by the teacher in the browser.
+   *
+   * `assignment:update`, because this is part of setting the task. The written
+   * instructions stay required and are untouched: audio is an addition to the
+   * brief, never a replacement, or the course becomes unusable for a deaf
+   * student and unsearchable for everybody.
+   *
+   * In memory, like the submission upload beside it — the service reads the
+   * leading bytes to prove the file really is something a browser recorded,
+   * and anything that fails must never reach disk (SEC-FIL-005).
+   */
+  @RequirePermission("assignment", "update")
+  @Post("assignments/:id/brief-audio")
+  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: MAX_BRIEF_BYTES, files: 1 } }))
+  setBriefAudio(
+    @Param("id") id: string,
+    @Body("seconds") seconds?: string,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    return this.voiceBrief.set(
+      id,
+      file ? { buffer: file.buffer, size: file.size } : undefined,
+      seconds === undefined ? undefined : Number(seconds),
+    );
+  }
+
+  /**
+   * The brief, played rather than downloaded.
+   *
+   * INLINE, WHICH IS THE POINT AND IS THE OPPOSITE OF THE SUBMISSION
+   * DOWNLOAD BELOW IT. That route forces `attachment` because a student may
+   * upload anything and an inline HTML or SVG would execute in this origin.
+   * Here the bytes are proven by signature to be one of three audio containers
+   * before they are ever stored, so there is nothing executable to render, and
+   * a brief that downloads instead of playing is a brief nobody listens to.
+   *
+   * `assignment:read`, held by a student over their own enrolments — the scope
+   * predicate decides which assignment they can reach, and this route adds no
+   * second opinion about that.
+   */
+  @RequirePermission("assignment", "read")
+  @Get("assignments/:id/brief-audio")
+  @Header("X-Content-Type-Options", "nosniff")
+  @Header("Cache-Control", "private, max-age=0, no-store")
+  async briefAudio(@Param("id") id: string, @Res() res: Response): Promise<void> {
+    const audio = await this.voiceBrief.read(id);
+    res.setHeader("Content-Type", audio.contentType);
+    res.setHeader("Content-Length", String(audio.body.byteLength));
+    res.end(audio.body);
+  }
+
+  @RequirePermission("assignment", "update")
+  @Delete("assignments/:id/brief-audio")
+  @HttpCode(200)
+  clearBriefAudio(@Param("id") id: string) {
+    return this.voiceBrief.clear(id);
+  }
+
+  /**
+   * A SPOKEN ANSWER, played while marking.
+   *
+   * The same bytes the download route serves, with `inline` instead of
+   * `attachment` and only where the stored content type is audio. A teacher
+   * working through thirty spoken answers should press play thirty times, not
+   * download thirty files and hunt for them in a downloads folder.
+   *
+   * THE TYPE IS THE ONE RECORDED AT UPLOAD, which was proven against the
+   * file's own leading bytes. A submission whose stored type is anything else
+   * is refused here rather than served inline, so this cannot become a way to
+   * render a student-supplied document in the System's origin.
+   */
+  @RequirePermission("submission", "read")
+  @Get("submission-files/:fileId/audio")
+  @Header("X-Content-Type-Options", "nosniff")
+  @Header("Cache-Control", "private, max-age=0, no-store")
+  async playSubmission(@Param("fileId") fileId: string, @Res() res: Response): Promise<void> {
+    const file = await this.files.download(fileId);
+    if (!file.contentType.startsWith("audio/")) {
+      throw new AppError("VALIDATION_FAILED", {
+        message: "That file is not a recording.",
+        details: [
+          {
+            field: "fileId",
+            code: "NOT_AUDIO",
+            message: "Only a spoken answer can be played here. Download the file instead.",
+          },
+        ],
+      });
+    }
+    res.setHeader("Content-Type", file.contentType);
+    res.setHeader("Content-Length", String(file.sizeBytes));
+    res.setHeader("Content-Disposition", "inline");
     res.end(file.body);
   }
 
