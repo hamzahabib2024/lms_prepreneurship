@@ -9,6 +9,7 @@ class AuthUser extends Equatable {
     required this.roles,
     this.photoUrl,
     this.student,
+    this.subPermissions = const [],
   });
 
   final String id;
@@ -17,6 +18,7 @@ class AuthUser extends Equatable {
   final List<String> roles;
   final String? photoUrl;
   final StudentProfile? student;
+  final List<String> subPermissions;
 
   factory AuthUser.fromJson(Map<String, dynamic> json) {
     return AuthUser(
@@ -30,6 +32,9 @@ class AuthUser extends Equatable {
       student: json['student'] != null
           ? StudentProfile.fromJson(json['student'] as Map<String, dynamic>)
           : null,
+      subPermissions: (json['subPermissions'] as List<dynamic>? ?? const [])
+          .map((e) => e.toString())
+          .toList(),
     );
   }
 
@@ -47,6 +52,9 @@ class AuthUser extends Equatable {
       student: json['student'] != null
           ? StudentProfile.fromJson(json['student'] as Map<String, dynamic>)
           : null,
+      subPermissions: (json['subPermissions'] as List<dynamic>? ?? const [])
+          .map((e) => e.toString())
+          .toList(),
     );
   }
 
@@ -54,6 +62,11 @@ class AuthUser extends Equatable {
   bool get isTeacher => roles.contains('teacher');
   bool get isAdmin => roles.contains('admin');
   bool get isSuperAdmin => roles.contains('super_admin');
+
+  /// Whether this user may create or manage other admin accounts.
+  /// Requires either the `admin_manager` sub-permission or super_admin role.
+  bool get canManageAdmins =>
+      isSuperAdmin || subPermissions.contains('admin_manager');
 
   /// The human-readable role label the shell shows under the name.
   String get roleLabel {
@@ -65,7 +78,7 @@ class AuthUser extends Equatable {
   }
 
   @override
-  List<Object?> get props => [id, fullName, email, roles, photoUrl, student];
+  List<Object?> get props => [id, fullName, email, roles, photoUrl, student, subPermissions];
 }
 
 class StudentProfile extends Equatable {

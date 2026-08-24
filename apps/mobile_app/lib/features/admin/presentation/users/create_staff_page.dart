@@ -3,11 +3,14 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/theme/app_theme.dart';
+import '../../../auth/data/models/auth_session.dart';
 import '../../cubit/admin_cubit.dart';
 import '../../data/models/staff_creation_result.dart';
 
 class CreateStaffPage extends StatefulWidget {
-  const CreateStaffPage({super.key});
+  const CreateStaffPage({super.key, required this.user});
+
+  final AuthUser user;
 
   @override
   State<CreateStaffPage> createState() => _CreateStaffPageState();
@@ -88,28 +91,35 @@ class _CreateStaffPageState extends State<CreateStaffPage> {
                     const SizedBox(height: 18),
                     Text('Role', style: Theme.of(context).textTheme.titleMedium),
                     const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _RoleOption(
-                            label: 'Teacher',
-                            selected: _role == 'teacher',
-                            onTap: () => setState(() {
-                              _role = 'teacher';
-                              _subPermissions.clear();
-                            }),
+                    if (widget.user.canManageAdmins)
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _RoleOption(
+                              label: 'Teacher',
+                              selected: _role == 'teacher',
+                              onTap: () => setState(() {
+                                _role = 'teacher';
+                                _subPermissions.clear();
+                              }),
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _RoleOption(
-                            label: 'Admin',
-                            selected: _role == 'admin',
-                            onTap: () => setState(() => _role = 'admin'),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _RoleOption(
+                              label: 'Admin',
+                              selected: _role == 'admin',
+                              onTap: () => setState(() => _role = 'admin'),
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
+                        ],
+                      )
+                    else
+                      _RoleOption(
+                        label: 'Teacher',
+                        selected: true,
+                        onTap: () {},
+                      ),
                     if (_role == 'admin') ...[
                       const SizedBox(height: 16),
                       Text('Sub-permissions', style: Theme.of(context).textTheme.titleSmall),
