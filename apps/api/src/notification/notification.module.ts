@@ -5,6 +5,7 @@ import { TemplateService } from "./template.service";
 import { NotificationController } from "./notification.controller";
 import { ChannelRegistry } from "./channel/channel.registry";
 import { LoggedWhatsAppChannel } from "./channel/logged.channel";
+import { WhatsAppChannel } from "./channel/whatsapp.channel";
 import { EmailChannel } from "./channel/email.channel";
 import { CredentialsMailer } from "./credentials-mailer";
 
@@ -25,6 +26,7 @@ import { CredentialsMailer } from "./credentials-mailer";
     TemplateService,
     ChannelRegistry,
     LoggedWhatsAppChannel,
+    WhatsAppChannel,
     EmailChannel,
     CredentialsMailer,
   ],

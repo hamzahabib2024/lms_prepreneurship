@@ -68,6 +68,9 @@ export class IntegrationService {
     // GOOGLE_SERVICE_ACCOUNT_JSON by docker-compose.
     const driveConfigured = this.googleConfigured;
     const whatsappConfigured = this.channels.get("WHATSAPP")?.isConfigured() ?? false;
+    // Read directly: the adapter refuses to send without it, so the screen
+    // must be able to say which of the three settings is missing.
+    const whatsappTemplate = this.config.get<string>("WHATSAPP_TEMPLATE_NAME", "").trim() !== "";
     // Asked of the adapter, not re-derived from the environment here — one
     // source of truth for "is this set up", so the screen cannot disagree with
     // what actually happens at send time.
@@ -126,11 +129,26 @@ export class IntegrationService {
             `is the truth. The wording is kept in the simulator outbox (${this.outbox.count()} ` +
             "held) so it can be read and proofread. Recipients still get the message in their " +
             "in-app inbox, which is the record.",
-        toGoLive: whatsappConfigured
+        /*
+         * THREE THINGS, AND THE THIRD IS THE ONE PEOPLE MISS.
+         *
+         * A token and a number id make the adapter live, and it will then
+         * refuse every message until a template is named — because Meta
+         * accepts nothing but an approved template outside a 24-hour reply
+         * window, and no student has ever messaged the Institute. Saying so
+         * here is cheaper than a delivery log full of suppressions.
+         */
+        toGoLive: whatsappConfigured && whatsappTemplate
           ? null
-          : "Set WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID from the Meta Business " +
-            "account, then restart. No other change is needed — the adapter already " +
-            "implements the full contract.",
+          : whatsappConfigured
+            ? "Almost there. WHATSAPP_TEMPLATE_NAME is not set, so nothing will send: Meta " +
+              "only accepts a pre-approved template outside a 24-hour reply window, and " +
+              "students never message the Institute first. Create a template in WhatsApp " +
+              "Manager with two body parameters — {{1}} the title, {{2}} the message — wait " +
+              "for approval, then set its name and language."
+            : "Set WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID from the Meta Business " +
+              "account, and WHATSAPP_TEMPLATE_NAME to an approved template with two body " +
+              "parameters. Then restart. No code change is needed — the adapter is complete.",
       },
       {
         key: "email",
