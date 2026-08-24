@@ -2,6 +2,7 @@ import { Injectable, Logger } from "@nestjs/common";
 import { AppError } from "@lms/shared";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
+import { SettingsService } from "../settings/settings.service";
 import { getActor } from "../prisma/actor-context";
 import { applyLatePenalty, assessLateness, type LatePolicy } from "./late-penalty";
 import { forStudent, validateScores } from "./rubric-scoring";
@@ -38,13 +39,39 @@ export interface GradeInput {
   revisionReason?: string;
 }
 
-/** Appendix H — the institute-wide ceiling. A teacher may narrow it, never widen it. */
-const INSTITUTE_FILE_TYPES = [
-  "pdf", "docx", "doc", "pptx", "ppt", "xlsx",
-  "jpg", "jpeg", "png", "mp3", "zip", "txt",
-];
-const INSTITUTE_MAX_MB = 10;
-const INSTITUTE_MAX_FILES = 5;
+/**
+ * THE INSTITUTE CEILING, READ FROM THE SETTING THAT DECLARES IT.
+ *
+ * This was a hardcoded array, in TWO files, saying the same thing as
+ * `upload.allowedFileTypes` in the settings catalogue. The catalogue entry was
+ * declared, documented, shown on the Settings screen, editable by a Super
+ * Admin, audited when changed — and read by nobody.
+ *
+ * So an administrator who added a file type saw it save, saw it listed, and
+ * saw nothing happen: assignment creation refused the type against a constant
+ * in the source, and uploads filtered against another copy of the same
+ * constant a directory away. That is precisely the silent failure the whole
+ * catalogue exists to prevent, sitting inside the assessment module.
+ *
+ * The fallback is the catalogue's own default rather than a fresh list, so
+ * there is still exactly one statement of what the Institute permits.
+ */
+async function institutePolicy(settings: SettingsService): Promise<{
+  types: string[];
+  maxMb: number;
+  maxFiles: number;
+}> {
+  const [types, maxMb, maxFiles] = await Promise.all([
+    settings.list("upload.allowedFileTypes"),
+    settings.number("upload.maxFileSizeMb"),
+    settings.number("upload.maxFileCount"),
+  ]);
+  return {
+    types: types.map((t) => t.toLowerCase().replace(/^\./, "")),
+    maxMb,
+    maxFiles,
+  };
+}
 
 /**
  * Assignments — SRS §5.9.
@@ -64,6 +91,7 @@ export class AssignmentService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly notifications: NotificationService,
+    private readonly settings: SettingsService,
   ) {}
 
   // -------------------------------------------------------------- authoring
@@ -96,10 +124,11 @@ export class AssignmentService {
 
     // FR-ASG-006 — a teacher narrows the institute policy; anything outside it
     // is rejected rather than silently accepted and then failing at upload.
-    const requested = (input.allowedFileTypes ?? INSTITUTE_FILE_TYPES).map((t) =>
+    const policy = await institutePolicy(this.settings);
+    const requested = (input.allowedFileTypes ?? policy.types).map((t) =>
       t.toLowerCase().replace(/^\./, ""),
     );
-    const outside = requested.filter((t) => !INSTITUTE_FILE_TYPES.includes(t));
+    const outside = requested.filter((t) => !policy.types.includes(t));
     if (outside.length > 0) {
       throw new AppError("VALIDATION_FAILED", {
         details: [
@@ -128,8 +157,8 @@ export class AssignmentService {
         latePenaltyFloor: input.latePenaltyFloor ?? null,
         submissionType: input.submissionType ?? "FILE",
         allowedFileTypes: requested as object,
-        maxFileSizeMb: Math.min(input.maxFileSizeMb ?? INSTITUTE_MAX_MB, INSTITUTE_MAX_MB),
-        maxFileCount: Math.min(input.maxFileCount ?? INSTITUTE_MAX_FILES, INSTITUTE_MAX_FILES),
+        maxFileSizeMb: Math.min(input.maxFileSizeMb ?? policy.maxMb, policy.maxMb),
+        maxFileCount: Math.min(input.maxFileCount ?? policy.maxFiles, policy.maxFiles),
         resubmissionPolicy: input.resubmissionPolicy ?? "NONE",
         maxAttempts: input.maxAttempts ?? null,
         rubricId: input.rubricId ?? null,
@@ -785,6 +814,16 @@ export class AssignmentService {
         id: a.id,
         title: a.title,
         instructions: a.instructions,
+        /*
+         * WHETHER THERE IS A SPOKEN BRIEF, never where it lives.
+         *
+         * A boolean and a length, so the card can offer a play button and say
+         * how long it is. The storage reference stays on the server (ARC-041);
+         * the audio itself comes from a guarded route that re-checks scope, so
+         * knowing one exists gives a student nothing they did not already have.
+         */
+        hasBriefAudio: a.briefAudioKey !== null,
+        briefAudioSeconds: a.briefAudioSeconds,
         marksAvailable: Number(a.marksAvailable),
         opensAt: a.opensAt,
         dueAt: a.dueAt,

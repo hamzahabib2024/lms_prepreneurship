@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { EmptyState, Skeleton } from "../components/Ui";
 import { ApiError, api } from "../api/client";
+import { HowItWorks } from "../components/HowItWorks";
 
 /**
  * The security log — SRS §13.8, FR-LOG-020..026.
@@ -117,6 +118,19 @@ export function SecurityPage() {
           ))}
         </span>
       </header>
+
+      <HowItWorks
+        id="security"
+        title="Sign-ins and lockouts"
+        intro="Failed sign-ins, locked accounts and anything that looks like somebody trying to get in."
+        steps={[
+          { icon: "shield", title: "Look at what is flagged", body: "Repeated failures from one place, or one account being tried over and over." },
+          { icon: "users", title: "Check the account", body: "Usually somebody has forgotten their password. Occasionally it is not." },
+          { icon: "key", title: "Unlock or reset", body: "A lockout clears itself with time; you can also lift it." },
+          { icon: "clock", title: "End sessions if needed", body: "Signs a person out everywhere, on every device, at once." },
+        ]}
+        note="Most of what appears here is people mistyping their own password. Look for a pattern — many accounts from one place, or one account from many — before assuming an attack."
+      />
 
       {error && (
         <div className="alert alert-error" role="alert">

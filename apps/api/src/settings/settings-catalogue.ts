@@ -210,14 +210,32 @@ export const CATALOGUE: SettingDefinition[] = [
   {
     key: "upload.allowedFileTypes",
     type: "string[]",
-    default: ["pdf", "docx", "doc", "pptx", "ppt", "xlsx", "jpg", "jpeg", "png", "mp3", "zip", "txt"],
+    /*
+     * THE THREE AUDIO FORMATS ARE ON BY DEFAULT, and that is deliberate.
+     *
+     * A spoken answer is recorded in the browser, and the browser chooses the
+     * container: webm on Chrome, Edge and Firefox; m4a on Safari and every
+     * iPhone. A student cannot pick, and neither can the teacher who set the
+     * assignment. Leaving these merely ALLOWED rather than DEFAULT would mean
+     * the recorder appears, records, uploads and is refused — on whichever
+     * half of the cohort happens to be on the other operating system.
+     *
+     * ogg is included because Firefox has historically emitted it and still
+     * may, depending on the codecs available on the machine.
+     */
+    default: [
+      "pdf", "docx", "doc", "pptx", "ppt", "xlsx", "jpg", "jpeg", "png",
+      "mp3", "m4a", "webm", "ogg", "zip", "txt",
+    ],
     group: "Submissions",
     allowed: [
       "pdf", "docx", "doc", "pptx", "ppt", "xlsx", "xls",
-      "jpg", "jpeg", "png", "gif", "mp3", "mp4", "zip", "txt", "csv",
+      "jpg", "jpeg", "png", "gif",
+      "mp3", "m4a", "webm", "ogg", "oga", "mp4", "mov", "mkv",
+      "zip", "txt", "csv",
     ],
     description:
-      "The institute-wide ceiling (Appendix H). A teacher may narrow this for one assignment, never widen it. Files are checked by CONTENT, so renaming an extension does not get past it.",
+      "The institute-wide ceiling (Appendix H). A teacher may narrow this for one assignment, never widen it. Files are checked by CONTENT, so renaming an extension does not get past it. The audio formats are what a browser records a spoken answer in — webm on Chrome and Firefox, m4a on Safari and iPhone — and removing either one breaks voice answers for that half of the cohort.",
   },
 
   // ----------------------------------------------------------- maintenance --
@@ -591,6 +609,56 @@ export const CATALOGUE: SettingDefinition[] = [
     group: "Public page",
     maxLength: 200,
     description: "The line under that heading.",
+  },
+  /*
+   * THE ONE THING ON THIS PAGE THAT IS NOT FOR AN APPLICANT — FR-CRT-015.
+   *
+   * An employer with a certificate in their hand is not going to apply, will
+   * never have an account, and has exactly one question. The System could
+   * already answer it: /verify has been public since certificates existed. But
+   * every address into it was `/verify/<code>`, which serves the one person who
+   * scanned a QR code and nobody else — and the front page did not mention it
+   * at all. So a printed certificate with a smudged code, or a number read down
+   * the telephone, had nowhere to go.
+   *
+   * A band on the public page is the cheapest possible fix and it closes the
+   * loop the certificate itself opens.
+   */
+  {
+    key: "public.showVerify",
+    type: "boolean",
+    default: true,
+    group: "Public page",
+    description:
+      "Show the band inviting an employer to check a certificate. Turn it off only if the Institute has not issued any yet — the page it links to works whether or not this is shown.",
+  },
+  {
+    key: "public.verifyHeading",
+    type: "string",
+    default: "Holding one of our certificates?",
+    group: "Public page",
+    maxLength: 80,
+    description:
+      "The heading on that band. Addressed to an employer rather than to a student, which is the only part of this page that is.",
+  },
+  {
+    key: "public.verifyBody",
+    type: "string",
+    default:
+      "Check it against the Institute's own register. Type the number printed on the document and you will see who it belongs to, what it was awarded for, and whether it still stands. No account, no sign-up.",
+    group: "Public page",
+    maxLength: 400,
+    multiline: true,
+    description:
+      "The sentence on that band. Say that no account is needed — that is the part that decides whether somebody bothers.",
+  },
+  {
+    key: "public.verifyCta",
+    type: "string",
+    default: "Verify a certificate",
+    group: "Public page",
+    maxLength: 40,
+    description: "The wording on that band's button.",
   },
   {
     key: "public.closingHeading",

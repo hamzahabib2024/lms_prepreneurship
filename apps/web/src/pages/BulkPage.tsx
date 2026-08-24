@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { EmptyState } from "../components/Ui";
 import { ApiError, api } from "../api/client";
+import { HowItWorks } from "../components/HowItWorks";
 
 /**
  * Bulk operations — SRS §13.10, FR-OPS-020..026.
@@ -110,6 +111,19 @@ export function BulkPage() {
           </p>
         </div>
       </header>
+
+      <HowItWorks
+        id="bulk"
+        title="Changing many records at once"
+        intro="Moving a group between sections, or changing something for a whole cohort. Powerful, and worth slowing down for."
+        steps={[
+          { icon: "users", title: "Choose who", body: "Filter down to exactly the students you mean. The count is shown before anything happens." },
+          { icon: "shuffle", title: "Choose the change", body: "One change, applied to all of them." },
+          { icon: "search", title: "Read the summary", body: "How many will change, and what to. This is the moment to check the count is the one you expected." },
+          { icon: "check", title: "Confirm", body: "It is applied together, and recorded as one action in the audit log." },
+        ]}
+        note="If the count is larger than you expected, your filter is wrong — not the System. Go back and narrow it rather than proceeding."
+      />
 
       {error && (
         <div className="alert alert-error" role="alert">

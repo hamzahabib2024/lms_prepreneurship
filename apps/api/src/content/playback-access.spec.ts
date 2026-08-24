@@ -63,6 +63,15 @@ describe("issuing a playback ticket", () => {
       { record: () => Promise.resolve(undefined) } as never,
       {} as never,
       { get: (_k: string, d?: string) => d } as unknown as ConfigService,
+      // Nothing in this suite re-points a folder, so the sync collaborator is
+      // never reached. Present because the constructor requires it, and left
+      // as a throwing stub rather than a no-op so a test that DOES reach it
+      // fails loudly instead of silently proving nothing.
+      {
+        sync: () => {
+          throw new Error("lectureSync should not be reached from playback tests");
+        },
+      } as never,
     );
 
     return { service, tickets, progressQueries };

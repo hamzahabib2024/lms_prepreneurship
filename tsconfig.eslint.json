@@ -4,7 +4,25 @@
   // probe is a test that passes without testing — so this project includes
   // everything and is used only by eslint.
   "extends": "./tsconfig.base.json",
-  "compilerOptions": { "noEmit": true, "allowJs": true },
+  // THE DOM, because this project lints a BROWSER APPLICATION with it.
+  //
+  // tsconfig.base.json declares `lib: ["ES2022"]`, which is right for the API
+  // and wrong for the 40-odd .tsx files listed below. Without the DOM library
+  // every browser global — window, document, HTMLElement, MediaRecorder — is
+  // an unresolved name, and typescript-eslint types each one as `error`. That
+  // is not a quiet inaccuracy: it is where all 680 "unsafe assignment of an
+  // error typed value" warnings come from, and it silently disables the
+  // type-aware rules exactly where they would be most useful.
+  //
+  // It also produced FOUR HARD ERRORS: a ref typed `MediaRecorder | null`
+  // reads as `any | null`, which `no-redundant-type-constituents` correctly
+  // refuses. tsc itself was always fine — apps/web/tsconfig.json has the DOM —
+  // so the linter and the compiler disagreed about what this code even was.
+  "compilerOptions": {
+    "noEmit": true,
+    "allowJs": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"]
+  },
   "include": [
     "apps/api/src/**/*.ts",
     "apps/web/src/**/*.ts",

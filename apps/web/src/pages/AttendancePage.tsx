@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SkeletonTable } from "../components/Ui";
 import { ApiError, api } from "../api/client";
+import { HowItWorks } from "../components/HowItWorks";
 
 /**
  * Attendance register — SRS §5.11, §13.6, UC-15.
@@ -109,6 +110,19 @@ export function AttendancePage() {
           </select>
         </label>
       </header>
+
+      <HowItWorks
+        id="attendance"
+        title="Taking the register"
+        intro="One class at a time. Everybody starts as present, so you only mark the exceptions."
+        steps={[
+          { icon: "calendar", title: "Pick the class", body: "Today's classes are listed first." },
+          { icon: "check", title: "Mark the exceptions", body: "Absent, late or excused. Everybody you do not touch is present." },
+          { icon: "clock", title: "Late is not absent", body: "A student arriving after the class started is marked late, and it counts differently." },
+          { icon: "pen", title: "Save it", body: "Nothing is recorded until you do. You can correct it afterwards, and the change is logged." },
+        ]}
+        note="The System warns a student by itself once their attendance drops below the requirement, so you do not have to watch for it. It waits until enough classes have been held to mean anything."
+      />
 
       {sessionId && <RegisterGrid key={sessionId} sessionId={sessionId} />}
     </>

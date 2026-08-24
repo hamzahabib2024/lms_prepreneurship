@@ -3,6 +3,7 @@ import { SkeletonList } from "../components/Ui";
 import { Link, useParams } from "react-router-dom";
 import { ApiError, api, tokens } from "../api/client";
 import { StudentNotes } from "../components/StudentNotes";
+import { Icon } from "../components/Icon";
 
 /**
  * Grading — SRS §13.6, FR-ASG-025/026/028, FR-TCH-019.
@@ -67,6 +68,20 @@ export function GradingPage() {
   const [error, setError] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [releasing, setReleasing] = useState(false);
+  /**
+   * ONE SUBMISSION AT A TIME — the way marking is actually done.
+   *
+   * The list below is the OVERVIEW: who has handed in, who has not, what is
+   * left. It is the right shape for deciding where to start and the wrong
+   * shape for the work itself, because marking thirty submissions from a list
+   * means thirty rounds of find-the-row, expand, mark, collapse, and losing
+   * your place every time the list re-sorts under you.
+   *
+   * Every serious marking tool solves this the same way and has for years: put
+   * the work, the marking guide and the mark box on one screen, and give the
+   * teacher a Next. That is what this index is. Null means the overview.
+   */
+  const [focusIndex, setFocusIndex] = useState<number | null>(null);
 
   const load = useCallback(() => {
     api
@@ -108,6 +123,36 @@ export function GradingPage() {
     return rank(x) - rank(y) || (x.rollNo ?? 9999) - (y.rollNo ?? 9999);
   });
 
+  /*
+   * ONLY WORK THERE IS SOMETHING TO DO WITH. A student who did not submit has
+   * nothing to mark, and stepping through them is a Next that does nothing —
+   * so focus mode walks the submissions, and the overview keeps everybody.
+   *
+   * Already-marked work stays in the walk on purpose: changing a mark you have
+   * just given is a normal part of marking a set, and dropping them from the
+   * sequence would make the one thing you want to go back to unreachable.
+   */
+  const markable = ordered.filter((s) => s.submitted && s.submissionId);
+  const current = focusIndex === null ? null : markable[focusIndex] ?? null;
+
+  const goTo = (i: number) => setFocusIndex(Math.max(0, Math.min(i, markable.length - 1)));
+
+  /*
+   * AFTER SAVING, GO TO THE NEXT THING THAT STILL NEEDS DOING — not simply the
+   * next row. A teacher part-way through a set has already marked some of it,
+   * and stepping onto work that is finished makes them check every time
+   * whether they have already done it.
+   *
+   * When nothing is left the teacher stays where they are rather than being
+   * thrown back to the list: the last mark they gave is still on screen, which
+   * is what somebody wants to see at the end of a set.
+   */
+  const advance = () => {
+    const from = (focusIndex ?? -1) + 1;
+    const next = markable.findIndex((s, i) => i >= from && !s.graded);
+    if (next >= 0) setFocusIndex(next);
+  };
+
   return (
     <>
       <header className="page-head">
@@ -117,11 +162,49 @@ export function GradingPage() {
             Out of {a.marksAvailable} · due {new Date(a.dueAt).toLocaleDateString()}
           </p>
         </div>
-        <Link className="btn btn-quiet" to="/attendance">
-          Back
-        </Link>
+        <div className="row-actions">
+          {/* The way IN to the work. Offered only when there is work: a button
+              that opens an empty marking screen is a button that lies. */}
+          {focusIndex === null && markable.length > 0 && (
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => {
+                const firstUnmarked = markable.findIndex((x) => !x.graded);
+                setFocusIndex(firstUnmarked >= 0 ? firstUnmarked : 0);
+              }}
+            >
+              <Icon name="pen" />
+              {summary.ungraded > 0 ? `Mark ${summary.ungraded} submission${summary.ungraded === 1 ? "" : "s"}` : "Review the marks"}
+            </button>
+          )}
+          <Link className="btn btn-quiet" to="/marking">
+            Back
+          </Link>
+        </div>
       </header>
 
+      {current && (
+        <FocusMarker
+          student={current}
+          position={(focusIndex ?? 0) + 1}
+          total={markable.length}
+          remaining={markable.filter((x) => !x.graded).length}
+          marksAvailable={a.marksAvailable}
+          onPrevious={() => goTo((focusIndex ?? 0) - 1)}
+          onNext={() => goTo((focusIndex ?? 0) + 1)}
+          onClose={() => setFocusIndex(null)}
+          onGraded={() => {
+            load();
+            advance();
+          }}
+        />
+      )}
+
+      {/* The overview steps aside while a submission is in focus: two views of
+          the same work on one screen is two places to lose your place. */}
+      {focusIndex === null && (
+        <>
       <section className="card">
         <ul className="list">
           <li>
@@ -186,6 +269,8 @@ export function GradingPage() {
           ))}
         </ul>
       </section>
+        </>
+      )}
     </>
   );
 }
@@ -417,4 +502,146 @@ function describeLateness(minutes: number): string {
   const hours = Math.round(minutes / 60);
   if (hours < 48) return `${hours} hour${hours === 1 ? "" : "s"}`;
   return `${Math.round(hours / 24)} days`;
+}
+
+
+// ══════════════════════════════════════════════════ marking, one at a time ══
+
+/**
+ * ONE SUBMISSION, FILLING THE SCREEN — the shape marking actually has.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * WHY THIS EXISTS BESIDE THE LIST RATHER THAN INSTEAD OF IT. The list answers
+ * "where am I up to": who has handed in, who has not, what is left. That is a
+ * question a teacher asks twice. Marking is the question they ask thirty
+ * times, and answering it from a list means thirty rounds of find-the-row,
+ * expand, mark, collapse — losing your place each time the list re-sorts
+ * because the row you just marked moved out of the unmarked block.
+ *
+ * So the list stays as the overview and this is the work: the submission, the
+ * mark box and the feedback on one screen, with a Next. It is the arrangement
+ * every serious marking tool has converged on, for the same reason.
+ *
+ * WHAT MAKES IT FASTER IS THE COUNT AND THE NEXT, not the layout. A teacher
+ * needs to know how many are left without going back, and needs the next piece
+ * of work to arrive without choosing it. Both are here; neither was before.
+ *
+ * KEYBOARD, BECAUSE THIS IS REPETITIVE WORK. Left and right move, Escape
+ * returns to the list. Deliberately NOT bound while a text box has focus —
+ * somebody typing "the kerning is left→right inconsistent" must not be thrown
+ * onto the next student mid-sentence, which is the classic way a shortcut
+ * turns a good screen into an infuriating one.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+function FocusMarker({
+  student: s,
+  position,
+  total,
+  remaining,
+  marksAvailable,
+  onPrevious,
+  onNext,
+  onClose,
+  onGraded,
+}: {
+  student: RosterStudent;
+  position: number;
+  total: number;
+  remaining: number;
+  marksAvailable: number;
+  onPrevious: () => void;
+  onNext: () => void;
+  onClose: () => void;
+  onGraded: () => void;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      // A shortcut that fires inside a textarea is a shortcut that eats work.
+      const typing =
+        !!el &&
+        (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
+      if (typing) return;
+
+      if (e.key === "ArrowLeft") onPrevious();
+      else if (e.key === "ArrowRight") onNext();
+      else if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onPrevious, onNext, onClose]);
+
+  return (
+    <section className="focus-marker">
+      <header className="focus-bar">
+        <button type="button" className="btn btn-quiet btn-sm" onClick={onClose}>
+          <Icon name="chevron-left" />
+          All submissions
+        </button>
+
+        <span className="focus-position">
+          <strong>
+            {position} of {total}
+          </strong>
+          {/* The number that decides whether a teacher keeps going or stops
+              for the evening, so it is on screen rather than a page away. */}
+          <span className="muted small">
+            {remaining === 0 ? "all marked" : `${remaining} still to mark`}
+          </span>
+        </span>
+
+        <span className="row-actions">
+          <button
+            type="button"
+            className="btn btn-sm"
+            onClick={onPrevious}
+            disabled={position <= 1}
+            aria-label="Previous submission"
+          >
+            <Icon name="chevron-left" />
+          </button>
+          <button
+            type="button"
+            className="btn btn-sm"
+            onClick={onNext}
+            disabled={position >= total}
+            aria-label="Next submission"
+          >
+            <Icon name="chevron-right" />
+          </button>
+        </span>
+      </header>
+
+      <div className="focus-who">
+        <div>
+          <h2>
+            {s.rollNo}. {s.name}
+          </h2>
+          <p className="muted small">
+            {s.graded ? (
+              <>
+                Already marked — {s.finalMarks}/{marksAvailable}. Saving again replaces it.
+              </>
+            ) : (
+              <>Not marked yet.</>
+            )}
+            {s.isLate && " · Handed in late"}
+          </p>
+        </div>
+        {/* A word as well as a colour (NFR-ACC-007). */}
+        <span className={s.graded ? "pill pill-ok" : "pill pill-warn"}>
+          {s.graded ? "Marked" : "To mark"}
+        </span>
+      </div>
+
+      {s.submissionId && (
+        <GradeForm student={s} marksAvailable={marksAvailable} onGraded={onGraded} />
+      )}
+
+      <p className="focus-hint muted small">
+        Arrow keys move between submissions, Escape goes back to the list. Saving a mark takes
+        you to the next one still to mark.
+      </p>
+    </section>
+  );
 }

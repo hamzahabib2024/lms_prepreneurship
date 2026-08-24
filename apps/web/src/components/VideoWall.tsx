@@ -9,6 +9,12 @@ export interface VideoLink {
   embedUrl: string | null;
   thumbnailUrl: string | null;
   portrait: boolean;
+  /**
+   * The shape of the thing, as a CSS aspect-ratio the server worked out from
+   * the URL. Optional so an older API that only sends `portrait` still renders
+   * — falling back to the two shapes it knows about rather than to nothing.
+   */
+  aspect?: string;
 }
 
 const LABEL: Record<VideoLink["provider"], string> = {
@@ -91,10 +97,20 @@ export function VideoWall({
             );
           }
 
+          /*
+             THE CARD IS THE SHAPE OF WHAT IS IN IT.
+             The wall lays out in justified rows — every card the same HEIGHT,
+             its width following from this ratio — so a vertical reel is narrow
+             beside a wide landscape video instead of towering over it. See
+             `.video-grid` for why that is the layout.
+          */
+          const aspect = v.aspect ?? (v.portrait ? "9 / 16" : "16 / 9");
+
           return (
             <div
               key={v.url}
               className={`video-card${v.portrait ? " video-portrait" : ""}`}
+              style={{ aspectRatio: aspect }}
             >
               {isPlaying ? (
                 <iframe
@@ -155,10 +171,37 @@ export interface ImageLink {
  */
 export function PhotoStrip({ images }: { images: ImageLink[] }) {
   const [broken, setBroken] = useState<string[]>([]);
+  /**
+   * THE REAL SHAPE OF EACH PICTURE, measured when it loads.
+   *
+   * The stage used to be a fixed 2:1 letterbox with `object-fit: cover`, which
+   * is right for the wide photograph of a classroom it was designed around and
+   * WRONG for everything else. A square post — which is what an institute
+   * actually publishes — lost a third of itself off the top and bottom, and
+   * the part it lost was usually the words.
+   *
+   * The browser is the only thing that knows the true ratio, and it knows it
+   * the moment the file arrives. Nothing is guessed and nothing is fetched
+   * twice: `naturalWidth` and `naturalHeight` are already there on the element
+   * that just rendered.
+   */
+  const [shapes, setShapes] = useState<Record<string, number>>({});
   const usable = images.filter((i) => !broken.includes(i.url));
   const { index, go, next, previous, holdProps } = useAutoRotate(usable.length, 5000);
 
   if (usable.length === 0) return null;
+
+  /*
+   * CLAMPED, because a picture may be any shape at all and the stage has to
+   * stay a stage. A panorama at 4:1 becomes a slot too short to see, and a
+   * phone screenshot at 9:19 becomes a column taller than the window that
+   * pushes everything below it off the page. Between 4:3 and 16:7 covers every
+   * ordinary photograph, every square post and every portrait shot, and only
+   * bites on the extremes it exists to catch.
+   */
+  const current = usable[index];
+  const measured = current ? shapes[current.url] : undefined;
+  const ratio = Math.min(Math.max(measured ?? 16 / 8, 4 / 3), 16 / 7);
 
   return (
     <section className="landing-inner photo-strip">
@@ -170,7 +213,7 @@ export function PhotoStrip({ images }: { images: ImageLink[] }) {
         The whole panel holds still on hover and on focus — see useAutoRotate
         for why focus matters as much as hover.
       */}
-      <div className="photo-stage" {...holdProps}>
+      <div className="photo-stage" style={{ aspectRatio: String(ratio) }} {...holdProps}>
         {usable.map((img, i) => (
           <figure
             key={img.url}
@@ -185,6 +228,14 @@ export function PhotoStrip({ images }: { images: ImageLink[] }) {
               // The first is what somebody sees immediately; the rest can wait.
               loading={i === 0 ? "eager" : "lazy"}
               onError={() => setBroken((b) => [...b, img.url])}
+              onLoad={(e) => {
+                const el = e.currentTarget;
+                if (!el.naturalWidth || !el.naturalHeight) return;
+                const r = el.naturalWidth / el.naturalHeight;
+                // Guarded, or every load queues a render for a value that has
+                // not changed — and a cross-fading gallery re-renders often.
+                setShapes((prev) => (prev[img.url] === r ? prev : { ...prev, [img.url]: r }));
+              }}
             />
             {img.alt && <figcaption>{img.alt}</figcaption>}
           </figure>

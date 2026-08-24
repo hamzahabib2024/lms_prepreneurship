@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { SkeletonList } from "../components/Ui";
 import { ApiError, api } from "../api/client";
+import { HowItWorks } from "../components/HowItWorks";
 
 /**
  * The messages the System sends — SRS §13.13, FR-NOT-020..026.
@@ -112,6 +113,19 @@ export function TemplatesPage() {
           </p>
         </div>
       </header>
+
+      <HowItWorks
+        id="templates"
+        title="What the System says on your behalf"
+        intro="Every automatic message — a welcome, a warning, a receipt. Written once here, sent many times."
+        steps={[
+          { icon: "bell", title: "Pick the message", body: "Each one is sent at a particular moment, which is written above it." },
+          { icon: "pen", title: "Write it in your words", body: "Plain wording. This is the Institute talking to a student or a parent." },
+          { icon: "shuffle", title: "Drop in the details", body: "Placeholders fill in the name, the course, the amount. The list of what you can use is shown." },
+          { icon: "monitor", title: "Look at the preview", body: "Filled in with real-looking details, so you see what actually lands." },
+        ]}
+        note="A placeholder spelt wrong does not fill in — it goes out looking like a mistake. The preview is how you catch it."
+      />
 
       {error && (
         <div className="alert alert-error" role="alert">

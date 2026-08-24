@@ -3,6 +3,7 @@ import { SkeletonList } from "../components/Ui";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ApiError, api } from "../api/client";
 import { QuestionComposer } from "../components/QuestionComposer";
+import { HowItWorks } from "../components/HowItWorks";
 
 /**
  * Building a quiz — SRS §13.6, FR-QIZ-001..020.
@@ -124,6 +125,35 @@ function NewQuiz() {
           Back to marking
         </Link>
       </header>
+
+      <HowItWorks
+        id="quiz-builder"
+        title="How a quiz goes together"
+        intro="A quiz is the settings plus the questions. Both can be changed until you publish it."
+        steps={[
+          {
+            icon: "settings",
+            title: "Set the rules",
+            body: "How long they get, how many attempts, and whether the questions come in a different order each time.",
+          },
+          {
+            icon: "clipboard",
+            title: "Add the questions",
+            body: "Multiple choice, true or false, short answer or numeric. Or pull them from a question bank.",
+          },
+          {
+            icon: "chart",
+            title: "Decide what marks itself",
+            body: "Multiple choice and numeric are marked the moment they are submitted. Short answers wait for you.",
+          },
+          {
+            icon: "check",
+            title: "Publish it",
+            body: "Students see it when it opens. A published quiz with no questions is the one mistake to avoid.",
+          },
+        ]}
+        note="Choose when results appear. Showing them immediately tells a student the answers — which matters if the rest of the class has not sat it yet."
+      />
 
       <section className="card">
         <div className="field-row">

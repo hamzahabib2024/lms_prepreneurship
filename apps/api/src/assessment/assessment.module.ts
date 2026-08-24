@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { AssignmentService } from "./assignment.service";
 import { SubmissionFileService } from "./submission-file.service";
+import { VoiceBriefService } from "./voice-brief.service";
 import { AssessmentController } from "./assessment.controller";
 import { RubricService } from "./rubric.service";
 import { RubricController } from "./rubric.controller";
@@ -15,7 +16,7 @@ import { ContentModule } from "../content/content.module";
 @Module({
   imports: [ContentModule],
   controllers: [AssessmentController, RubricController],
-  providers: [AssignmentService, SubmissionFileService, RubricService],
+  providers: [VoiceBriefService, AssignmentService, SubmissionFileService, RubricService],
   exports: [AssignmentService],
 })
 export class AssessmentModule {}

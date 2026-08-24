@@ -3,6 +3,7 @@ import { EmptyState, SkeletonTable } from "../components/Ui";
 import { ApiError, api, tokens } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { StepUpPrompt, needsStepUp } from "../components/StepUpPrompt";
+import { HowItWorks } from "../components/HowItWorks";
 
 /**
  * User administration — SRS §13.7, FR-USR-003..015.
@@ -83,6 +84,19 @@ export function UsersPage() {
       <header className="page-head">
         <h1>People</h1>
       </header>
+
+      <HowItWorks
+        id="people"
+        title="Who can do what"
+        intro="Everybody with a sign-in, and what each of them is allowed to reach."
+        steps={[
+          { icon: "users", title: "Find the person", body: "Search by name or email. Students, teachers and office staff are all here." },
+          { icon: "key", title: "Give them a role", body: "The role decides what they see. A teacher sees their own classes; the office sees the Institute." },
+          { icon: "shield", title: "Or suspend them", body: "Suspending stops them signing in without deleting anything they have done." },
+          { icon: "clipboard", title: "Every change is recorded", body: "Who changed what, and when. That record cannot be edited by anybody." },
+        ]}
+        note="Give the narrowest role that lets somebody do their job. Widening it later takes a moment; explaining why a part-time tutor could read the fee ledger does not."
+      />
 
       {error && (
         <div className="alert alert-error" role="alert">

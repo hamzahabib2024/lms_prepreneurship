@@ -107,6 +107,24 @@ export function VerifyPage() {
           </div>
         </header>
 
+        {/*
+          ARRIVED WITH NOTHING TO CHECK, which is now a way to arrive.
+          Somebody who followed the link from the public page rather than
+          scanning a code needs to be told what to type and where it is
+          printed, before they meet an empty box.
+        */}
+        {!code && !result && (
+          <div className="verify-intro">
+            <p>
+              Type the number printed on the certificate and we will tell you whether the Institute
+              issued it, who it belongs to and what it was awarded for.
+            </p>
+            <p className="muted small">
+              No account is needed, and nothing you type here is stored.
+            </p>
+          </div>
+        )}
+
         {failed && (
           <div className="alert alert-error" role="alert">
             <p>We could not check that certificate just now. Please try again shortly.</p>
@@ -213,7 +231,10 @@ export function VerifyPage() {
             a printed certificate is often photocopied or scanned flat, and the
             number under it is then the only way in. */}
         <section className="card verify-lookup">
-          <h2>Check another certificate</h2>
+          {/* "Another" only once there HAS been one. It was the heading in
+              both cases, which reads as an error to somebody who has not
+              checked anything yet. */}
+          <h2>{result || code ? "Check another certificate" : "Check a certificate"}</h2>
           <p className="muted small">
             Type the certificate number printed on the document. It looks like CERT-2026-000001.
           </p>

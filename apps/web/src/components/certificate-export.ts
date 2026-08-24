@@ -396,9 +396,18 @@ export async function printCertificate(
     );
     doc.close();
 
-    // The fonts are inside the markup, so this resolves as soon as they are
-    // parsed — but it does have to resolve, or the sheet prints in Times.
-    if (doc.fonts?.ready) await doc.fonts.ready;
+    /*
+     * The fonts are inside the markup, so this resolves as soon as they are
+     * parsed — but it does have to resolve, or the sheet prints in Times.
+     *
+     * THE GUARD USED TO TEST `doc.fonts?.ready`, WHICH IS A PROMISE and
+     * therefore always truthy. It read as "wait for the fonts if this browser
+     * can", and it actually meant "always wait" — harmless where FontFaceSet
+     * exists, and a TypeError on any browser without it, which is the exact
+     * case the `?.` was written to survive. The thing to test is whether the
+     * API is there; what to await is its promise.
+     */
+    if (doc.fonts) await doc.fonts.ready;
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
     frame.contentWindow?.focus();

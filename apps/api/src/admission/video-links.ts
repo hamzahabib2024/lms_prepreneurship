@@ -27,6 +27,21 @@ export interface VideoLink {
   thumbnailUrl: string | null;
   /** Vertical formats get a taller frame; a 16:9 player in a 9:16 box is letterboxed twice. */
   portrait: boolean;
+  /**
+   * THE SHAPE OF THE THING, as a CSS aspect-ratio.
+   *
+   * `portrait` was a BOOLEAN, and two shapes is one too few. A wall of the
+   * Institute's own posts holds three: a landscape YouTube video, a vertical
+   * reel or TikTok, and a SQUARE Instagram feed post — which is the shape most
+   * of them actually are. With only a flag, every Instagram link was treated as
+   * vertical, so a square graphic was drawn in a 9:16 box and lost a third of
+   * itself off the top and bottom.
+   *
+   * It is a string rather than a number because it goes straight into
+   * `aspect-ratio` in the browser, and "9 / 16" survives a reader's eye better
+   * than 0.5625 does.
+   */
+  aspect: string;
 }
 
 /** A YouTube id is 11 characters of the URL-safe alphabet. */
@@ -106,6 +121,7 @@ export function parseVideoLink(raw: string): VideoLink | null {
       embedUrl: `https://www.youtube-nocookie.com/embed/${youtube}?rel=0`,
       thumbnailUrl: `https://i.ytimg.com/vi/${youtube}/hqdefault.jpg`,
       portrait: isShort,
+      aspect: isShort ? "9 / 16" : "16 / 9",
     };
   }
 
@@ -119,31 +135,82 @@ export function parseVideoLink(raw: string): VideoLink | null {
       // TikTok gives no thumbnail without an API call, so the page draws one.
       thumbnailUrl: null,
       portrait: true,
+      // TikTok is vertical, with no landscape option worth planning for.
+      aspect: "9 / 16",
     };
   }
 
   if (host.endsWith("facebook.com") || host === "fb.watch") {
+    /*
+     * FACEBOOK HAS TWO PLUGINS AND THEY ARE NOT INTERCHANGEABLE.
+     *
+     * Every facebook.com link used to be handed to plugins/video.php, which is
+     * correct for a video and renders EMPTY for anything else. A photo — the
+     * `/photo?fbid=…` shape the Institute actually pastes, because a photo is
+     * what a page posts most often — produced a card with a play button over a
+     * blank grey frame. It looked like the video had failed to load rather than
+     * like the wrong plugin, so the administrator's instinct is to re-paste the
+     * link, which changes nothing.
+     *
+     * plugins/post.php renders a photo, an album, a status or a shared link,
+     * and is what everything that is not a video wants.
+     */
+    const isVideo =
+      host === "fb.watch" ||
+      url.pathname.includes("/videos/") ||
+      url.pathname.includes("/reel/") ||
+      url.pathname === "/watch" ||
+      url.pathname === "/watch/";
+
+    const plugin = isVideo ? "video" : "post";
+
     return {
       url: url.toString(),
       provider: "facebook",
       id: null,
-      embedUrl: `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(
-        url.toString(),
-      )}&show_text=false`,
+      embedUrl:
+        `https://www.facebook.com/plugins/${plugin}.php?href=` +
+        `${encodeURIComponent(url.toString())}&show_text=false`,
       thumbnailUrl: null,
       portrait: false,
+      /*
+       * A video plugin renders a player, which is landscape. A post plugin
+       * renders a photograph with the page's name above it, which is roughly
+       * square once the header is counted — 4:5 is closer to what Facebook
+       * actually draws than 1:1, and being slightly too tall costs a band of
+       * background while being too short crops the picture.
+       */
+      aspect: isVideo ? "16 / 9" : "4 / 5",
     };
   }
 
   if (host.endsWith("instagram.com")) {
     const reel = url.pathname.match(/\/(reel|p|tv)\/([A-Za-z0-9_-]+)/);
+    /*
+     * THE THREE INSTAGRAM SHAPES, AND WHY THE DEFAULT CHANGED.
+     *
+     * A `/reel/` and the older `/tv/` are vertical video: 9:16, and they were
+     * always drawn correctly. A `/p/` is a FEED POST, which is the ordinary
+     * photograph or carousel a page publishes, and Instagram's feed crop is
+     * square. Every one of them used to be marked portrait, so a square
+     * graphic was put in a 9:16 frame and a third of it was cut away — on the
+     * public page, where the Institute's own marketing is what a stranger sees.
+     *
+     * The embed adds a header and a caption strip of its own, so the frame is
+     * given a little more height than the picture needs. Too tall shows a band
+     * of Instagram's own background; too short crops the picture itself.
+     */
+    const kind = reel?.[1];
+    const aspect = kind === "reel" || kind === "tv" ? "9 / 16" : "4 / 5";
+
     return {
       url: url.toString(),
       provider: "instagram",
       id: reel?.[2] ?? null,
       embedUrl: reel ? `https://www.instagram.com/${reel[1]}/${reel[2]}/embed` : null,
       thumbnailUrl: null,
-      portrait: true,
+      portrait: aspect === "9 / 16",
+      aspect,
     };
   }
 
@@ -156,6 +223,9 @@ export function parseVideoLink(raw: string): VideoLink | null {
     embedUrl: null,
     thumbnailUrl: null,
     portrait: false,
+    // Never rendered as a frame — this one becomes a link card — but the field
+    // is not optional, and a landscape default is the least surprising.
+    aspect: "16 / 9",
   };
 }
 

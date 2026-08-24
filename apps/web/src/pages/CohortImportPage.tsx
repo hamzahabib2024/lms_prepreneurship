@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ApiError, api } from "../api/client";
+import { HowItWorks } from "../components/HowItWorks";
 
 /**
  * Importing a cohort — SRS §13.10, FR-OPS-024..026.
@@ -158,6 +159,19 @@ export function CohortImportPage() {
           Download the template
         </a>
       </header>
+
+      <HowItWorks
+        id="cohort-import"
+        title="Bringing in a whole class at once"
+        intro="For students who already exist on paper — a group joining from elsewhere, or a term the Institute ran before this System."
+        steps={[
+          { icon: "upload", title: "Upload the sheet", body: "One row per student. The columns it expects are listed on this page." },
+          { icon: "search", title: "Look at the preview", body: "Nothing is created yet. You are shown exactly what would happen, row by row." },
+          { icon: "alert", title: "Fix what is flagged", body: "Duplicates, missing fields and bad dates are marked. Correct the sheet and upload it again." },
+          { icon: "check", title: "Then import", body: "Only once the preview is right. Everybody is created together, with their sign-in details." },
+        ]}
+        note="Always read the preview. It is the only chance to catch a wrong column before it becomes two hundred students with the wrong course."
+      />
 
       {/* Said before anything is chosen, because it changes whether this is the
           right tool at all. */}

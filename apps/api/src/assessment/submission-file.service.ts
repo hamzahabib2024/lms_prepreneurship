@@ -3,17 +3,16 @@ import { createHash } from "node:crypto";
 import { AppError } from "@lms/shared";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
+import { SettingsService } from "../settings/settings.service";
 import { StorageRegistry } from "../content/storage/storage.registry";
 import { getActor } from "../prisma/actor-context";
 import { validateUpload, type FilePolicy } from "./file-validation";
 
-/** Appendix H — the institute-wide ceiling a teacher may narrow but not widen. */
-const INSTITUTE_FILE_TYPES = [
-  "pdf", "docx", "doc", "pptx", "ppt", "xlsx",
-  "jpg", "jpeg", "png", "mp3", "zip", "txt",
-];
-const INSTITUTE_MAX_MB = 10;
-const INSTITUTE_MAX_FILES = 5;
+/**
+ * The same ceiling the assignment service enforces, read from the same
+ * setting. See the note there: this used to be a second hardcoded copy, and
+ * two copies of a policy are two places for it to be wrong.
+ */
 
 export interface IncomingFile {
   originalname: string;
@@ -44,14 +43,15 @@ export class SubmissionFileService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly storage: StorageRegistry,
+    private readonly settings: SettingsService,
   ) {}
 
   /** The effective policy: the teacher's choice, bounded by Appendix H. */
-  private policyFor(assignment: {
+  private async policyFor(assignment: {
     allowedFileTypes: unknown;
     maxFileSizeMb: number;
     maxFileCount: number;
-  }): FilePolicy {
+  }): Promise<FilePolicy> {
     const configured = Array.isArray(assignment.allowedFileTypes)
       ? (assignment.allowedFileTypes as unknown[]).filter(
           (t): t is string => typeof t === "string",
@@ -60,14 +60,21 @@ export class SubmissionFileService {
 
     // Intersected, never trusted wholesale. A stored policy that somehow names
     // a type outside Appendix H must not widen what is accepted.
-    const allowedTypes = (configured.length > 0 ? configured : INSTITUTE_FILE_TYPES)
+    const [instituteTypes, instituteMaxMb, instituteMaxFiles] = await Promise.all([
+      this.settings.list("upload.allowedFileTypes"),
+      this.settings.number("upload.maxFileSizeMb"),
+      this.settings.number("upload.maxFileCount"),
+    ]);
+    const ceiling = instituteTypes.map((t) => t.toLowerCase().replace(/^\./, ""));
+
+    const allowedTypes = (configured.length > 0 ? configured : ceiling)
       .map((t) => t.toLowerCase().replace(/^\./, ""))
-      .filter((t) => INSTITUTE_FILE_TYPES.includes(t));
+      .filter((t) => ceiling.includes(t));
 
     return {
-      allowedTypes: allowedTypes.length > 0 ? allowedTypes : INSTITUTE_FILE_TYPES,
-      maxSizeBytes: Math.min(assignment.maxFileSizeMb, INSTITUTE_MAX_MB) * 1024 * 1024,
-      maxFileCount: Math.min(assignment.maxFileCount, INSTITUTE_MAX_FILES),
+      allowedTypes: allowedTypes.length > 0 ? allowedTypes : ceiling,
+      maxSizeBytes: Math.min(assignment.maxFileSizeMb, instituteMaxMb) * 1024 * 1024,
+      maxFileCount: Math.min(assignment.maxFileCount, instituteMaxFiles),
     };
   }
 
@@ -114,7 +121,7 @@ export class SubmissionFileService {
       filename: file.originalname,
       sizeBytes: file.size,
       bytes: file.buffer,
-      policy: this.policyFor(assignment),
+      policy: await this.policyFor(assignment),
       existingCount,
     });
 

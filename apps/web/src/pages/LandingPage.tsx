@@ -85,6 +85,10 @@ interface Copy {
   newsBlurb: string;
   programmesHeading: string;
   programmesBlurb: string;
+  showVerify: boolean;
+  verifyHeading: string;
+  verifyBody: string;
+  verifyCta: string;
   closingHeading: string;
   closingBody: string;
   closingCta: string;
@@ -132,6 +136,21 @@ const FALLBACK: Copy = {
   newsBlurb: "Notices we have published for everyone.",
   programmesHeading: "What we are running",
   programmesBlurb: "Straight from the Institute's own records — if a section is listed, it is open.",
+  /*
+   * OFF when the showcase did not load, and that is the deliberate choice.
+   *
+   * Everything else here degrades to a sentence that is merely generic. This
+   * one is an INVITATION TO LOOK SOMETHING UP, and offering it while the
+   * server is unreachable sends an employer to a lookup that is about to fail
+   * for the same reason. A missing band is better than a broken errand.
+   */
+  showVerify: false,
+  verifyHeading: "Holding one of our certificates?",
+  verifyBody:
+    "Check it against the Institute's own register. Type the number printed on the document " +
+    "and you will see who it belongs to, what it was awarded for, and whether it still stands. " +
+    "No account, no sign-up.",
+  verifyCta: "Verify a certificate",
   closingHeading: "Ready when you are.",
   closingBody:
     "Applications are open. Fill the form, attach your slip, and we will write to you with a " +
@@ -181,6 +200,13 @@ export function LandingPage() {
               check it. */}
           <Link className="btn btn-quiet" to="/track">
             Track application
+          </Link>
+          {/* FR-CRT-015 — an employer arrives for this and nothing else, and
+              the page used to have no way in at all. It sits beside Track
+              because the two are the same kind of thing: a public lookup for
+              somebody who will never have an account. */}
+          <Link className="btn btn-quiet" to="/verify">
+            Verify a certificate
           </Link>
           <Link className="btn btn-quiet" to="/login">
             Sign in
@@ -404,6 +430,32 @@ export function LandingPage() {
         the one instruction that matters and nothing else — a closing band that
         restates the whole page is a page nobody finished reading.
       */}
+      {/*
+        THE ONE BAND ON THIS PAGE ADDRESSED TO SOMEBODY WHO IS NOT APPLYING.
+
+        It sits before the closing band deliberately. The closing band is the
+        page's single call to action and works because it says one thing; an
+        employer checking a certificate is a different person with a different
+        errand, and putting the two in one band would blunt both. Above it, the
+        employer finds their errand and stops reading, which is exactly right.
+      */}
+      {copy.showVerify && (
+        <section className="landing-inner verify-band">
+          <div className="verify-band-inner">
+            <span className="verify-band-mark" aria-hidden="true">
+              <Icon name="shield" />
+            </span>
+            <div className="verify-band-copy">
+              <h2 className="landing-h2">{copy.verifyHeading}</h2>
+              <p className="muted">{copy.verifyBody}</p>
+            </div>
+            <Link className="btn btn-primary btn-lg" to="/verify">
+              {copy.verifyCta}
+            </Link>
+          </div>
+        </section>
+      )}
+
       <section className="closing-band">
         <div className="landing-inner closing-inner">
           <div>
@@ -428,6 +480,10 @@ export function LandingPage() {
           </span>
           {showcase && <SocialRow social={showcase.social} />}
           <span className="muted small">
+            {/* Repeated here because a footer is where people look for the
+                small, official things, and verification is one. */}
+            <Link to="/verify">Verify a certificate</Link>
+            {" · "}
             Already enrolled? <Link to="/login">Sign in</Link>
           </span>
         </div>

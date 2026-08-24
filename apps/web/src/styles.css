@@ -913,13 +913,35 @@ code {
  * than an optimisation.
  */
 .video-wall { padding-block: 2.5rem 1rem; }
+
+/*
+ * JUSTIFIED ROWS, NOT EQUAL COLUMNS — and this is the fix for a wall that was
+ * genuinely unusable once the Institute put its own posts on it.
+ *
+ * The grid gave every card the same WIDTH. At 260px a 16:9 video is 146px tall
+ * and a 9:16 reel is 462px tall, so a mixed row was a squat letterbox sitting
+ * beside a tower three times its height, and the grid row stretched to the
+ * tallest thing in it. One vertical video pushed everything after it a screen
+ * and a half down the page.
+ *
+ * Fixing the HEIGHT instead and letting width follow from each card's own
+ * aspect ratio is how every photograph wall worth looking at is laid out: a
+ * landscape video is wide, a square post is square, a reel is a narrow strip,
+ * and the row lines up along the top and bottom because they all agree on one
+ * dimension. The cards carry their ratio inline, from the server, per item.
+ */
 .video-grid {
-  display: grid; gap: 1.1rem;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  display: flex; flex-wrap: wrap; gap: 1.1rem;
+  /* A short last row is centred rather than left hanging against the edge. */
+  justify-content: center;
 }
 .video-card {
   position: relative;
+  /* The one dimension every card agrees on. Width comes from aspect-ratio. */
+  height: clamp(210px, 26vw, 320px);
   aspect-ratio: 16 / 9;
+  flex: 0 0 auto;
+  max-width: 100%;
   border-radius: var(--radius);
   overflow: hidden;
   background: var(--surface-2);
@@ -927,9 +949,33 @@ code {
   box-shadow: var(--shadow-1);
   transition: transform .2s var(--ease), box-shadow .2s var(--ease);
 }
-/* A vertical video in a 16:9 box is letterboxed twice over. */
-.video-portrait { aspect-ratio: 9 / 16; }
+/* Kept as a hook for the badge and the play ring, which want to be smaller on
+   a narrow card. The RATIO now arrives inline from the server, which knows the
+   difference between a vertical reel and a square feed post — a distinction a
+   single class could not carry. */
+.video-portrait .video-play-ring { width: 46px; height: 46px; }
+.video-portrait .video-play { width: 18px; height: 18px; }
+.video-portrait .video-badge { font-size: .62rem; padding: .15rem .4rem; }
+
 .video-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-2); }
+
+/*
+ * ON A PHONE THE ROW IS ONE CARD, so height stops leading and width does.
+ *
+ * A fixed height and `max-width: 100%` contradict each other once the derived
+ * width is wider than the screen: the cap wins on width, the declaration wins
+ * on height, and the ratio quietly breaks — the frame ends up a shape the
+ * video is not. Letting height follow from the width keeps the ratio exact.
+ *
+ * A vertical card still does NOT take the full width. At 9:16 that is a frame
+ * two-thirds the height of the phone for one reel, which is the same "so long"
+ * complaint one screen size down.
+ */
+@media (max-width: 600px) {
+  .video-grid { gap: .9rem; }
+  .video-card { height: auto; width: 100%; }
+  .video-portrait { width: 62%; }
+}
 
 /* The poster is a button, so it is reachable by keyboard and fires on Enter. */
 .video-face {
@@ -977,7 +1023,9 @@ code {
 
 .video-card-link {
   display: flex; align-items: center; gap: .8rem;
-  aspect-ratio: auto; padding: 1rem 1.1rem;
+  /* A row of words, not a frame: it opts out of both the ratio and the fixed
+     height the frames share, and takes its size from its own text. */
+  aspect-ratio: auto; height: auto; padding: 1rem 1.1rem;
   text-decoration: none; color: var(--ink);
 }
 .video-card-link .video-face {
@@ -1386,15 +1434,39 @@ code {
  * that a transformed row does at the edges, and it is gentler for anybody who
  * finds sliding motion uncomfortable.
  */
+/*
+ * THE RATIO IS SET INLINE, from the picture itself.
+ *
+ * It was a fixed 2:1 letterbox, which is right for the wide photograph of a
+ * classroom this was designed around and wrong for everything else: a square
+ * post lost a third of itself to `object-fit: cover`, and what it lost was
+ * usually the words. PhotoStrip measures each file as it loads and sets the
+ * ratio per slide, clamped so a panorama cannot become a slot and a screenshot
+ * cannot become a column taller than the window.
+ *
+ * The value below is only the fallback for the first paint, before any file
+ * has arrived.
+ */
 .photo-stage {
   position: relative;
   aspect-ratio: 16 / 8;
+  /* The stage stays a stage even when a tall picture asks for more. */
+  max-height: 78vh;
+  margin-inline: auto;
   border-radius: var(--radius-lg); overflow: hidden;
   background: var(--surface-2);
   border: 1px solid var(--line);
   box-shadow: var(--shadow-2);
+  transition: aspect-ratio .45s var(--ease);
 }
-@media (max-width: 700px) { .photo-stage { aspect-ratio: 4 / 3; } }
+/*
+ * CONTAIN, NOT COVER, now that the frame is the shape of the picture.
+ * Cover exists to fill a frame the picture does not fit; once the frame agrees
+ * with the picture there is nothing to crop, and cropping anyway would trim
+ * the edge of a graphic whose text runs to the margin. The clamp above can
+ * still leave a sliver of background on an extreme shape, which is the correct
+ * place for it to show.
+ */
 
 .photo-slide {
   position: absolute; inset: 0; margin: 0;
@@ -1403,20 +1475,41 @@ code {
   pointer-events: none;
 }
 .photo-slide.is-current { opacity: 1; pointer-events: auto; }
+/*
+ * CONTAIN, NOT COVER, now that the frame is the shape of the picture.
+ *
+ * Cover exists to fill a frame the picture does not fit, by throwing away
+ * whatever hangs over the edge. Once the stage takes its ratio from the file
+ * itself there is nothing to throw away — and cropping anyway would trim the
+ * edge of a graphic whose text runs to the margin, which is exactly what was
+ * happening to the Institute's own posts. The clamp on the stage can still
+ * leave a sliver of ground on an extreme shape; that is the right place for it.
+ */
 .photo-slide img {
-  width: 100%; height: 100%; object-fit: cover; display: block;
+  width: 100%; height: 100%; object-fit: contain; display: block;
+  background: var(--surface-2);
 }
 /*
- * A slow drift across the picture while it is the current one — the effect
- * that makes a still photograph feel alive. It runs ONLY on the visible slide,
- * so nothing animates off-screen, and the global reduced-motion rule at the
- * top of this file collapses it to nothing.
+ * THE DRIFT HAD TO GO, AND WHAT REPLACED IT SETTLES INSTEAD OF PANNING.
+ *
+ * The old effect scaled the picture from 1.02 to 1.09 and slid it. That works
+ * under `object-fit: cover`, where there is always spare picture outside the
+ * frame to pan across — the crop is the point. Under `contain` there is no
+ * spare picture: the file fits the frame exactly, so ANY scale above 1 pushes
+ * the edges out through `overflow: hidden` and crops them. On a marketing
+ * graphic whose phone number runs along the bottom, a 9% scale eats the phone
+ * number, which is the whole defect this section was changed to fix.
+ *
+ * So it settles rather than drifts: a whisker under full size up to exactly
+ * full size, ending where the picture is complete and staying there. It still
+ * runs only on the visible slide, and the global reduced-motion rule near the
+ * top of this file still collapses it to nothing.
  */
-@keyframes drift {
-  from { transform: scale(1.02) translate3d(0, 0, 0); }
-  to   { transform: scale(1.09) translate3d(-1.5%, -1%, 0); }
+@keyframes settle {
+  from { transform: scale(.985); opacity: .85; }
+  to   { transform: scale(1); opacity: 1; }
 }
-.photo-slide.is-current img { animation: drift 12s var(--ease) forwards; }
+.photo-slide.is-current img { animation: settle 1.1s var(--ease) forwards; }
 
 .photo-slide figcaption {
   position: absolute; left: 0; right: 0; bottom: 0;
@@ -4851,4 +4944,269 @@ details > summary:hover { text-decoration: underline; }
   /* A phone submitting a payment: the primary action spans the screen rather
      than sitting in a row with two others. */
   .form-actions .btn { flex: 1 1 auto; justify-content: center; }
+}
+
+
+/* ------------------------------------------- verifying a certificate -------
+   FR-CRT-015. The one band on the public page addressed to somebody who is not
+   applying: an employer with a printed certificate and one question.
+
+   IT IS QUIETER THAN THE CLOSING BAND ON PURPOSE. The page has ONE call to
+   action and it is Apply; a second band in full brand colour immediately above
+   it would compete with the thing the page exists to do. This reads as an
+   official notice — a rule, a mark and a plain ground — which is also the
+   register it should be written in. */
+.verify-band { padding-block: 1.5rem; }
+.verify-band-inner {
+  display: flex; align-items: center; gap: 1.25rem; flex-wrap: wrap;
+  padding: 1.35rem 1.5rem;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--brand-700);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+}
+.verify-band-mark {
+  display: grid; place-items: center; flex: 0 0 auto;
+  width: 46px; height: 46px; border-radius: 999px;
+  background: var(--brand-050); color: var(--brand-700);
+}
+.verify-band-mark svg { width: 22px; height: 22px; }
+.verify-band-copy { flex: 1 1 20rem; min-width: 0; }
+.verify-band-copy h2 { margin: 0 0 .2rem; }
+.verify-band-copy p { margin: 0; }
+.verify-band .btn { flex: 0 0 auto; }
+
+/* The mark is ornament; on a phone the words and the button are the band. */
+@media (max-width: 600px) {
+  .verify-band-mark { display: none; }
+  .verify-band .btn { width: 100%; }
+}
+
+/* An intro above the lookup, for somebody who arrived at /verify with nothing
+   to check rather than by scanning a code off a certificate. */
+.verify-intro {
+  padding: .9rem 1.1rem; margin-bottom: 1rem;
+  border-left: 3px solid var(--brand-700);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+.verify-intro p { margin: 0; }
+.verify-intro p + p { margin-top: .3rem; }
+
+/* ------------------------------------------------ the public nav, packed ---
+   FR-CRT-015 added a fifth destination, and five full-size buttons wrap into
+   three rows on a phone — which pushes the headline below the fold on the one
+   screen where the headline is the entire product. The quiet links tighten up
+   as the screen narrows; nothing is hidden, because every one of them is the
+   only route to something (tracking an application, checking a certificate). */
+@media (max-width: 900px) {
+  .landing-nav { padding: .75rem 1rem; }
+  .landing-nav .row-actions { gap: .25rem; justify-content: flex-end; }
+  .landing-nav .btn-quiet {
+    padding-inline: .45rem;
+    font-size: .8125rem;
+    min-height: 32px;
+  }
+}
+
+
+/* ------------------------------------------------------- recording a note --
+   FR-ASG. One control, both directions: a teacher records the brief for an
+   assignment, a student records the answer to it.
+
+   THE STATE IS NEVER CARRIED BY COLOUR ALONE (NFR-ACC-007). A pulsing red dot
+   says "recording" to somebody who can see it and nothing at all to somebody
+   who cannot, so the dot sits beside the word and a running clock. */
+.voice-recorder { display: grid; gap: .4rem; margin-bottom: .9rem; }
+.field-label {
+  font-size: .8125rem; font-weight: 600; color: var(--ink-2);
+}
+.voice-row { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+.voice-row .btn svg { width: 15px; height: 15px; margin-right: .35rem; }
+/* One width for both states. The button's label runs "Record" -> "Stop" ->
+   "Record again", and letting it size to its text makes the whole row jump
+   twice per take — under a cursor that is about to press it again. */
+.voice-start, .voice-stop { min-width: 9.5rem; justify-content: center; }
+
+.voice-live {
+  display: inline-flex; align-items: center; gap: .4rem;
+  font-size: .875rem; font-weight: 600; color: var(--error);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+.voice-dot {
+  width: 9px; height: 9px; border-radius: 999px; flex: 0 0 9px;
+  background: var(--error);
+  animation: voice-pulse 1.2s var(--ease) infinite;
+}
+@keyframes voice-pulse { 50% { opacity: .25; } }
+
+/* The browser's own player. Restyling it means rebuilding scrubbing, volume
+   and keyboard control from scratch, and the native one is already better at
+   all three than anything worth writing here. */
+.voice-player { height: 34px; max-width: 100%; flex: 1 1 14rem; min-width: 0; }
+
+/* A note already saved, shown to whoever receives it. */
+.voice-note {
+  display: flex; align-items: center; gap: .75rem; flex-wrap: wrap;
+  padding: .6rem .75rem; margin: .5rem 0;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--brand-700);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+.voice-note-mark {
+  display: grid; place-items: center; flex: 0 0 auto;
+  width: 32px; height: 32px; border-radius: 999px;
+  background: var(--brand-050); color: var(--brand-700);
+}
+.voice-note-mark svg { width: 16px; height: 16px; }
+.voice-note-body { flex: 1 1 14rem; min-width: 0; display: grid; gap: .2rem; }
+
+@media (max-width: 600px) {
+  .voice-row { align-items: stretch; }
+  .voice-player { flex-basis: 100%; }
+}
+
+
+/* ------------------------------------------------ how a screen works -------
+   Orientation, drawn as the sequence the task actually is. See HowItWorks.tsx
+   for why this is markup rather than a picture: it reflows, it reads aloud in
+   order, and it cannot go stale the way an SVG of a renamed button does. */
+.howto {
+  margin-bottom: 1.25rem; padding: 1rem 1.15rem;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--brand-700);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+.howto-collapsed {
+  padding: 0; border: 0; background: none; margin-bottom: .9rem;
+}
+.howto-collapsed .btn svg { width: 14px; height: 14px; margin-right: .35rem; }
+.howto-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: .75rem; margin-bottom: .35rem;
+}
+.howto-title { margin: 0; font-size: .95rem; }
+.howto-intro { margin: 0 0 .85rem; font-size: .875rem; color: var(--ink-2); }
+
+/*
+   THE DIAGRAM. A row of steps on a wide screen, a column on a narrow one, with
+   the connector rotating to match — the same figure in the shape that fits,
+   rather than a picture that shrinks until nobody can read it.
+*/
+.howto-steps {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; gap: .9rem;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+}
+.howto-step {
+  position: relative;
+  display: flex; gap: .6rem; align-items: flex-start;
+  padding-right: .9rem;
+}
+/* The connector. Decorative by construction — the list already numbers the
+   steps, so this says nothing a screen reader needs. */
+.howto-step:not(:last-child)::after {
+  content: "→";
+  position: absolute; right: -.15rem; top: .35rem;
+  color: var(--line-strong); font-size: .95rem; line-height: 1;
+}
+.howto-step-mark {
+  position: relative; flex: 0 0 auto;
+  display: grid; place-items: center;
+  width: 32px; height: 32px; border-radius: 999px;
+  background: var(--surface); border: 1px solid var(--line);
+  color: var(--brand-700);
+}
+.howto-step-mark svg { width: 15px; height: 15px; }
+.howto-step-n {
+  position: absolute; right: -5px; bottom: -5px;
+  display: grid; place-items: center;
+  width: 17px; height: 17px; border-radius: 999px;
+  background: var(--brand-700); color: var(--primary-ink);
+  font-size: .65rem; font-weight: 700; line-height: 1;
+}
+.howto-step-body { display: grid; gap: .1rem; min-width: 0; }
+.howto-step-body strong { font-size: .875rem; }
+
+/* The one thing people get wrong here. Amber rather than red: it is a warning
+   about a mistake, not a report of one. */
+.howto-note {
+  display: flex; gap: .5rem; align-items: flex-start;
+  margin: .9rem 0 0; padding-top: .75rem;
+  border-top: 1px solid var(--line);
+  font-size: .8125rem; color: var(--ink-2);
+}
+.howto-note svg { width: 15px; height: 15px; flex: 0 0 15px; color: var(--warn); margin-top: .1rem; }
+
+@media (max-width: 700px) {
+  .howto-steps { grid-template-columns: 1fr; gap: .7rem; }
+  /* The row became a column, so the arrow turns to match. */
+  .howto-step:not(:last-child)::after {
+    content: "↓"; right: auto; left: 12px; top: auto; bottom: -.6rem;
+  }
+  .howto-step { padding-right: 0; padding-bottom: .3rem; }
+}
+
+
+/* ---------------------------------------------- marking, one at a time ----
+   The list is the overview; this is the work. See FocusMarker in
+   GradingPage.tsx for why the two live side by side rather than one replacing
+   the other. */
+.focus-marker {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+  overflow: hidden;
+  margin-bottom: 1rem;
+}
+
+/* Sticky, because the position, the count and the Next are the three things a
+   teacher reaches for and a long submission would scroll them away. */
+.focus-bar {
+  position: sticky; top: 0; z-index: 3;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: .75rem; flex-wrap: wrap;
+  padding: .6rem .9rem;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--line);
+}
+.focus-bar .btn svg { width: 14px; height: 14px; }
+.focus-position {
+  display: flex; align-items: baseline; gap: .5rem;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.focus-who {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: .75rem; flex-wrap: wrap;
+  padding: .9rem 1.1rem .2rem;
+}
+.focus-who h2 { margin: 0; font-size: 1.05rem; }
+.focus-who p { margin: .15rem 0 0; }
+
+/*
+   The form the list already used, given room now that it is not inside a row.
+   IT IS `.assignment-body` — the class the accordion nests it in — and naming
+   the wrong one cost horizontal padding entirely: the content sat flush to the
+   panel edge and `overflow: hidden` above shaved the first character off every
+   filename. "palette.pdf" read as "alette.pdf", which looks like bad data
+   rather than bad CSS, and is the sort of thing nobody reports because it is
+   only slightly wrong.
+*/
+.focus-marker .assignment-body { padding: 0 1.1rem 1rem; border: 0; }
+
+.focus-hint {
+  display: block; margin: 0;
+  padding: .6rem 1.1rem .8rem;
+  border-top: 1px solid var(--line);
+  background: var(--surface-2);
+}
+
+@media (max-width: 700px) {
+  .focus-bar { gap: .5rem; }
+  .focus-position { order: 3; width: 100%; }
 }

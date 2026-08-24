@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { ApiError, api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { EmptyState, Skeleton, SkeletonTable } from "../components/Ui";
+import { HowItWorks } from "../components/HowItWorks";
 
 interface Section {
   id: string;
@@ -224,6 +225,19 @@ export function SectionsPage() {
         </div>
         <span className="muted small">{rows.length} visible to you</span>
       </header>
+
+      <HowItWorks
+        id="sections"
+        title="What a section is"
+        intro="A section is one group of students being taught together — a class. The course is what is taught; the section is who is in the room."
+        steps={[
+          { icon: "layers", title: "Pick the course", body: "A section always belongs to one course." },
+          { icon: "users", title: "Name the group", body: "Morning A, Evening B. Whatever the office already calls it on paper." },
+          { icon: "calendar", title: "Say when it runs", body: "The shift and the term. This is what an applicant chooses between." },
+          { icon: "pen", title: "Give it a teacher", body: "A teacher only ever sees the sections they are assigned to." },
+        ]}
+        note="A section with no teacher assigned is invisible to every teacher, so nobody takes the register. It is the most common thing to forget."
+      />
 
       {error && (
         <div className="alert alert-error" role="alert">

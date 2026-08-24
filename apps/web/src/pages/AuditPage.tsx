@@ -3,6 +3,7 @@ import { EmptyState, SkeletonTable } from "../components/Ui";
 import { text } from "../api/text";
 import { ApiError, api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
+import { HowItWorks } from "../components/HowItWorks";
 
 /**
  * The audit log — SRS §13.7, FR-LOG-010..016.
@@ -78,6 +79,19 @@ export function AuditPage() {
           </p>
         </div>
       </header>
+
+      <HowItWorks
+        id="audit"
+        title="Who changed what"
+        intro="A permanent record of every change: who, what, when, and what it was before. Nobody can edit or delete it, including whoever is reading it."
+        steps={[
+          { icon: "search", title: "Search for it", body: "By person, by kind of change, or by date." },
+          { icon: "clipboard", title: "Open the entry", body: "The before and the after, side by side." },
+          { icon: "users", title: "See who really did it", body: "If somebody was acting as another user, the entry names both of them." },
+          { icon: "upload", title: "Export if you need to", body: "For an inspection, or a question that needs answering in writing." },
+        ]}
+        note="This exists to answer “who changed this mark” without anybody having to remember. It is not a way to watch staff, and it is a poor one."
+      />
 
       {error && (
         <div className="alert alert-error" role="alert">

@@ -3,6 +3,7 @@ import { SkeletonList } from "../components/Ui";
 import { text as asText } from "../api/text";
 import { Link, useParams } from "react-router-dom";
 import { ApiError, api } from "../api/client";
+import { HowItWorks } from "../components/HowItWorks";
 
 /**
  * Marking written quiz answers — SRS §13.6, FR-QIZ-021/031.
@@ -110,6 +111,19 @@ export function QuizMarkingPage() {
           Back
         </Link>
       </header>
+
+      <HowItWorks
+        id="quiz-marking"
+        title="Marking written answers"
+        intro="Only the answers a person has to judge are here. Multiple choice and numeric answers marked themselves the moment they were submitted."
+        steps={[
+          { icon: "clipboard", title: "One question at a time", body: "Every student's answer to the same question, together. Marking them in one pass keeps your standard steady." },
+          { icon: "pen", title: "Right or wrong, and why", body: "A comment is optional but it is the part the student learns from." },
+          { icon: "chart", title: "Watch the totals", body: "Each student's score updates as you go. Nothing is shown to them yet." },
+          { icon: "megaphone", title: "Release when you are done", body: "The whole class sees their results at once, not one by one as you finish." },
+        ]}
+        note="If most of the class got the same question wrong, it is usually the question. You can still change the marks afterwards."
+      />
 
       {error && (
         <div className="alert alert-error" role="alert">

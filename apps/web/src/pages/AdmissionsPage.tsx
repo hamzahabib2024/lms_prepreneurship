@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { SkeletonList } from "../components/Ui";
 import { ApiError, api } from "../api/client";
 import { SlipViewer } from "../components/SlipViewer";
+import { HowItWorks } from "../components/HowItWorks";
 
 /**
  * Admission queue and review — SRS UC-02, §13.5.
@@ -117,6 +118,19 @@ export function AdmissionsPage() {
           {overdue > 0 && <strong className="warn"> · {overdue} over 48 hours</strong>}
         </span>
       </header>
+
+      <HowItWorks
+        id="admissions"
+        title="How an application becomes a student"
+        intro="Everything people have applied for, newest first. Each one is a decision waiting to be made."
+        steps={[
+          { icon: "clipboard", title: "Read the application", body: "Their details, the course they want, and the payment slip they attached." },
+          { icon: "search", title: "Check the slip", body: "Does the amount match the fee, and is the name the same? This is the step that catches mistakes." },
+          { icon: "check", title: "Approve or decline", body: "Approving creates the student, their registration number and their sign-in — all at once." },
+          { icon: "bell", title: "They are told either way", body: "An approval sends their details. A rejection says why, so they can fix it and apply again." },
+        ]}
+        note="If something is merely missing, ask for it rather than declining. “Needs more information” keeps their place; declining makes them start over."
+      />
 
       {/* A filter arrived at from elsewhere SAYS SO and offers the way out.
           Landing on a filtered list with no sign that it is filtered is how
