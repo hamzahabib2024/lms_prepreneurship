@@ -236,9 +236,9 @@ export function VoiceRecorder({
 
         {!recording && preview && (
           <>
-            {/* eslint-disable-next-line jsx-a11y/media-has-caption -- a voice
-                note has no caption track; the written brief beside it is the
-                text alternative, and it is required. */}
+            {/* No caption track, and none is possible: this is a recording
+                the user made two seconds ago. The written instructions beside
+                it are the text alternative, which is why they stay required. */}
             <audio className="voice-player" src={preview.url} controls preload="metadata" />
             <span className="muted small">{clock(preview.seconds)}</span>
             <button type="button" className="btn btn-quiet btn-sm" disabled={busy} onClick={discard}>
@@ -286,7 +286,8 @@ export function VoiceNote({
       </span>
       <div className="voice-note-body">
         <strong className="small">{label}</strong>
-        {/* eslint-disable-next-line jsx-a11y/media-has-caption -- see above. */}
+        {/* See the note on the recorder above: a voice note carries no
+            caption track, and the written text beside it is the alternative. */}
         <audio className="voice-player" src={src} controls preload="metadata" />
       </div>
       {typeof seconds === "number" && seconds > 0 && (
