@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/network/api_exception.dart';
@@ -64,8 +65,9 @@ class InboxCubit extends Cubit<InboxState> {
     try {
       await repository.markRead(ids);
       await load();
-    } on ApiException {
-      // Silently fail — the inbox is not why anyone is here.
+    } on ApiException catch (e) {
+      // Non-critical: inbox stays readable even if mark-read fails.
+      debugPrint('markRead failed: ${e.message}');
     }
   }
 
@@ -73,8 +75,8 @@ class InboxCubit extends Cubit<InboxState> {
     try {
       await repository.markAllRead();
       await load();
-    } on ApiException {
-      // Silently fail.
+    } on ApiException catch (e) {
+      debugPrint('markAllRead failed: ${e.message}');
     }
   }
 }
