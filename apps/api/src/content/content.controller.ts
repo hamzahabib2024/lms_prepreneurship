@@ -22,6 +22,7 @@ import { ContentService } from "./content.service";
 import { LectureStorageService } from "./lecture-storage.service";
 import { LectureSyncService } from "./lecture-sync.service";
 import { StorageRegistry } from "./storage/storage.registry";
+import type { ByteRange } from "./storage/storage.provider";
 import { zodBody } from "../common/zod-validation.pipe";
 import { Public, RequirePermission } from "../rbac/permissions.guard";
 
@@ -548,14 +549,42 @@ export class ContentController {
  * cannot clamp, and a suffix range ("the last N bytes") is handed on untouched
  * for the provider to resolve. Conflating the two would mean guessing a length.
  */
-function parseRangeHeader(header: string | undefined): { start: number; end?: number } | undefined {
+export function parseRangeHeader(header: string | undefined): ByteRange | undefined {
   if (!header) return undefined;
   const match = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
   if (!match) return undefined;
   const [, rawStart, rawEnd] = match;
-  // A suffix range ("the last N bytes") cannot be turned into a start without
-  // knowing the length, so it is handed on as written.
-  if (rawStart === "") return undefined;
+
+  /*
+   * A SUFFIX RANGE IS PASSED ON, AND USED TO BE DROPPED ON THE FLOOR.
+   *
+   * The comment here said it was "handed on as written". It was not: the
+   * function returned `undefined`, which means "no range at all", so the
+   * request became a plain 200 with the WHOLE FILE.
+   *
+   * That is the bug behind "the videos do not play". An MP4 keeps its index —
+   * the `moov` atom — at the end unless somebody deliberately moved it, which
+   * is true of every recording Google Meet produces. A browser opening one
+   * asks for the tail first with `bytes=-N` to read that index. Getting 200
+   * and a 247 MB body instead, the player has to download the entire lecture
+   * before it can find out how to play any of it: on a class connection it
+   * looks like a video that spins and never starts, and on a fast one like a
+   * video that takes a minute to begin.
+   *
+   * Measured on this Institute's own recording: `bytes=-2048` answered 200 and
+   * began streaming all 247 MB.
+   *
+   * It cannot be converted to a start here, because nothing on this side knows
+   * the file's length. Only the provider does, so the provider resolves it —
+   * which for Drive means passing the header straight through, since Drive
+   * honours suffix ranges itself.
+   */
+  if (rawStart === "") {
+    const suffix = Number(rawEnd);
+    if (!Number.isFinite(suffix) || suffix <= 0) return undefined;
+    return { suffix };
+  }
+
   const start = Number(rawStart);
   if (!Number.isFinite(start) || start < 0) return undefined;
   const end = rawEnd === "" ? undefined : Number(rawEnd);

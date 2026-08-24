@@ -185,11 +185,27 @@ export interface StorageProvider {
   openStream?(storageRef: string, range?: ByteRange): Promise<StorageStream>;
 }
 
-/** One byte range a player asked for. */
-export interface ByteRange {
-  start: number;
-  end?: number;
-}
+/**
+ * One byte range a player asked for.
+ *
+ * TWO SHAPES, BECAUSE HTTP HAS TWO AND THE SECOND IS THE ONE THAT MATTERS.
+ *
+ * `bytes=0-1023` names an offset. `bytes=-2048` names the LAST 2048 bytes, and
+ * that form cannot be expressed as a start without knowing the file's length —
+ * which nothing on this side of the provider does.
+ *
+ * It is not an exotic case. An MP4 keeps its index (the `moov` atom) at the END
+ * unless somebody has deliberately moved it to the front, and that is true of
+ * essentially every recording straight out of a camera or a Meet call. A
+ * browser opening one asks for the tail FIRST, to find out what is in the file
+ * before it fetches any of it. Answering that with the whole file means the
+ * player waits for a 250 MB download to discover a table of contents in the
+ * last few kilobytes, which presents as a video that never starts.
+ */
+export type ByteRange =
+  | { start: number; end?: number; suffix?: undefined }
+  /** `bytes=-N` — the last N bytes, length unknown to the caller. */
+  | { suffix: number; start?: undefined; end?: undefined };
 
 /** What a proxying provider hands back: a live stream, never a buffer. */
 export interface StorageStream {

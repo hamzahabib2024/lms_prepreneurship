@@ -412,8 +412,19 @@ export class GoogleDriveStorageProvider implements StorageProvider {
       Authorization: `Bearer ${await this.accessToken()}`,
     };
     if (range) {
+      /*
+       * Drive honours all three forms itself, so the header is rebuilt rather
+       * than resolved. A suffix range in particular MUST reach Drive intact:
+       * the length needed to turn it into an offset is only known there, and
+       * dropping it turns "give me the last 2 KB" into "give me all 247 MB" —
+       * which is what a player asking for an MP4's trailing index used to get.
+       */
       headers["Range"] =
-        range.end === undefined ? `bytes=${range.start}-` : `bytes=${range.start}-${range.end}`;
+        range.suffix !== undefined
+          ? `bytes=-${range.suffix}`
+          : range.end === undefined
+            ? `bytes=${range.start}-`
+            : `bytes=${range.start}-${range.end}`;
     }
 
     const res = await fetch(url, { headers });
