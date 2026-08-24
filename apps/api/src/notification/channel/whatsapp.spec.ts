@@ -89,7 +89,12 @@ describe("template or nothing", () => {
     const calls: Array<{ url: string; body: Record<string, unknown> }> = [];
     const original = globalThis.fetch;
     globalThis.fetch = (async (url: string, init: RequestInit) => {
-      calls.push({ url: String(url), body: JSON.parse(String(init.body)) as Record<string, unknown> });
+      // `RequestInit.body` is a union wide enough to include Blob and
+      // ReadableStream, and String() on one of those gives "[object Object]".
+      // The adapter always sends a JSON string; narrowing to that here keeps
+      // the assertion honest rather than silencing the rule.
+      const raw = typeof init.body === "string" ? init.body : "";
+      calls.push({ url: String(url), body: JSON.parse(raw) as Record<string, unknown> });
       return {
         ok: true,
         status: 200,
