@@ -120,6 +120,29 @@ export class LectureSyncService {
       }),
     );
     const byRef = new Map(existing.map((l) => [l.storageRef, l]));
+
+    /*
+     * ALSO THE ONES THAT WERE PUT ASIDE, and this is what makes re-linking a
+     * folder reversible rather than destructive.
+     *
+     * When a class is pointed at a different Drive folder its old recordings
+     * are soft-deleted — they belonged to the folder that is no longer this
+     * class's. Point it BACK and, without this, the sweep below would see
+     * files it has no live row for and create fresh ones: new ids, and every
+     * student's watch history left hanging off rows nothing reads any more.
+     *
+     * A storage reference is the identity that survives all of it, so a
+     * deleted row for the same file is revived instead. Somebody who changed
+     * a folder by mistake gets everything back, marks and watch progress
+     * included, by changing it back.
+     */
+    const buried = await this.prisma.asSystem((db) =>
+      db.recordedLecture.findMany({
+        where: { sectionSubjectId, deletedAt: { not: null } },
+        select: { id: true, storageRef: true },
+      }),
+    );
+    const buriedByRef = new Map(buried.map((l) => [l.storageRef, l]));
     const seen = new Set<string>();
 
     let added = 0;
@@ -141,6 +164,24 @@ export class LectureSyncService {
           );
           restored++;
         }
+        continue;
+      }
+
+      /*
+       * Revived, not recreated. Availability is reset because the file is
+       * demonstrably here — we are looking at it — and publication is NOT:
+       * a recording that was published before is published again, which is
+       * what somebody re-connecting the right folder expects.
+       */
+      const wasBuried = buriedByRef.get(entry.storageRef);
+      if (wasBuried) {
+        await this.prisma.asSystem((db) =>
+          db.recordedLecture.update({
+            where: { id: wasBuried.id },
+            data: { deletedAt: null, availabilityStatus: "AVAILABLE" },
+          }),
+        );
+        restored++;
         continue;
       }
 

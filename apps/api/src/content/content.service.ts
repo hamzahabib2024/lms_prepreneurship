@@ -5,6 +5,7 @@ import { AppError } from "@lms/shared";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { StorageRegistry } from "./storage/storage.registry";
+import { LectureSyncService } from "./lecture-sync.service";
 import { getActor } from "../prisma/actor-context";
 import { assertOwnsSectionSubject } from "../rbac/ownership";
 import { applyWatchUpdate, type Interval } from "./watch-intervals";
@@ -46,6 +47,9 @@ export class ContentService {
     private readonly audit: AuditService,
     private readonly storage: StorageRegistry,
     private readonly config: ConfigService,
+    // Re-pointing a class at a different folder has to import what is in the
+    // new one, in the same act — see setLectureFolder.
+    private readonly lectureSync: LectureSyncService,
   ) {}
 
   // ------------------------------------------------------ modules & lessons
@@ -548,20 +552,104 @@ export class ContentService {
     if (!offering) throw new AppError("RESOURCE_NOT_FOUND");
 
     const value = folderRef.trim() === "" ? null : folderRef.trim();
+
+    /*
+     * NOTHING CHANGED, SO NOTHING HAPPENS.
+     *
+     * Saving the same folder again is a common accident — the form is
+     * submitted, the value is identical — and it must not sweep the catalogue
+     * aside and rebuild it. Everything destructive below is guarded by this.
+     */
+    if (value === offering.lectureFolderRef) {
+      return { id: offering.id, lectureFolderRef: value, cleared: 0, imported: null };
+    }
+
+    /*
+     * THE NEW FOLDER IS PROVED READABLE BEFORE THE OLD CATALOGUE IS TOUCHED.
+     *
+     * The order matters more than it looks. Setting the reference first and
+     * discovering afterwards that the folder is unshared, mistyped or in
+     * somebody else's Drive would leave the class with its old recordings
+     * already put aside and nothing to replace them — a class that had ten
+     * lectures a moment ago now has none, and the message says "folder not
+     * found". Listing it first turns that into a refusal that changes nothing.
+     */
+    if (value) {
+      const provider = this.storage.forLectures();
+      // Throws a readable AppError when the folder is gone or not shared —
+      // the provider already words that one properly, so it is not caught.
+      await provider.listFolder(value);
+    }
+
     const updated = await this.prisma.scoped.sectionSubject.update({
       where: { id: sectionSubjectId },
       data: { lectureFolderRef: value },
       select: { id: true, lectureFolderRef: true },
     });
 
+    /*
+     * THE OLD FOLDER'S RECORDINGS ARE PUT ASIDE — FR-VID-003.
+     *
+     * They were catalogued from a folder that is no longer this class's, so
+     * leaving them would mean a class listing recordings from somewhere else
+     * while the hourly sweep marked them MISSING one by one — which reads as
+     * the Institute losing files rather than as a folder having been changed.
+     *
+     * SOFT, ALWAYS. A student's watch progress hangs off these rows and is
+     * their record of their own work; it is not ours to destroy because an
+     * administrator corrected a folder. The sync below revives by storage
+     * reference, so anything present in the NEW folder comes straight back
+     * with its history — and so does everything else if somebody re-links the
+     * old folder after a mistake.
+     */
+    const cleared = await this.prisma.asSystem((db) =>
+      db.recordedLecture.updateMany({
+        where: { sectionSubjectId, deletedAt: null },
+        data: { deletedAt: new Date() },
+      }),
+    );
+
     await this.audit.record({
       action: value ? "lecture_folder.set" : "lecture_folder.cleared",
       entityType: "SectionSubject",
       entityId: sectionSubjectId,
       before: { lectureFolderRef: offering.lectureFolderRef },
-      after: { lectureFolderRef: value },
+      after: { lectureFolderRef: value, setAside: cleared.count },
     });
-    return updated;
+
+    /*
+     * AND THE NEW FOLDER IS READ IMMEDIATELY, in the same act.
+     *
+     * Connecting a folder and then waiting up to an hour for the sweep is the
+     * behaviour that makes this look broken: the administrator points at the
+     * right folder, the page still shows nothing, and the natural conclusion
+     * is that the folder is wrong.
+     *
+     * A failure here does not fail the change — the folder IS connected and
+     * the hourly sweep will catch it — so the error is reported alongside
+     * rather than thrown over the top of a successful update.
+     */
+    let imported: Awaited<ReturnType<LectureSyncService["sync"]>> | null = null;
+    let importError: string | null = null;
+    if (value) {
+      try {
+        imported = await this.lectureSync.sync(sectionSubjectId);
+      } catch (err) {
+        importError = err instanceof Error ? err.message : "The new folder could not be read.";
+        this.logger.warn(
+          `Folder for section-subject ${sectionSubjectId} was connected but not imported: ${importError}`,
+        );
+      }
+    }
+
+    return {
+      ...updated,
+      /** How many recordings from the previous folder were put aside. */
+      cleared: cleared.count,
+      /** What the new folder yielded, or null when there is no new folder. */
+      imported,
+      ...(importError ? { importError } : {}),
+    };
   }
 
   async browseStorage(folderRef?: string) {
