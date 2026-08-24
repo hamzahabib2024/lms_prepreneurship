@@ -95,6 +95,21 @@ export const RESOURCES = [
   "registration_queue",
   "payment_slip",
   "payment",
+  /**
+   * A STUDENT SAYING THEY HAVE PAID. Deliberately not `payment`.
+   *
+   * `payment` is money the Institute has verified it holds, and §4.5 puts the
+   * whole resource behind step-up — reading included. A student must be able
+   * to CREATE a claim and watch it being reviewed, and neither of those is an
+   * act on the Institute's money: nothing a student does here reaches the
+   * ledger. Granting them `payment:create` instead would have handed them the
+   * one verb that means "this money has arrived".
+   *
+   * The office's half — verifying and rejecting — keeps the step-up that
+   * `payment` has, because verifying IS the act that moves money into the
+   * ledger.
+   */
+  "payment_submission",
   /** A course's PUBLISHED PRICE — what an applicant is quoted before they pay.
    *  Separate from `payment`, which is money that has actually moved. Setting
    *  the price and recording a receipt are different authorities: the first is
@@ -317,6 +332,23 @@ export const PERMISSION_MATRIX: Record<Resource, ResourcePolicy> = {
     super_admin: { actions: FULL, scope: "ALL", requiresStepUp: true },
     admin: { actions: FULL, scope: "ALL", requiresStepUp: true },
     student: { actions: ["read"], scope: "OWN" },
+  },
+  /**
+   * The claim, not the money — see the note beside the resource name.
+   *
+   * A STUDENT MAY CREATE, READ AND DELETE THEIR OWN. `delete` is withdrawing a
+   * submission they have not been reviewed on yet — a wrong figure, the wrong
+   * slip — and the service refuses it the moment an administrator has acted,
+   * so it can never erase a decision. NO `update`: editing a claim after
+   * submitting it is how a reviewed amount and a printed proof part company.
+   *
+   * `approve` is the office verifying one, and carries step-up for the same
+   * reason `payment` does: it is the act that puts money in the ledger.
+   */
+  payment_submission: {
+    super_admin: { actions: FULL, scope: "ALL", requiresStepUp: true },
+    admin: { actions: FULL, scope: "ALL", requiresStepUp: true },
+    student: { actions: ["create", "read", "delete"], scope: "OWN" },
   },
   /**
    * SETTING A PRICE IS NOT THE SAME AUTHORITY AS TAKING A PAYMENT.

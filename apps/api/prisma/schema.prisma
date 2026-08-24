@@ -84,11 +84,34 @@ enum RejectionReason {
   OTHER
 }
 
+/// How the money moved.
+///
+/// EASYPAISA AND JAZZCASH ARE HERE BECAUSE THEY ARE HOW PAKISTAN PAYS. A
+/// student photographing a mobile-wallet receipt had to file it as
+/// BANK_TRANSFER or OTHER, so the office could not tell a wallet transfer from
+/// a counter deposit without opening the proof — and "OTHER" on a receipt tells
+/// the person holding it nothing about the transaction they can look up.
 enum PaymentMethod {
   BANK_TRANSFER
   CASH_DEPOSIT
   CHEQUE
+  EASYPAISA
+  JAZZCASH
   OTHER
+}
+
+/// Where a student's CLAIM stands — see PaymentSubmission.
+///
+/// DELIBERATELY NOT THE SAME THING AS A Payment. A Payment is money the
+/// Institute has verified it holds; a submission is somebody saying they sent
+/// it. The two were one concept before this, which meant the only way a
+/// payment could exist was for an administrator to type it in, and a student
+/// who paid their second instalment had nowhere to say so.
+enum PaymentSubmissionStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  CANCELLED
 }
 
 enum DocumentType {
@@ -236,16 +259,17 @@ model User {
   updatedBy String?   @map("updated_by") @db.Uuid
   deletedAt DateTime? @map("deleted_at")
 
-  roles    UserRole[]
-  sessions UserSession[]
-  studentNotes StudentNote[]
+  roles                  UserRole[]
+  sessions               UserSession[]
+  studentNotes           StudentNote[]
   announcements          Announcement[]
   notifications          Notification[]
   notificationPreference NotificationPreference?
-  student  Student?
-  teacher  Teacher?
+  student                Student?
+  teacher                Teacher?
 
   discussionPosts DiscussionPost[]
+
   @@index([status])
   @@index([deletedAt])
   @@map("users")
@@ -315,26 +339,26 @@ model RegistrationRequest {
   trackingRef String             @unique @map("tracking_ref") @db.VarChar(20) // FR-REG-018
   status      RegistrationStatus @default(PENDING_REVIEW)
 
-  fullName        String   @map("full_name") @db.VarChar(200)
-  fatherName      String   @map("father_name") @db.VarChar(200)
-  dateOfBirth     DateTime @map("date_of_birth") @db.Date
+  fullName        String          @map("full_name") @db.VarChar(200)
+  fatherName      String          @map("father_name") @db.VarChar(200)
+  dateOfBirth     DateTime        @map("date_of_birth") @db.Date
   gender          Gender // drives section eligibility (FR-CRS-009)
-  nationalId      String   @map("national_id") @db.VarChar(20) // encrypted; masked in lists (SEC-PRV-005)
-  phone           String   @db.VarChar(20)
+  nationalId      String          @map("national_id") @db.VarChar(20) // encrypted; masked in lists (SEC-PRV-005)
+  phone           String          @db.VarChar(20)
   // FR-REG-003 — the WhatsApp-capable indicator. Carried on the application
   // itself because credentials are relayed over WhatsApp at approval
   // (FR-REG-042), so the reviewer needs to know before the account exists.
-  phoneIsWhatsapp Boolean  @default(true) @map("phone_is_whatsapp")
-  altPhone        String?  @map("alt_phone") @db.VarChar(20)
+  phoneIsWhatsapp Boolean         @default(true) @map("phone_is_whatsapp")
+  altPhone        String?         @map("alt_phone") @db.VarChar(20)
   email           String
-  address         String   @db.VarChar(500)
-  city            String   @db.VarChar(100)
+  address         String          @db.VarChar(500)
+  city            String          @db.VarChar(100)
   /// The level, from a fixed list, because this is what gets counted.
   /// Nullable only so applications submitted before it existed still read.
   educationLevel  EducationLevel? @map("education_level")
   /// The detail beside it — the subject, the board, the year.
-  qualification   String   @db.VarChar(120)
-  occupation      String?  @db.VarChar(120)
+  qualification   String          @db.VarChar(120)
+  occupation      String?         @db.VarChar(120)
 
   desiredProgrammeId String? @map("desired_programme_id") @db.Uuid
   desiredSectionId   String? @map("desired_section_id") @db.Uuid
@@ -402,6 +426,18 @@ model RegistrationDocument {
   /// An unattached row is claimed by the submission that names it, and only
   /// while it is still unattached (FR-REG-008).
   registrationRequestId String?      @map("registration_request_id") @db.Uuid
+  /// THE OTHER THING A SLIP CAN BELONG TO — a payment claimed by a student who
+  /// is already enrolled.
+  ///
+  /// The same table rather than a second one, because it is the same object:
+  /// a photograph of a bank or wallet receipt, validated by content, stored
+  /// under a key the client never sees, and streamed back to a reviewer. A
+  /// parallel `payment_proofs` table would mean two upload pipelines, two
+  /// scan-status columns and two chances for one of them to skip a check.
+  ///
+  /// Exactly one of the two parents is set. RESTRICT rather than CASCADE here:
+  /// a submission is never deleted, so neither is its evidence.
+  paymentSubmissionId   String?      @map("payment_submission_id") @db.Uuid
   documentType          DocumentType @default(PAYMENT_SLIP) @map("document_type")
 
   storageKey       String     @map("storage_key") @db.VarChar(500) // never a public URL (SEC-FIL-009)
@@ -414,8 +450,10 @@ model RegistrationDocument {
   createdAt DateTime @default(now()) @map("created_at")
 
   registrationRequest RegistrationRequest? @relation(fields: [registrationRequestId], references: [id], onDelete: Cascade)
+  paymentSubmission   PaymentSubmission?   @relation(fields: [paymentSubmissionId], references: [id], onDelete: Restrict)
 
   @@index([registrationRequestId])
+  @@index([paymentSubmissionId])
   @@index([contentHash])
   @@map("registration_documents")
 }
@@ -453,9 +491,104 @@ model Payment {
 
   student             Student              @relation(fields: [studentId], references: [id], onDelete: Restrict)
   registrationRequest RegistrationRequest? @relation(fields: [registrationRequestId], references: [id], onDelete: SetNull)
+  /// The claim this payment came from, when it came from one. Absent for
+  /// payments taken at the desk and typed in by an administrator.
+  submission          PaymentSubmission?
 
   @@index([studentId, paymentDate])
   @@map("payments")
+}
+
+/// A STUDENT SAYING THEY HAVE PAID — FR-PAY-021, and the missing half of the
+/// fee system.
+///
+/// WHAT WAS WRONG. A Payment row is verified money by construction:
+/// `verified_amount`, `verified_by` and `verified_at` are all NOT NULL, and the
+/// only two things that ever wrote one were an administrator approving an
+/// admission and an administrator typing at the fee screen. So a student who
+/// transferred their second instalment on a Friday evening had NOWHERE TO SAY
+/// SO. They photographed the slip, sent it to somebody's personal WhatsApp, and
+/// hoped. The System's record of it began whenever a human got round to typing
+/// it in, and the student's own screen went on saying they owed the money
+/// throughout.
+///
+/// SO A CLAIM IS ITS OWN ROW, and never becomes a Payment until somebody with
+/// authority has looked at the proof. That separation is the whole point:
+///
+///   `claimed_amount` is what the student says they sent. It is evidence, not
+///   money, and it is NEVER added to the ledger. Nothing here touches
+///   `Student.outstandingBalance`.
+///
+///   Verification CREATES a Payment, and that payment is what the ledger sees.
+///   The verified amount may differ from the claim — the office reads the slip,
+///   not the form — which is why it is recorded separately rather than copied.
+///
+/// IT IS NEVER DELETED, for the same reason a Payment is not. A rejected claim
+/// is the evidence that the Institute looked and said no, and a student who
+/// disputes that is entitled to find the record rather than an absence.
+///
+/// THE SNAPSHOT COLUMNS ARE NOT DENORMALISATION FOR SPEED. A receipt states
+/// what was true when the money changed hands. A student who transfers to
+/// another batch, or whose name is corrected, must not thereby alter a document
+/// the Institute has already issued — so the receipt reads these, not the live
+/// student record.
+model PaymentSubmission {
+  id String @id @default(uuid()) @db.Uuid
+
+  /// What the student quotes to the office. Allocated at submission from the
+  /// same atomic series as a receipt number, so two students submitting at once
+  /// cannot be handed one reference.
+  reference String @unique @db.VarChar(50)
+
+  studentId String                  @map("student_id") @db.Uuid
+  status    PaymentSubmissionStatus @default(PENDING)
+
+  /// THE CLAIM. Not money. See the note above.
+  claimedAmount Decimal       @map("claimed_amount") @db.Decimal(12, 2)
+  currency      String        @default("PKR") @db.Char(3)
+  paymentDate   DateTime      @map("payment_date") @db.Date
+  method        PaymentMethod
+  bankReference String?       @map("bank_reference") @db.VarChar(100)
+  studentNote   String?       @map("student_note") @db.Text
+
+  /// What the student was told they still owed at the moment they submitted.
+  /// Kept so a disagreement months later can be read as it stood, rather than
+  /// recomputed against a ledger that has moved on.
+  outstandingAtSubmission Decimal? @map("outstanding_at_submission") @db.Decimal(12, 2)
+
+  // ------------------------------------------------ snapshots (BR-DAT-02) --
+  studentNameAtSubmission    String  @map("student_name_at_submission") @db.VarChar(200)
+  registrationNoAtSubmission String  @map("registration_no_at_submission") @db.VarChar(50)
+  programmeAtSubmission      String? @map("programme_at_submission") @db.VarChar(200)
+  sectionAtSubmission        String? @map("section_at_submission") @db.VarChar(150)
+  rollNoAtSubmission         Int?    @map("roll_no_at_submission") @db.SmallInt
+
+  // ---------------------------------------------------------- the review --
+  reviewedBy String?   @map("reviewed_by") @db.Uuid
+  reviewedAt DateTime? @map("reviewed_at")
+  /// Why it was rejected, or a note beside a verification. SHOWN TO THE
+  /// STUDENT — this is not an internal remark, and a rejection with no reason
+  /// is an instruction to telephone the office.
+  reviewNote String?   @map("review_note") @db.Text
+
+  /// What the office actually verified, when it differs from the claim.
+  verifiedAmount Decimal? @map("verified_amount") @db.Decimal(12, 2)
+
+  /// The Payment this became. Null until verified, and permanent afterwards.
+  paymentId String? @unique @map("payment_id") @db.Uuid
+
+  submittedAt DateTime @default(now()) @map("submitted_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  student   Student                @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  payment   Payment?               @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  /// The proof. At least one is required to submit; the reviewer opens it.
+  documents RegistrationDocument[]
+
+  // The office's queue, oldest first — the order it must be worked in.
+  @@index([status, submittedAt])
+  @@index([studentId, submittedAt])
+  @@map("payment_submissions")
 }
 
 // =============================================== academic structure (8.3.3)
@@ -485,23 +618,26 @@ model Student {
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
 
-  user           User                 @relation(fields: [userId], references: [id], onDelete: Restrict)
-  currentSection Section?             @relation(fields: [currentSectionId], references: [id], onDelete: SetNull)
-  enrolments     Enrolment[]
-  payments       Payment[]
-  attendance      AttendanceRecord[]
-  watchProgress   WatchProgress[]
-  submissionFiles SubmissionFile[]
-  submissions     AssignmentSubmission[]
-  extensions      AssignmentExtension[]
-  quizAttempts    QuizAttempt[]
-  certificates    Certificate[]
+  user               User                   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  currentSection     Section?               @relation(fields: [currentSectionId], references: [id], onDelete: SetNull)
+  enrolments         Enrolment[]
+  payments           Payment[]
+  /// What they have SAID they paid. Kept apart from `payments`, which is what
+  /// the Institute has verified it holds.
+  paymentSubmissions PaymentSubmission[]
+  attendance         AttendanceRecord[]
+  watchProgress      WatchProgress[]
+  submissionFiles    SubmissionFile[]
+  submissions        AssignmentSubmission[]
+  extensions         AssignmentExtension[]
+  quizAttempts       QuizAttempt[]
+  certificates       Certificate[]
   attendanceWarnings AttendanceWarning[]
   /// Plural now: a student who takes a second course was admitted by a second
   /// request, and both point at the same record.
-  registrations   RegistrationRequest[]
-  feeCharges      FeeCharge[]
-  notes           StudentNote[]
+  registrations      RegistrationRequest[]
+  feeCharges         FeeCharge[]
+  notes              StudentNote[]
 
   // FR-REG-057: roll numbers are unique within a section and reusable after
   // withdrawal. Enforced as a partial unique index in raw SQL (live rows only).
@@ -582,12 +718,12 @@ model Programme {
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
 
-  sessions      AcademicSession[]
-  registrations RegistrationRequest[]
-  certificates  Certificate[]
-  feeStructures FeeStructure[]
+  sessions          AcademicSession[]
+  registrations     RegistrationRequest[]
+  certificates      Certificate[]
+  feeStructures     FeeStructure[]
   programmeSubjects ProgrammeSubject[]
-  thumbnail     MediaAsset?          @relation(fields: [thumbnailAssetId], references: [id], onDelete: SetNull)
+  thumbnail         MediaAsset?           @relation(fields: [thumbnailAssetId], references: [id], onDelete: SetNull)
 
   @@index([thumbnailAssetId])
   @@map("programmes")
@@ -670,11 +806,11 @@ model Section {
 }
 
 model Subject {
-  id           String  @id @default(uuid()) @db.Uuid
-  name         String  @db.VarChar(200)
-  code         String  @unique @db.VarChar(20)
-  description  String? @db.Text
-  credits      Int?    @db.SmallInt
+  id               String  @id @default(uuid()) @db.Uuid
+  name             String  @db.VarChar(200)
+  code             String  @unique @db.VarChar(20)
+  description      String? @db.Text
+  credits          Int?    @db.SmallInt
   /// An EXTERNAL picture, pasted as a URL. Kept because some subjects are
   /// illustrated from the Institute's own site, and dropping it would break
   /// those. `thumbnailAssetId` below is the uploaded one, and wins when set.
@@ -689,7 +825,7 @@ model Subject {
   sectionSubjects   SectionSubject[]
   programmeSubjects ProgrammeSubject[]
   modules           Module[]
-  thumbnail         MediaAsset?      @relation(fields: [thumbnailAssetId], references: [id], onDelete: SetNull)
+  thumbnail         MediaAsset?        @relation(fields: [thumbnailAssetId], references: [id], onDelete: SetNull)
 
   @@index([thumbnailAssetId])
   @@map("subjects")
@@ -724,17 +860,18 @@ model SectionSubject {
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
 
-  section     Section             @relation(fields: [sectionId], references: [id], onDelete: Restrict)
-  subject     Subject             @relation(fields: [subjectId], references: [id], onDelete: Restrict)
-  assignments   TeacherAssignment[]
-  enrolments    Enrolment[]
-  sessions      LiveSession[]
-  certificates  Certificate[]
-  announcements Announcement[]
+  section            Section             @relation(fields: [sectionId], references: [id], onDelete: Restrict)
+  subject            Subject             @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  assignments        TeacherAssignment[]
+  enrolments         Enrolment[]
+  sessions           LiveSession[]
+  certificates       Certificate[]
+  announcements      Announcement[]
   attendanceWarnings AttendanceWarning[]
   studentNotes       StudentNote[]
 
   discussionPosts DiscussionPost[]
+
   @@unique([sectionId, subjectId])
   @@index([sectionId])
   @@index([subjectId])
@@ -835,7 +972,7 @@ model Lesson {
   createdBy String?   @map("created_by") @db.Uuid
   deletedAt DateTime? @map("deleted_at")
 
-  module   Module            @relation(fields: [moduleId], references: [id], onDelete: Restrict)
+  module    Module            @relation(fields: [moduleId], references: [id], onDelete: Restrict)
   lectures  RecordedLecture[]
   sessions  LiveSession[]
   resources LessonResource[]
@@ -1181,8 +1318,8 @@ model Notification {
 
   createdAt DateTime @default(now()) @map("created_at")
 
-  recipient    User          @relation(fields: [recipientId], references: [id], onDelete: Cascade)
-  announcement Announcement? @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  recipient    User                   @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  announcement Announcement?          @relation(fields: [announcementId], references: [id], onDelete: Cascade)
   deliveries   NotificationDelivery[]
 
   /// The inbox query: this person's, newest first, unread first.
@@ -1256,11 +1393,11 @@ model AttendanceWarning {
   studentId        String @map("student_id") @db.Uuid
   sectionSubjectId String @map("section_subject_id") @db.Uuid
 
-  severity WarningSeverity
+  severity         WarningSeverity
   /// What the figure was when this level was reached — the evidence for the
   /// message that was sent.
-  percentage         Decimal @map("percentage") @db.Decimal(5, 2)
-  thresholdApplied   Decimal @map("threshold_applied") @db.Decimal(5, 2)
+  percentage       Decimal         @map("percentage") @db.Decimal(5, 2)
+  thresholdApplied Decimal         @map("threshold_applied") @db.Decimal(5, 2)
 
   raisedAt  DateTime  @default(now()) @map("raised_at")
   /// Set when the student climbs back above the threshold. A cleared row is
@@ -1442,7 +1579,7 @@ model SecurityEvent {
 /// Appendix E — every parameter is changeable through the UI without a
 /// deployment (ARC-002, FR-CFG-001).
 model Setting {
-  id String @id @default(uuid()) @db.Uuid
+  id    String @id @default(uuid()) @db.Uuid
   /// NOT globally unique. A key exists once per SCOPE — one institute-wide row
   /// and any number of programme, section or subject overrides beside it. It
   /// was declared @unique alongside the scope columns and the compound unique
@@ -1494,9 +1631,9 @@ model FeeCharge {
   waivedBy     String?   @map("waived_by") @db.Uuid
   waiverReason String?   @map("waiver_reason") @db.Text
 
-  createdBy String   @map("created_by") @db.Uuid
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  createdBy String    @map("created_by") @db.Uuid
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
 
   student         Student          @relation(fields: [studentId], references: [id], onDelete: Restrict)
@@ -1781,7 +1918,7 @@ model SubmissionFile {
   /// this caller attach this file?", and attaching by id alone would let one
   /// student pull another's work into their own submission — which would also
   /// REMOVE it from the victim's, since a file has one parent.
-  studentId String @map("student_id") @db.Uuid
+  studentId    String @map("student_id") @db.Uuid
   /// What it was uploaded FOR. Stops a file uploaded against one assignment
   /// being attached to a different one.
   assignmentId String @map("assignment_id") @db.Uuid
@@ -2217,9 +2354,9 @@ model MediaAsset {
   storageKey       String @map("storage_key") @db.VarChar(500)
   originalFilename String @map("original_filename") @db.VarChar(255)
   /// Determined by CONTENT, not by the extension (SEC-FIL-003).
-  contentType String @map("content_type") @db.VarChar(100)
-  sizeBytes   BigInt @map("size_bytes")
-  contentHash String @unique @map("content_hash") @db.VarChar(64)
+  contentType      String @map("content_type") @db.VarChar(100)
+  sizeBytes        BigInt @map("size_bytes")
+  contentHash      String @unique @map("content_hash") @db.VarChar(64)
 
   createdBy String    @map("created_by") @db.Uuid
   createdAt DateTime  @default(now()) @map("created_at")
@@ -2253,8 +2390,8 @@ model MediaAsset {
 /// than rewritten, because the old numbers are what somebody was told and what
 /// their slip will be checked against. `supersededAt` records that.
 model FeeStructure {
-  id          String  @id @default(uuid()) @db.Uuid
-  programmeId String  @map("programme_id") @db.Uuid
+  id                String  @id @default(uuid()) @db.Uuid
+  programmeId       String  @map("programme_id") @db.Uuid
   /// Null = the programme's standing structure, used by any session without
   /// one of its own.
   academicSessionId String? @map("academic_session_id") @db.Uuid
@@ -2287,8 +2424,8 @@ model FeeStructure {
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
 
-  programme       Programme        @relation(fields: [programmeId], references: [id], onDelete: Restrict)
-  academicSession AcademicSession? @relation(fields: [academicSessionId], references: [id], onDelete: SetNull)
+  programme       Programme          @relation(fields: [programmeId], references: [id], onDelete: Restrict)
+  academicSession AcademicSession?   @relation(fields: [academicSessionId], references: [id], onDelete: SetNull)
   lines           FeeStructureLine[]
 
   @@index([programmeId, status])

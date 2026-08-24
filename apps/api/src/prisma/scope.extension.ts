@@ -295,14 +295,38 @@ const MODEL_POLICIES: Record<string, PolicyFn> = {
   RegistrationDocument: (a) => {
     if (isAdmin(a)) return null;
     if (isStudent(a)) {
+      // EITHER PARENT. A slip now belongs to an application OR to a payment
+      // the student claimed after they were enrolled, and a student who
+      // uploaded proof of their second instalment must be able to see the file
+      // they just sent. Testing only the application path made their own
+      // upload invisible to them the moment it was attached.
       return a.studentId
-        ? { registrationRequest: { createdStudentId: a.studentId } }
+        ? {
+            OR: [
+              { registrationRequest: { createdStudentId: a.studentId } },
+              { paymentSubmission: { studentId: a.studentId } },
+            ],
+          }
         : DENY_ALL;
     }
     return DENY_ALL;
   },
 
   Payment: (a) => {
+    if (isAdmin(a)) return null;
+    if (isStudent(a)) return a.studentId ? { studentId: a.studentId } : DENY_ALL;
+    return DENY_ALL; // teachers: never
+  },
+
+  /**
+   * A student's own claim, and nobody else's — the same policy as Payment.
+   *
+   * A TEACHER HAS NO BRANCH HERE and must never get one. §4.7 and BR-REG-04
+   * keep a teacher out of a student's finances entirely, and a submission
+   * carries the same bank reference and the same photographed slip that a
+   * payment does.
+   */
+  PaymentSubmission: (a) => {
     if (isAdmin(a)) return null;
     if (isStudent(a)) return a.studentId ? { studentId: a.studentId } : DENY_ALL;
     return DENY_ALL; // teachers: never

@@ -4425,3 +4425,307 @@ details > summary:hover { text-decoration: underline; }
   .cert-pager { flex-direction: column; align-items: stretch; }
   .certificate-actions .btn { flex: 1 1 auto; justify-content: center; }
 }
+
+/* ---------------------------------------------------------------------------
+   FEES & PAYMENTS — FR-PAY-021, FR-PAY-039..042.
+
+   TWO REGISTERS IN ONE FILE, and keeping them apart is the whole point.
+
+   The SCREENS (fee summary, submission form, verification queue) are dashboard
+   work: cards, tinted tiles, pills, generous tap targets, a layout that folds
+   onto a phone — because the payment screenshot is on the phone, and that is
+   where a student will be standing when they submit it.
+
+   The RECEIPT is a document. It is set in a narrow measure with fixed field
+   rows, a rule under the masthead, one figure larger than everything else and
+   a signature block, and it is styled so that the printed sheet — not the
+   screen — is the thing that looks right. Anything that reads as "app" on that
+   page is a mistake there, however good it looks elsewhere.
+   --------------------------------------------------------------------------- */
+
+/* ------------------------------------------------------- the four figures --
+   The tile a student opens this section to read. "Awaiting checking" is
+   deliberately NOT coloured like money — it is the one figure on the screen
+   that is evidence rather than a balance, and a green tile is how a student
+   comes to believe a screenshot settled their fee. */
+/* The panel itself. Nothing but rhythm — the tiles inside carry the meaning,
+   and a second border around them would fence the figures off from the
+   sentence that explains them. */
+.fee-standing { padding-bottom: 1.1rem; }
+.fee-standing-head {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  gap: 1rem; flex-wrap: wrap;
+}
+.fee-standing-head h2 { margin-bottom: .25rem; }
+.fee-headline { margin: 0; color: var(--ink-2); max-width: 46rem; }
+
+.fee-figures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: .75rem;
+  margin: 1.1rem 0 0;
+}
+.fee-figure {
+  display: flex; flex-direction: column; gap: .15rem;
+  padding: .8rem .9rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.fee-figure-label {
+  font-size: .78rem; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--muted); font-weight: 600;
+}
+.fee-figure-value {
+  font-size: 1.5rem; line-height: 1.15;
+  font-variant-numeric: tabular-nums;   /* figures that line up down a column */
+  color: var(--ink);
+}
+.fee-figure-note { font-size: .78rem; color: var(--muted); }
+.fee-figure.is-ok { border-color: color-mix(in srgb, var(--ok) 35%, var(--line)); }
+.fee-figure.is-ok .fee-figure-value { color: var(--ok); }
+.fee-figure.is-due { border-color: color-mix(in srgb, var(--warn) 40%, var(--line)); }
+.fee-figure.is-due .fee-figure-value { color: var(--warn); }
+/* A dashed edge, not a fill: "waiting" is a provisional state and reads as one. */
+.fee-figure.is-pending { border-style: dashed; border-color: var(--muted); }
+
+.fee-standing-action {
+  display: flex; align-items: center; gap: .75rem; flex-wrap: wrap;
+  margin-top: 1.1rem; padding-top: 1rem; border-top: 1px solid var(--line);
+}
+
+/* The ledger, folded away. Present in full, second in prominence. */
+.fee-ledger > summary {
+  cursor: pointer; display: flex; gap: .75rem; align-items: baseline;
+  flex-wrap: wrap; font-weight: 600; color: var(--ink);
+}
+.fee-ledger > summary::marker { color: var(--muted); }
+.fee-ledger[open] > summary { margin-bottom: .75rem; }
+
+/* ------------------------------------------------------ payment history ----
+   One markup, two layouts: a row on a desk, a card on a phone. */
+.paylist { list-style: none; margin: 1rem 0 0; padding: 0; display: grid; gap: .75rem; }
+.payrow {
+  border: 1px solid var(--line); border-radius: var(--radius);
+  padding: .85rem 1rem; background: var(--surface);
+}
+.payrow-main {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  gap: 1rem; flex-wrap: wrap;
+}
+.payrow-amount { display: flex; flex-direction: column; }
+.payrow-amount strong { font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+/* When the office verified a different figure, the claim is still shown. */
+.payrow-claimed { font-size: .78rem; color: var(--muted); }
+.payrow-meta { display: flex; flex-direction: column; align-items: flex-end; gap: .2rem; text-align: right; }
+.payrow-note { margin: .6rem 0 0; }
+.payrow-actions { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; margin-top: .7rem; }
+.payrow-proof { flex: 1 1 100%; margin-top: .6rem; }
+
+/* ---------------------------------------------------------- field blocks --
+   Label above value on a phone, two columns on a desk. Used by the form, the
+   review panel and the confirmation. */
+.paydetails { margin: .9rem 0 0; display: grid; gap: .55rem; }
+.paydetails > div { display: grid; grid-template-columns: 12rem 1fr; gap: 1rem; align-items: baseline; }
+.paydetails dt { color: var(--muted); font-size: .875rem; }
+.paydetails dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+
+/* The arithmetic, as an account rather than a sentence. */
+.paycalc { margin: .9rem 0 0; display: grid; gap: .4rem; max-width: 30rem; }
+.paycalc > div { display: flex; justify-content: space-between; gap: 1rem; align-items: baseline; }
+.paycalc dt { color: var(--ink-2); }
+.paycalc dd { margin: 0; font-variant-numeric: tabular-nums; }
+.paycalc-total {
+  border-top: 2px solid var(--ink); margin-top: .35rem; padding-top: .45rem;
+  font-weight: 700; font-size: 1.05rem;
+}
+/* Set aside from the sum, because a pending claim is not in it. */
+.paycalc-aside { color: var(--muted); font-style: italic; }
+.paycalc-aside dt, .paycalc-aside dd { color: var(--muted); font-weight: 400; }
+
+/* --------------------------------------------------------- amount entry ----
+   The currency lives INSIDE the control. A student typing a figure must never
+   have to work out which currency the box is in. */
+.amount-input {
+  display: flex; align-items: stretch;
+  border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--surface); overflow: hidden;
+  max-width: 22rem;
+}
+.amount-input:focus-within {
+  border-color: var(--brand-600);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-600) 18%, transparent);
+}
+.amount-currency {
+  display: flex; align-items: center; padding: 0 .8rem;
+  background: var(--surface-2); color: var(--ink-2);
+  font-weight: 700; border-right: 1px solid var(--line);
+}
+.field .amount-input input {
+  border: none; border-radius: 0; box-shadow: none; background: transparent;
+  font-size: 1.35rem; font-variant-numeric: tabular-nums; font-weight: 600;
+  min-height: 48px;
+}
+.field .amount-input input:focus { box-shadow: none; }
+
+/* --------------------------------------------------------- proof upload ----
+   Drag and drop on a desk, the camera roll on a phone, one handler behind
+   both. The target is deliberately large: most of these are one-handed taps. */
+.dropzone {
+  margin-top: .9rem; padding: 1.6rem 1rem; text-align: center;
+  border: 2px dashed var(--line); border-radius: var(--radius);
+  background: var(--surface-2);
+  transition: border-color .15s var(--ease), background .15s var(--ease);
+}
+.dropzone.is-over {
+  border-color: var(--brand-600);
+  background: color-mix(in srgb, var(--brand-600) 8%, var(--surface));
+}
+.dropzone p { margin: .4rem 0 0; }
+.dropzone-icon { width: 26px; height: 26px; color: var(--muted); }
+
+.proofgrid {
+  list-style: none; margin: .9rem 0 0; padding: 0;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr)); gap: .75rem;
+}
+.proofitem { border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: var(--surface); }
+/* THE PREVIEW IS THE CHECK. A student who attached the wrong screenshot finds
+   out here rather than from a rejection three days later. */
+.proofitem img { width: 100%; height: 7.5rem; object-fit: cover; display: block; background: var(--surface-2); }
+.proofitem-pdf {
+  height: 7.5rem; display: flex; flex-direction: column; gap: .3rem;
+  align-items: center; justify-content: center; background: var(--surface-2); color: var(--muted);
+}
+.proofitem-pdf svg { width: 26px; height: 26px; }
+.proofitem-foot { display: flex; align-items: center; justify-content: space-between; gap: .3rem; padding: .35rem .5rem; }
+.proofitem-foot span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ------------------------------------------------------- confirmations -----
+   Not a toast. Somebody who has just told the Institute they paid 25,000
+   rupees is owed a page, not a strip that disappears in four seconds. */
+.payconfirm { text-align: left; }
+.payconfirm-mark {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 44px; height: 44px; border-radius: 50%;
+  background: var(--ok-bg); color: var(--ok); margin-bottom: .5rem;
+}
+.payconfirm-mark svg { width: 24px; height: 24px; }
+
+.checklist { margin: .8rem 0 0; padding-left: 1.1rem; display: grid; gap: .35rem; }
+.checklist li { color: var(--ink-2); }
+
+.form-actions { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin-top: 1.1rem; }
+
+/* Where to pay. An account number copied by hand is how money reaches the
+   wrong account, so the value is monospaced and has a copy button beside it. */
+.paybank-value { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: .02em; margin-right: .5rem; }
+.paybank dd { display: flex; align-items: center; gap: .25rem; flex-wrap: wrap; }
+
+/* A negative action, distinguished by more than position. Rejecting a payment
+   and verifying one sit side by side, and they must not look alike. */
+.btn-danger { border-color: color-mix(in srgb, var(--error) 45%, var(--line)); color: var(--error); }
+.btn-danger:hover:not(:disabled) { background: var(--error-bg); border-color: var(--error); }
+
+/* --------------------------------------------------- verification queue ---- */
+.payfilters {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: .75rem; align-items: end; margin-bottom: 1rem;
+}
+.payfilters .field { margin-bottom: 0; }
+/* Search is the field people actually use; it gets the room. */
+.payfilters .field:first-child { grid-column: span 2; min-width: 14rem; }
+
+.payreview { width: min(52rem, 100%); max-height: 90vh; overflow-y: auto; }
+.payreview-section { padding: 1rem 0; border-top: 1px solid var(--line); }
+.payreview-section:first-of-type { border-top: none; padding-top: .5rem; }
+.payreview-actions {
+  position: sticky; bottom: 0; background: var(--surface);
+  padding: .9rem 0 .2rem; border-top: 1px solid var(--line);
+}
+.payreview-confirm {
+  margin-top: 1rem; padding: 1rem;
+  border: 1px solid color-mix(in srgb, var(--brand-600) 35%, var(--line));
+  border-radius: var(--radius); background: var(--surface-2);
+}
+.payreview-confirm h3 { margin: 0 0 .35rem; }
+
+/* --------------------------------------------------------- the receipt -----
+   From here down the register changes: this is a document. */
+.receipt-toolbar { margin-bottom: 1rem; }
+.receipt { max-width: 48rem; }
+
+.receipt-issuer { display: flex; gap: .9rem; align-items: flex-start; }
+.receipt-logo { width: 52px; height: 52px; object-fit: contain; }
+.receipt-head { border-bottom: none; padding-bottom: .35rem; align-items: flex-start; }
+.receipt-head h1 { font-size: 1.35rem; letter-spacing: -.01em; }
+.receipt-campus { margin: .1rem 0 0; color: var(--ink-2); font-size: .9rem; }
+.receipt-contact { margin: .15rem 0 0; color: var(--muted); font-size: .78rem; }
+
+.receipt-doctype {
+  margin: 0; font-size: .72rem; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--muted); font-weight: 700;
+}
+.receipt-number {
+  margin: .1rem 0 0; font-size: 1.15rem; font-weight: 700;
+  font-variant-numeric: tabular-nums; letter-spacing: .02em;
+}
+.receipt-issued { margin: .1rem 0 0; font-size: .78rem; color: var(--muted); }
+
+/* The rule under the masthead — the line that makes it a letterhead. */
+.receipt-rule { height: 3px; background: var(--ink); margin: .3rem 0 1.25rem; }
+.receipt.is-reversed .receipt-rule { background: var(--error); }
+
+.receipt-block { margin: 1.1rem 0; }
+.receipt-block-title {
+  margin: 0 0 .4rem; font-size: .72rem; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--muted); font-weight: 700;
+}
+.receipt-block .receipt-fields { margin: 0; gap: .35rem; }
+.receipt-fields > div { grid-template-columns: 11rem 1fr; }
+
+.receipt-amount { margin-top: 1.25rem; }
+.receipt-amount strong { font-size: 1.5rem; }
+
+/* Four lines answering "so what do I still owe?" */
+.receipt-ledger { width: 100%; max-width: 26rem; border-collapse: collapse; }
+.receipt-ledger th { text-align: left; font-weight: 400; color: var(--ink-2); padding: .25rem 0; }
+.receipt-ledger td { text-align: right; font-variant-numeric: tabular-nums; padding: .25rem 0; }
+.receipt-ledger-total th, .receipt-ledger-total td {
+  border-top: 1px solid var(--ink); padding-top: .4rem; font-weight: 700;
+}
+
+.receipt-foot { align-items: flex-end; }
+.receipt-verification { min-width: 12rem; }
+.receipt-verifier { margin: 0; font-weight: 600; }
+.receipt-qr { text-align: center; }
+.receipt-qr svg { border: 1px solid var(--line); }
+.receipt-note { margin: 1.5rem 0 0; padding-top: .6rem; border-top: 1px solid var(--line); font-size: .75rem; color: var(--muted); }
+
+@media print {
+  /* The toolbar, and anything else that is not the document. */
+  .receipt-toolbar { display: none !important; }
+  .receipt-rule { background: #000 !important; }
+  .receipt-ledger-total th, .receipt-ledger-total td { border-top-color: #000 !important; }
+  .receipt-note { border-top-color: #999 !important; color: #444 !important; }
+  .receipt-doctype, .receipt-issued, .receipt-contact, .receipt-block-title { color: #444 !important; }
+  .receipt-qr svg { border-color: #999 !important; }
+  /* The emblem is the one image on the sheet and it must survive a printer
+     that strips backgrounds. */
+  .receipt-logo { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+
+@media (max-width: 720px) {
+  /* Label above value: two columns at this width leaves four characters for
+     the value, and the value is the part that matters. */
+  .paydetails > div, .receipt-fields > div { grid-template-columns: 1fr; gap: .1rem; }
+  .payrow-meta { align-items: flex-start; text-align: left; }
+  .payrow-main { gap: .5rem; }
+  .payfilters .field:first-child { grid-column: span 1; }
+  .receipt-head { flex-direction: column; }
+  .receipt-no { text-align: left; }
+  .receipt-foot { flex-direction: column; align-items: flex-start; gap: 1.25rem; }
+  .receipt-sign { min-width: 100%; }
+  /* A phone submitting a payment: the primary action spans the screen rather
+     than sitting in a row with two others. */
+  .form-actions .btn { flex: 1 1 auto; justify-content: center; }
+}

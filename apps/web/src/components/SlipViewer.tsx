@@ -14,9 +14,17 @@ import { ApiError, api } from "../api/client";
  * send no credentials and render a broken image. The bytes come through the
  * api client and become an object URL, which is also what keeps the slip out
  * of the browser's cache and history.
+ *
+ * `ProofFile` BELOW IS EXPORTED, and that is the whole reason this file is
+ * worth reading twice. A student's payment proof is the same object as an
+ * applicant's admission slip — a photograph of a bank receipt, behind a bearer
+ * token, at a different address — so the fee screens render it with this
+ * component rather than a second copy of the object-URL lifecycle. Getting
+ * that lifecycle wrong does not fail visibly; it leaks a file's worth of
+ * memory per slip, and a clerk works through fifty in a sitting.
  */
 
-interface SlipDocument {
+export interface SlipDocument {
   id: string;
   documentType: string;
   originalFilename: string;
@@ -73,20 +81,40 @@ export function SlipViewer({ requestId }: { requestId: string }) {
         Payment {docs.length === 1 ? "slip" : "slips"}
       </h3>
       {docs.map((d) => (
-        <Slip key={d.id} requestId={requestId} doc={d} />
+        <ProofFile
+          key={d.id}
+          path={`/registration-requests/${requestId}/documents/${d.id}`}
+          doc={d}
+        />
       ))}
     </>
   );
 }
 
-function Slip({ requestId, doc }: { requestId: string; doc: SlipDocument }) {
+/**
+ * One photographed receipt, fetched with the session and shown.
+ *
+ * TAKES A PATH RATHER THAN AN ID because the two callers reach the same kind
+ * of object through different doors — an application's slip is scoped by the
+ * application, a payment proof by the submission — and the component has no
+ * business knowing which. What it does know is the part that is easy to get
+ * wrong: authenticate, make an object URL, and revoke it on unmount.
+ */
+export function ProofFile({
+  path,
+  doc,
+}: {
+  path: string;
+  doc: Pick<SlipDocument, "originalFilename" | "contentType"> &
+    Partial<Pick<SlipDocument, "sizeBytes" | "scanStatus">>;
+}) {
   const [url, setUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     let objectUrl: string | null = null;
     api
-      .download(`/registration-requests/${requestId}/documents/${doc.id}`)
+      .download(path)
       .then((blob) => {
         objectUrl = URL.createObjectURL(blob);
         setUrl(objectUrl);
@@ -99,7 +127,7 @@ function Slip({ requestId, doc }: { requestId: string; doc: SlipDocument }) {
     return () => {
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [requestId, doc.id]);
+  }, [path]);
 
   const isPdf = doc.contentType === "application/pdf";
 
@@ -107,12 +135,15 @@ function Slip({ requestId, doc }: { requestId: string; doc: SlipDocument }) {
     <div className="slip">
       <div className="slip-meta">
         <span className="muted small">
-          {doc.originalFilename} · {Math.max(1, Math.round(doc.sizeBytes / 1024))} KB
+          {doc.originalFilename}
+          {doc.sizeBytes === undefined
+            ? ""
+            : ` · ${Math.max(1, Math.round(doc.sizeBytes / 1024))} KB`}
         </span>
         {/* SEC-FIL-004 — said plainly. No scanner is wired up yet, and a
             reviewer opening an attachment from a stranger should know that
             rather than assume the System checked it. */}
-        {doc.scanStatus !== "CLEAN" && (
+        {doc.scanStatus !== undefined && doc.scanStatus !== "CLEAN" && (
           <span className="pill pill-warn">Not virus-scanned</span>
         )}
       </div>
@@ -127,7 +158,7 @@ function Slip({ requestId, doc }: { requestId: string; doc: SlipDocument }) {
       ) : !url ? (
         <div className="skeleton" style={{ height: 180 }} aria-hidden="true" />
       ) : isPdf ? (
-        <object data={url} type="application/pdf" className="slip-frame" aria-label="Payment slip">
+        <object data={url} type="application/pdf" className="slip-frame" aria-label="Payment receipt">
           <p className="small">
             <a href={url} target="_blank" rel="noreferrer">
               Open the slip
@@ -139,7 +170,7 @@ function Slip({ requestId, doc }: { requestId: string; doc: SlipDocument }) {
           {/* Opening full size in a tab, because a bank reference printed
               small on a phone photograph is exactly what has to be read. */}
           <a href={url} target="_blank" rel="noreferrer" title="Open full size">
-            <img className="slip-image" src={url} alt={`Payment slip: ${doc.originalFilename}`} />
+            <img className="slip-image" src={url} alt={`Payment receipt: ${doc.originalFilename}`} />
           </a>
         </>
       )}

@@ -169,7 +169,10 @@ states as a sweep across all pages after the role work.
 |---|---|
 | **FeesPage** | Green page colour, ledger-grid texture, tables with lining figures |
 | **FeesPanels** | Shares the fees treatment |
-| **ReceiptPage** | **All decoration removed for print.** The page wash was fixed to the viewport and would have repeated on every sheet |
+| **FeesSubmissions** | The four figures as bordered tiles, not filled cards. "Awaiting checking" is dashed rather than tinted: it is the one figure on the screen that is evidence and not money, and a green tile is how a student comes to believe a screenshot settled their fee |
+| **PaymentSubmitPage** | Currency set inside the amount control, large numeric entry, a drag-and-drop target sized for a one-handed tap. Most of these arrive from the phone the screenshot is already on |
+| **PaymentVerificationPage** | Queue treatment: KPI band, filter grid, and a review panel whose decision buttons stay pinned while the reviewer scrolls the proof |
+| **ReceiptPage** | **All decoration removed for print.** The page wash was fixed to the viewport and would have repeated on every sheet. Rebuilt as a document rather than a card: letterhead rule, fixed field rows, the figure larger than anything else, a four-line account, a signature block and a verification QR |
 
 ### Admissions and people
 

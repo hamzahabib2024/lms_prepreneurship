@@ -28,6 +28,8 @@ import { UsersPage } from "./pages/UsersPage";
 import { AuditPage } from "./pages/AuditPage";
 import { RubricsPage } from "./pages/RubricsPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { PaymentSubmitPage } from "./pages/PaymentSubmitPage";
+import { PaymentVerificationPage } from "./pages/PaymentVerificationPage";
 import { SecurityPage } from "./pages/SecurityPage";
 import { BulkPage } from "./pages/BulkPage";
 import { CohortImportPage } from "./pages/CohortImportPage";
@@ -552,6 +554,31 @@ export function App() {
             path="/fees"
             element={
               hasRole("super_admin", "admin", "student") ? <FeesPage /> : <Navigate to="/" replace />
+            }
+          />
+          {/* STUDENTS ALONE, and that is not a permission decision — an
+              administrator holds `payment_submission:create` too. It is that
+              this form submits AS THE PERSON FILLING IT IN: the service takes
+              the student from the session, so a clerk who opened it would be
+              claiming a payment against their own record. An administrator
+              recording money over the counter uses "Record a payment" on the
+              student's statement, which is a different act with a different
+              permission. */}
+          <Route
+            path="/fees/submit"
+            element={hasRole("student") ? <PaymentSubmitPage /> : <Navigate to="/fees" replace />}
+          />
+          {/* The fee desk. `payment_submission:approve` is Super Admin and
+              Admin at step-up; the server asks for the password, and this test
+              only decides whether the door is offered (UI-002). */}
+          <Route
+            path="/fees/verification"
+            element={
+              hasRole("super_admin", "admin") ? (
+                <PaymentVerificationPage />
+              ) : (
+                <Navigate to="/fees" replace />
+              )
             }
           />
           {/* Admin too: bulk_operation reaches an Admin holding the

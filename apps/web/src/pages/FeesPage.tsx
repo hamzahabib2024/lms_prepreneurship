@@ -1,9 +1,17 @@
 import { useCallback, useEffect, useState } from "react";
-import { EmptyState, SkeletonTable } from "../components/Ui";
+import { Link } from "react-router-dom";
+import { EmptyState, SkeletonCards, SkeletonTable } from "../components/Ui";
 import { ApiError, api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
+import { Icon } from "../components/Icon";
 import { StepUpPrompt, needsStepUp } from "../components/StepUpPrompt";
 import { PlanBuilder, RecordPayment, ReverseButton } from "./FeesPanels";
+import {
+  FeeSummaryPanel,
+  SubmissionHistory,
+  type FeeSummary,
+  type Submission,
+} from "./FeesSubmissions";
 
 /**
  * Fees — SRS §13.11, FR-PAY-020..032.
@@ -12,6 +20,22 @@ import { PlanBuilder, RecordPayment, ReverseButton } from "./FeesPanels";
  * staff see who owes what and can open any of them. The server decides what
  * each may read, so the page asks for what it is entitled to rather than
  * branching on a role it could be wrong about.
+ *
+ * WHAT A STUDENT SEES, IN THIS ORDER, and the order is the design:
+ *
+ *   1. the four figures and a sentence — how much, how much paid, how much
+ *      waiting, how much left
+ *   2. one button, to submit a payment
+ *   3. their own payments, each with its status and its receipt
+ *   4. the full ledger, folded away
+ *
+ * The ledger used to be first, and it is the right document for a dispute and
+ * the wrong one for the question actually being asked. A student opening this
+ * page wants to know what they owe and whether the screenshot they sent last
+ * Tuesday has been looked at; a chronological list of charges and credits
+ * answers neither without arithmetic. It is still here, in full, because a
+ * student holding a receipt for a payment that was later reversed must be able
+ * to find both — but it is now the thing you open, not the thing you land on.
  *
  * A STATEMENT IS A LEDGER, NOT A TOTAL. Every event has a line — including a
  * waiver and including a reversed payment — because a student holding a receipt
@@ -93,6 +117,164 @@ const money = (n: number) =>
 export function FeesPage() {
   const { hasRole } = useAuth();
   const isStaff = hasRole("super_admin", "admin");
+  // A student's own screen is a different shape from the one staff work in, so
+  // it is a different component. The two share the fee figures and the payment
+  // history — from FeesSubmissions.tsx, computed once on the server — and
+  // nothing else, which is what stops "helpful" staff controls appearing on a
+  // student's page because a flag was threaded one level too far.
+  if (!isStaff) return <StudentFees />;
+  return <StaffFees />;
+}
+
+/**
+ * THE STUDENT'S FEES & PAYMENTS PAGE.
+ *
+ * THREE REQUESTS, IN PARALLEL, and the page draws as soon as the first two
+ * land. The statement is the slowest and the least urgent — it is behind a
+ * fold — so waiting for it before showing the balance would be waiting for the
+ * least important thing on the screen.
+ */
+function StudentFees() {
+  const [summary, setSummary] = useState<FeeSummary | null>(null);
+  const [submissions, setSubmissions] = useState<Submission[] | null>(null);
+  const [statement, setStatement] = useState<Statement | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    api
+      .get<{ summary: FeeSummary }>("/fees/submissions/context")
+      .then((c) => setSummary(c.summary))
+      .catch((e) =>
+        setError(e instanceof ApiError ? e.message : "Your fee summary could not be loaded."),
+      );
+
+    api
+      .get<Submission[]>("/fees/submissions/mine")
+      .then(setSubmissions)
+      .catch(() => setSubmissions([]));
+
+    // Best effort. A student with no statement yet still gets the summary and
+    // the button, which is the whole point of the screen.
+    api
+      .get<Statement>("/me/fees")
+      .then(setStatement)
+      .catch(() => setStatement(null));
+  }, []);
+
+  useEffect(load, [load]);
+
+  const withdraw = async (id: string) => {
+    setError(null);
+    try {
+      const r = await api.del<{ message: string }>(`/fees/submissions/${id}`);
+      setNotice(r.message);
+      load();
+    } catch (e) {
+      setError(
+        e instanceof ApiError ? e.message : "That submission could not be withdrawn.",
+      );
+    }
+  };
+
+  return (
+    <>
+      <header className="page-head">
+        <div>
+          <h1>Fees &amp; payments</h1>
+          <p className="muted small">
+            What you owe, what you have paid, and every receipt the Institute has issued you.
+          </p>
+        </div>
+      </header>
+
+      {error && (
+        <div className="alert alert-error" role="alert">
+          <p>{error}</p>
+        </div>
+      )}
+      {notice && (
+        <div className="alert alert-ok" role="status">
+          <p>{notice}</p>
+        </div>
+      )}
+
+      {!summary ? (
+        <SkeletonCards count={2} />
+      ) : (
+        <FeeSummaryPanel
+          summary={summary}
+          action={
+            <>
+              <Link className="btn btn-primary" to="/fees/submit">
+                <Icon name="money" /> Submit a fee payment
+              </Link>
+              <span className="muted small">
+                Already paid into the Institute's account? Tell us here and attach the receipt.
+              </span>
+            </>
+          }
+        />
+      )}
+
+      {submissions && (
+        <SubmissionHistory
+          submissions={submissions}
+          audience="student"
+          onCancel={(id) => void withdraw(id)}
+        />
+      )}
+
+      {/*
+        THE LEDGER, FOLDED AWAY. Every charge, waiver, payment and reversal in
+        the order it happened — the document a dispute is settled with, and the
+        one nobody needs on an ordinary visit.
+      */}
+      {statement && statement.lines.length > 0 && (
+        <details className="card fee-ledger">
+          <summary>
+            <span>Full statement</span>
+            <span className="muted small">
+              Every charge and payment, in the order they happened
+            </span>
+          </summary>
+          <p className="muted small">{statement.note}</p>
+          <div className="table-scroll">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>What</th>
+                  <th className="num">Charged</th>
+                  <th className="num">Paid</th>
+                  <th className="num">Balance</th>
+                </tr>
+              </thead>
+              <tbody>
+                {statement.lines.map((l, i) => (
+                  <tr key={`${l.date}-${i}`}>
+                    <td className="small">{new Date(l.date).toLocaleDateString()}</td>
+                    <td>
+                      <span className={l.kind === "REVERSAL" ? "warn" : undefined}>
+                        {l.description}
+                      </span>
+                    </td>
+                    <td className="num">{l.debit === null ? "" : money(l.debit)}</td>
+                    <td className="num">{l.credit === null ? "" : money(l.credit)}</td>
+                    <td className="num">{money(l.balance)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      )}
+    </>
+  );
+}
+
+/** The office's view: who owes what, and a way into any one of them. */
+function StaffFees() {
   const [debtors, setDebtors] = useState<Debtor[] | null>(null);
   const [open, setOpen] = useState<Statement | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -104,7 +286,6 @@ export function FeesPage() {
   const [locked, setLocked] = useState(false);
 
   const loadDebtors = useCallback(() => {
-    if (!isStaff) return;
     api
       .get<Debtor[]>("/fees/debtors")
       .then((d) => {
@@ -115,7 +296,7 @@ export function FeesPage() {
         if (needsStepUp(e)) setLocked(true);
         else setError(e instanceof ApiError ? e.message : "Could not load the list.");
       });
-  }, [isStaff]);
+  }, []);
 
   const openStatement = useCallback((studentId?: string) => {
     const path = studentId ? `/students/${studentId}/fees` : "/me/fees";
@@ -132,9 +313,8 @@ export function FeesPage() {
   }, []);
 
   const load = useCallback(() => {
-    if (isStaff) loadDebtors();
-    else openStatement();
-  }, [isStaff, loadDebtors, openStatement]);
+    loadDebtors();
+  }, [loadDebtors]);
 
   useEffect(load, [load]);
 
@@ -143,17 +323,23 @@ export function FeesPage() {
       <header className="page-head">
         <div>
           <h1>Fees</h1>
-          <p className="muted small">
-            {isStaff
-              ? "What each student owes, and what they have paid."
-              : "Your statement. Every charge and payment, in the order they happened."}
-          </p>
+          <p className="muted small">What each student owes, and what they have paid.</p>
         </div>
-        {isStaff && open && (
-          <button className="btn btn-quiet" onClick={() => setOpen(null)}>
-            Back to the list
-          </button>
-        )}
+        <span className="row-actions">
+          {/* THE QUEUE IS A DESTINATION, NOT A TAB HERE. Verifying payments is
+              a different job from chasing debtors — done by a different person
+              on a different day — and folding it into this page would put a
+              student's bank slip in front of somebody who came to write off a
+              charge. */}
+          <Link className="btn" to="/fees/verification">
+            <Icon name="clipboard" /> Payment verification
+          </Link>
+          {open && (
+            <button className="btn btn-quiet" onClick={() => setOpen(null)}>
+              Back to the list
+            </button>
+          )}
+        </span>
       </header>
 
       {error && (
@@ -173,7 +359,7 @@ export function FeesPage() {
         />
       )}
 
-      {isStaff && !locked && !open && (
+      {!locked && !open && (
         <DebtorList
           debtors={debtors}
           onOpen={(id) => openStatement(id)}
@@ -183,7 +369,7 @@ export function FeesPage() {
       {open && (
         <StatementView
           statement={open}
-          canEdit={isStaff}
+          canEdit
           onChanged={(next) => {
             setOpen(next);
             loadDebtors();
@@ -452,6 +638,12 @@ function StatementView({
         </section>
       )}
 
+      {/* WHAT THIS STUDENT HAS SUBMITTED, on the screen where somebody is
+          being asked about it. Without it, an administrator taking a telephone
+          call had to leave the statement, open the verification queue and
+          search — while the student waited. */}
+      <StudentSubmissions studentId={s.student.id} />
+
       {canEdit && <RecordPayment studentId={s.student.id} busy={busy} onDone={act} />}
       {canEdit && <PlanBuilder studentId={s.student.id} busy={busy} onDone={act} />}
 
@@ -487,6 +679,30 @@ function StatementView({
       )}
     </>
   );
+}
+
+/**
+ * One student's claims, on the office's copy of their statement.
+ *
+ * FETCHED SEPARATELY rather than folded into the statement endpoint, because
+ * the statement is the LEDGER and a claim is not in the ledger — that
+ * separation is the whole point of the feature, and merging the two responses
+ * is how it would quietly stop being true.
+ */
+function StudentSubmissions({ studentId }: { studentId: string }) {
+  const [submissions, setSubmissions] = useState<Submission[] | null>(null);
+
+  useEffect(() => {
+    setSubmissions(null);
+    api
+      .get<Submission[]>(`/students/${studentId}/fees/submissions`)
+      .then(setSubmissions)
+      .catch(() => setSubmissions([]));
+  }, [studentId]);
+
+  if (!submissions || submissions.length === 0) return null;
+
+  return <SubmissionHistory submissions={submissions} audience="office" />;
 }
 
 function AddCharge({

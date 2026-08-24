@@ -114,7 +114,17 @@ export const DESTINATIONS: readonly Destination[] = [
   { to: "/structure", label: "Structure", icon: "calendar", group: "Institute", roles: STAFF, also: ["terms", "batches", "sessions"] },
   /* A TEACHER holds no `payment` grant at all (§4.5) — offering them the page
      would be offering a 403. */
-  { to: "/fees", label: "Fees", icon: "money", group: "Institute", roles: ["super_admin", "admin", "student"], also: ["payments", "invoice", "balance", "receipt"] },
+  { to: "/fees", label: "Fees", icon: "money", group: "Institute", roles: ["super_admin", "admin", "student"], also: ["payments", "invoice", "balance", "receipt", "challan", "statement"] },
+  /* SUBMITTING A PAYMENT IS ITS OWN DESTINATION, not a button found only after
+     opening Fees. It is the single most common thing a student comes to this
+     part of the System to do, and the command palette is how many of them
+     navigate — so "easypaisa" and "slip" are search terms that must land
+     somewhere. Students only: the form claims a payment as whoever is signed
+     in, so it is not a screen an administrator has any use for. */
+  { to: "/fees/submit", label: "Submit a fee payment", icon: "upload", group: "Institute", roles: ["student"], also: ["pay", "payment", "easypaisa", "jazzcash", "bank", "transfer", "slip", "proof", "receipt", "challan"] },
+  /* The fee desk. Held apart from /fees because chasing debtors and checking
+     bank slips are different jobs done by different people. */
+  { to: "/fees/verification", label: "Payment verification", icon: "clipboard", group: "Institute", roles: OFFICE, also: ["verify", "approve", "pending", "slips", "proof", "easypaisa", "jazzcash", "challan", "receipts"] },
   { to: "/reports", label: "Reports", icon: "chart", group: "Institute", roles: STAFF, also: ["export", "analytics"] },
   /* A teacher holds provider_binding:read and needs it — whether a Meet link
      is created for them or they must paste one in changes what they do before
