@@ -20,6 +20,7 @@ import { IntegrationModule } from "./integration/integration.module";
 import { QuizModule } from "./quiz/quiz.module";
 import { ReportingModule } from "./reporting/reporting.module";
 import { SettingsModule } from "./settings/settings.module";
+import { PublicPageModule } from "./public-page/public-page.module";
 import { MaintenanceGuard } from "./admin/maintenance.guard";
 import { FinanceModule } from "./finance/finance.module";
 import { DiscussionModule } from "./discussion/discussion.module";
@@ -84,6 +85,10 @@ import { PermissionsGuard } from "./rbac/permissions.guard";
     ReportingModule,
     FinanceModule,
     DiscussionModule,
+    // The landing page, as something the Institute edits rather than something a
+    // developer deploys. Last, because it reads settings and announcements and
+    // owns nothing itself.
+    PublicPageModule,
   ],
   controllers: [HealthController],
   providers: [

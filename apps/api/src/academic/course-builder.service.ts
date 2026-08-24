@@ -398,7 +398,55 @@ export class CourseBuilderService {
           });
         }
 
-        return { section, sessionId, groupId: group.id, subjectCount: subjectIds.length };
+        /*
+         * ---- WHO TEACHES IT — FR-CRS-021 -----------------------------------
+         *
+         * TWENTY OF TWENTY-FOUR subject-batches in this Institute's own data
+         * had no teacher, because assigning one needed an endpoint that no
+         * screen called. A batch with no teacher has nobody who can mark its
+         * register or its coursework, and the dashboard could only ever report
+         * the number — it had nowhere to send anybody to fix it.
+         *
+         * PRIMARY on every subject of the batch, which is the ordinary case: a
+         * batch is normally one teacher's. A subject taught by somebody else is
+         * changed afterwards, and the assignment rows are per subject precisely
+         * so that it can be.
+         */
+        let teacherAssigned = 0;
+        if (input.teacherId && subjectIds.length > 0) {
+          const teacher = await tx.teacher.findFirst({
+            where: { id: input.teacherId, deletedAt: null },
+            select: { id: true },
+          });
+          if (!teacher) {
+            throw new AppError("VALIDATION_FAILED", {
+              message: "That teacher no longer exists. Reload the page and try again.",
+              details: [{ field: "teacherId", code: "NOT_FOUND", message: "Unknown teacher." }],
+            });
+          }
+
+          const offerings = await tx.sectionSubject.findMany({
+            where: { sectionId: section.id, deletedAt: null },
+            select: { id: true },
+          });
+          await tx.teacherAssignment.createMany({
+            data: offerings.map((o) => ({
+              teacherId: teacher.id,
+              sectionSubjectId: o.id,
+              assignmentRole: "PRIMARY" as const,
+              startDate: new Date(),
+            })),
+          });
+          teacherAssigned = offerings.length;
+        }
+
+        return {
+          section,
+          sessionId,
+          groupId: group.id,
+          subjectCount: subjectIds.length,
+          teacherAssigned,
+        };
       }),
     );
 
@@ -413,6 +461,7 @@ export class CourseBuilderService {
         capacity: created.section.capacity,
         genderRestriction: created.section.genderRestriction,
         subjects: created.subjectCount,
+        teacherAssigned: created.teacherAssigned,
         academicSessionId: created.sessionId,
       },
     });
@@ -422,18 +471,31 @@ export class CourseBuilderService {
         `${created.subjectCount} subject(s)`,
     );
 
+    /*
+     * WHAT IS STILL MISSING, said at the moment it can be acted on.
+     *
+     * A batch is not finished when the row exists. Without subjects it has no
+     * register; without a teacher nobody can mark that register. Both are the
+     * states an inexperienced administrator leaves a batch in, and both used to
+     * be discovered weeks later from a dashboard exception with nowhere to go.
+     */
+    const missing: string[] = [];
+    if (created.subjectCount === 0) missing.push("no subjects, so it has no register");
+    if (created.teacherAssigned === 0) missing.push("no teacher, so nobody can mark it");
+
     return {
       id: created.section.id,
       code: created.section.code,
       name: created.section.name,
       capacity: created.section.capacity,
       subjects: created.subjectCount,
+      teacherAssigned: created.teacherAssigned,
       message:
-        created.subjectCount === 0
-          ? `${created.section.name} is ready. Add its subjects so students have a register and a course page.`
-          : `${created.section.name} is ready, teaching ${created.subjectCount} subject${
+        missing.length === 0
+          ? `${created.section.name} is ready — ${created.subjectCount} subject${
               created.subjectCount === 1 ? "" : "s"
-            }.`,
+            }, a teacher assigned, and open for admissions.`
+          : `${created.section.name} was created, but it has ${missing.join(" and ")}.`,
     };
   }
 

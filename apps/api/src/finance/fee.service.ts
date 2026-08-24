@@ -485,6 +485,21 @@ export class FeeService {
   }
 
   /**
+   * The same recompute, for a service that writes a Payment of its own.
+   *
+   * PaymentSubmission.verify creates the Payment row inside its own
+   * transaction — it has a slip, a variance and a submission to close in the
+   * same breath, which recordPayment() knows nothing about — and a Payment
+   * that lands without the balance moving is exactly the drift the note above
+   * warns of. So the recompute is reachable, but only WITH a transaction
+   * client: the signature is what stops it being called on its own, after the
+   * fact, from somewhere that has already committed.
+   */
+  async recomputeBalance(db: Prisma.TransactionClient, studentId: string): Promise<number> {
+    return this.recompute(db, studentId);
+  }
+
+  /**
    * FR-PAY-032 — rebuild every balance from the ledger.
    *
    * Exists because a materialised figure needs a way back to the truth. If a

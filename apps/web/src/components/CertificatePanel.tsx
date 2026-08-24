@@ -1,39 +1,34 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { CERTIFICATE_KIND_COPY, type CertificateDocument } from "@lms/shared";
 import { ApiError, api } from "../api/client";
+import { CertificateCard } from "./CertificateCard";
+import { CertificateModal } from "./CertificateModal";
 
 /**
- * A student's certificates — SRS §13.5, FR-CRT-015.
+ * A student's certificates, beside their subjects — SRS §13.5, FR-CRT-015.
  *
- * Shows revoked ones too. A student may be holding the printed copy, and hiding
- * the record would leave them unable to find out why it no longer verifies
- * (BR-ENR-08 keeps this readable even after withdrawal).
+ * A TASTER, NOT THE SHELF. The full list lives at /my-certificates; this is
+ * the two most recent, on the page a student is already looking at, because
+ * the moment a certificate appears is the moment they want to send it to
+ * somebody. Anything more would push the subjects they came for off the
+ * screen.
  *
- * The verification link is the useful part: it is what a student sends to an
- * employer, so it is presented as something to copy rather than buried.
+ * Shows revoked ones too. A student may be holding the printed copy, and
+ * hiding the record would leave them unable to find out why it no longer
+ * verifies (BR-ENR-08 keeps this readable after withdrawal).
  */
 
-interface Certificate {
-  id: string;
-  certificateNo: string;
-  type: string;
-  status: string;
-  issuedAt: string;
-  revokedAt: string | null;
-  revocationReason: string | null;
-  progressPercent: number;
-  verificationCode: string;
-  subject: { code: string; name: string } | null;
-  programme: { code: string; name: string } | null;
-}
+const SHOWN = 2;
 
 export function CertificatePanel() {
-  const [items, setItems] = useState<Certificate[] | null>(null);
+  const [items, setItems] = useState<CertificateDocument[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState<string | null>(null);
+  const [open, setOpen] = useState<CertificateDocument | null>(null);
 
   useEffect(() => {
     api
-      .get<Certificate[]>("/me/certificates")
+      .get<CertificateDocument[]>("/me/certificates")
       .then(setItems)
       .catch((e) => setError(e instanceof ApiError ? e.message : "Could not load certificates."));
   }, []);
@@ -53,53 +48,27 @@ export function CertificatePanel() {
   // rather than showing an empty panel on every subject page.
   if (!items || items.length === 0) return null;
 
-  const verifyUrl = (code: string) =>
-    `${window.location.origin}/verify/${code}`;
-
   return (
     <section className="card">
-      <h2>Certificates</h2>
-      <ul className="list">
-        {items.map((c) => (
-          <li key={c.id} className="assignment">
-            <div className="assignment-head">
-              <strong>{c.subject?.name ?? c.programme?.name ?? "Certificate"}</strong>
-              {/* A word, never colour alone (NFR-ACC-003). */}
-              <span className={c.status === "REVOKED" ? "warn small" : "small"}>
-                {c.status === "REVOKED" ? "Revoked" : "✓ Valid"}
-              </span>
-            </div>
+      <div className="card-head">
+        <h2>Certificates</h2>
+        <Link className="btn btn-sm btn-quiet" to="/my-certificates">
+          See all {items.length}
+        </Link>
+      </div>
 
-            <p className="muted small">
-              {c.certificateNo} · issued {new Date(c.issuedAt).toLocaleDateString()}
-            </p>
-
-            {c.status === "REVOKED" ? (
-              // The reason, plainly. A student who cannot find out why has no
-              // way to challenge it (NFR-USE-007).
-              <div className="alert alert-warn">
-                <p>
-                  Revoked {c.revokedAt ? new Date(c.revokedAt).toLocaleDateString() : ""}.{" "}
-                  {c.revocationReason}
-                </p>
-              </div>
-            ) : (
-              <div className="row-actions">
-                <button
-                  className="btn btn-quiet"
-                  onClick={() => {
-                    void navigator.clipboard?.writeText(verifyUrl(c.verificationCode));
-                    setCopied(c.id);
-                  }}
-                >
-                  {copied === c.id ? "Link copied" : "Copy verification link"}
-                </button>
-                <span className="muted small">Give this to an employer to confirm it.</span>
-              </div>
-            )}
-          </li>
+      <div className="certificate-grid">
+        {items.slice(0, SHOWN).map((c) => (
+          <CertificateCard
+            key={c.id}
+            certificate={c}
+            caption={CERTIFICATE_KIND_COPY[c.kind].label}
+            onOpen={() => setOpen(c)}
+          />
         ))}
-      </ul>
+      </div>
+
+      {open && <CertificateModal certificate={open} onClose={() => setOpen(null)} />}
     </section>
   );
 }

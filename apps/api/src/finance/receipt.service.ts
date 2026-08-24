@@ -1,63 +1,42 @@
 import { Injectable } from "@nestjs/common";
+import { AppError, PAYMENT_METHOD_LABELS, type PaymentMethodValue } from "@lms/shared";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { SettingsService } from "../settings/settings.service";
 import { RegistrationNumberService } from "../admission/registration-number.service";
 import { getActor } from "../prisma/actor-context";
-import { AppError } from "@lms/shared";
-
-export interface Receipt {
-  receiptNo: string;
-  issuedAt: Date;
-  /** True when this print is not the first. Shown on the document. */
-  reprint: boolean;
-
-  institute: { name: string; campus: string };
-  student: {
-    fullName: string;
-    registrationNo: string;
-    programme: string | null;
-    section: string | null;
-  };
-  payment: {
-    id: string;
-    amount: number;
-    currency: string;
-    amountInWords: string;
-    paidOn: Date;
-    method: string;
-    bankReference: string | null;
-    receivedBy: string;
-  };
-  /** Present only when the payment has been reversed. */
-  reversal: { reversedAt: Date; reason: string | null } | null;
-  balanceAfter: number | null;
-  note: string;
-}
+import { renderReceiptPdf, type ReceiptDocument } from "./receipt-document";
+import { summarise } from "./fee-summary";
 
 /**
  * Receipts — SRS §5.16, FR-PAY-039..042.
  *
- * A student who hands over 30,000 rupees in cash gets a piece of paper. That
- * paper is the Institute's admission that it has the money, so three things
- * about it are not negotiable.
+ * A student who hands over 30,000 rupees gets a piece of paper. That paper is
+ * the Institute's admission that it has the money, so four things about it are
+ * not negotiable.
  *
  * THE NUMBER IS ALLOCATED ONCE AND NEVER CHANGES. A student holding a printed
  * receipt and the Institute's own copy must show the same number, or neither
  * document proves anything. So it is allocated on the first request, stored,
  * and every later request returns the same one — marked as a REPRINT, because
- * two pieces of paper bearing one number need to be distinguishable when both
- * are on the desk.
+ * two pieces of paper bearing one number will end up on a desk together and
+ * need to be distinguishable.
  *
- * A REVERSED PAYMENT STILL HAS A RECEIPT, and it says so. Refusing to print one
- * would leave the student holding the only record of a transaction the
- * Institute has since undone, with nothing to show what happened. The receipt
- * is issued and states the reversal on its face (BR-RPT-05, and the same
- * reasoning as the ledger).
+ * A REVERSED PAYMENT STILL HAS A RECEIPT, and it says so on its face. Refusing
+ * to print one would leave the student holding the only record of a
+ * transaction the Institute has since undone, with nothing to show what
+ * happened (BR-RPT-05).
  *
- * THE AMOUNT IS WRITTEN IN WORDS as well as figures. That is not decoration:
- * it is the ordinary defence against a digit being added to a printed line,
- * and every receipt book in the country does it.
+ * THE AMOUNT IS WRITTEN IN WORDS as well as figures. Not decoration: it is the
+ * ordinary defence against a digit being added to a printed line, and every
+ * receipt book in the country does it.
+ *
+ * IT NOW CARRIES THE BALANCE, and that is the change that matters most to the
+ * people using it. A receipt that says only "we received 25,000" leaves the
+ * one question the holder actually has — "so what do I still owe?" —
+ * unanswered, and the answer arrives by telephone call to the office. The
+ * figures are computed from the ledger at the moment of issue and printed as
+ * a four-line account.
  */
 @Injectable()
 export class ReceiptService {
@@ -73,8 +52,12 @@ export class ReceiptService {
    *
    * Scoped by the extension: a student reaching this for somebody else's
    * payment finds nothing, rather than being told they may not (ARC-051).
+   *
+   * `silent` suppresses the audit entry, and exists for exactly one caller —
+   * the verification path, which has already recorded that it issued a receipt
+   * and would otherwise write two entries for one act.
    */
-  async forPayment(paymentId: string, ip?: string): Promise<Receipt> {
+  async forPayment(paymentId: string, ip?: string, silent = false): Promise<ReceiptDocument> {
     const actor = getActor();
     if (!actor) throw new AppError("AUTH_TOKEN_INVALID");
 
@@ -82,10 +65,12 @@ export class ReceiptService {
     // where clause, and findUnique accepts only unique fields — so the two
     // together throw a validation error at runtime for any role that IS
     // scoped, while working perfectly for a Super Admin, who has no
-    // predicate. That is how this reached a probe: every staff test passed.
+    // predicate. That is how this once reached a probe: every staff test
+    // passed.
     const payment = await this.prisma.scoped.payment.findFirst({
       where: { id: paymentId },
       include: {
+        submission: { select: { reference: true } },
         student: {
           include: {
             user: { select: { fullName: true } },
@@ -100,35 +85,79 @@ export class ReceiptService {
 
     const issued = await this.ensureNumber(payment.id, payment.receiptNo, payment.paymentDate);
 
-    const resolved = await this.settings.resolveFor();
-    const instituteName =
-      (await this.settings.text("institute.name")) ?? "The Institute";
-    const campus = (await this.settings.text("institute.campus")) ?? "";
+    /*
+     * IS THIS A DUPLICATE? — and the answer is NOT "does the number already
+     * exist".
+     *
+     * It used to be, and that was right while a receipt number was allocated
+     * by the first person to press Print. It stopped being right the day
+     * verification began issuing the receipt itself: the number is now
+     * allocated the moment the money is confirmed, so by the time the student
+     * opened their own copy the number existed, and the first document they
+     * ever saw was stamped DUPLICATE — THIS RECEIPT HAS BEEN PRINTED BEFORE.
+     * Which is precisely the sentence that makes somebody doubt a financial
+     * document, printed across the one screen that exists to reassure them.
+     *
+     * So the question the stamp actually answers is "has a human produced this
+     * document before" — because the stamp exists so that two pieces of paper
+     * bearing one number can be told apart on a desk. A production is a
+     * non-silent call: a print, a download, a view. The copy the System
+     * attaches to the verification email is `silent`, it is the holder's FIRST
+     * copy, and it is not one of them.
+     *
+     * The audit log is the record of those productions, so it is what is
+     * asked. It is one indexed count against a table this act already writes
+     * to, and it cannot drift from the truth the way a second column would.
+     */
+    const producedBefore = silent
+      ? 0
+      : await this.prisma.asSystem((db) =>
+          db.auditLog.count({
+            where: {
+              entityType: "Payment",
+              entityId: payment.id,
+              action: { in: ["receipt.issue", "receipt.reprint"] },
+            },
+          }),
+        );
 
-    // FR-LOG-003. Printing a receipt is a financial act — somebody produced a
-    // document the Institute stands behind — so each printing is recorded,
+    // FR-LOG-003. Producing a receipt is a financial act — somebody made a
+    // document the Institute stands behind — so each one is recorded,
     // including the reprints.
-    await this.audit.record({
-      action: issued.wasNew ? "receipt.issue" : "receipt.reprint",
-      entityType: "Payment",
-      entityId: payment.id,
-      after: { receiptNo: issued.receiptNo, by: actor.userId },
-      ...(ip ? { ipAddress: ip } : {}),
-    });
+    if (!silent) {
+      await this.audit.record({
+        action: producedBefore === 0 ? "receipt.issue" : "receipt.reprint",
+        entityType: "Payment",
+        entityId: payment.id,
+        after: { receiptNo: issued.receiptNo, by: actor.userId },
+        ...(ip ? { ipAddress: ip } : {}),
+      });
+    }
+
+    const [institute, note, ledger] = await Promise.all([
+      this.institute(),
+      this.receiptNote(payment.isReversed),
+      this.ledgerAt(payment.studentId, payment.id),
+    ]);
 
     const amount = Number(payment.verifiedAmount);
-    const section = payment.student?.currentSection;
+    const section = payment.student.currentSection;
+    const method = payment.method as PaymentMethodValue;
 
     return {
       receiptNo: issued.receiptNo,
       issuedAt: issued.issuedAt,
-      reprint: !issued.wasNew,
-      institute: { name: instituteName, campus },
+      // See the note above: a duplicate is a document produced twice, not a
+      // number allocated twice.
+      reprint: producedBefore > 0,
+      status: payment.isReversed ? "REVERSED" : "VERIFIED",
+      institute,
       student: {
-        fullName: payment.student?.user.fullName ?? "",
-        registrationNo: payment.student?.registrationNo ?? "",
+        fullName: payment.student.user.fullName,
+        registrationNo: payment.student.registrationNo,
         programme: section?.batch.academicSession.programme.name ?? null,
         section: section?.name ?? null,
+        rollNo: payment.student.currentRollNo,
       },
       payment: {
         id: payment.id,
@@ -136,24 +165,145 @@ export class ReceiptService {
         currency: payment.currency,
         amountInWords: amountInWords(amount, payment.currency),
         paidOn: payment.paymentDate,
-        method: payment.method,
+        method,
+        methodLabel: PAYMENT_METHOD_LABELS[method] ?? method,
         bankReference: payment.bankReference,
-        receivedBy: await this.nameOf(payment.verifiedBy),
+        submissionReference: payment.submission?.reference ?? null,
+      },
+      verification: {
+        verifiedBy: await this.nameOf(payment.verifiedBy),
+        verifiedAt: payment.verifiedAt,
+        note: payment.varianceReason,
       },
       reversal: payment.isReversed
         ? { reversedAt: payment.reversedAt!, reason: payment.reversalReason }
         : null,
-      balanceAfter: null,
-      note: payment.isReversed
-        ? "This payment has been REVERSED. This receipt is kept so the record is complete; " +
-          "it is not proof of a payment the Institute holds."
-        : // The settings map is loosely typed, and a note that is not a string
-          // would print on the receipt as "[object Object]". A document the
-          // Institute hands to a student does not get to look broken.
-          (typeof resolved["finance.receiptNote"] === "string"
-            ? resolved["finance.receiptNote"]
-            : "") || "Please keep this receipt. It is your proof of payment.",
+      ledger,
+      verifyUrl: this.verifyUrl(issued.receiptNo),
+      note,
     };
+  }
+
+  /** The same document, as a print-ready A4 PDF. */
+  async pdfFor(paymentId: string, ip?: string): Promise<{ filename: string; body: Buffer }> {
+    const receipt = await this.forPayment(paymentId, ip);
+    return {
+      // The receipt number, so a folder of downloads sorts and searches by the
+      // thing people quote. Never the student's name — these end up in shared
+      // download folders.
+      filename: `${receipt.receiptNo}.pdf`,
+      body: renderReceiptPdf(receipt),
+    };
+  }
+
+  /** The PDF for a document already built, without reading it all again. */
+  render(receipt: ReceiptDocument): Buffer {
+    return renderReceiptPdf(receipt);
+  }
+
+  /**
+   * The student's account as it stood when this payment landed.
+   *
+   * "PREVIOUSLY PAID" MEANS BEFORE THIS ONE, and getting that wrong is the
+   * whole risk here: a receipt whose arithmetic does not add up is worse than
+   * a receipt with no arithmetic on it. So the figure is every verified,
+   * unreversed payment EXCEPT this one, and the balance after is the total fee
+   * less all of them including this one.
+   *
+   * A reversed payment contributes nothing to either figure — `summarise`
+   * excludes it — which is right: the receipt for a reversed payment prints
+   * the account as it stands, and the reversal notice on its face says why the
+   * money is not in it.
+   */
+  private async ledgerAt(
+    studentId: string,
+    paymentId: string,
+  ): Promise<ReceiptDocument["ledger"]> {
+    const [charges, payments] = await Promise.all([
+      this.prisma.asSystem((db) =>
+        db.feeCharge.findMany({
+          where: { studentId, deletedAt: null },
+          select: { amount: true, waivedAt: true },
+        }),
+      ),
+      this.prisma.asSystem((db) =>
+        db.payment.findMany({
+          where: { studentId },
+          select: { id: true, verifiedAmount: true, isReversed: true },
+        }),
+      ),
+    ]);
+
+    // Nothing has ever been charged. Printing "Total fee: Rs 0" beside a
+    // payment of 25,000 would be a receipt that contradicts itself, so the
+    // block is omitted instead (see the null branch in the layout).
+    if (charges.length === 0) return null;
+
+    const asPayments = payments.map((p) => ({
+      amount: Number(p.verifiedAmount),
+      isReversed: p.isReversed,
+    }));
+    const thisOne = payments.find((p) => p.id === paymentId);
+    const thisAmount = thisOne && !thisOne.isReversed ? Number(thisOne.verifiedAmount) : 0;
+
+    const all = summarise(
+      charges.map((c) => ({ amount: Number(c.amount), waivedAt: c.waivedAt })),
+      asPayments,
+      [],
+    );
+
+    return {
+      totalFee: all.totalFee,
+      previouslyPaid: round2(all.verified - thisAmount),
+      thisPayment: Number(thisOne?.verifiedAmount ?? 0),
+      balanceAfter: round2(all.totalFee - all.verified),
+    };
+  }
+
+  private async institute(): Promise<ReceiptDocument["institute"]> {
+    const [name, campus, phone, email, website] = await Promise.all([
+      this.settings.text("institute.name"),
+      this.settings.text("institute.campus"),
+      this.settings.text("institute.phone"),
+      this.settings.text("institute.email"),
+      this.settings.text("institute.website"),
+    ]);
+    return {
+      name: name || "The Institute",
+      campus: campus || "",
+      phone: phone || "",
+      email: email || "",
+      website: website || "",
+    };
+  }
+
+  private async receiptNote(isReversed: boolean): Promise<string> {
+    if (isReversed) {
+      return (
+        "This payment has been REVERSED. This receipt is kept so the record is complete; " +
+        "it is not proof of a payment the Institute holds."
+      );
+    }
+    // The settings map is loosely typed, and a note that is not a string would
+    // print on the receipt as "[object Object]". A document the Institute
+    // hands to a student does not get to look broken.
+    const configured = await this.settings.text("finance.receiptNote");
+    return configured || "Please keep this receipt. It is your proof of payment.";
+  }
+
+  /**
+   * Where a holder can check the receipt.
+   *
+   * THE NUMBER ALONE, and nothing about the person. A receipt is shown to
+   * employers, parents and landlords; a link that discloses a student's name
+   * or balance to anybody who scans the paper would be a privacy failure
+   * created by a convenience (SEC-PRV). Null when no public address is
+   * configured, so the document prints without a code rather than with a code
+   * that goes nowhere.
+   */
+  private verifyUrl(receiptNo: string): string | null {
+    const base = (process.env["PUBLIC_WEB_URL"] ?? "").trim().replace(/\/+$/, "");
+    return base ? `${base}/receipts/verify/${encodeURIComponent(receiptNo)}` : null;
   }
 
   /**
@@ -167,13 +317,13 @@ export class ReceiptService {
     paymentId: string,
     existing: string | null,
     paidOn: Date,
-  ): Promise<{ receiptNo: string; issuedAt: Date; wasNew: boolean }> {
+  ): Promise<{ receiptNo: string; issuedAt: Date }> {
     if (existing) {
       const row = await this.prisma.scoped.payment.findFirst({
         where: { id: paymentId },
         select: { receiptIssuedAt: true },
       });
-      return { receiptNo: existing, issuedAt: row?.receiptIssuedAt ?? new Date(), wasNew: false };
+      return { receiptNo: existing, issuedAt: row?.receiptIssuedAt ?? new Date() };
     }
 
     return this.prisma.asSystem((db) =>
@@ -185,11 +335,7 @@ export class ReceiptService {
           select: { receiptNo: true, receiptIssuedAt: true },
         });
         if (fresh?.receiptNo) {
-          return {
-            receiptNo: fresh.receiptNo,
-            issuedAt: fresh.receiptIssuedAt ?? new Date(),
-            wasNew: false,
-          };
+          return { receiptNo: fresh.receiptNo, issuedAt: fresh.receiptIssuedAt ?? new Date() };
         }
 
         const year = paidOn.getUTCFullYear();
@@ -201,7 +347,7 @@ export class ReceiptService {
           where: { id: paymentId },
           data: { receiptNo, receiptIssuedAt: issuedAt },
         });
-        return { receiptNo, issuedAt, wasNew: true };
+        return { receiptNo, issuedAt };
       }),
     );
   }
@@ -213,6 +359,8 @@ export class ReceiptService {
     return user?.fullName ?? "";
   }
 }
+
+const round2 = (n: number): number => Math.round((n + Number.EPSILON) * 100) / 100;
 
 const ONES = [
   "",

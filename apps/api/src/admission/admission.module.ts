@@ -12,6 +12,10 @@ import { ContentModule } from "../content/content.module";
   imports: [ContentModule],
   controllers: [AdmissionController],
   providers: [AdmissionService, AdmissionMailer, RegistrationNumberService, SlipService],
-  exports: [RegistrationNumberService],
+  // SlipService is exported for the finance module: a student photographing
+  // the receipt for their second instalment is doing the same thing an
+  // applicant does with their admission slip, and it must be sniffed, hashed
+  // and stored by the same code (SEC-FIL-003).
+  exports: [RegistrationNumberService, SlipService],
 })
 export class AdmissionModule {}

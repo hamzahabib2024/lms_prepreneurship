@@ -95,6 +95,21 @@ export const RESOURCES = [
   "registration_queue",
   "payment_slip",
   "payment",
+  /**
+   * A STUDENT SAYING THEY HAVE PAID. Deliberately not `payment`.
+   *
+   * `payment` is money the Institute has verified it holds, and §4.5 puts the
+   * whole resource behind step-up — reading included. A student must be able
+   * to CREATE a claim and watch it being reviewed, and neither of those is an
+   * act on the Institute's money: nothing a student does here reaches the
+   * ledger. Granting them `payment:create` instead would have handed them the
+   * one verb that means "this money has arrived".
+   *
+   * The office's half — verifying and rejecting — keeps the step-up that
+   * `payment` has, because verifying IS the act that moves money into the
+   * ledger.
+   */
+  "payment_submission",
   /** A course's PUBLISHED PRICE — what an applicant is quoted before they pay.
    *  Separate from `payment`, which is money that has actually moved. Setting
    *  the price and recording a receipt are different authorities: the first is
@@ -188,6 +203,25 @@ export const RESOURCES = [
   "report_marketing",
   // governance — §4.5.12
   "system_setting",
+  /**
+   * WHAT THE PUBLIC PAGE SAYS — the headline, the videos, the photographs and
+   * the six things the Institute claims it does well.
+   *
+   * Held apart from `system_setting` because the two are different kinds of
+   * decision made by different people. A system setting decides when a student
+   * is warned and what a certificate requires, which is why writing one is
+   * reserved to a Super Admin. A headline is marketing: it is wrong weekly, it
+   * is corrected by whoever runs admissions, and routing that through the one
+   * person who also holds the restore key means the front page says last
+   * term's thing for a year.
+   *
+   * The values behind it ARE settings — same table, same audit, same cache —
+   * so this resource is a narrower door onto a subset of them, not a second
+   * store. The subset is the catalogue's "Public page" group, enforced on the
+   * server (public-page.keys.ts), which is what stops the narrower door being
+   * a way to reach the wider room.
+   */
+  "public_page",
   "integration_credential",
   "live_provider_selection",
   "audit_log",
@@ -317,6 +351,23 @@ export const PERMISSION_MATRIX: Record<Resource, ResourcePolicy> = {
     super_admin: { actions: FULL, scope: "ALL", requiresStepUp: true },
     admin: { actions: FULL, scope: "ALL", requiresStepUp: true },
     student: { actions: ["read"], scope: "OWN" },
+  },
+  /**
+   * The claim, not the money — see the note beside the resource name.
+   *
+   * A STUDENT MAY CREATE, READ AND DELETE THEIR OWN. `delete` is withdrawing a
+   * submission they have not been reviewed on yet — a wrong figure, the wrong
+   * slip — and the service refuses it the moment an administrator has acted,
+   * so it can never erase a decision. NO `update`: editing a claim after
+   * submitting it is how a reviewed amount and a printed proof part company.
+   *
+   * `approve` is the office verifying one, and carries step-up for the same
+   * reason `payment` does: it is the act that puts money in the ledger.
+   */
+  payment_submission: {
+    super_admin: { actions: FULL, scope: "ALL", requiresStepUp: true },
+    admin: { actions: FULL, scope: "ALL", requiresStepUp: true },
+    student: { actions: ["create", "read", "delete"], scope: "OWN" },
   },
   /**
    * SETTING A PRICE IS NOT THE SAME AUTHORITY AS TAKING A PAYMENT.
@@ -728,6 +779,24 @@ export const PERMISSION_MATRIX: Record<Resource, ResourcePolicy> = {
   system_setting: {
     super_admin: { actions: ["read", "configure"], scope: "ALL" },
     admin: { actions: ["read"], scope: "ALL" },
+  },
+  /**
+   * An Admin may CHANGE this one, unlike every other setting.
+   *
+   * Deliberate, and the reason is above the resource name. Nothing reachable
+   * through it decides anything about a student — no threshold, no weighting,
+   * no criterion — and everything reachable through it is already published to
+   * the world by the Institute. The worst outcome of a mistake here is an
+   * embarrassing sentence on a web page, corrected in the next minute by the
+   * same person; the worst outcome of NOT granting it is that the page cannot
+   * be corrected at all without the Super Admin.
+   *
+   * A teacher and a student hold nothing. This is the Institute talking about
+   * itself, and it is signed with the Institute's name.
+   */
+  public_page: {
+    super_admin: { actions: ["read", "configure"], scope: "ALL" },
+    admin: { actions: ["read", "configure"], scope: "ALL" },
   },
   integration_credential: {
     // SEC-CRY-010: write-only. No role may READ a stored secret — not even a

@@ -2936,6 +2936,87 @@ details > summary:hover { text-decoration: underline; }
 }
 .priority-option.is-on.priority-urgent strong { color: var(--error); }
 
+/* ------------------------------------------------- a page per thing --------
+   Creating a course, a subject or a batch used to be a panel inside a card:
+   no address to link or bookmark, the card swallowing the whole row to get any
+   width, and no room for the fields that matter — which is how twenty of
+   twenty-four batches ended up with no teacher. */
+.editor-page {
+  max-width: 62rem;
+  /* Clearance for the sticky save bar, so the last field of the last step can
+     always be scrolled out from under it rather than hiding there. */
+  padding-bottom: 4.5rem;
+}
+
+.editor-back {
+  display: inline-flex; align-items: center; gap: .25rem;
+  margin-bottom: .5rem;
+  color: var(--muted); text-decoration: none; font-size: .875rem;
+}
+.editor-back:hover { color: var(--ink); text-decoration: underline; }
+.editor-back svg { width: 14px; height: 14px; }
+
+.editor-head { align-items: flex-start; }
+.editor-intro {
+  padding: .75rem 1rem; margin-bottom: 1rem;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.editor-intro p { margin: 0; }
+.editor-intro .alert { margin: 0; }
+
+.editor-body { display: grid; gap: 1rem; }
+
+/* Each step is a card of its own, so the eye can count them. */
+.editor-section {
+  padding: 1.1rem 1.25rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-1);
+}
+
+.editor-section-head { margin-bottom: .75rem; }
+.editor-section-head h2 {
+  display: flex; align-items: center; gap: .5rem;
+  margin: 0; font-size: 1rem;
+}
+.editor-section-head p { margin: .15rem 0 0; }
+.editor-step {
+  display: grid; place-items: center;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: var(--brand-700); color: var(--primary-ink);
+  font-size: .72rem; font-weight: 700; flex: 0 0 22px;
+}
+
+/* The save stays in view. These forms scroll, and a save button below the fold
+   is one people hunt for — or assume is not there and leave without saving. */
+.editor-actions {
+  position: sticky; bottom: 0; z-index: 2;
+  display: flex; gap: .5rem; align-items: center; flex-wrap: wrap;
+  margin-top: 1rem; padding: .75rem 1rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-2);
+}
+
+/* The picture beside what it will actually look like — so a wrong crop is seen
+   here rather than on the public page. */
+.editor-preview-row { display: flex; gap: 1.25rem; flex-wrap: wrap; align-items: flex-start; }
+.editor-preview-row > .thumb-field { flex: 1 1 20rem; margin-bottom: 0; }
+.editor-preview { flex: 0 0 220px; display: grid; gap: .3rem; }
+.editor-preview .cover { border-radius: var(--radius-sm); }
+
+.editor-facets { display: flex; gap: 1.5rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.editor-facets > div { flex: 1 1 16rem; display: grid; gap: .4rem; align-content: start; }
+
+@media (max-width: 700px) {
+  .editor-preview { flex: 1 1 100%; }
+  .editor-actions { padding: .6rem .75rem; }
+}
+
 /* --------------------------------------------- subjects → course → batches --
    The order is the thing being explained, so it is drawn rather than
    described: a numbered row with arrows between, which reads in one glance and
@@ -4127,3 +4208,647 @@ details > summary:hover { text-decoration: underline; }
 
 .skeleton-head { margin-bottom: 1.25rem; }
 .skeleton-head .skeleton { height: 26px; width: 14rem; border-radius: 8px; }
+
+
+/* --------------------------------------------- editing the public page ----
+   The one screen in this application that edits ANOTHER screen, and the only
+   one whose result strangers see. Two things follow from that and shape
+   everything below.
+
+   THE FORM IS LONG BY NECESSITY — a headline, six cards, a gallery, four
+   headings and a closing band — so it is broken into numbered cards with the
+   save pinned at the foot (.editor-actions, shared with the course editors).
+
+   AND IT CAN SIT BESIDE THE THING IT EDITS. The preview is a real frame
+   showing the real page, off by default because it is a second load of the
+   whole application, and it collapses under the form on anything narrower
+   than a laptop rather than shrinking into a letterbox nobody can read. */
+.publicpage-single { display: block; }
+.publicpage-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 26rem);
+  gap: 1.25rem;
+  align-items: start;
+}
+.publicpage-form { min-width: 0; }
+
+.publicpage-preview {
+  position: sticky; top: 1rem;
+  display: grid; gap: .4rem;
+  min-width: 0;
+}
+.publicpage-preview-head {
+  display: flex; align-items: center; justify-content: space-between; gap: .5rem;
+}
+.publicpage-frame {
+  width: 100%; height: 70vh;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+}
+
+/* Each editable value carries its own explanation and its own way back, so the
+   footer under the box is part of the field rather than a hint elsewhere. */
+.publicpage-field { display: grid; gap: .3rem; margin-bottom: 1rem; }
+.publicpage-field textarea { resize: vertical; min-height: 3.4rem; }
+.publicpage-foot {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: .75rem; flex-wrap: wrap;
+}
+/* A word, never a colour alone (NFR-ACC-007) — the counter says "too long"
+   as well as turning red, because over-length is refused on save. */
+.publicpage-over { color: var(--error); font-weight: 600; }
+.publicpage-error {
+  display: block;
+  color: var(--error); font-size: .8125rem; font-weight: 600;
+}
+/* The server refuses the whole set when one field is wrong, so the field that
+   caused it has to be findable in a form this long. */
+.publicpage-field.is-wrong > input,
+.publicpage-field.is-wrong > textarea,
+.publicpage-field.is-wrong .publicpage-rows { border-color: var(--error); }
+
+/* ORDER IS CONTENT in all three lists: the first video is the one most people
+   watch, and the first photograph is the one on screen when the page loads. So
+   a row moves rather than being retyped somewhere else — retyping a URL is how
+   a URL gets broken. */
+.publicpage-rows {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; gap: .5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: .5rem;
+  background: var(--surface-2);
+}
+.publicpage-row {
+  display: flex; align-items: flex-start; gap: .5rem;
+  padding: .35rem; border-radius: var(--radius-sm);
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+.publicpage-row-main { flex: 1 1 auto; min-width: 0; }
+.publicpage-row-controls {
+  display: flex; gap: .2rem; align-items: center; flex: 0 0 auto;
+}
+
+/* A photograph row is the picture, its address and its caption — the picture
+   first, because that is what somebody is checking when they scan the list. */
+.publicpage-photo { align-items: center; }
+.publicpage-photo-fields,
+.publicpage-feature-fields { flex: 1 1 auto; min-width: 0; display: grid; gap: .3rem; }
+.publicpage-photo-fields input { width: 100%; }
+
+/* Smaller than a course cover: this is a row in a list, not the subject of the
+   screen, and twelve of them at 160px would be the whole page. */
+.publicpage-thumb { width: 96px; height: 60px; }
+.publicpage-feature-icon {
+  display: grid; place-items: center;
+  width: 34px; height: 34px; flex: 0 0 34px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--brand-700);
+}
+.publicpage-feature-icon svg { width: 17px; height: 17px; }
+.publicpage-feature select { width: auto; min-width: 9rem; }
+.publicpage-feature textarea { resize: vertical; min-height: 2.8rem; }
+
+/* Read-only on purpose: these are real announcements, and the screen says so
+   rather than looking like a list somebody forgot to make editable. */
+.publicpage-notices li { padding: .35rem 0; }
+
+@media (max-width: 1100px) {
+  /* The frame stops being a preview below this width and starts being a
+     letterbox, so it goes under the form instead of beside it. */
+  .publicpage-split { grid-template-columns: minmax(0, 1fr); }
+  .publicpage-preview { position: static; }
+  .publicpage-frame { height: 60vh; }
+}
+
+@media (max-width: 700px) {
+  .publicpage-row { flex-wrap: wrap; }
+  .publicpage-row-controls { width: 100%; justify-content: flex-end; }
+  .publicpage-thumb { width: 100%; height: 120px; }
+}
+
+/* ------------------------------------------------------- certificates ----
+
+   THE DOCUMENT BRINGS ITS OWN PALETTE and nothing here may override it. The
+   certificate is an SVG with navy, amber and ivory baked in, because it is
+   paper: it must look the same in dark mode, on a projector and on a printer,
+   and a student's copy must be identical to their classmate's. Everything
+   below styles the FRAME around it — the stage, the tiles, the register — in
+   the application's own tokens.
+*/
+
+/* The stage holds the aspect ratio, so the document never distorts and never
+   overflows sideways on a phone. The ratio is stated rather than left to the
+   SVG so the box is the right height before the markup is parsed — otherwise
+   the page jumps as each certificate lands. */
+.certificate-stage {
+  aspect-ratio: 1414 / 1000;
+  width: 100%;
+  border-radius: var(--radius);
+  overflow: hidden;
+  /* A rim rather than a shadow: a certificate on a dark ground with no edge
+     reads as a hole in the page. */
+  box-shadow: 0 0 0 1px var(--line), var(--shadow-2);
+  background: #fffdf8;
+}
+.certificate-stage svg { display: block; width: 100%; height: 100%; }
+
+.certificate-viewer { display: grid; gap: .9rem; }
+.certificate-viewer.is-compact { gap: .75rem; }
+
+.certificate-actions { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+.certificate-actions .btn svg { width: 16px; height: 16px; }
+.certificate-note { margin: 0; }
+
+/* The dialog is as wide as the page allows: a certificate read at 600px is a
+   certificate whose signatures and number cannot be made out, which is the one
+   thing somebody opens it to do. */
+.certificate-modal { width: min(1180px, 100%); }
+
+/* ------------------------------------------------------------- tiles ------
+
+   A GRID OF DOCUMENTS, not a list of filenames. Each tile carries the real
+   certificate, scaled by CSS from the same markup the download rasterises, so
+   a tile can never show something the file does not.
+*/
+.certificate-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1rem;
+  margin-top: .25rem;
+}
+
+.certificate-card {
+  display: flex; flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow-1);
+  transition: box-shadow .18s var(--ease), transform .18s var(--ease), border-color .18s var(--ease);
+}
+.certificate-card:hover { box-shadow: var(--shadow-2); transform: translateY(-1px); }
+/* Withdrawn tiles are held back rather than hidden (BR-ENR-08): the student
+   may be holding the paper copy and needs to find out why it stopped
+   verifying. The word in the pill is what says so; this is only support. */
+.certificate-card.is-revoked { border-color: color-mix(in srgb, var(--error) 40%, var(--line)); }
+.certificate-card.is-archived { opacity: .88; }
+
+.certificate-thumb {
+  display: block; position: relative;
+  width: 100%; padding: 0; border: 0;
+  background: #fffdf8;
+  cursor: pointer;
+  border-bottom: 1px solid var(--line);
+}
+.certificate-thumb-inner { display: block; aspect-ratio: 1414 / 1000; }
+.certificate-thumb-inner svg { display: block; width: 100%; height: 100%; }
+
+/* The hint appears on hover and on keyboard focus alike — a control that only
+   exists for a mouse is a control half the readers never find. */
+.certificate-thumb-hint {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center; gap: .4rem;
+  background: rgb(14 37 64 / 55%);
+  color: #fff; font-weight: 600; font-size: .875rem;
+  opacity: 0; transition: opacity .18s var(--ease);
+}
+.certificate-thumb-hint svg { width: 16px; height: 16px; }
+.certificate-thumb:hover .certificate-thumb-hint,
+.certificate-thumb:focus-visible .certificate-thumb-hint { opacity: 1; }
+
+.certificate-card-body { display: grid; gap: .35rem; padding: .8rem .9rem 1rem; }
+.certificate-card-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: .5rem;
+}
+.certificate-card-head h3 {
+  margin: 0; font-size: .975rem; line-height: 1.3;
+  /* Two lines, then an ellipsis: a forty-word workshop title must not push
+     every other tile in the row taller than itself. */
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.certificate-card-meta { margin: .15rem 0 .35rem; font-size: .8125rem; color: var(--muted); }
+
+/* Tabular figures, because a column of certificate numbers that does not line
+   up is a column nobody can scan. */
+.certificate-no {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .01em;
+  font-weight: 600; color: var(--ink-2);
+}
+
+/* ---------------------------------------------------------- register ------ */
+
+.cert-tabs { display: flex; gap: .5rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.cert-tab {
+  flex: 1 1 13rem; min-width: 0; text-align: left; cursor: pointer;
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: .5rem .75rem .6rem;
+  color: var(--muted); font: inherit;
+  transition: color .18s var(--ease), border-color .18s var(--ease), background .18s var(--ease);
+}
+.cert-tab:hover { color: var(--ink-2); }
+/* Selection by weight and a bar, never by colour alone (NFR-ACC-007). */
+.cert-tab.is-current {
+  color: var(--ink); border-color: var(--brand-600);
+  background: var(--brand-050);
+  box-shadow: inset 0 -3px 0 var(--brand-600);
+}
+.cert-tab-label { display: block; font-weight: 620; font-size: .9rem; }
+.cert-tab-hint { display: block; font-size: .78rem; }
+
+.cert-filters { align-items: flex-end; }
+/* The search box earns the room: a name or a certificate number is what gets
+   typed, and both are longer than a select. */
+.cert-search { flex: 2 1 22rem; }
+
+.cert-pager { justify-content: space-between; margin-top: .75rem; }
+.cert-pager .btn svg { width: 15px; height: 15px; }
+
+/* The line that appears once a typed name is matched to a real student. */
+.cert-linked {
+  display: flex; align-items: center; gap: .4rem; flex-wrap: wrap;
+  margin: .1rem 0 .9rem;
+  font-size: .85rem; color: var(--ink-2);
+}
+.cert-linked svg { width: 15px; height: 15px; color: var(--ok); }
+
+.cert-matches {
+  margin: .1rem 0 .9rem; padding: .6rem .7rem;
+  background: var(--surface-2); border-radius: var(--radius-sm);
+}
+.cert-matches ul { display: flex; flex-wrap: wrap; gap: .35rem; }
+.cert-matches li { padding: 0; border: 0; }
+
+/* Everything optional, folded away. An office issuing forty workshop slips
+   should see two fields, not twelve. */
+.cert-more { margin: .2rem 0 1rem; }
+.cert-more > summary { cursor: pointer; font-size: .875rem; color: var(--ink-2); padding: .3rem 0; }
+.cert-more[open] > summary { margin-bottom: .5rem; font-weight: 600; }
+
+/* A confirmation is a sentence and a reason, not a screen. */
+.modal-sm { width: min(520px, 100%); }
+
+/* ------------------------------------------------- public verification ---- */
+
+.verify-shell { max-width: 900px; }
+
+.verify-card { border-left: 4px solid var(--line); }
+.verify-card.is-valid { border-left-color: var(--ok); }
+.verify-card.is-revoked { border-left-color: var(--error); }
+.verify-card.is-archived { border-left-color: var(--warn); }
+.verify-card.is-unknown { border-left-color: var(--muted); }
+
+/* THE ANSWER, FIRST. Somebody checking a qualification has one question, and
+   the sentence answers it before the table below is read at all. */
+.verify-verdict { display: flex; gap: .85rem; align-items: flex-start; }
+.verify-verdict strong { display: block; font-size: 1.15rem; line-height: 1.3; }
+.verify-verdict p { margin: .3rem 0 0; color: var(--ink-2); font-size: .9rem; }
+
+.verify-mark {
+  flex: 0 0 auto;
+  display: grid; place-items: center;
+  width: 44px; height: 44px; border-radius: 50%;
+  background: var(--surface-2); color: var(--ink-2);
+}
+.verify-mark svg { width: 22px; height: 22px; }
+.is-valid .verify-mark { background: var(--ok-bg); color: var(--ok); }
+.is-revoked .verify-mark { background: var(--error-bg); color: var(--error); }
+.is-archived .verify-mark { background: var(--warn-bg); color: var(--warn); }
+
+.verify-facts {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: .85rem 1.25rem;
+  margin: 1.1rem 0 0; padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+.verify-facts dt {
+  font-size: .75rem; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--muted); margin-bottom: .15rem;
+}
+.verify-facts dd { margin: 0; color: var(--ink); font-size: .95rem; }
+/* The holder's name is what the reader is checking, so it is the largest
+   thing on the page after the verdict. */
+.verify-holder { font-family: var(--font-display); font-size: 1.15rem; font-weight: 600; }
+.verify-no { font-variant-numeric: tabular-nums; letter-spacing: .02em; }
+
+.verify-lookup form { display: flex; gap: .6rem; align-items: flex-end; flex-wrap: wrap; }
+.verify-lookup .field { flex: 1 1 16rem; }
+
+@media (max-width: 700px) {
+  .certificate-grid { grid-template-columns: 1fr; }
+  .cert-tab { flex: 1 1 100%; }
+  .cert-pager { flex-direction: column; align-items: stretch; }
+  .certificate-actions .btn { flex: 1 1 auto; justify-content: center; }
+}
+
+/* ---------------------------------------------------------------------------
+   FEES & PAYMENTS — FR-PAY-021, FR-PAY-039..042.
+
+   TWO REGISTERS IN ONE FILE, and keeping them apart is the whole point.
+
+   The SCREENS (fee summary, submission form, verification queue) are dashboard
+   work: cards, tinted tiles, pills, generous tap targets, a layout that folds
+   onto a phone — because the payment screenshot is on the phone, and that is
+   where a student will be standing when they submit it.
+
+   The RECEIPT is a document. It is set in a narrow measure with fixed field
+   rows, a rule under the masthead, one figure larger than everything else and
+   a signature block, and it is styled so that the printed sheet — not the
+   screen — is the thing that looks right. Anything that reads as "app" on that
+   page is a mistake there, however good it looks elsewhere.
+   --------------------------------------------------------------------------- */
+
+/* ------------------------------------------------------- the four figures --
+   The tile a student opens this section to read. "Awaiting checking" is
+   deliberately NOT coloured like money — it is the one figure on the screen
+   that is evidence rather than a balance, and a green tile is how a student
+   comes to believe a screenshot settled their fee. */
+/* The panel itself. Nothing but rhythm — the tiles inside carry the meaning,
+   and a second border around them would fence the figures off from the
+   sentence that explains them. */
+.fee-standing { padding-bottom: 1.1rem; }
+.fee-standing-head {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  gap: 1rem; flex-wrap: wrap;
+}
+.fee-standing-head h2 { margin-bottom: .25rem; }
+.fee-headline { margin: 0; color: var(--ink-2); max-width: 46rem; }
+
+.fee-figures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: .75rem;
+  margin: 1.1rem 0 0;
+}
+.fee-figure {
+  display: flex; flex-direction: column; gap: .15rem;
+  padding: .8rem .9rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.fee-figure-label {
+  font-size: .78rem; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--muted); font-weight: 600;
+}
+.fee-figure-value {
+  font-size: 1.5rem; line-height: 1.15;
+  font-variant-numeric: tabular-nums;   /* figures that line up down a column */
+  color: var(--ink);
+}
+.fee-figure-note { font-size: .78rem; color: var(--muted); }
+.fee-figure.is-ok { border-color: color-mix(in srgb, var(--ok) 35%, var(--line)); }
+.fee-figure.is-ok .fee-figure-value { color: var(--ok); }
+.fee-figure.is-due { border-color: color-mix(in srgb, var(--warn) 40%, var(--line)); }
+.fee-figure.is-due .fee-figure-value { color: var(--warn); }
+/* A dashed edge, not a fill: "waiting" is a provisional state and reads as one. */
+.fee-figure.is-pending { border-style: dashed; border-color: var(--muted); }
+
+.fee-standing-action {
+  display: flex; align-items: center; gap: .75rem; flex-wrap: wrap;
+  margin-top: 1.1rem; padding-top: 1rem; border-top: 1px solid var(--line);
+}
+
+/* The ledger, folded away. Present in full, second in prominence. */
+.fee-ledger > summary {
+  cursor: pointer; display: flex; gap: .75rem; align-items: baseline;
+  flex-wrap: wrap; font-weight: 600; color: var(--ink);
+}
+.fee-ledger > summary::marker { color: var(--muted); }
+.fee-ledger[open] > summary { margin-bottom: .75rem; }
+
+/* ------------------------------------------------------ payment history ----
+   One markup, two layouts: a row on a desk, a card on a phone. */
+.paylist { list-style: none; margin: 1rem 0 0; padding: 0; display: grid; gap: .75rem; }
+.payrow {
+  border: 1px solid var(--line); border-radius: var(--radius);
+  padding: .85rem 1rem; background: var(--surface);
+}
+.payrow-main {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  gap: 1rem; flex-wrap: wrap;
+}
+.payrow-amount { display: flex; flex-direction: column; }
+.payrow-amount strong { font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+/* When the office verified a different figure, the claim is still shown. */
+.payrow-claimed { font-size: .78rem; color: var(--muted); }
+.payrow-meta { display: flex; flex-direction: column; align-items: flex-end; gap: .2rem; text-align: right; }
+.payrow-note { margin: .6rem 0 0; }
+.payrow-actions { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; margin-top: .7rem; }
+.payrow-proof { flex: 1 1 100%; margin-top: .6rem; }
+
+/* ---------------------------------------------------------- field blocks --
+   Label above value on a phone, two columns on a desk. Used by the form, the
+   review panel and the confirmation. */
+.paydetails { margin: .9rem 0 0; display: grid; gap: .55rem; }
+.paydetails > div { display: grid; grid-template-columns: 12rem 1fr; gap: 1rem; align-items: baseline; }
+.paydetails dt { color: var(--muted); font-size: .875rem; }
+.paydetails dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+
+/* The arithmetic, as an account rather than a sentence. */
+.paycalc { margin: .9rem 0 0; display: grid; gap: .4rem; max-width: 30rem; }
+.paycalc > div { display: flex; justify-content: space-between; gap: 1rem; align-items: baseline; }
+.paycalc dt { color: var(--ink-2); }
+.paycalc dd { margin: 0; font-variant-numeric: tabular-nums; }
+.paycalc-total {
+  border-top: 2px solid var(--ink); margin-top: .35rem; padding-top: .45rem;
+  font-weight: 700; font-size: 1.05rem;
+}
+/* Set aside from the sum, because a pending claim is not in it. */
+.paycalc-aside { color: var(--muted); font-style: italic; }
+.paycalc-aside dt, .paycalc-aside dd { color: var(--muted); font-weight: 400; }
+
+/* --------------------------------------------------------- amount entry ----
+   The currency lives INSIDE the control. A student typing a figure must never
+   have to work out which currency the box is in. */
+.amount-input {
+  display: flex; align-items: stretch;
+  border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--surface); overflow: hidden;
+  max-width: 22rem;
+}
+.amount-input:focus-within {
+  border-color: var(--brand-600);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-600) 18%, transparent);
+}
+.amount-currency {
+  display: flex; align-items: center; padding: 0 .8rem;
+  background: var(--surface-2); color: var(--ink-2);
+  font-weight: 700; border-right: 1px solid var(--line);
+}
+.field .amount-input input {
+  border: none; border-radius: 0; box-shadow: none; background: transparent;
+  font-size: 1.35rem; font-variant-numeric: tabular-nums; font-weight: 600;
+  min-height: 48px;
+}
+.field .amount-input input:focus { box-shadow: none; }
+
+/* --------------------------------------------------------- proof upload ----
+   Drag and drop on a desk, the camera roll on a phone, one handler behind
+   both. The target is deliberately large: most of these are one-handed taps. */
+.dropzone {
+  margin-top: .9rem; padding: 1.6rem 1rem; text-align: center;
+  border: 2px dashed var(--line); border-radius: var(--radius);
+  background: var(--surface-2);
+  transition: border-color .15s var(--ease), background .15s var(--ease);
+}
+.dropzone.is-over {
+  border-color: var(--brand-600);
+  background: color-mix(in srgb, var(--brand-600) 8%, var(--surface));
+}
+.dropzone p { margin: .4rem 0 0; }
+.dropzone-icon { width: 26px; height: 26px; color: var(--muted); }
+
+.proofgrid {
+  list-style: none; margin: .9rem 0 0; padding: 0;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr)); gap: .75rem;
+}
+.proofitem { border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: var(--surface); }
+/* THE PREVIEW IS THE CHECK. A student who attached the wrong screenshot finds
+   out here rather than from a rejection three days later. */
+.proofitem img { width: 100%; height: 7.5rem; object-fit: cover; display: block; background: var(--surface-2); }
+.proofitem-pdf {
+  height: 7.5rem; display: flex; flex-direction: column; gap: .3rem;
+  align-items: center; justify-content: center; background: var(--surface-2); color: var(--muted);
+}
+.proofitem-pdf svg { width: 26px; height: 26px; }
+.proofitem-foot { display: flex; align-items: center; justify-content: space-between; gap: .3rem; padding: .35rem .5rem; }
+.proofitem-foot span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ------------------------------------------------------- confirmations -----
+   Not a toast. Somebody who has just told the Institute they paid 25,000
+   rupees is owed a page, not a strip that disappears in four seconds. */
+.payconfirm { text-align: left; }
+.payconfirm-mark {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 44px; height: 44px; border-radius: 50%;
+  background: var(--ok-bg); color: var(--ok); margin-bottom: .5rem;
+}
+.payconfirm-mark svg { width: 24px; height: 24px; }
+
+.checklist { margin: .8rem 0 0; padding-left: 1.1rem; display: grid; gap: .35rem; }
+.checklist li { color: var(--ink-2); }
+
+.form-actions { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin-top: 1.1rem; }
+
+/* Where to pay. An account number copied by hand is how money reaches the
+   wrong account, so the value is monospaced and has a copy button beside it. */
+.paybank-value { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: .02em; margin-right: .5rem; }
+.paybank dd { display: flex; align-items: center; gap: .25rem; flex-wrap: wrap; }
+
+/* A negative action, distinguished by more than position. Rejecting a payment
+   and verifying one sit side by side, and they must not look alike. */
+.btn-danger { border-color: color-mix(in srgb, var(--error) 45%, var(--line)); color: var(--error); }
+.btn-danger:hover:not(:disabled) { background: var(--error-bg); border-color: var(--error); }
+
+/* --------------------------------------------------- verification queue ---- */
+.payfilters {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: .75rem; align-items: end; margin-bottom: 1rem;
+}
+.payfilters .field { margin-bottom: 0; }
+/* Search is the field people actually use; it gets the room. */
+.payfilters .field:first-child { grid-column: span 2; min-width: 14rem; }
+
+.payreview { width: min(52rem, 100%); max-height: 90vh; overflow-y: auto; }
+.payreview-section { padding: 1rem 0; border-top: 1px solid var(--line); }
+.payreview-section:first-of-type { border-top: none; padding-top: .5rem; }
+.payreview-actions {
+  position: sticky; bottom: 0; background: var(--surface);
+  padding: .9rem 0 .2rem; border-top: 1px solid var(--line);
+}
+.payreview-confirm {
+  margin-top: 1rem; padding: 1rem;
+  border: 1px solid color-mix(in srgb, var(--brand-600) 35%, var(--line));
+  border-radius: var(--radius); background: var(--surface-2);
+}
+.payreview-confirm h3 { margin: 0 0 .35rem; }
+
+/* --------------------------------------------------------- the receipt -----
+   From here down the register changes: this is a document. */
+.receipt-toolbar { margin-bottom: 1rem; }
+.receipt { max-width: 48rem; }
+
+.receipt-issuer { display: flex; gap: .9rem; align-items: flex-start; }
+.receipt-logo { width: 52px; height: 52px; object-fit: contain; }
+.receipt-head { border-bottom: none; padding-bottom: .35rem; align-items: flex-start; }
+.receipt-head h1 { font-size: 1.35rem; letter-spacing: -.01em; }
+.receipt-campus { margin: .1rem 0 0; color: var(--ink-2); font-size: .9rem; }
+.receipt-contact { margin: .15rem 0 0; color: var(--muted); font-size: .78rem; }
+
+.receipt-doctype {
+  margin: 0; font-size: .72rem; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--muted); font-weight: 700;
+}
+.receipt-number {
+  margin: .1rem 0 0; font-size: 1.15rem; font-weight: 700;
+  font-variant-numeric: tabular-nums; letter-spacing: .02em;
+}
+.receipt-issued { margin: .1rem 0 0; font-size: .78rem; color: var(--muted); }
+
+/* The rule under the masthead — the line that makes it a letterhead. */
+.receipt-rule { height: 3px; background: var(--ink); margin: .3rem 0 1.25rem; }
+.receipt.is-reversed .receipt-rule { background: var(--error); }
+
+.receipt-block { margin: 1.1rem 0; }
+.receipt-block-title {
+  margin: 0 0 .4rem; font-size: .72rem; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--muted); font-weight: 700;
+}
+.receipt-block .receipt-fields { margin: 0; gap: .35rem; }
+.receipt-fields > div { grid-template-columns: 11rem 1fr; }
+
+.receipt-amount { margin-top: 1.25rem; }
+.receipt-amount strong { font-size: 1.5rem; }
+
+/* Four lines answering "so what do I still owe?" */
+.receipt-ledger { width: 100%; max-width: 26rem; border-collapse: collapse; }
+.receipt-ledger th { text-align: left; font-weight: 400; color: var(--ink-2); padding: .25rem 0; }
+.receipt-ledger td { text-align: right; font-variant-numeric: tabular-nums; padding: .25rem 0; }
+.receipt-ledger-total th, .receipt-ledger-total td {
+  border-top: 1px solid var(--ink); padding-top: .4rem; font-weight: 700;
+}
+
+.receipt-foot { align-items: flex-end; }
+.receipt-verification { min-width: 12rem; }
+.receipt-verifier { margin: 0; font-weight: 600; }
+.receipt-qr { text-align: center; }
+.receipt-qr svg { border: 1px solid var(--line); }
+.receipt-note { margin: 1.5rem 0 0; padding-top: .6rem; border-top: 1px solid var(--line); font-size: .75rem; color: var(--muted); }
+
+@media print {
+  /* The toolbar, and anything else that is not the document. */
+  .receipt-toolbar { display: none !important; }
+  .receipt-rule { background: #000 !important; }
+  .receipt-ledger-total th, .receipt-ledger-total td { border-top-color: #000 !important; }
+  .receipt-note { border-top-color: #999 !important; color: #444 !important; }
+  .receipt-doctype, .receipt-issued, .receipt-contact, .receipt-block-title { color: #444 !important; }
+  .receipt-qr svg { border-color: #999 !important; }
+  /* The emblem is the one image on the sheet and it must survive a printer
+     that strips backgrounds. */
+  .receipt-logo { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+
+@media (max-width: 720px) {
+  /* Label above value: two columns at this width leaves four characters for
+     the value, and the value is the part that matters. */
+  .paydetails > div, .receipt-fields > div { grid-template-columns: 1fr; gap: .1rem; }
+  .payrow-meta { align-items: flex-start; text-align: left; }
+  .payrow-main { gap: .5rem; }
+  .payfilters .field:first-child { grid-column: span 1; }
+  .receipt-head { flex-direction: column; }
+  .receipt-no { text-align: left; }
+  .receipt-foot { flex-direction: column; align-items: flex-start; gap: 1.25rem; }
+  .receipt-sign { min-width: 100%; }
+  /* A phone submitting a payment: the primary action spans the screen rather
+     than sitting in a row with two others. */
+  .form-actions .btn { flex: 1 1 auto; justify-content: center; }
+}

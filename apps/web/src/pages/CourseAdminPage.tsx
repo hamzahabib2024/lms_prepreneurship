@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ApiError, api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
@@ -7,8 +7,6 @@ import { CourseCover } from "../components/CourseCover";
 import { Icon } from "../components/Icon";
 import { money, whenDue, type Fee } from "../components/FeePanel";
 import { CourseHierarchy } from "../components/CourseHierarchy";
-import { BatchForm } from "../components/BatchForm";
-import { CourseSubjects, type CourseSubject } from "../components/CourseSubjects";
 
 /**
  * Courses — creating them, illustrating them, and pricing them (FR-CRS-004,
@@ -76,9 +74,9 @@ interface Batch {
 interface CourseNode extends Programme {
   terms: Array<{ id: string; code: string; name: string; status: string }>;
   /** The course's OWN syllabus, with how many batches actually teach each. */
-  subjects: CourseSubject[];
+  subjects: Array<{ id: string; code: string; name: string; batches: number }>;
   /** Taught by a batch but missing from the syllabus — drift, surfaced. */
-  unlistedSubjects: CourseSubject[];
+  unlistedSubjects: Array<{ id: string; code: string; name: string; batches: number }>;
   batches: Batch[];
   totals: { batches: number; seats: number; enrolled: number };
 }
@@ -210,13 +208,12 @@ export function CourseAdminPage() {
           under it because it is a store to draw from rather than a step. */}
       <CoursesPanel
         courses={courses}
-        subjects={subjects ?? []}
         mayEdit={mayEdit}
         run={run}
         onChanged={() => void load()}
       />
 
-      <SubjectsPanel subjects={subjects} mayEdit={mayEdit} run={run} />
+      <SubjectsPanel subjects={subjects} mayEdit={mayEdit} />
     </>
   );
 }
@@ -239,25 +236,23 @@ export function CourseAdminPage() {
  */
 function CoursesPanel({
   courses,
-  subjects,
   mayEdit,
   run,
   onChanged,
 }: {
   courses: CourseNode[] | null;
-  subjects: Subject[];
   mayEdit: boolean;
   run: (work: () => Promise<unknown>, ok: string) => Promise<boolean>;
   onChanged: () => void;
 }) {
-  const [creating, setCreating] = useState(false);
-  const [open, setOpen] = useState<{
-    id: string;
-    panel: "edit" | "fees" | "batch" | "subjects";
-  } | null>(null);
-
-  const close = () => setOpen(null);
-  const toggle = (id: string, panel: "edit" | "fees" | "batch" | "subjects") =>
+  /*
+   * ONLY THE FEE IS STILL A PANEL. The course, its subjects and its batches
+   * are pages now — but a fee is edited far more often than the course around
+   * it, it is a table with its own draft/published life, and opening it beside
+   * the card it belongs to is genuinely the right shape for that one job.
+   */
+  const [open, setOpen] = useState<{ id: string; panel: "fees" } | null>(null);
+  const toggle = (id: string, panel: "fees") =>
     setOpen((o) => (o && o.id === id && o.panel === panel ? null : { id, panel }));
 
   return (
@@ -268,22 +263,12 @@ function CoursesPanel({
           <p className="muted small">What a student applies for.</p>
         </div>
         {mayEdit && (
-          <button className="btn btn-primary" onClick={() => setCreating((c) => !c)}>
-            {creating ? "Cancel" : "New course"}
-          </button>
+          /* A page, not a panel. See the note on EditorPage for why. */
+          <Link className="btn btn-primary" to="/courses-admin/course/new">
+            New course
+          </Link>
         )}
       </div>
-
-      {creating && (
-        <ProgrammeForm
-          onDone={async (body) => {
-            const ok = await run(() => api.post("/programmes", body), "Course created.");
-            if (ok) setCreating(false);
-            return ok;
-          }}
-          onCancel={() => setCreating(false)}
-        />
-      )}
 
       {!courses ? (
         <SkeletonCards count={3} />
@@ -345,12 +330,9 @@ function CoursesPanel({
                       </span>
                     )}
                     {mayEdit && (
-                      <button
-                        className="link-button small course-facet-edit"
-                        onClick={() => toggle(c.id, "subjects")}
-                      >
-                        {isOpen && open.panel === "subjects" ? "Close" : "Choose subjects"}
-                      </button>
+                      <Link className="link-button small course-facet-edit" to={`/courses-admin/course/${c.id}`}>
+                        Choose subjects
+                      </Link>
                     )}
                   </div>
 
@@ -407,75 +389,27 @@ function CoursesPanel({
 
                   {mayEdit && (
                     <div className="row-actions">
-                      <button className="btn btn-primary" onClick={() => toggle(c.id, "batch")}>
-                        {isOpen && open.panel === "batch" ? "Close" : "Add a batch"}
-                      </button>
+                      <Link
+                        className="btn btn-primary"
+                        to={`/courses-admin/batch/new?courseId=${c.id}`}
+                      >
+                        Add a batch
+                      </Link>
+                      {/* The fee stays a panel: it is a table with its own
+                          arithmetic and its own draft life, and it is edited
+                          far more often than the course around it. */}
                       <button className="btn btn-quiet" onClick={() => toggle(c.id, "fees")}>
                         {isOpen && open.panel === "fees" ? "Close" : "Fees"}
                       </button>
-                      <button className="btn btn-quiet" onClick={() => toggle(c.id, "edit")}>
-                        {isOpen && open.panel === "edit" ? "Close" : "Edit course"}
-                      </button>
+                      <Link className="btn btn-quiet" to={`/courses-admin/course/${c.id}`}>
+                        Edit course
+                      </Link>
                     </div>
                   )}
                 </div>
 
-                {isOpen && open.panel === "edit" && (
-                  <div className="course-card-editor">
-                    <ProgrammeForm
-                      initial={c}
-                      onDone={async (body) => {
-                        const ok = await run(
-                          () => api.patch(`/programmes/${c.id}`, body),
-                          `${c.name} updated.`,
-                        );
-                        if (ok) close();
-                        return ok;
-                      }}
-                      onCancel={close}
-                    />
-                  </div>
-                )}
 
-                {isOpen && open.panel === "subjects" && (
-                  <div className="course-card-editor">
-                    <h3>What {c.name} teaches</h3>
-                    <CourseSubjects
-                      programmeId={c.id}
-                      programmeName={c.name}
-                      current={c.subjects}
-                      unlisted={c.unlistedSubjects ?? []}
-                      batchCount={c.totals.batches}
-                      allSubjects={subjects.filter((x) => x.isActive !== false)}
-                      onSaved={(message) => {
-                        close();
-                        void run(() => Promise.resolve(), message).then(() => onChanged());
-                      }}
-                      onCancel={close}
-                    />
-                  </div>
-                )}
 
-                {isOpen && open.panel === "batch" && (
-                  <div className="course-card-editor">
-                    <h3>Add a batch to {c.name}</h3>
-                    <BatchForm
-                      programmeId={c.id}
-                      programmeName={c.name}
-                      subjects={subjects.filter((s) => s.isActive !== false)}
-                      // THE COURSE'S OWN SYLLABUS, which is what a batch of
-                      // it should teach. Previously this was derived from what
-                      // other batches happened to teach, so the first batch of
-                      // a course started from nothing at all.
-                      suggestedSubjectIds={c.subjects.map((s) => s.id)}
-                      onCreated={(message) => {
-                        close();
-                        void run(() => Promise.resolve(), message).then(() => onChanged());
-                      }}
-                      onCancel={close}
-                    />
-                  </div>
-                )}
 
                 {isOpen && open.panel === "fees" && (
                   <div className="course-card-editor">
@@ -539,144 +473,24 @@ const AUDIENCE_LABEL: Record<string, string> = {
   MALE: "Male only",
 };
 
-/**
- * One form for creating and for editing.
- *
- * THE CODE IS NOT EDITABLE ONCE SET, and the field says why rather than simply
- * being disabled. A programme code is baked into every registration number
- * issued against it (Appendix B), several of which are printed on certificates
- * in people's hands — so this is not a restriction anybody can lift later, and
- * an administrator who does not know that will try.
- */
-function ProgrammeForm({
-  initial,
-  onDone,
-  onCancel,
-}: {
-  initial?: Programme;
-  onDone: (body: Record<string, unknown>) => Promise<boolean>;
-  onCancel: () => void;
-}) {
-  const editing = !!initial;
-  const [f, setF] = useState({
-    name: initial?.name ?? "",
-    code: initial?.code ?? "",
-    description: initial?.description ?? "",
-    durationWeeks: initial?.durationWeeks ? String(initial.durationWeeks) : "",
-  });
-  const [assetId, setAssetId] = useState<string | null>(initial?.thumbnailAssetId ?? null);
-  const [busy, setBusy] = useState(false);
-
-  const set = (k: keyof typeof f) => (v: string) => setF((p) => ({ ...p, [k]: v }));
-
-  const submit = async () => {
-    setBusy(true);
-    const body: Record<string, unknown> = {
-      name: f.name.trim(),
-      ...(editing ? {} : { code: f.code.trim().toUpperCase() }),
-      description: f.description.trim() || null,
-      durationWeeks: f.durationWeeks ? Number(f.durationWeeks) : null,
-      thumbnailAssetId: assetId,
-    };
-    await onDone(body);
-    setBusy(false);
-  };
-
-  return (
-    <div className="course-form">
-      <div className="form-row">
-        <label className="field">
-          <span>Name</span>
-          <input
-            value={f.name}
-            onChange={(e) => set("name")(e.target.value)}
-            placeholder="Diploma in Graphic Designing"
-          />
-        </label>
-        <label className="field">
-          <span>Code</span>
-          <input
-            value={f.code}
-            onChange={(e) => set("code")(e.target.value.toUpperCase())}
-            placeholder="GD"
-            disabled={editing}
-            maxLength={10}
-          />
-          <span className="muted small">
-            {editing
-              ? "Cannot be changed — it is part of every registration number already issued."
-              : "2–10 letters or digits. It becomes part of every student's registration number, so it cannot be changed afterwards."}
-          </span>
-        </label>
-      </div>
-
-      <label className="field">
-        <span>Description</span>
-        <textarea
-          value={f.description}
-          onChange={(e) => set("description")(e.target.value)}
-          placeholder="What the course covers, in a sentence or two. This appears on the public page."
-        />
-      </label>
-
-      <div className="form-row">
-        <label className="field">
-          <span>Length in weeks</span>
-          <input
-            type="number"
-            min={1}
-            max={520}
-            value={f.durationWeeks}
-            onChange={(e) => set("durationWeeks")(e.target.value)}
-            placeholder="26"
-          />
-        </label>
-      </div>
-
-      <ThumbnailField
-        assetId={assetId}
-        onChange={setAssetId}
-        hint="Shown on the landing page and the application form. A wide picture works best — the card crops to a banner."
-      />
-
-      <div className="row-actions">
-        <button
-          className="btn btn-primary"
-          disabled={busy || !f.name.trim() || (!editing && !f.code.trim())}
-          onClick={() => void submit()}
-        >
-          {busy ? "Saving…" : editing ? "Save changes" : "Create programme"}
-        </button>
-        <button className="btn btn-quiet" onClick={onCancel} disabled={busy}>
-          Cancel
-        </button>
-      </div>
-    </div>
-  );
-}
-
 // ═════════════════════════════════════════════════════════════ subjects ═══
 
 function SubjectsPanel({
   subjects,
   mayEdit,
-  run,
 }: {
   subjects: Subject[] | null;
   mayEdit: boolean;
-  run: (work: () => Promise<unknown>, ok: string) => Promise<boolean>;
 }) {
-  const [creating, setCreating] = useState(false);
-  const [editing, setEditing] = useState<string | null>(null);
 
   return (
     <section className="card">
       <div className="card-head">
         <h2>Subjects</h2>
         {mayEdit && (
-          <button className="btn btn-primary" onClick={() => setCreating((c) => !c)}>
-            {creating ? "Cancel" : "New subject"}
-          </button>
+          <Link className="btn btn-primary" to="/courses-admin/subject/new">
+            New subject
+          </Link>
         )}
       </div>
       <p className="muted small">
@@ -684,16 +498,7 @@ function SubjectsPanel({
         that is not offered anywhere has no students and no register.
       </p>
 
-      {creating && (
-        <SubjectForm
-          onDone={async (body) => {
-            const ok = await run(() => api.post("/subjects", body), "Subject created.");
-            if (ok) setCreating(false);
-            return ok;
-          }}
-          onCancel={() => setCreating(false)}
-        />
-      )}
+
 
       {!subjects ? (
         <SkeletonCards count={3} />
@@ -723,32 +528,13 @@ function SubjectsPanel({
                 {s.description && <p className="small muted">{s.description}</p>}
                 {mayEdit && (
                   <div className="row-actions">
-                    <button
-                      className="btn btn-quiet"
-                      onClick={() => setEditing(editing === s.id ? null : s.id)}
-                    >
-                      {editing === s.id ? "Close" : "Edit"}
-                    </button>
+                    <Link className="btn btn-quiet" to={`/courses-admin/subject/${s.id}`}>
+                      Edit
+                    </Link>
                   </div>
                 )}
               </div>
 
-              {editing === s.id && (
-                <div className="course-card-editor">
-                  <SubjectForm
-                    initial={s}
-                    onDone={async (body) => {
-                      const ok = await run(
-                        () => api.patch(`/subjects/${s.id}`, body),
-                        `${s.name} updated.`,
-                      );
-                      if (ok) setEditing(null);
-                      return ok;
-                    }}
-                    onCancel={() => setEditing(null)}
-                  />
-                </div>
-              )}
             </li>
           ))}
         </ul>
@@ -757,195 +543,8 @@ function SubjectsPanel({
   );
 }
 
-function SubjectForm({
-  initial,
-  onDone,
-  onCancel,
-}: {
-  initial?: Subject;
-  onDone: (body: Record<string, unknown>) => Promise<boolean>;
-  onCancel: () => void;
-}) {
-  const editing = !!initial;
-  const [f, setF] = useState({
-    name: initial?.name ?? "",
-    code: initial?.code ?? "",
-    description: initial?.description ?? "",
-    credits: initial?.credits ? String(initial.credits) : "",
-  });
-  const [assetId, setAssetId] = useState<string | null>(initial?.thumbnailAssetId ?? null);
-  const [busy, setBusy] = useState(false);
-
-  const set = (k: keyof typeof f) => (v: string) => setF((p) => ({ ...p, [k]: v }));
-
-  const submit = async () => {
-    setBusy(true);
-    await onDone({
-      name: f.name.trim(),
-      ...(editing ? {} : { code: f.code.trim().toUpperCase() }),
-      description: f.description.trim() || null,
-      credits: f.credits ? Number(f.credits) : null,
-      thumbnailAssetId: assetId,
-    });
-    setBusy(false);
-  };
-
-  return (
-    <div className="course-form">
-      <div className="form-row">
-        <label className="field">
-          <span>Name</span>
-          <input
-            value={f.name}
-            onChange={(e) => set("name")(e.target.value)}
-            placeholder="Adobe Photoshop"
-          />
-        </label>
-        <label className="field">
-          <span>Code</span>
-          <input
-            value={f.code}
-            onChange={(e) => set("code")(e.target.value.toUpperCase())}
-            placeholder="PS101"
-            disabled={editing}
-            maxLength={10}
-          />
-          <span className="muted small">
-            {editing ? "Cannot be changed — it appears on transcripts already issued." : "2–10 letters or digits."}
-          </span>
-        </label>
-      </div>
-
-      <label className="field">
-        <span>Description</span>
-        <textarea
-          value={f.description}
-          onChange={(e) => set("description")(e.target.value)}
-          placeholder="What students learn in this subject."
-        />
-      </label>
-
-      <ThumbnailField
-        assetId={assetId}
-        onChange={setAssetId}
-        hint="Shown on the course card. Optional — without one the System draws a cover from the subject code."
-      />
-
-      <div className="row-actions">
-        <button
-          className="btn btn-primary"
-          disabled={busy || !f.name.trim() || (!editing && !f.code.trim())}
-          onClick={() => void submit()}
-        >
-          {busy ? "Saving…" : editing ? "Save changes" : "Create subject"}
-        </button>
-        <button className="btn btn-quiet" onClick={onCancel} disabled={busy}>
-          Cancel
-        </button>
-      </div>
-    </div>
-  );
-}
-
 // ════════════════════════════════════════════════════════════ thumbnail ═══
 
-/**
- * Choose a picture, and see it immediately.
- *
- * THE PREVIEW IS THE POINT. An upload field that reports "uploaded" and shows
- * nothing leaves the administrator to save, navigate to the public page and
- * look — three steps to find out they picked the wrong file. It uploads on
- * selection and shows the result at the size it will actually appear.
- */
-function ThumbnailField({
-  assetId,
-  onChange,
-  hint,
-}: {
-  assetId: string | null;
-  onChange: (id: string | null) => void;
-  hint: string;
-}) {
-  const input = useRef<HTMLInputElement>(null);
-  const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
-
-  const pick = async (file: File) => {
-    setBusy(true);
-    setProblem(null);
-    try {
-      const form = new FormData();
-      form.append("file", file);
-      const r = await api.upload<{ id: string; deduplicated: boolean }>("/course-media", form);
-      onChange(r.id);
-    } catch (e) {
-      // The server's own words. It knows why — too large, not an image, an SVG
-      // — and each of those has a different thing to do about it.
-      setProblem(
-        e instanceof ApiError
-          ? (e.details?.[0]?.message ?? e.message)
-          : "That picture could not be uploaded.",
-      );
-    } finally {
-      setBusy(false);
-      // So choosing the SAME file again after a failure still fires onChange.
-      if (input.current) input.current.value = "";
-    }
-  };
-
-  return (
-    <div className="field thumb-field">
-      <span>Picture</span>
-
-      <div className="thumb-row">
-        <div className="thumb-preview">
-          {assetId ? (
-            <img src={`/api/v1/public/course-media/${assetId}`} alt="" />
-          ) : (
-            <span className="muted small">No picture</span>
-          )}
-        </div>
-
-        <div className="thumb-actions">
-          <input
-            ref={input}
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            style={{ display: "none" }}
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) void pick(file);
-            }}
-          />
-          <div className="row-actions">
-            <button
-              type="button"
-              className="btn"
-              disabled={busy}
-              onClick={() => input.current?.click()}
-            >
-              <Icon name="upload" />
-              {busy ? "Uploading…" : assetId ? "Replace" : "Choose a picture"}
-            </button>
-            {assetId && (
-              <button type="button" className="btn btn-quiet" onClick={() => onChange(null)}>
-                Remove
-              </button>
-            )}
-          </div>
-          <span className="muted small">{hint}</span>
-          <span className="muted small">JPEG, PNG or WebP, up to 3 MB.</span>
-        </div>
-      </div>
-
-      {problem && (
-        <div className="alert alert-error" role="alert">
-          <p className="small">{problem}</p>
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ═════════════════════════════════════════════════════════ fee structures ═══
 

@@ -15,6 +15,20 @@ export interface NotifyInput {
   linkPath?: string | null;
   isUrgent?: boolean;
   announcementId?: string | null;
+  /**
+   * Channels to write the inbox row for but NOT to push over.
+   *
+   * EXISTS FOR ONE CASE, and it is a real one. A fee receipt is emailed with
+   * the PDF attached, by the service that has the PDF in hand. The student
+   * should still find the notification in their inbox and still get it on
+   * WhatsApp — but not a second, plainer email saying the same thing without
+   * the attachment. Naming the channel to hold back is the honest way to say
+   * that; the alternative was two notification systems.
+   *
+   * The suppression is RECORDED as a delivery outcome like any other, so the
+   * log says the email was held back on purpose rather than going quiet.
+   */
+  exceptChannels?: readonly string[];
 }
 
 /**
@@ -121,7 +135,9 @@ export class NotificationService {
     await Promise.all(
       users.map((u: (typeof users)[number]) => {
         const notificationId = byRecipient.get(u.id);
-        return notificationId ? this.deliver(notificationId, u, message) : Promise.resolve();
+        return notificationId
+          ? this.deliver(notificationId, u, message, input.exceptChannels ?? [])
+          : Promise.resolve();
       }),
     );
 
@@ -145,6 +161,7 @@ export class NotificationService {
       } | null;
     },
     message: OutboundMessage,
+    exceptChannels: readonly string[] = [],
   ): Promise<void> {
     const preference: Preference = user.notificationPreference
       ? {
@@ -165,6 +182,18 @@ export class NotificationService {
     };
 
     for (const { channel } of this.channels.available()) {
+      // Held back by the caller, because it is sending this one itself with a
+      // document attached. Recorded rather than skipped silently.
+      if (exceptChannels.includes(channel)) {
+        await this.recordDelivery(
+          notificationId,
+          channel,
+          "SUPPRESSED",
+          "Sent separately by the service that raised this, with the document attached.",
+        );
+        continue;
+      }
+
       const decision = shouldPush({
         channel,
         kind: message.kind,

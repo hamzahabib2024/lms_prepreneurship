@@ -37,7 +37,23 @@ const LABEL: Record<VideoLink["provider"], string> = {
  * pasted something meant to publish it, and a silently vanishing row would send
  * them to check a setting that is saved and correct.
  */
-export function VideoWall({ videos }: { videos: VideoLink[] }) {
+export function VideoWall({
+  videos,
+  /*
+   * THE HEADING IS THE INSTITUTE'S, NOT THIS COMPONENT'S.
+   *
+   * It was a literal here, which meant an institute that does not think of its
+   * channels as "what we do" could not say otherwise without a deployment. The
+   * defaults are the words that were here, so a caller that passes nothing
+   * renders exactly what this component rendered before.
+   */
+  heading = "See what we do",
+  blurb = "Straight from our own channels. Nothing plays until you press it.",
+}: {
+  videos: VideoLink[];
+  heading?: string;
+  blurb?: string;
+}) {
   const [playing, setPlaying] = useState<string | null>(null);
 
   if (videos.length === 0) return null;
@@ -46,10 +62,8 @@ export function VideoWall({ videos }: { videos: VideoLink[] }) {
     <section className="landing-inner video-wall" id="videos">
       <header className="page-head">
         <div>
-          <h2 className="landing-h2">See what we do</h2>
-          <p className="muted">
-            Straight from our own channels. Nothing plays until you press it.
-          </p>
+          <h2 className="landing-h2">{heading}</h2>
+          {blurb && <p className="muted">{blurb}</p>}
         </div>
       </header>
 
@@ -221,7 +235,16 @@ export interface NewsItem {
  * page into a noticeboard nobody reads. What a stranger needs is that the
  * Institute is active and what it is currently saying.
  */
-export function NewsList({ news }: { news: NewsItem[] }) {
+export function NewsList({
+  news,
+  /** As above: the Institute's wording, defaulting to what was written here. */
+  heading = "Latest from the Institute",
+  blurb = "Notices we have published for everyone.",
+}: {
+  news: NewsItem[];
+  heading?: string;
+  blurb?: string;
+}) {
   // Slower than the photographs: these are sentences somebody has to read, and
   // five seconds is not long enough to finish one and decide it matters.
   const { index, go, holdProps, isStill } = useAutoRotate(news.length, 9000);
@@ -239,8 +262,8 @@ export function NewsList({ news }: { news: NewsItem[] }) {
     <section className="landing-inner news-section" id="news">
       <header className="page-head">
         <div>
-          <h2 className="landing-h2">Latest from the Institute</h2>
-          <p className="muted">Notices we have published for everyone.</p>
+          <h2 className="landing-h2">{heading}</h2>
+          {blurb && <p className="muted">{blurb}</p>}
         </div>
       </header>
 

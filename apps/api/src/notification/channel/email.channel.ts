@@ -144,6 +144,19 @@ export class EmailChannel implements NotificationChannelAdapter {
         to: recipient.email,
         subject: message.title,
         text: this.plainText(recipient, message),
+        // Only when there are any. nodemailer accepts an empty array, but
+        // passing one makes every ordinary message a multipart one for no
+        // reason, and multipart mail with no parts is what some filters score
+        // against.
+        ...(message.attachments?.length
+          ? {
+              attachments: message.attachments.map((a) => ({
+                filename: a.filename,
+                contentType: a.contentType,
+                content: a.content,
+              })),
+            }
+          : {}),
       });
       // The provider's id, so a delivery can be traced in the mail logs later.
       return { status: "SENT", detail: `Accepted by the mail server (${info.messageId}).` };

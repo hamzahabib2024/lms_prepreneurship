@@ -111,12 +111,23 @@ export class SlipService {
 
     const contentHash = createHash("sha256").update(file.buffer).digest("hex");
 
-    // An applicant who uploads the same slip twice — by pressing the button
-    // again on a slow connection — gets the same row rather than two, so the
-    // reviewer is not shown a duplicate they have to think about.
+    /*
+     * An applicant who uploads the same slip twice — by pressing the button
+     * again on a slow connection — gets the same row rather than two, so the
+     * reviewer is not shown a duplicate they have to think about.
+     *
+     * UNATTACHED MEANS UNATTACHED TO EITHER PARENT. A document now belongs to
+     * an application OR to a payment submission, and matching only on
+     * `registrationRequestId: null` handed back a row already stapled to a
+     * submission — which the submit step then refused to claim, because it
+     * insists on both parents being empty. The visible failure was the exact
+     * case this feature exists for: a student whose payment was rejected for
+     * an unreadable slip, re-sending the SAME photograph, and being told their
+     * receipt "could not be saved" with no way to proceed.
+     */
     const existing = await this.prisma.asSystem((db) =>
       db.registrationDocument.findFirst({
-        where: { contentHash, registrationRequestId: null },
+        where: { contentHash, registrationRequestId: null, paymentSubmissionId: null },
         select: { id: true, createdAt: true },
       }),
     );
@@ -169,7 +180,14 @@ export class SlipService {
     const anHourAgo = new Date(Date.now() - 3_600_000);
     const recent = await this.prisma.asSystem((db) =>
       db.registrationDocument.count({
-        where: { registrationRequestId: null, createdAt: { gte: anHourAgo } },
+        // Genuinely unattached — to either parent. A payment proof that has
+        // already been stapled to a submission is a finished piece of work,
+        // not part of the pile this guard exists to bound.
+        where: {
+          registrationRequestId: null,
+          paymentSubmissionId: null,
+          createdAt: { gte: anHourAgo },
+        },
       }),
     );
     if (recent >= MAX_UNATTACHED_PER_HOUR * 20) {
