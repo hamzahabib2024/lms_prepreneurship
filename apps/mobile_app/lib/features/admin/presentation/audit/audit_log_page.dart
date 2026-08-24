@@ -152,9 +152,13 @@ class _AuditEntryTile extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               if (entry.entityType != null)
-                Text(
-                  entry.entityType!,
-                  style: TextStyle(fontSize: 11.5, color: muted),
+                Flexible(
+                  child: Text(
+                    entry.entityType!,
+                    style: TextStyle(fontSize: 11.5, color: muted),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
             ],
           ),

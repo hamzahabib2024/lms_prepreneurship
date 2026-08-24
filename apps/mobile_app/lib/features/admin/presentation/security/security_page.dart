@@ -147,14 +147,15 @@ class _OverviewCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _TallyItem(label: 'Sign-ins', value: signIns, color: ok),
-              const SizedBox(width: 16),
-              _TallyItem(label: 'Failures', value: failures, color: failures > 0 ? warn : muted),
-              const SizedBox(width: 16),
-              _TallyItem(label: 'Lockouts', value: lockouts, color: lockouts > 0 ? error : muted),
-              const SizedBox(width: 16),
-              _TallyItem(label: 'Token reuse', value: tokenReuse, color: tokenReuse > 0 ? error : muted),
+              Expanded(child: _TallyItem(label: 'Sign-ins', value: signIns, color: ok)),
+              const SizedBox(width: 8),
+              Expanded(child: _TallyItem(label: 'Failures', value: failures, color: failures > 0 ? warn : muted)),
+              const SizedBox(width: 8),
+              Expanded(child: _TallyItem(label: 'Lockouts', value: lockouts, color: lockouts > 0 ? error : muted)),
+              const SizedBox(width: 8),
+              Expanded(child: _TallyItem(label: 'Token reuse', value: tokenReuse, color: tokenReuse > 0 ? error : muted)),
             ],
           ),
           if (overview.concerns.isNotEmpty) ...[
@@ -295,9 +296,13 @@ class _SecurityEventTile extends StatelessWidget {
               ],
             ),
           ),
-          Text(
-            _formatDate(event.occurredAt),
-            style: TextStyle(fontSize: 11, color: muted),
+          Flexible(
+            child: Text(
+              _formatDate(event.occurredAt),
+              style: TextStyle(fontSize: 11, color: muted),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ],
       ),
