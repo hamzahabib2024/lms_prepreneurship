@@ -138,6 +138,11 @@ export class SettingsService {
         ...(def.min !== undefined ? { min: def.min } : {}),
         ...(def.max !== undefined ? { max: def.max } : {}),
         ...(def.allowed ? { allowed: def.allowed } : {}),
+        // Shape, so the screen can draw a box the size of the value. Without
+        // these a 400-character paragraph is edited through a one-line input
+        // that shows forty characters of it at a time.
+        ...(def.maxLength !== undefined ? { maxLength: def.maxLength } : {}),
+        ...(def.multiline !== undefined ? { multiline: def.multiline } : {}),
       };
 
       // SEC-CRY-010 — a secret is write-only. Not masked, not truncated:

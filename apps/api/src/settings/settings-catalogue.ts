@@ -277,6 +277,41 @@ export const CATALOGUE: SettingDefinition[] = [
     description:
       "The campus or address printed under the Institute's name on a receipt. Leave it empty for a single-campus institute; the line is then omitted rather than printed blank.",
   },
+  /*
+   * HOW TO REACH THE INSTITUTE, printed on the receipt masthead.
+   *
+   * These exist because a receipt is a document that leaves the building. A
+   * student queries a payment six months later from a phone; whatever is on
+   * the paper in their hand is how they get in touch, and until now the paper
+   * carried a name and nothing else. Each is omitted rather than printed blank
+   * when it is not set, so an institute that gives only a phone number gets a
+   * masthead with a phone number rather than three empty separators.
+   */
+  {
+    key: "institute.phone",
+    type: "string",
+    default: "",
+    group: "Institute",
+    description:
+      "The office telephone number, printed on receipts and in the emails that carry them. This is the number a student rings about a payment, so it should be the desk that can answer.",
+  },
+  {
+    key: "institute.email",
+    type: "string",
+    default: "",
+    group: "Institute",
+    description:
+      "The address a student writes to about fees. Printed on receipts. Not the same as the account the System sends from — that is MAIL_FROM, which is usually a no-reply.",
+  },
+  {
+    key: "institute.website",
+    type: "string",
+    default: "",
+    group: "Institute",
+    description:
+      "The Institute's public web address, printed on receipts. Written without the https:// — a printed URL is read, not clicked.",
+  },
+
   // ----------------------------------------------------------- the paper --
   /*
    * WHAT GOES ON A CERTIFICATE — SRS §5.15.
@@ -406,6 +441,184 @@ export const CATALOGUE: SettingDefinition[] = [
     group: "Public page",
     description:
       "One line under the Institute's name on the public page. Leave empty to use the System's own wording, which describes what the software does rather than making a claim about the Institute.",
+  },
+
+  /*
+   * THE WORDS ON THE PAGE, and the reason they moved out of the markup.
+   *
+   * Everything below was a string literal in LandingPage.tsx. The headline, the
+   * paragraph under it, the two buttons, the six things the Institute claims it
+   * does well, the heading over the programme list and the closing band: all of
+   * it correct on the day it was written, and none of it changeable by the
+   * Institute without a developer, a build and a deployment.
+   *
+   * That is the same defect the video links were moved here to fix, one level
+   * up. A front page nobody can edit is a front page that describes the
+   * Institute as it was on the day somebody wrote the component.
+   *
+   * THE DEFAULTS ARE THE WORDS THAT WERE THERE. Nothing has been reworded. A
+   * fresh install renders exactly the page it rendered before, and clearing an
+   * override restores it — which is what makes this safe to hand to somebody
+   * who is about to experiment with a headline at four in the afternoon.
+   */
+  {
+    key: "public.heroPill",
+    type: "string",
+    default: "Prepreneurship Institute",
+    group: "Public page",
+    maxLength: 60,
+    description:
+      "The small label above the headline. Usually the Institute's name; short enough to read as a badge rather than a sentence.",
+  },
+  {
+    key: "public.heroHeadline",
+    type: "string",
+    default: "Learn the craft.\nBuild the business.",
+    group: "Public page",
+    maxLength: 120,
+    multiline: true,
+    description:
+      "The first thing anybody reads. Each line is set on its own line of the page, so two short lines read better than one long one. This is the Institute's claim about itself — keep it to something that is true.",
+  },
+  {
+    key: "public.heroBody",
+    type: "string",
+    default:
+      "Practical programmes in design and digital marketing, taught in small sections with attendance, coursework and progress you can see from the first week — not a mark at the end of the term.",
+    group: "Public page",
+    maxLength: 400,
+    multiline: true,
+    description:
+      "The paragraph under the headline. Two or three sentences saying what the Institute teaches and how. Anything longer is not read.",
+  },
+  {
+    key: "public.heroPrimaryCta",
+    type: "string",
+    default: "Apply now",
+    group: "Public page",
+    maxLength: 40,
+    description:
+      "The wording on the main button. It always goes to the application form; only the words change.",
+  },
+  {
+    key: "public.heroSecondaryCta",
+    type: "string",
+    default: "See what we teach",
+    group: "Public page",
+    maxLength: 40,
+    description: "The quieter button beside it. It scrolls down to the programme list.",
+  },
+  {
+    key: "public.showStats",
+    type: "boolean",
+    default: true,
+    group: "Public page",
+    description:
+      "Show the counted band — how many programmes, how many sections, how many shifts. Every figure in it is counted from the Institute's own records rather than typed, and the band hides itself when there is nothing open to count.",
+  },
+  {
+    key: "public.showFeatures",
+    type: "boolean",
+    default: true,
+    group: "Public page",
+    description:
+      "Show the grid of things the Institute does — the timetable, attendance, progress, fees, certificates and the audit trail.",
+  },
+  {
+    key: "public.features",
+    type: "string[]",
+    emptyMeansNone: true,
+    maxLength: 400,
+    group: "Public page",
+    default: [
+      "calendar | A timetable that is true | Every class, with the room and the teacher, and a join link that appears when the class does rather than in an email nobody can find.",
+      "check | Attendance you can act on | Registers taken in seconds and a warning the moment somebody slips below the requirement — early enough to do something about it.",
+      "chart | Progress from the first week | Lectures watched, work submitted, marks released and attendance, combined into one figure that says what is left rather than only how far along.",
+      "money | Fees without arguments | Instalment plans, receipts printed on the spot, and a statement that shows every charge and every payment — including the ones that were reversed.",
+      "award | Certificates worth holding | Issued only when the requirements are genuinely met, and verifiable by an employer from the printed number without an account.",
+      "shield | Records that keep themselves | An append-only audit log, so who changed what is a question with an answer rather than a matter of recollection.",
+    ],
+    description:
+      "The cards in that grid, one per line, written as: icon | title | description. An icon the System does not have is drawn as a plain marker rather than left blank, so a typo costs a picture and not a card.",
+  },
+  {
+    key: "public.videosHeading",
+    type: "string",
+    default: "See what we do",
+    group: "Public page",
+    maxLength: 80,
+    description: "The heading over the videos. The section is hidden entirely when there are none.",
+  },
+  {
+    key: "public.videosBlurb",
+    type: "string",
+    default: "Straight from our own channels. Nothing plays until you press it.",
+    group: "Public page",
+    maxLength: 200,
+    description:
+      "The line under that heading. The second half of the default is a promise the page keeps: no video loads, and no provider sets a cookie, until a visitor presses play.",
+  },
+  {
+    key: "public.newsHeading",
+    type: "string",
+    default: "Latest from the Institute",
+    group: "Public page",
+    maxLength: 80,
+    description:
+      "The heading over the public notices. The notices themselves are real announcements marked “show publicly” on the Announcements screen — they are never typed again here.",
+  },
+  {
+    key: "public.newsBlurb",
+    type: "string",
+    default: "Notices we have published for everyone.",
+    group: "Public page",
+    maxLength: 200,
+    description: "The line under that heading.",
+  },
+  {
+    key: "public.programmesHeading",
+    type: "string",
+    default: "What we are running",
+    group: "Public page",
+    maxLength: 80,
+    description:
+      "The heading over the programme list. The list itself comes from the Institute's own records and cannot be typed here — a section is advertised because it is open.",
+  },
+  {
+    key: "public.programmesBlurb",
+    type: "string",
+    default: "Straight from the Institute's own records — if a section is listed, it is open.",
+    group: "Public page",
+    maxLength: 200,
+    description: "The line under that heading.",
+  },
+  {
+    key: "public.closingHeading",
+    type: "string",
+    default: "Ready when you are.",
+    group: "Public page",
+    maxLength: 80,
+    description:
+      "The band at the foot of the page, for somebody who has read the whole thing and decided. It repeats one instruction and nothing else.",
+  },
+  {
+    key: "public.closingBody",
+    type: "string",
+    default:
+      "Applications are open. Fill the form, attach your slip, and we will write to you with a tracking reference you can check at any time.",
+    group: "Public page",
+    maxLength: 400,
+    multiline: true,
+    description:
+      "The sentence in that band. If it promises a tracking reference, the page keeps the promise — it links to the page where one can be checked.",
+  },
+  {
+    key: "public.closingCta",
+    type: "string",
+    default: "Start your application",
+    group: "Public page",
+    maxLength: 40,
+    description: "The wording on that band's button.",
   },
 
   // -------------------------------------------------- registration numbers --

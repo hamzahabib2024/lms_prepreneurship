@@ -19,6 +19,7 @@ import { RegistrationNumberService } from "./registration-number.service";
 import { StorageRegistry } from "../content/storage/storage.registry";
 import { SettingsService } from "../settings/settings.service";
 import { parseImageLinks, parseVideoLinks } from "./video-links";
+import { parseFeatures } from "../public-page/public-page.keys";
 import { AdmissionMailer } from "./admission-mailer";
 import { CredentialsMailer } from "../notification/credentials-mailer";
 
@@ -54,32 +55,85 @@ export class AdmissionService {
    * test for anything served without an account.
    */
   async showcase() {
-    const [videoUrls, imageUrls, youtube, tiktok, facebook, instagram, tagline, name, news] =
-      await Promise.all([
-        this.settings.list("public.videoUrls"),
-        this.settings.list("public.imageUrls"),
-        this.settings.text("public.youtubeUrl"),
-        this.settings.text("public.tiktokUrl"),
-        this.settings.text("public.facebookUrl"),
-        this.settings.text("public.instagramUrl"),
-        this.settings.text("public.tagline"),
-        this.settings.text("institute.name"),
-        this.publicNews(),
-      ]);
+    /*
+     * ONE RESOLUTION, NOT TWENTY-FOUR AWAITS.
+     *
+     * This used to be nine parallel calls, each of which resolved the whole
+     * settings map to pull one value out of it. The page now carries its own
+     * headline, its paragraph, its six feature cards, four section headings
+     * and two buttons — so the same pattern would have meant two dozen
+     * resolutions of the same cached map per visitor, on the one route in this
+     * System that is hit by people who have never signed in.
+     *
+     * `resolveFor()` returns that map once, from the same per-process cache the
+     * rest of the System reads. Each value is checked for its type on the way
+     * out, so a row stored as the wrong shape costs one sentence rather than
+     * rendering "[object Object]" across the Institute's front page.
+     */
+    const [resolved, news] = await Promise.all([this.settings.resolveFor(), this.publicNews()]);
+
+    /*
+     * EVERY KEY IS WRITTEN OUT AS A LITERAL INDEX, and that is not verbosity.
+     *
+     * settings-used.spec.ts reads this source and asserts that every settings
+     * key the code reads is one the catalogue declares — the guard that stops a
+     * misspelled key from falling back to a default forever while the Institute
+     * cannot find the setting to change. It recognises a quoted key indexed
+ * straight off the resolved map, and only that shape. A
+     * helper taking the key as an argument would hide all seventeen of these
+     * from it, and a typo in one would show an empty headline on the front page
+     * with nothing anywhere saying why.
+     *
+     * So the helpers take the VALUE, not the key.
+     */
+    const str = (value: unknown, fallback = ""): string =>
+      typeof value === "string" ? value : fallback;
+    const bool = (value: unknown, fallback: boolean): boolean =>
+      typeof value === "boolean" ? value : fallback;
+    const strings = (value: unknown): string[] =>
+      Array.isArray(value) && value.every((v) => typeof v === "string") ? (value as string[]) : [];
 
     return {
-      instituteName: name,
-      tagline: tagline.trim() || null,
-      videos: parseVideoLinks(videoUrls),
-      images: parseImageLinks(imageUrls),
+      instituteName: str(resolved["institute.name"]),
+      tagline: str(resolved["public.tagline"]).trim() || null,
+      videos: parseVideoLinks(strings(resolved["public.videoUrls"])),
+      images: parseImageLinks(strings(resolved["public.imageUrls"])),
       news,
+      /*
+       * THE WORDS, which were literals in the React component until the
+       * Institute was given a screen to change them.
+       *
+       * Sent as one object rather than spread across the top level so the
+       * landing page holds it in one piece of state, and so a value the
+       * Institute has never touched arrives identical to the one that used to
+       * be compiled in — the catalogue's defaults ARE the previous markup.
+       */
+      copy: {
+        heroPill: str(resolved["public.heroPill"]),
+        heroHeadline: str(resolved["public.heroHeadline"]),
+        heroBody: str(resolved["public.heroBody"]),
+        heroPrimaryCta: str(resolved["public.heroPrimaryCta"]),
+        heroSecondaryCta: str(resolved["public.heroSecondaryCta"]),
+        showStats: bool(resolved["public.showStats"], true),
+        showFeatures: bool(resolved["public.showFeatures"], true),
+        features: parseFeatures(strings(resolved["public.features"])),
+        videosHeading: str(resolved["public.videosHeading"]),
+        videosBlurb: str(resolved["public.videosBlurb"]),
+        newsHeading: str(resolved["public.newsHeading"]),
+        newsBlurb: str(resolved["public.newsBlurb"]),
+        programmesHeading: str(resolved["public.programmesHeading"]),
+        programmesBlurb: str(resolved["public.programmesBlurb"]),
+        closingHeading: str(resolved["public.closingHeading"]),
+        closingBody: str(resolved["public.closingBody"]),
+        closingCta: str(resolved["public.closingCta"]),
+      },
       // Only the ones actually set: an icon linking nowhere is worse than no
       // icon, and a row of dead social buttons is the mark of a template.
       social: [
-        { platform: "youtube", url: youtube.trim() },
-        { platform: "tiktok", url: tiktok.trim() },
-        { platform: "facebook", url: facebook.trim() },
-        { platform: "instagram", url: instagram.trim() },
+        { platform: "youtube", url: str(resolved["public.youtubeUrl"]).trim() },
+        { platform: "tiktok", url: str(resolved["public.tiktokUrl"]).trim() },
+        { platform: "facebook", url: str(resolved["public.facebookUrl"]).trim() },
+        { platform: "instagram", url: str(resolved["public.instagramUrl"]).trim() },
       ].filter((s) => s.url !== ""),
     };
   }
