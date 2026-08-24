@@ -30,9 +30,6 @@ class _IntegrationsView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Integrations'),
-      ),
       body: BlocBuilder<IntegrationsCubit, IntegrationsState>(
         builder: (context, state) {
           switch (state.status) {

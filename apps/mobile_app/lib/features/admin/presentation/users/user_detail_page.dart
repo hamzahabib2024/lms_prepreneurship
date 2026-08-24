@@ -160,37 +160,40 @@ class UserDetailPage extends StatelessWidget {
     final reasonController = TextEditingController();
     showDialog<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Suspend account'),
-        content: TextField(
-          controller: reasonController,
-          decoration: const InputDecoration(
-            labelText: 'Reason (required)',
-            hintText: 'Describe why this account is being suspended',
-          ),
-          maxLines: 3,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: reasonController.text.trim().length >= 5
-                ? () {
-                    Navigator.of(ctx).pop();
-                    context.read<AdminCubit>().suspendUser(
-                          id: user.id,
-                          reason: reasonController.text.trim(),
-                        );
-                  }
-                : null,
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(ctx).colorScheme.error,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Suspend account'),
+          content: TextField(
+            controller: reasonController,
+            decoration: const InputDecoration(
+              labelText: 'Reason (required)',
+              hintText: 'Describe why this account is being suspended',
             ),
-            child: const Text('Suspend'),
+            maxLines: 3,
+            onChanged: (_) => setDialogState(() {}),
           ),
-        ],
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: reasonController.text.trim().length >= 5
+                  ? () {
+                      Navigator.of(ctx).pop();
+                      context.read<AdminCubit>().suspendUser(
+                            id: user.id,
+                            reason: reasonController.text.trim(),
+                          );
+                    }
+                  : null,
+              style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(ctx).colorScheme.error,
+              ),
+              child: const Text('Suspend'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -199,33 +202,36 @@ class UserDetailPage extends StatelessWidget {
     final reasonController = TextEditingController();
     showDialog<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Reactivate account'),
-        content: TextField(
-          controller: reasonController,
-          decoration: const InputDecoration(
-            labelText: 'Reason (required)',
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Reactivate account'),
+          content: TextField(
+            controller: reasonController,
+            decoration: const InputDecoration(
+              labelText: 'Reason (required)',
+            ),
+            maxLines: 2,
+            onChanged: (_) => setDialogState(() {}),
           ),
-          maxLines: 2,
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: reasonController.text.trim().length >= 5
+                  ? () {
+                      Navigator.of(ctx).pop();
+                      context.read<AdminCubit>().reactivateUser(
+                            id: user.id,
+                            reason: reasonController.text.trim(),
+                          );
+                    }
+                  : null,
+              child: const Text('Reactivate'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: reasonController.text.trim().length >= 5
-                ? () {
-                    Navigator.of(ctx).pop();
-                    context.read<AdminCubit>().reactivateUser(
-                          id: user.id,
-                          reason: reasonController.text.trim(),
-                        );
-                  }
-                : null,
-            child: const Text('Reactivate'),
-          ),
-        ],
       ),
     );
   }

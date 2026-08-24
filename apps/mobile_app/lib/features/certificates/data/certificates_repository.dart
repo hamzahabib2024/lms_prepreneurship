@@ -1,3 +1,6 @@
+import 'package:dio/dio.dart';
+
+import '../../../core/constants.dart';
 import '../../../core/network/api_client.dart';
 import 'models/certificate.dart';
 import 'models/certificate_candidate.dart';
@@ -91,10 +94,16 @@ class CertificatesRepository {
   /// Public verification — FR-CRT-015. No auth required.
   Future<VerifyResult> verify(String code) async {
     // Public endpoint — uses a raw Dio call without auth headers.
-    final response = await api.get<Map<String, dynamic>>(
+    final dio = Dio(BaseOptions(
+      baseUrl: AppConstants.apiBaseUrl,
+      connectTimeout: const Duration(seconds: 15),
+      receiveTimeout: const Duration(seconds: 30),
+    ));
+    final response = await dio.get<Map<String, dynamic>>(
       '/public/certificates/$code/verify',
+      options: Options(headers: {'Accept': 'application/json'}),
     );
-    return VerifyResult.fromJson(response);
+    return VerifyResult.fromJson(response.data ?? {});
   }
 }
 

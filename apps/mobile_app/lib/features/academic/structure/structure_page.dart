@@ -123,6 +123,7 @@ class _StructurePageState extends State<StructurePage> {
     );
     if (created == true && mounted) {
       setState(() => _note = 'Programme created. A term can be added to it now.');
+      await _load();
     }
   }
 
@@ -131,7 +132,10 @@ class _StructurePageState extends State<StructurePage> {
       title: 'Add a term',
       builder: (_) => _SessionForm(repository: _repository, programmes: _programmes),
     );
-    if (created == true && mounted) setState(() => _note = 'Term created.');
+    if (created == true && mounted) {
+      setState(() => _note = 'Term created.');
+      await _load();
+    }
   }
 
   Future<void> _editSession(AcademicSession session) async {

@@ -73,11 +73,13 @@ class ReportRunnerCubit extends Cubit<ReportRunnerState> {
     ));
     try {
       final result = await repository.run(key, filters: filters);
+      if (isClosed) return;
       emit(state.copyWith(
         status: ReportRunnerStatus.success,
         result: result,
       ));
     } on ApiException catch (e) {
+      if (isClosed) return;
       emit(state.copyWith(
         status: ReportRunnerStatus.failure,
         error: e,
@@ -95,11 +97,13 @@ class ReportRunnerCubit extends Cubit<ReportRunnerState> {
           '${key}_${now.year}${_pad(now.month)}${_pad(now.day)}_${_pad(now.hour)}${_pad(now.minute)}.csv';
       final file = File('${dir.path}/$filename');
       await file.writeAsBytes(bytes);
+      if (isClosed) return;
       emit(state.copyWith(
         exporting: false,
         exportPath: file.path,
       ));
     } on ApiException catch (e) {
+      if (isClosed) return;
       emit(state.copyWith(exporting: false, error: e));
     }
   }

@@ -77,13 +77,17 @@ class AdmissionsCubit extends Cubit<AdmissionsState> {
         note: note,
       );
       if (isClosed) return;
+      // Fetch fresh queue and emit everything together so the queue update
+      // is not lost by a subsequent emit based on stale state.
+      final rows = await repository.queue();
+      if (isClosed) return;
       emit(state.copyWith(
+        queue: rows,
         busy: false,
         receipt: result,
         clearDetail: true,
         clearSelected: true,
       ));
-      await loadQueue();
     } on ApiException catch (error) {
       if (isClosed) return;
       emit(state.copyWith(busy: false, actionError: error));

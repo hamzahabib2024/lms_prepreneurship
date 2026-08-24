@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -32,11 +34,13 @@ class _UsersView extends StatefulWidget {
 
 class _UsersViewState extends State<_UsersView> {
   final _searchController = TextEditingController();
+  Timer? _debounce;
   String? _selectedRole;
   String? _selectedStatus;
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -105,7 +109,10 @@ class _UsersViewState extends State<_UsersView> {
                   ),
                   onChanged: (v) {
                     setState(() {});
-                    context.read<AdminCubit>().setSearchQuery(v);
+                    _debounce?.cancel();
+                    _debounce = Timer(const Duration(milliseconds: 400), () {
+                      context.read<AdminCubit>().setSearchQuery(v);
+                    });
                   },
                 ),
               ),
