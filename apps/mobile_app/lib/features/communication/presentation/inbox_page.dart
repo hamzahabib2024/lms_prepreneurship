@@ -30,22 +30,6 @@ class _InboxView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Notifications'),
-        actions: [
-          BlocBuilder<InboxCubit, InboxState>(
-            buildWhen: (prev, curr) => prev.unread != curr.unread,
-            builder: (context, state) {
-              if (state.unread == 0) return const SizedBox.shrink();
-              return TextButton(
-                onPressed: () =>
-                    context.read<InboxCubit>().markAllRead(),
-                child: const Text('Mark all read'),
-              );
-            },
-          ),
-        ],
-      ),
       body: BlocBuilder<InboxCubit, InboxState>(
         builder: (context, state) {
           switch (state.status) {

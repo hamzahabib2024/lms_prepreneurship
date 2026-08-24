@@ -36,6 +36,7 @@ class _AppShellState extends State<AppShell> {
   static const _maxVisible = 5;
 
   int _selectedIndex = 0;
+  int _dashboardRefreshKey = 0;
 
   bool get _isAdmin => widget.user.isAdmin || widget.user.isSuperAdmin;
   bool get _isStaff => _isAdmin || widget.user.isTeacher;
@@ -45,7 +46,11 @@ class _AppShellState extends State<AppShell> {
           icon: Icons.dashboard_outlined,
           activeIcon: Icons.dashboard,
           label: 'Home',
-          page: DashboardPage(user: widget.user, api: widget.api),
+          page: DashboardPage(
+            key: ValueKey(_dashboardRefreshKey),
+            user: widget.user,
+            api: widget.api,
+          ),
         ),
         _TabEntry(
           icon: Icons.play_circle_outline,
@@ -109,12 +114,19 @@ class _AppShellState extends State<AppShell> {
       _openMoreSheet();
       return;
     }
-    setState(() => _selectedIndex = _pinnedIndices[slot]);
+    final tabIndex = _pinnedIndices[slot];
+    setState(() {
+      _selectedIndex = tabIndex;
+      if (tabIndex == 0) _dashboardRefreshKey++;
+    });
     HapticFeedback.lightImpact();
   }
 
   void _selectTab(int tabIndex) {
-    setState(() => _selectedIndex = tabIndex);
+    setState(() {
+      _selectedIndex = tabIndex;
+      if (tabIndex == 0) _dashboardRefreshKey++;
+    });
     Navigator.of(context).pop();
     HapticFeedback.lightImpact();
   }
@@ -301,7 +313,8 @@ class _AppShellState extends State<AppShell> {
 
     final tabs = _tabs;
     final pinned = _pinnedIndices;
-    final barSelected = pinned.indexOf(_selectedIndex);
+    final pinnedSlot = pinned.indexOf(_selectedIndex);
+    final barSelected = pinnedSlot >= 0 ? pinnedSlot : pinned.length;
 
     final barBg = dark ? AppColorsDark.surface : AppColors.surface;
     final borderColor = dark ? AppColorsDark.line : AppColors.line;

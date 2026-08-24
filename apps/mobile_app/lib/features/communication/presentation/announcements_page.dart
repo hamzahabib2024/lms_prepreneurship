@@ -36,7 +36,6 @@ class _AnnouncementsView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Announcements')),
       body: BlocBuilder<AnnouncementsCubit, AnnouncementsState>(
         builder: (context, state) {
           switch (state.status) {
@@ -273,7 +272,7 @@ class _Composer extends StatefulWidget {
 
 class _ComposerState extends State<_Composer> {
   bool _expanded = false;
-  String _audience = 'SECTION_SUBJECT';
+  String _audience = 'INSTITUTE';
   String _sectionSubjectId = '';
   String _title = '';
   String _body = '';
@@ -291,7 +290,12 @@ class _ComposerState extends State<_Composer> {
     try {
       final repo = CommunicationRepository(api: widget.api);
       final sections = await repo.mySections();
-      if (mounted) setState(() => _sections = sections);
+      final uniqueSections = <String, SectionSubject>{
+        for (final section in sections)
+          if (section.sectionSubjectId.isNotEmpty)
+            section.sectionSubjectId: section,
+      }.values.toList();
+      if (mounted) setState(() => _sections = uniqueSections);
     } catch (_) {
       // Sections unavailable — the composer still works for institute-wide.
     }
@@ -343,7 +347,7 @@ class _ComposerState extends State<_Composer> {
                 child: Text('Everyone at the Institute'),
               ),
             ],
-            onChanged: (v) => setState(() => _audience = v ?? 'SECTION_SUBJECT'),
+            onChanged: (v) => setState(() => _audience = v ?? 'INSTITUTE'),
           ),
 
           if (_audience == 'SECTION_SUBJECT') ...[

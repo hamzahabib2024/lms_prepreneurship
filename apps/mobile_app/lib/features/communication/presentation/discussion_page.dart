@@ -36,30 +36,29 @@ class _DiscussionView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Discussion'),
-        actions: [
-          BlocBuilder<DiscussionCubit, DiscussionState>(
-            buildWhen: (p, c) => p.openThread != c.openThread,
-            builder: (context, state) {
-              if (state.openThread == null) return const SizedBox.shrink();
-              return TextButton(
-                onPressed: () =>
-                    context.read<DiscussionCubit>().closeThread(),
-                child: const Text('Back'),
-              );
-            },
-          ),
-        ],
-      ),
       body: BlocBuilder<DiscussionCubit, DiscussionState>(
         builder: (context, state) {
           if (state.openThread != null) {
-            return _ThreadView(
-              thread: state.openThread!,
-              myUserId: user.id,
-              isTeacher: _isTeacher,
-              replyBusy: state.replyBusy,
+            return Column(
+              children: [
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: () =>
+                        context.read<DiscussionCubit>().closeThread(),
+                    icon: const Icon(Icons.arrow_back, size: 18),
+                    label: const Text('Back to discussions'),
+                  ),
+                ),
+                Expanded(
+                  child: _ThreadView(
+                    thread: state.openThread!,
+                    myUserId: user.id,
+                    isTeacher: _isTeacher,
+                    replyBusy: state.replyBusy,
+                  ),
+                ),
+              ],
             );
           }
 

@@ -72,8 +72,11 @@ class _CommunicationPanelState extends State<CommunicationPanel> {
       _selectedIndex = clampedIndex;
     }
 
-    return Column(
-      children: [
+    return SafeArea(
+      top: true,
+      bottom: false,
+      child: Column(
+        children: [
         // Top tab bar
         Container(
           height: 48,
@@ -108,7 +111,8 @@ class _CommunicationPanelState extends State<CommunicationPanel> {
             children: tabs.map((t) => t.page).toList(),
           ),
         ),
-      ],
+        ],
+      ),
     );
   }
 }
