@@ -28,6 +28,7 @@ import { UsersPage } from "./pages/UsersPage";
 import { AuditPage } from "./pages/AuditPage";
 import { RubricsPage } from "./pages/RubricsPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { PublicPageEditorPage } from "./pages/PublicPageEditorPage";
 import { PaymentSubmitPage } from "./pages/PaymentSubmitPage";
 import { PaymentVerificationPage } from "./pages/PaymentVerificationPage";
 import { SecurityPage } from "./pages/SecurityPage";
@@ -638,6 +639,25 @@ export function App() {
           <Route
             path="/settings"
             element={hasRole("super_admin", "admin") ? <SettingsPage /> : <Navigate to="/" replace />}
+          />
+          {/*
+            FR-PUB — what a stranger sees, edited by the people who know it is
+            wrong.
+
+            BOTH ROLES, unlike /settings above, and that difference is the whole
+            point of the screen. Writing a setting is Super Admin only because a
+            setting decides when a student is warned; nothing reachable here
+            decides anything about anybody, and the person who knows a new reel
+            went up this morning is the one running admissions. The server
+            grants `public_page:configure` to both and narrows what it reaches
+            to the Public page settings alone — this test only decides whether
+            the destination is offered (UI-002).
+          */}
+          <Route
+            path="/public-page"
+            element={
+              hasRole("super_admin", "admin") ? <PublicPageEditorPage /> : <Navigate to="/" replace />
+            }
           />
           {/* Teacher and above. A student may READ a rubric they are marked
               against, but that belongs beside their grade, not on an

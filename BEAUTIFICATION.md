@@ -196,6 +196,7 @@ states as a sweep across all pages after the role work.
 | **SecurityPage** | As above; timestamps given fixed width so the column stops resizing as events arrive |
 | **BackupPage** | As above |
 | **SettingsPage** | **A filter across 32 settings**, matching key, description and group — findability was the real problem on this page. Deliberately no texture: a form reads better on a plain ground |
+| **PublicPageEditorPage** | The screen that edits another screen, and the only one whose result strangers see. Eight numbered cards in the order a visitor meets the page — first screen, claims, videos, photographs, notices, programmes, closing band, footer — with the preview a real frame of the real page beside the form on a laptop and underneath it on anything narrower. **The lists are rows, not a comma-separated box**, which is the whole reason this exists rather than a filter on Settings: a URL retyped into a shared text field is a URL somebody eventually breaks, and the settings editor lowercased them, which silently killed every YouTube link. Photographs upload and appear at the size they will be, captions beside them because a caption is the alt text. Each field carries its own description, its character count in a word as well as a colour, and its way back to the default |
 | **IntegrationsPage** | Indigo; simulated services marked so nobody mistakes one for a send |
 | **TemplatesPage** | Message wording with a live preview |
 | **ChangePasswordPage** | Card and form treatment |

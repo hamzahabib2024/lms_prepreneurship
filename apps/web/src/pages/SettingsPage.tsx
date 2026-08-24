@@ -41,6 +41,8 @@ interface Setting {
   min?: number;
   max?: number;
   allowed?: string[];
+  maxLength?: number;
+  multiline?: boolean;
   isSecret?: boolean;
   isSet?: boolean;
 }
@@ -277,6 +279,24 @@ function SettingRow({
                 step="any"
                 onChange={(e) => setDraft(e.target.value)}
               />
+            ) : isProse(setting) ? (
+              /*
+               * A BOX THE SIZE OF THE VALUE.
+               *
+               * The public page's headline, its paragraph and its six feature
+               * cards are edited here as well as on their own screen, and each
+               * one is prose or a list of lines. A single-line input shows
+               * forty characters of a four-hundred-character sentence and
+               * offers no way to type a newline at all — so a list of six
+               * cards could be READ here and never correctly written.
+               */
+              <textarea
+                rows={setting.type === "string[]" ? 5 : 3}
+                value={draft}
+                disabled={!canEdit}
+                onChange={(e) => setDraft(e.target.value)}
+                placeholder={hint(setting)}
+              />
             ) : (
               <input
                 value={draft}
@@ -318,8 +338,31 @@ function label(key: string): string {
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
 
+/**
+ * A LIST OF WORDS AND A LIST OF LINKS ARE NOT THE SAME KIND OF LIST, and
+ * treating them as one silently destroyed the second.
+ *
+ * `allowed` marks a fixed vocabulary — the file extensions an upload may have.
+ * Those are short, lowercase by definition, and comma-separated reads naturally.
+ *
+ * Everything else in a `string[]` is free text: a URL, or a feature card
+ * written as `icon | title | body`. Both routinely CONTAIN a comma, and a URL
+ * is case-sensitive — a YouTube id lowercased is a video that does not exist.
+ * So those are one per line, exactly as typed.
+ */
+function isVocabulary(setting: Setting): boolean {
+  return setting.type === "string[]" && !!setting.allowed;
+}
+
+/** Rendered in a box rather than on a line: prose, or a list of lines. */
+function isProse(setting: Setting): boolean {
+  if (setting.type === "string[]") return !isVocabulary(setting);
+  return setting.type === "string" && setting.multiline === true;
+}
+
 function hint(setting: Setting): string {
-  if (setting.type === "string[]") return "Comma separated, e.g. pdf, docx, png";
+  if (isVocabulary(setting)) return "Comma separated, e.g. pdf, docx, png";
+  if (setting.type === "string[]") return "One per line";
   if (setting.type === "weights") return "video 30, assignment 30, quiz 25, attendance 15";
   return "";
 }
@@ -344,7 +387,8 @@ function toDraft(setting: Setting): string {
       .map(([k, v]) => `${k} ${Math.round(v * 100)}`)
       .join(", ");
   }
-  if (Array.isArray(value)) return value.join(", ");
+  // One per line unless it is a fixed vocabulary — see isVocabulary.
+  if (Array.isArray(value)) return value.join(isVocabulary(setting) ? ", " : "\n");
   return text(value);
 }
 
@@ -360,9 +404,24 @@ function fromDraft(setting: Setting, draft: string): unknown {
     case "boolean":
       return draft === "true";
     case "string[]":
+      /*
+       * THIS USED TO LOWERCASE EVERY ENTRY AND SPLIT ON EVERY COMMA, which was
+       * right for `pdf, docx, png` and wrong for everything else the System
+       * stores as a list. A YouTube share link pasted here came back with its
+       * id lowercased — a different video, or none — and a feature card, which
+       * is a sentence, was shattered at each of its commas. Both failures were
+       * silent: the value saved, the screen showed it saved, and the public
+       * page quietly stopped working.
+       */
+      if (isVocabulary(setting)) {
+        return draft
+          .split(",")
+          .map((s) => s.trim().toLowerCase())
+          .filter(Boolean);
+      }
       return draft
-        .split(",")
-        .map((s) => s.trim().toLowerCase())
+        .split(/\r?\n/)
+        .map((s) => s.trim())
         .filter(Boolean);
     case "weights": {
       // "video 30, assignment 30, quiz 25, attendance 15" -> fractions.

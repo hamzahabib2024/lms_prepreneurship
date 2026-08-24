@@ -4209,6 +4209,129 @@ details > summary:hover { text-decoration: underline; }
 .skeleton-head { margin-bottom: 1.25rem; }
 .skeleton-head .skeleton { height: 26px; width: 14rem; border-radius: 8px; }
 
+
+/* --------------------------------------------- editing the public page ----
+   The one screen in this application that edits ANOTHER screen, and the only
+   one whose result strangers see. Two things follow from that and shape
+   everything below.
+
+   THE FORM IS LONG BY NECESSITY — a headline, six cards, a gallery, four
+   headings and a closing band — so it is broken into numbered cards with the
+   save pinned at the foot (.editor-actions, shared with the course editors).
+
+   AND IT CAN SIT BESIDE THE THING IT EDITS. The preview is a real frame
+   showing the real page, off by default because it is a second load of the
+   whole application, and it collapses under the form on anything narrower
+   than a laptop rather than shrinking into a letterbox nobody can read. */
+.publicpage-single { display: block; }
+.publicpage-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 26rem);
+  gap: 1.25rem;
+  align-items: start;
+}
+.publicpage-form { min-width: 0; }
+
+.publicpage-preview {
+  position: sticky; top: 1rem;
+  display: grid; gap: .4rem;
+  min-width: 0;
+}
+.publicpage-preview-head {
+  display: flex; align-items: center; justify-content: space-between; gap: .5rem;
+}
+.publicpage-frame {
+  width: 100%; height: 70vh;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+}
+
+/* Each editable value carries its own explanation and its own way back, so the
+   footer under the box is part of the field rather than a hint elsewhere. */
+.publicpage-field { display: grid; gap: .3rem; margin-bottom: 1rem; }
+.publicpage-field textarea { resize: vertical; min-height: 3.4rem; }
+.publicpage-foot {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: .75rem; flex-wrap: wrap;
+}
+/* A word, never a colour alone (NFR-ACC-007) — the counter says "too long"
+   as well as turning red, because over-length is refused on save. */
+.publicpage-over { color: var(--error); font-weight: 600; }
+.publicpage-error {
+  display: block;
+  color: var(--error); font-size: .8125rem; font-weight: 600;
+}
+/* The server refuses the whole set when one field is wrong, so the field that
+   caused it has to be findable in a form this long. */
+.publicpage-field.is-wrong > input,
+.publicpage-field.is-wrong > textarea,
+.publicpage-field.is-wrong .publicpage-rows { border-color: var(--error); }
+
+/* ORDER IS CONTENT in all three lists: the first video is the one most people
+   watch, and the first photograph is the one on screen when the page loads. So
+   a row moves rather than being retyped somewhere else — retyping a URL is how
+   a URL gets broken. */
+.publicpage-rows {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; gap: .5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: .5rem;
+  background: var(--surface-2);
+}
+.publicpage-row {
+  display: flex; align-items: flex-start; gap: .5rem;
+  padding: .35rem; border-radius: var(--radius-sm);
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+.publicpage-row-main { flex: 1 1 auto; min-width: 0; }
+.publicpage-row-controls {
+  display: flex; gap: .2rem; align-items: center; flex: 0 0 auto;
+}
+
+/* A photograph row is the picture, its address and its caption — the picture
+   first, because that is what somebody is checking when they scan the list. */
+.publicpage-photo { align-items: center; }
+.publicpage-photo-fields,
+.publicpage-feature-fields { flex: 1 1 auto; min-width: 0; display: grid; gap: .3rem; }
+.publicpage-photo-fields input { width: 100%; }
+
+/* Smaller than a course cover: this is a row in a list, not the subject of the
+   screen, and twelve of them at 160px would be the whole page. */
+.publicpage-thumb { width: 96px; height: 60px; }
+.publicpage-feature-icon {
+  display: grid; place-items: center;
+  width: 34px; height: 34px; flex: 0 0 34px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--brand-700);
+}
+.publicpage-feature-icon svg { width: 17px; height: 17px; }
+.publicpage-feature select { width: auto; min-width: 9rem; }
+.publicpage-feature textarea { resize: vertical; min-height: 2.8rem; }
+
+/* Read-only on purpose: these are real announcements, and the screen says so
+   rather than looking like a list somebody forgot to make editable. */
+.publicpage-notices li { padding: .35rem 0; }
+
+@media (max-width: 1100px) {
+  /* The frame stops being a preview below this width and starts being a
+     letterbox, so it goes under the form instead of beside it. */
+  .publicpage-split { grid-template-columns: minmax(0, 1fr); }
+  .publicpage-preview { position: static; }
+  .publicpage-frame { height: 60vh; }
+}
+
+@media (max-width: 700px) {
+  .publicpage-row { flex-wrap: wrap; }
+  .publicpage-row-controls { width: 100%; justify-content: flex-end; }
+  .publicpage-thumb { width: 100%; height: 120px; }
+}
+
 /* ------------------------------------------------------- certificates ----
 
    THE DOCUMENT BRINGS ITS OWN PALETTE and nothing here may override it. The

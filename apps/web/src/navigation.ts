@@ -130,7 +130,19 @@ export const DESTINATIONS: readonly Destination[] = [
      is created for them or they must paste one in changes what they do before
      class. A student holds no such grant. */
   { to: "/integrations", label: "Integrations", icon: "shuffle", group: "Institute", roles: STAFF, also: ["google", "meet", "drive", "gmail", "email"] },
-  { to: "/home", label: "Public page", icon: "megaphone", group: "Institute", roles: OFFICE, leavesApp: true, also: ["landing", "website", "preview"] },
+  /*
+   * TWO DESTINATIONS FOR THE PUBLIC PAGE, and they are different acts.
+   *
+   * /public-page EDITS it — the headline, the videos, the photographs, the
+   * cards, the closing band — and is an ordinary route inside the shell.
+   *
+   * /home IS it, with no sidebar and no chrome, because a preview inside the
+   * application would not be a preview of anything. It stays because looking
+   * at the result is a separate thing from changing it, and the editor's own
+   * preview is a frame rather than the page at full width.
+   */
+  { to: "/public-page", label: "Public page", icon: "megaphone", group: "Institute", roles: OFFICE, also: ["landing", "website", "homepage", "hero", "headline", "videos", "photos", "gallery", "marketing"] },
+  { to: "/home", label: "View the public page", icon: "monitor", group: "Institute", roles: OFFICE, leavesApp: true, also: ["preview", "live", "visitors"] },
 
   // ------------------------------------------------------ administration --
   { to: "/settings", label: "Settings", icon: "settings", group: "Administration", roles: OFFICE, also: ["policy", "configuration"] },
