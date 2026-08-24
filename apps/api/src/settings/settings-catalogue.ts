@@ -58,6 +58,26 @@ export interface SettingDefinition {
    * empty case is something the Institute might genuinely want.
    */
   emptyMeansNone?: boolean;
+  /**
+   * The longest a `string`, or one line of a `string[]`, may be.
+   *
+   * IT EXISTS FOR THE PUBLIC PAGE. Every other setting is a number, a flag or
+   * a short name typed by somebody who knows what it is for; the front page's
+   * headline and its six feature cards are FREE TEXT typed into a web form,
+   * and free text with no ceiling is a column that eventually holds a
+   * megabyte of pasted document and a page that takes ten seconds to render.
+   *
+   * A bound also gives the editor something honest to say while somebody is
+   * typing, rather than accepting the paste and truncating it later where
+   * nobody sees which half was kept.
+   */
+  maxLength?: number;
+  /**
+   * For a `string`: it may hold newlines and is edited in a box rather than a
+   * single line. Nothing validates differently — it tells the SCREEN what
+   * shape the value is, which the type alone cannot say.
+   */
+  multiline?: boolean;
 }
 
 /**
@@ -257,6 +277,68 @@ export const CATALOGUE: SettingDefinition[] = [
     description:
       "The campus or address printed under the Institute's name on a receipt. Leave it empty for a single-campus institute; the line is then omitted rather than printed blank.",
   },
+  // ----------------------------------------------------------- the paper --
+  /*
+   * WHAT GOES ON A CERTIFICATE — SRS §5.15.
+   *
+   * These are settings rather than constants for one reason: a certificate is
+   * the most public document the System produces. It is framed, photographed,
+   * attached to job applications and shown to strangers for years. Every word
+   * on it is the Institute's own, and an institute that cannot change the name
+   * above its own signature without a deployment does not really own it.
+   *
+   * THEY ARE SNAPSHOTTED AT ISSUE. Changing the signatory here does not rewrite
+   * certificates already issued — a 2026 document must not be reattributed to
+   * a director appointed in 2029 the next time somebody prints it. New
+   * certificates take the new value; old ones keep the one they were issued
+   * with, which is what makes reprinting safe.
+   */
+  {
+    key: "certificate.tagline",
+    type: "string",
+    default: "",
+    group: "Certificates",
+    maxLength: 90,
+    description:
+      "A short line under the Institute's name on the certificate — what it teaches, or its motto. Left empty the line is omitted rather than printed blank, and the header simply sits tighter.",
+  },
+  {
+    key: "certificate.website",
+    type: "string",
+    default: "",
+    group: "Certificates",
+    maxLength: 120,
+    description:
+      "The address printed in the certificate's footer, beside the verification line. Write it as somebody would type it — prepreneurship.pk, not https://prepreneurship.pk/ — because it is read off paper.",
+  },
+  {
+    key: "certificate.signatoryName",
+    type: "string",
+    default: "",
+    group: "Certificates",
+    maxLength: 120,
+    description:
+      "Who signs for the Institute — the second signature on every certificate, beside the instructor's. Snapshotted when a certificate is issued, so changing it here never alters one already in somebody's hands. Left empty, the block is omitted and the instructor's signature is centred instead of sitting off to one side.",
+  },
+  {
+    key: "certificate.signatoryTitle",
+    type: "string",
+    default: "Director",
+    group: "Certificates",
+    maxLength: 90,
+    description:
+      "The designation printed under the authorised signature — Director, Principal, Head of Institute. Only shown when a signatory name is set.",
+  },
+  {
+    key: "certificate.instructorTitle",
+    type: "string",
+    default: "Course Instructor",
+    group: "Certificates",
+    maxLength: 90,
+    description:
+      "The designation printed under the teacher's signature when the certificate does not carry one of its own. The teacher's name comes from whoever is assigned to teach the subject; this is what it says beneath it.",
+  },
+
   // ------------------------------------------------------------ the front --
   /*
    * What the public page shows — FR-PUB, and the reason these are settings
@@ -441,21 +523,17 @@ export const CATALOGUE: SettingDefinition[] = [
     description:
       "Printed at the foot of every receipt. A reversed payment ignores this and prints its own notice instead, because a receipt for money the Institute no longer holds must not end with a line telling the student to keep it as proof.",
   },
-  {
-    key: "certificate.signatoryName",
-    type: "string",
-    default: "",
-    group: "Institute",
-    description:
-      "Printed on certificates beneath the signature line. Changing it does not alter certificates already issued — those carry the name recorded at the time.",
-  },
-  {
-    key: "certificate.signatoryTitle",
-    type: "string",
-    default: "Director",
-    group: "Institute",
-    description: "The office the signatory holds, printed under their name.",
-  },
+  /*
+   * `certificate.signatoryName` and `certificate.signatoryTitle` USED TO BE
+   * HERE, filed under Institute and read by nothing.
+   *
+   * They described themselves as "printed on certificates beneath the
+   * signature line" at a time when no certificate was drawn anywhere — the
+   * settings screen offered an institute a signature to configure and then
+   * never printed it. They have moved up into the Certificates group beside
+   * the rest of what goes on the paper, keeping their keys, so any value an
+   * institute has already saved is still the one that is used.
+   */
 ];
 
 const BY_KEY = new Map(CATALOGUE.map((d) => [d.key, d]));
@@ -511,7 +589,16 @@ export function validateValue(key: string, value: unknown): SettingProblem[] {
       break;
 
     case "string":
-      if (typeof value !== "string") fail(`${def.key} must be text.`);
+      if (typeof value !== "string") {
+        fail(`${def.key} must be text.`);
+        break;
+      }
+      if (def.maxLength !== undefined && value.length > def.maxLength) {
+        fail(
+          `${def.key} is ${value.length} characters. The limit is ${def.maxLength} — ` +
+            "this is read at a glance on a page, not studied.",
+        );
+      }
       break;
 
     case "string[]": {
@@ -534,6 +621,19 @@ export function validateValue(key: string, value: unknown): SettingProblem[] {
         for (const v of value as string[]) {
           if (!def.allowed.includes(v)) {
             fail(`"${v}" is not a file type this System can verify by content.`);
+          }
+        }
+      }
+      // Per LINE, not per list: the list's length is bounded by what reads it
+      // (twelve videos, twelve photographs), and a limit on the whole would
+      // report "too long" without saying which entry to shorten.
+      if (def.maxLength !== undefined) {
+        for (const v of value as string[]) {
+          if (v.length > def.maxLength) {
+            fail(
+              `"${v.slice(0, 40)}…" is ${v.length} characters. The limit for one entry is ` +
+                `${def.maxLength}.`,
+            );
           }
         }
       }

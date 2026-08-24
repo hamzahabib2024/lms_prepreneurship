@@ -68,6 +68,15 @@ const ACKNOWLEDGED: Record<string, string> = {
     "so ALL scope applies and there is no section to be outside of. The " +
     "studentId is checked against the completion criteria before anything is " +
     "written.",
+  "certificate/certificate.service.ts::issueManual":
+    "Same authority as issueForSubject above — certificate:create, which §4.5 " +
+    "grants a Super Admin and an Admin holding certificate_issuer, both at ALL " +
+    "scope, so there is no section to be outside of. Every id the caller " +
+    "supplies is ALSO read back through the scoped client first " +
+    "(requireStudent, requireSectionSubject, requireProgramme), each of which " +
+    "raises rather than logs when the record is not returned. That is the " +
+    "read-then-act pattern, and it runs before a certificate number is " +
+    "allocated so a refused request does not burn one.",
   "academic/academic.service.ts::offerSubject":
     "Admin-only. §4.5 gives no teacher `section_subject:create`.",
   "academic/student-note.service.ts::create":

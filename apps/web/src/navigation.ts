@@ -62,6 +62,11 @@ export const DESTINATIONS: readonly Destination[] = [
 
   // ------------------------------------------------------------ learning --
   { to: "/subjects", label: "My subjects", icon: "book", group: "Learning", roles: ["student"], also: ["progress", "courses", "grades"] },
+  /* A STUDENT'S OWN, which is not the register on /certificates below. That
+     one lists every holder in the Institute and is guarded by the issuing
+     permission; this one is `certificate:read` at OWN scope. Two addresses
+     because they are two different things, not one thing with a filter. */
+  { to: "/my-certificates", label: "My certificates", icon: "award", group: "Learning", roles: ["student"], also: ["certificate", "award", "diploma", "verify", "download"] },
 
   // ------------------------------------------------------------ teaching --
   { to: "/attendance", label: "Attendance", icon: "check", group: "Teaching", roles: STAFF, also: ["register", "present", "absent"] },
@@ -82,7 +87,7 @@ export const DESTINATIONS: readonly Destination[] = [
   // ------------------------------------------------------------ students --
   { to: "/admissions", label: "Admissions", icon: "clipboard", group: "Students", roles: OFFICE, also: ["applications", "registrations"] },
   { to: "/users", label: "People", icon: "users", group: "Students", roles: OFFICE, also: ["directory", "staff", "accounts"] },
-  { to: "/certificates", label: "Certificates", icon: "award", group: "Students", roles: OFFICE },
+  { to: "/certificates", label: "Certificates", icon: "award", group: "Students", roles: OFFICE, also: ["register", "issue", "revoke", "verification", "award"] },
   { to: "/import", label: "Import", icon: "upload", group: "Students", roles: OFFICE, also: ["cohort", "csv"] },
   { to: "/bulk", label: "Bulk changes", icon: "shuffle", group: "Students", roles: OFFICE },
 

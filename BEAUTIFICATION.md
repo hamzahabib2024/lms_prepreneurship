@@ -128,7 +128,7 @@ states as a sweep across all pages after the role work.
 | **LandingPage** | Cover art on every course card, with the artwork lifting on hover. Photographs became a cross-fading stage with a slow drift, arrows and dots. News rotates one notice at a time on a nine-second dwell with named tabs and a progress bar. A counted stat band, a closing band in full brand colour, one entrance on the hero |
 | **ApplyPage** | Stepper with completed steps ticked, per-field validation colour, the education level as a proper list |
 | **LoginPage** | Split panel — the brand on one side, the form on the other. Collapses on a phone so the form stays above the fold |
-| **VerifyPage** | Certificate verification, styled as a result rather than a form |
+| **VerifyPage** | Certificate verification, styled as a **result rather than a form**: the verdict is a sentence in the first line, with a coloured rim and a mark supporting it rather than carrying it. Three outcomes, not two — verified, revoked, and archived, which is genuine but withdrawn and must never be reported as revoked. A number box underneath for somebody holding a photocopy and no camera |
 | **TrackPage** | Application tracking, and a page that did not exist at all — the landing page promised "a tracking reference you can check at any time" and there was nowhere to check it. One field and one button on a single line, the reference set in the same monospace face the confirmation page uses so the two read as the same object. The answer is a plain-language verdict with a coloured pill, not a status enum; the office's own message is set apart as a quotation, which for NEEDS\_INFO is the entire point of the page |
 
 ### The daily screens
@@ -181,7 +181,8 @@ states as a sweep across all pages after the role work.
 | **BulkPage** | As above |
 | **SectionsPage** | Teal page colour; inline create form beneath the table, expanding subject panel |
 | **StructurePage** | As above |
-| **CertificatesPage** | Gold — **darkened from #ca8a04 to #a16207**, which failed contrast at 2.94:1 |
+| **CertificatesPage** | Gold — **darkened from #ca8a04 to #a16207**, which failed contrast at 2.94:1. Now three tabs rather than one long screen, because the register, issuing what was earned and issuing by hand are three different jobs done at three different moments. A five-figure band at the head, a debounced search over name and certificate number, and a register table whose Open action shows the real document rather than a row of fields |
+| **MyCertificatesPage** | A student's shelf. Tiles carrying the **actual certificate**, scaled from the same SVG the download rasterises, so a tile can never show something the file does not — and an empty state that explains how one is earned rather than saying there are none |
 
 ### Reports and operations
 

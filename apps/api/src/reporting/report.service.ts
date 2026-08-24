@@ -864,22 +864,35 @@ export class ReportService {
           ? { issuedAt: { ...(f.from ? { gte: f.from } : {}), ...(f.to ? { lte: f.to } : {}) } }
           : {}),
       },
-      include: {
-        student: { include: { user: { select: { fullName: true } } } },
-        sectionSubject: { include: { subject: { select: { name: true } } } },
-        programme: { select: { name: true } },
-      },
       orderBy: { issuedAt: "desc" },
     });
 
+    /*
+     * READ OFF THE SNAPSHOT, NOT OFF THE STUDENT.
+     *
+     * This used to join out to students, users and subjects. Two problems, one
+     * of which was a hole in the register: a certificate whose student record
+     * has since been erased has no row to join to, so the exact certificate an
+     * auditor is most likely to be asking about would have been the one
+     * missing — and the join, being required, would have refused the whole
+     * report rather than dropping the row quietly.
+     *
+     * The other is that a name changed since issue would have been exported
+     * against a certificate number printed under the old one, so the register
+     * and the document in somebody's hand would disagree.
+     */
     return certificates.map((c) => ({
       certificateNo: c.certificateNo,
       issuedAt: c.issuedAt,
-      registrationNo: c.student.registrationNo,
-      name: c.student.user.fullName,
+      registrationNo: c.studentRegistrationNoSnapshot ?? "",
+      name: c.studentNameSnapshot,
       type: c.type,
-      subject: c.sectionSubject?.subject.name ?? c.programme?.name ?? "",
-      progressPercent: Number(c.progressPercent),
+      kind: c.kind,
+      subject: c.awardTitleSnapshot,
+      // Blank rather than 0 for a manually issued certificate: it has no
+      // progress figure, and a zero in this column would read as a failure.
+      progressPercent: c.progressPercent === null ? "" : Number(c.progressPercent),
+      issuedManually: c.issuedManually,
       status: c.status,
       revokedAt: c.revokedAt ?? "",
       revocationReason: c.revocationReason ?? "",

@@ -970,24 +970,84 @@ model Certificate {
   /// The permanent public identifier, printed on the document.
   certificateNo String @unique @map("certificate_no") @db.VarChar(50)
 
-  studentId String          @map("student_id") @db.Uuid
+  /// NULLABLE, AND THAT IS THE POINT (FR-CRT-016, BR-DAT-02).
+  ///
+  /// A certificate outlives the student record. Erasing personal data under a
+  /// subject-access request, or deleting an account created in error, must not
+  /// destroy a document an employer is holding — so the link is severed and the
+  /// snapshot below carries the certificate on its own. With the old RESTRICT
+  /// the erasure simply failed, which is a different way of losing.
+  studentId String?         @map("student_id") @db.Uuid
   type      CertificateType
 
-  /// Exactly one of these is set, per the type.
+  /// At most one of these, per the type. Either may become null if the
+  /// structure it points at is later removed; the snapshot is what the
+  /// document is actually drawn from.
   sectionSubjectId String? @map("section_subject_id") @db.Uuid
   programmeId      String? @map("programme_id") @db.Uuid
 
+  /// WHICH CERTIFICATE IT IS — the wording printed under the title.
+  ///
+  /// Separate from `type`, which says what the certificate is ANCHORED TO. A
+  /// programme certificate can be a completion or a distinction; a workshop
+  /// certificate can be participation or training. This is also where a new
+  /// template plugs in without touching numbering, verification or storage.
+  kind CertificateKind @default(COMPLETION)
+
+  /// ------------------------------------------------------------ snapshot --
+  ///
+  /// THE DOCUMENT IS DRAWN FROM THESE, NEVER FROM THE LIVE RECORDS.
+  ///
+  /// A student marries and changes their surname. A course is renamed the
+  /// following year. A teacher leaves and their row is archived. None of those
+  /// may alter a certificate already printed, framed and shown to an employer —
+  /// and every one of them would, if the document were rendered by joining out
+  /// to today's tables. Reprinting a certificate must produce the same piece of
+  /// paper it produced on the day it was issued.
+  studentNameSnapshot           String  @map("student_name_snapshot") @db.VarChar(200)
+  studentRegistrationNoSnapshot String? @map("student_registration_no_snapshot") @db.VarChar(50)
+  studentRollNoSnapshot         Int?    @map("student_roll_no_snapshot") @db.SmallInt
+  /// What the certificate is FOR: the subject, the programme, or a workshop
+  /// name typed by an administrator.
+  awardTitleSnapshot            String  @map("award_title_snapshot") @db.VarChar(250)
+  /// The course the subject sits in, printed as a secondary line when known.
+  programmeNameSnapshot         String? @map("programme_name_snapshot") @db.VarChar(200)
+  awardCodeSnapshot             String? @map("award_code_snapshot") @db.VarChar(30)
+  instructorNameSnapshot        String? @map("instructor_name_snapshot") @db.VarChar(200)
+  instructorTitleSnapshot       String? @map("instructor_title_snapshot") @db.VarChar(150)
+  /// The Institute as it named itself that day, and who signed for it. Both are
+  /// settings, and settings change; a reprint must not quietly attribute a 2026
+  /// certificate to a director appointed in 2029.
+  instituteNameSnapshot         String  @map("institute_name_snapshot") @db.VarChar(200)
+  signatoryNameSnapshot         String? @map("signatory_name_snapshot") @db.VarChar(200)
+  signatoryTitleSnapshot        String? @map("signatory_title_snapshot") @db.VarChar(150)
+
+  /// When the work was finished, which is not always when the paper was
+  /// issued. Null means "the same day it was issued".
+  completionDate DateTime? @map("completion_date")
+  /// Free text — "12 weeks · 60 contact hours". Printed only if present,
+  /// because a blank duration line looks like a fault.
+  durationText   String?   @map("duration_text") @db.VarChar(80)
+
   /// What was true at the moment of issue (FR-CRT-008).
-  progressPercent     Decimal  @map("progress_percent") @db.Decimal(5, 2)
+  ///
+  /// NULLABLE since manual issue: a workshop certificate for somebody who was
+  /// never enrolled has no progress figure, and writing 0 would be a lie that
+  /// prints.
+  progressPercent     Decimal? @map("progress_percent") @db.Decimal(5, 2)
   attendancePercent   Decimal? @map("attendance_percent") @db.Decimal(5, 2)
   averageGradePercent Decimal? @map("average_grade_percent") @db.Decimal(5, 2)
   /// The criteria themselves, so a challenge years later can be answered with
   /// the rule that was actually applied rather than today's configuration.
-  criteriaApplied     Json     @map("criteria_applied")
+  criteriaApplied     Json?    @map("criteria_applied")
 
   status   CertificateStatus @default(ISSUED)
   issuedAt DateTime          @default(now()) @map("issued_at")
   issuedBy String            @map("issued_by") @db.Uuid
+  /// FR-CRT-002 vs the manual route. An earned certificate was recomputed and
+  /// met the criteria; a manual one was an administrator's decision. Both are
+  /// legitimate and they are not the same claim, so the row says which.
+  issuedManually Boolean @default(false) @map("issued_manually")
 
   /// BR-DAT-02 — revoked, never deleted. A certificate that vanished would
   /// leave an employer holding a document the System denies exists.
@@ -1003,9 +1063,12 @@ model Certificate {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  student        Student         @relation(fields: [studentId], references: [id], onDelete: Restrict)
-  sectionSubject SectionSubject? @relation(fields: [sectionSubjectId], references: [id], onDelete: Restrict)
-  programme      Programme?      @relation(fields: [programmeId], references: [id], onDelete: Restrict)
+  /// SetNull rather than Restrict, on all three. See `studentId` above: the
+  /// certificate is the record now, and it must survive everything it points
+  /// at. Restrict made the record depend on rows nobody promised to keep.
+  student        Student?        @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  sectionSubject SectionSubject? @relation(fields: [sectionSubjectId], references: [id], onDelete: SetNull)
+  programme      Programme?      @relation(fields: [programmeId], references: [id], onDelete: SetNull)
 
   /// FR-CRT-004 — at most one LIVE certificate per student per thing.
   ///
@@ -1015,6 +1078,11 @@ model Certificate {
   /// issue, revoke, reissue, revoke would collide on the second revocation.
   @@index([studentId])
   @@index([issuedAt])
+  /// The register's default sort and its commonest filter.
+  @@index([status, issuedAt])
+  /// Searching by holder name, which is what an administrator with a phone
+  /// call in their ear actually types.
+  @@index([studentNameSnapshot])
   @@map("certificates")
 }
 
@@ -1791,14 +1859,36 @@ model AssignmentExtension {
 
 // =========================================================== quizzes (8.3.5)
 
+/// WHAT the certificate is anchored to.
+///
+/// CUSTOM is manual issue: a workshop, a seminar, a short course the LMS never
+/// taught. It is a distinct value rather than a SUBJECT row with the checks
+/// skipped, so that reading a certificate years later tells you which of the
+/// two it was without having to reconstruct the issuing screen.
 enum CertificateType {
   SUBJECT
   PROGRAMME
+  CUSTOM
 }
 
+/// WHICH certificate it is — the wording under the title, and the template.
+enum CertificateKind {
+  COMPLETION
+  EXCELLENCE
+  PARTICIPATION
+  TRAINING
+}
+
+/// ISSUED reads as "Valid" on screen; the stored name is left alone because it
+/// is already written into rows, partial unique indexes and audit entries.
+///
+/// ARCHIVED is withdrawn WITHOUT being discredited — superseded, duplicated in
+/// error, reissued under a new number. It still verifies as genuine. REVOKED
+/// does not, and says so.
 enum CertificateStatus {
   ISSUED
   REVOKED
+  ARCHIVED
 }
 
 enum WarningSeverity {

@@ -4208,3 +4208,220 @@ details > summary:hover { text-decoration: underline; }
 
 .skeleton-head { margin-bottom: 1.25rem; }
 .skeleton-head .skeleton { height: 26px; width: 14rem; border-radius: 8px; }
+
+/* ------------------------------------------------------- certificates ----
+
+   THE DOCUMENT BRINGS ITS OWN PALETTE and nothing here may override it. The
+   certificate is an SVG with navy, amber and ivory baked in, because it is
+   paper: it must look the same in dark mode, on a projector and on a printer,
+   and a student's copy must be identical to their classmate's. Everything
+   below styles the FRAME around it — the stage, the tiles, the register — in
+   the application's own tokens.
+*/
+
+/* The stage holds the aspect ratio, so the document never distorts and never
+   overflows sideways on a phone. The ratio is stated rather than left to the
+   SVG so the box is the right height before the markup is parsed — otherwise
+   the page jumps as each certificate lands. */
+.certificate-stage {
+  aspect-ratio: 1414 / 1000;
+  width: 100%;
+  border-radius: var(--radius);
+  overflow: hidden;
+  /* A rim rather than a shadow: a certificate on a dark ground with no edge
+     reads as a hole in the page. */
+  box-shadow: 0 0 0 1px var(--line), var(--shadow-2);
+  background: #fffdf8;
+}
+.certificate-stage svg { display: block; width: 100%; height: 100%; }
+
+.certificate-viewer { display: grid; gap: .9rem; }
+.certificate-viewer.is-compact { gap: .75rem; }
+
+.certificate-actions { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+.certificate-actions .btn svg { width: 16px; height: 16px; }
+.certificate-note { margin: 0; }
+
+/* The dialog is as wide as the page allows: a certificate read at 600px is a
+   certificate whose signatures and number cannot be made out, which is the one
+   thing somebody opens it to do. */
+.certificate-modal { width: min(1180px, 100%); }
+
+/* ------------------------------------------------------------- tiles ------
+
+   A GRID OF DOCUMENTS, not a list of filenames. Each tile carries the real
+   certificate, scaled by CSS from the same markup the download rasterises, so
+   a tile can never show something the file does not.
+*/
+.certificate-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1rem;
+  margin-top: .25rem;
+}
+
+.certificate-card {
+  display: flex; flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow-1);
+  transition: box-shadow .18s var(--ease), transform .18s var(--ease), border-color .18s var(--ease);
+}
+.certificate-card:hover { box-shadow: var(--shadow-2); transform: translateY(-1px); }
+/* Withdrawn tiles are held back rather than hidden (BR-ENR-08): the student
+   may be holding the paper copy and needs to find out why it stopped
+   verifying. The word in the pill is what says so; this is only support. */
+.certificate-card.is-revoked { border-color: color-mix(in srgb, var(--error) 40%, var(--line)); }
+.certificate-card.is-archived { opacity: .88; }
+
+.certificate-thumb {
+  display: block; position: relative;
+  width: 100%; padding: 0; border: 0;
+  background: #fffdf8;
+  cursor: pointer;
+  border-bottom: 1px solid var(--line);
+}
+.certificate-thumb-inner { display: block; aspect-ratio: 1414 / 1000; }
+.certificate-thumb-inner svg { display: block; width: 100%; height: 100%; }
+
+/* The hint appears on hover and on keyboard focus alike — a control that only
+   exists for a mouse is a control half the readers never find. */
+.certificate-thumb-hint {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center; gap: .4rem;
+  background: rgb(14 37 64 / 55%);
+  color: #fff; font-weight: 600; font-size: .875rem;
+  opacity: 0; transition: opacity .18s var(--ease);
+}
+.certificate-thumb-hint svg { width: 16px; height: 16px; }
+.certificate-thumb:hover .certificate-thumb-hint,
+.certificate-thumb:focus-visible .certificate-thumb-hint { opacity: 1; }
+
+.certificate-card-body { display: grid; gap: .35rem; padding: .8rem .9rem 1rem; }
+.certificate-card-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: .5rem;
+}
+.certificate-card-head h3 {
+  margin: 0; font-size: .975rem; line-height: 1.3;
+  /* Two lines, then an ellipsis: a forty-word workshop title must not push
+     every other tile in the row taller than itself. */
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.certificate-card-meta { margin: .15rem 0 .35rem; font-size: .8125rem; color: var(--muted); }
+
+/* Tabular figures, because a column of certificate numbers that does not line
+   up is a column nobody can scan. */
+.certificate-no {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .01em;
+  font-weight: 600; color: var(--ink-2);
+}
+
+/* ---------------------------------------------------------- register ------ */
+
+.cert-tabs { display: flex; gap: .5rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.cert-tab {
+  flex: 1 1 13rem; min-width: 0; text-align: left; cursor: pointer;
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: .5rem .75rem .6rem;
+  color: var(--muted); font: inherit;
+  transition: color .18s var(--ease), border-color .18s var(--ease), background .18s var(--ease);
+}
+.cert-tab:hover { color: var(--ink-2); }
+/* Selection by weight and a bar, never by colour alone (NFR-ACC-007). */
+.cert-tab.is-current {
+  color: var(--ink); border-color: var(--brand-600);
+  background: var(--brand-050);
+  box-shadow: inset 0 -3px 0 var(--brand-600);
+}
+.cert-tab-label { display: block; font-weight: 620; font-size: .9rem; }
+.cert-tab-hint { display: block; font-size: .78rem; }
+
+.cert-filters { align-items: flex-end; }
+/* The search box earns the room: a name or a certificate number is what gets
+   typed, and both are longer than a select. */
+.cert-search { flex: 2 1 22rem; }
+
+.cert-pager { justify-content: space-between; margin-top: .75rem; }
+.cert-pager .btn svg { width: 15px; height: 15px; }
+
+/* The line that appears once a typed name is matched to a real student. */
+.cert-linked {
+  display: flex; align-items: center; gap: .4rem; flex-wrap: wrap;
+  margin: .1rem 0 .9rem;
+  font-size: .85rem; color: var(--ink-2);
+}
+.cert-linked svg { width: 15px; height: 15px; color: var(--ok); }
+
+.cert-matches {
+  margin: .1rem 0 .9rem; padding: .6rem .7rem;
+  background: var(--surface-2); border-radius: var(--radius-sm);
+}
+.cert-matches ul { display: flex; flex-wrap: wrap; gap: .35rem; }
+.cert-matches li { padding: 0; border: 0; }
+
+/* Everything optional, folded away. An office issuing forty workshop slips
+   should see two fields, not twelve. */
+.cert-more { margin: .2rem 0 1rem; }
+.cert-more > summary { cursor: pointer; font-size: .875rem; color: var(--ink-2); padding: .3rem 0; }
+.cert-more[open] > summary { margin-bottom: .5rem; font-weight: 600; }
+
+/* A confirmation is a sentence and a reason, not a screen. */
+.modal-sm { width: min(520px, 100%); }
+
+/* ------------------------------------------------- public verification ---- */
+
+.verify-shell { max-width: 900px; }
+
+.verify-card { border-left: 4px solid var(--line); }
+.verify-card.is-valid { border-left-color: var(--ok); }
+.verify-card.is-revoked { border-left-color: var(--error); }
+.verify-card.is-archived { border-left-color: var(--warn); }
+.verify-card.is-unknown { border-left-color: var(--muted); }
+
+/* THE ANSWER, FIRST. Somebody checking a qualification has one question, and
+   the sentence answers it before the table below is read at all. */
+.verify-verdict { display: flex; gap: .85rem; align-items: flex-start; }
+.verify-verdict strong { display: block; font-size: 1.15rem; line-height: 1.3; }
+.verify-verdict p { margin: .3rem 0 0; color: var(--ink-2); font-size: .9rem; }
+
+.verify-mark {
+  flex: 0 0 auto;
+  display: grid; place-items: center;
+  width: 44px; height: 44px; border-radius: 50%;
+  background: var(--surface-2); color: var(--ink-2);
+}
+.verify-mark svg { width: 22px; height: 22px; }
+.is-valid .verify-mark { background: var(--ok-bg); color: var(--ok); }
+.is-revoked .verify-mark { background: var(--error-bg); color: var(--error); }
+.is-archived .verify-mark { background: var(--warn-bg); color: var(--warn); }
+
+.verify-facts {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: .85rem 1.25rem;
+  margin: 1.1rem 0 0; padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+.verify-facts dt {
+  font-size: .75rem; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--muted); margin-bottom: .15rem;
+}
+.verify-facts dd { margin: 0; color: var(--ink); font-size: .95rem; }
+/* The holder's name is what the reader is checking, so it is the largest
+   thing on the page after the verdict. */
+.verify-holder { font-family: var(--font-display); font-size: 1.15rem; font-weight: 600; }
+.verify-no { font-variant-numeric: tabular-nums; letter-spacing: .02em; }
+
+.verify-lookup form { display: flex; gap: .6rem; align-items: flex-end; flex-wrap: wrap; }
+.verify-lookup .field { flex: 1 1 16rem; }
+
+@media (max-width: 700px) {
+  .certificate-grid { grid-template-columns: 1fr; }
+  .cert-tab { flex: 1 1 100%; }
+  .cert-pager { flex-direction: column; align-items: stretch; }
+  .certificate-actions .btn { flex: 1 1 auto; justify-content: center; }
+}

@@ -38,6 +38,7 @@ import { TimetablePage } from "./pages/TimetablePage";
 import { DiscussionPage } from "./pages/DiscussionPage";
 import { BackupPage } from "./pages/BackupPage";
 import { VerifyPage } from "./pages/VerifyPage";
+import { MyCertificatesPage } from "./pages/MyCertificatesPage";
 import { TrackPage } from "./pages/TrackPage";
 import { CourseAdminPage } from "./pages/CourseAdminPage";
 import { CourseEditPage } from "./pages/CourseEditPage";
@@ -129,6 +130,13 @@ export function App() {
   if (location.pathname.startsWith("/verify/")) {
     return (
       <Routes>
+        {/* TWO SHAPES, ONE PAGE. The QR code on every certificate encodes
+            /verify/certificate/<code>, which is the address a stranger's
+            camera will open and the one to keep working forever. The bare
+            /verify/<code> is what earlier links used, and it still resolves
+            — a printed certificate cannot be reissued because an address was
+            tidied up. */}
+        <Route path="/verify/certificate/:code" element={<VerifyPage />} />
         <Route path="/verify/:code" element={<VerifyPage />} />
       </Routes>
     );
@@ -618,6 +626,25 @@ export function App() {
             element={
               hasRole("super_admin", "admin") ? <CertificatesPage /> : <Navigate to="/" replace />
             }
+          />
+          {/*
+            FR-CRT-015 — a student's own certificates, at their own address.
+
+            SEPARATE FROM /certificates ABOVE, deliberately. That one is the
+            REGISTER: every holder's name and course on one screen, guarded by
+            the issuing permission because reading it is reading about other
+            students. This one is `certificate:read` at OWN scope, which the
+            server narrows to their own rows — so the two screens cannot be
+            made to show each other's data whatever this test says (UI-002).
+
+            Students only, because /me/certificates resolves the holder from
+            the signed-in account's student record and refuses an account that
+            has none. Offering the destination to a teacher would be offering
+            them a refusal.
+          */}
+          <Route
+            path="/my-certificates"
+            element={hasRole("student") ? <MyCertificatesPage /> : <Navigate to="/" replace />}
           />
           {/* Everyone: reading is universal, and the composer inside decides
               for itself whether this user may post. */}
