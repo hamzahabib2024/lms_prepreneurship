@@ -10,6 +10,7 @@ import { EmptyState, ErrorState, SkeletonList, SkeletonTable } from "../componen
 import { CertificateModal } from "../components/CertificateModal";
 import { Icon } from "../components/Icon";
 import { ApiError, api } from "../api/client";
+import { HowItWorks } from "../components/HowItWorks";
 
 /**
  * The certificate register — SRS §13.7, FR-CRT-002/006/012.
@@ -57,6 +58,19 @@ export function CertificatesPage() {
           </p>
         </div>
       </header>
+
+      <HowItWorks
+        id="certificates"
+        title="Issuing a certificate"
+        intro="A certificate is a public claim by the Institute, so it is issued only when the requirements are genuinely met."
+        steps={[
+          { icon: "search", title: "Check they qualify", body: "Attendance, submitted work and marks. The System tells you if something is short." },
+          { icon: "award", title: "Issue it", body: "It gets a number of its own, printed on the document." },
+          { icon: "monitor", title: "Anybody can verify it", body: "An employer types that number on the public page and sees whether it is genuine — no account needed." },
+          { icon: "alert", title: "Revoke only if you must", body: "A revoked certificate stays on record and reads as revoked. It is never quietly deleted." },
+        ]}
+        note="What the certificate says is copied onto it when you issue it. Renaming a course next year does not change a certificate already given out."
+      />
 
       <nav className="cert-tabs" aria-label="Certificate views">
         {TABS.map((t) => (

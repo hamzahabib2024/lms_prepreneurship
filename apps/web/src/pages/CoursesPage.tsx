@@ -4,6 +4,7 @@ import { ApiError, api } from "../api/client";
 import { CourseCover } from "../components/CourseCover";
 import { EmptyState, SkeletonCards } from "../components/Ui";
 import { Icon } from "../components/Icon";
+import { HowItWorks } from "../components/HowItWorks";
 
 interface Course {
   id: string;
@@ -97,6 +98,19 @@ export function CoursesPage() {
           </p>
         </div>
       </header>
+
+      <HowItWorks
+        id="courses-recordings"
+        title="Your classes and their recordings"
+        intro="Every class you teach, and what is waiting to be dealt with in each."
+        steps={[
+          { icon: "folder", title: "Connect a Drive folder", body: "Point the class at the folder its recordings land in. Do this once." },
+          { icon: "shuffle", title: "Recordings appear by themselves", body: "Anything put in that folder is picked up and listed here — you do not upload it twice." },
+          { icon: "play", title: "Check it plays", body: "Open one before the class does. A recording that will not play is better found by you." },
+          { icon: "check", title: "Publish the ones to keep", body: "New recordings arrive unpublished. Students see them when you say so." },
+        ]}
+        note="Changing a class's folder clears the recordings from the old one and pulls in the new folder's. Nothing is destroyed — point it back and they return."
+      />
 
       {/* The two facts worth acting on, as buttons rather than as text —
           reading "3 classes have no folder" and then having to find them is

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Skeleton } from "../components/Ui";
 import { ApiError, api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
+import { HowItWorks } from "../components/HowItWorks";
 
 /**
  * Rubrics — SRS §13.6, FR-ASG-012..018.
@@ -69,6 +70,19 @@ export function RubricsPage() {
           New rubric
         </button>
       </header>
+
+      <HowItWorks
+        id="marking-guides"
+        title="What a marking guide is"
+        intro="A list of what you are looking for, with marks against each part. Write it once and every piece of work in that assignment is judged the same way."
+        steps={[
+          { icon: "clipboard", title: "Name it", body: "Something you will recognise later — “Logo design, first year” beats “Rubric 2”." },
+          { icon: "layers", title: "List what you are marking", body: "One line per thing: idea, craft, presentation. Whatever you would have written in the margin anyway." },
+          { icon: "money", title: "Put marks against each", body: "The total is added up for you as you type, so you can see it come to the right number." },
+          { icon: "check", title: "Use it on an assignment", body: "Choose it when you set the work. Marking then shows each line with its own box." },
+        ]}
+        note="The marks have to add up to the marks the assignment is out of. The running total at the bottom tells you where you are — a guide that does not add up cannot be used."
+      />
 
       {error && (
         <div className="alert alert-error" role="alert">

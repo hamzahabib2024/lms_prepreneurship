@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ApiError, api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { EmptyState, SkeletonTable } from "../components/Ui";
+import { HowItWorks } from "../components/HowItWorks";
 
 interface Status {
   key: string;
@@ -103,6 +104,19 @@ export function IntegrationsPage() {
           </p>
         </div>
       </header>
+
+      <HowItWorks
+        id="integrations"
+        title="Connecting Google and email"
+        intro="The outside services the Institute uses: Drive for recordings, Meet for classes, and email for everything it sends."
+        steps={[
+          { icon: "key", title: "Add the credentials", body: "Given to you when the Google account was set up. Paste them once." },
+          { icon: "check", title: "Test the connection", body: "Says straight away whether it worked, rather than failing quietly later." },
+          { icon: "folder", title: "Share the folders", body: "Google must be told the System is allowed in. The page says exactly what to share and with whom." },
+          { icon: "bell", title: "Send a test message", body: "Prove an email actually arrives before the first student depends on it." },
+        ]}
+        note="A service shown as simulated is not sending anything. It is safe for trying things out and must be switched on before real students rely on it."
+      />
 
       {simulated.length > 0 && (
         <div className="alert alert-warn" role="status">

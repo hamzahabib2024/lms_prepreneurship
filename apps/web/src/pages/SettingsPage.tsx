@@ -3,6 +3,7 @@ import { Skeleton } from "../components/Ui";
 import { text } from "../api/text";
 import { ApiError, api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
+import { HowItWorks } from "../components/HowItWorks";
 
 /**
  * Institute settings — SRS §13.9, FR-CFG-001..005.
@@ -117,6 +118,19 @@ export function SettingsPage() {
           />
         </label>
       </header>
+
+      <HowItWorks
+        id="settings"
+        title="Institute policy"
+        intro="The rules the whole System applies: when a student is warned, what counts as complete, what a certificate needs."
+        steps={[
+          { icon: "search", title: "Find the setting", body: "Search matches the name and the description, so you can look for what it does." },
+          { icon: "book", title: "Read what it changes", body: "Every setting says in words what moving it will do." },
+          { icon: "pen", title: "Change it", body: "Nothing saves until you press Save. The default is always shown beside it." },
+          { icon: "clock", title: "It applies from now on", body: "Decisions already made stay made — lowering a threshold does not un-warn anybody." },
+        ]}
+        note="If you change something and nothing happens, look at where the value came from. A course or section may have its own override, and the more specific one wins."
+      />
 
       {!mayConfigure && (
         <div className="alert alert-warn">

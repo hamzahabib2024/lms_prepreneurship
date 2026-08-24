@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { ApiError, api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { EmptyState, SkeletonTable } from "../components/Ui";
+import { HowItWorks } from "../components/HowItWorks";
 
 interface Programme {
   id: string;
@@ -197,6 +198,19 @@ export function StructurePage() {
           {batches.length === 1 ? "batch" : "batches"}
         </span>
       </header>
+
+      <HowItWorks
+        id="structure"
+        title="Terms and intakes"
+        intro="The calendar the whole Institute runs on. Set once a term, then left alone."
+        steps={[
+          { icon: "calendar", title: "Make the session", body: "The term itself — its name and the dates it runs between." },
+          { icon: "users", title: "Add the intakes", body: "A group starting together. Sections belong to one of these." },
+          { icon: "clock", title: "Set the dates", body: "Everything else — deadlines, attendance, certificates — is measured against these." },
+          { icon: "check", title: "Make it current", body: "The current term is the one new sections and applications default to." },
+        ]}
+        note="Dates here are the ones everything else is judged against, so a term with the wrong end date makes every completion figure wrong at once."
+      />
 
       {error && (
         <div className="alert alert-error" role="alert">

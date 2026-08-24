@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Skeleton } from "../components/Ui";
 import { ApiError, api } from "../api/client";
 import { StepUpPrompt, needsStepUp } from "../components/StepUpPrompt";
+import { HowItWorks } from "../components/HowItWorks";
 
 /**
  * Backup and restore — SRS §13.14, FR-OPS-030..038.
@@ -113,6 +114,19 @@ export function BackupPage() {
           {busy ? "Working…" : "Take a backup now"}
         </button>
       </header>
+
+      <HowItWorks
+        id="backups"
+        title="Backups and restoring"
+        intro="Copies of everything the Institute holds, so a mistake or a failure is recoverable."
+        steps={[
+          { icon: "database", title: "Check they are running", body: "When the last one was taken, and whether it worked." },
+          { icon: "clock", title: "Set how often", body: "And how long they are kept for." },
+          { icon: "check", title: "Test a restore", body: "A backup nobody has ever restored is a backup nobody knows works." },
+          { icon: "alert", title: "Restore only if you must", body: "It puts everything back to that moment — anything since is lost." },
+        ]}
+        note="Restoring is the most destructive thing in this System. It undoes every change made since the backup was taken, for everybody, not only the mistake you are fixing."
+      />
 
       {/* Not buried in a manual. Somebody who believes these contain the schema
           will find out they do not on the day they need them. */}

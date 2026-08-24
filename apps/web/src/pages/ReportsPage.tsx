@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { SkeletonTable } from "../components/Ui";
 import { text } from "../api/text";
 import { ApiError, api } from "../api/client";
+import { HowItWorks } from "../components/HowItWorks";
 
 interface FilterSpec {
   key: "sectionId" | "from" | "to" | "status" | "belowThresholdOnly";
@@ -136,6 +137,19 @@ export function ReportsPage() {
         <h1>Reports</h1>
         <span className="muted small">{defs.length} available to you</span>
       </header>
+
+      <HowItWorks
+        id="reports"
+        title="Getting the numbers out"
+        intro="Counted from the Institute's own records at the moment you ask, never from a stored summary that has gone stale."
+        steps={[
+          { icon: "chart", title: "Choose the report", body: "Attendance, progress, enrolment, money. Each answers one kind of question." },
+          { icon: "calendar", title: "Narrow it", body: "By term, course or section. A report over everything is usually a report about nothing." },
+          { icon: "search", title: "Read it on screen", body: "Check it says what you expected before you send it anywhere." },
+          { icon: "upload", title: "Export it", body: "As a spreadsheet, for anybody who needs it outside this System." },
+        ]}
+        note="An export is a copy that stops being true the moment somebody's attendance changes. Put the date on it before you send it to anyone."
+      />
 
       {error && (
         <div className="alert alert-error" role="alert">

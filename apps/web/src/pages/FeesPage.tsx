@@ -12,6 +12,7 @@ import {
   type FeeSummary,
   type Submission,
 } from "./FeesSubmissions";
+import { HowItWorks } from "../components/HowItWorks";
 
 /**
  * Fees — SRS §13.11, FR-PAY-020..032.
@@ -187,6 +188,19 @@ function StudentFees() {
           </p>
         </div>
       </header>
+
+      <HowItWorks
+        id="fees"
+        title="Reading your fees"
+        intro="Everything charged to you, everything you have paid, and what is left."
+        steps={[
+          { icon: "money", title: "What you owe", body: "The full fee, and each instalment with the date it is due." },
+          { icon: "upload", title: "Tell us you have paid", body: "Attach a photo of the slip. The office checks it against the bank." },
+          { icon: "clock", title: "Wait for it to be confirmed", body: "It shows as awaiting confirmation until somebody has checked it, then as paid." },
+          { icon: "clipboard", title: "Keep the receipt", body: "Issued for every confirmed payment. It is the proof you paid." },
+        ]}
+        note="A payment you have told us about is not the same as a payment we have confirmed. Only a confirmed one reduces what you owe — so send the slip early rather than on the due date."
+      />
 
       {error && (
         <div className="alert alert-error" role="alert">

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, api } from "../api/client";
+import { HowItWorks } from "../components/HowItWorks";
 
 /**
  * Course content — SRS §13.6, FR-CRS-027..032, FR-VID-003..007.
@@ -96,6 +97,19 @@ export function ContentPage() {
       <header className="page-head">
         <h1>Course content</h1>
       </header>
+
+      <HowItWorks
+        id="content"
+        title="How course material is organised"
+        intro="Three levels: a course holds modules, a module holds lessons, and a lesson holds the material students actually open."
+        steps={[
+          { icon: "layers", title: "Make a module", body: "A block of the course — “Foundations”, “Composition”. It is a folder, nothing more." },
+          { icon: "book", title: "Add lessons to it", body: "One lesson is one sitting. Put the notes, the files and the recording on it." },
+          { icon: "upload", title: "Attach the material", body: "Files, links and recordings. A lesson with nothing on it is a heading." },
+          { icon: "check", title: "Publish it", body: "Nothing is visible to a student until you publish it, so you can build a whole term in advance." },
+        ]}
+        note="Publishing a lesson inside an unpublished module still shows nobody anything. The module has to be published too."
+      />
 
       {error && (
         <div className="alert alert-error" role="alert">

@@ -7,6 +7,7 @@ import { CourseCover } from "../components/CourseCover";
 import { Icon } from "../components/Icon";
 import { money, whenDue, type Fee } from "../components/FeePanel";
 import { CourseHierarchy } from "../components/CourseHierarchy";
+import { HowItWorks } from "../components/HowItWorks";
 
 /**
  * Courses — creating them, illustrating them, and pricing them (FR-CRS-004,
@@ -181,6 +182,19 @@ export function CourseAdminPage() {
           </p>
         </div>
       </header>
+
+      <HowItWorks
+        id="courses-and-fees"
+        title="Setting up a course"
+        intro="What the Institute teaches, and what it costs. This is where the public page gets its list from."
+        steps={[
+          { icon: "book", title: "Make the course", body: "Its name, its code and how long it runs. This is the thing people apply for." },
+          { icon: "layers", title: "Add its subjects", body: "The parts it is taught in. A student enrols on the course and gets its subjects." },
+          { icon: "money", title: "Set the fee", body: "The full price, and the instalments if you allow them. The lines have to add up to the total." },
+          { icon: "check", title: "Publish the price", body: "Until you do, nobody is quoted anything. Applicants see it the moment you publish." },
+        ]}
+        note="Closing a course takes it off the public page the same afternoon. It does not touch the students already on it."
+      />
 
       {/* Shown at the top, once, because the order is the thing an
           inexperienced administrator does not have and cannot guess. */}
