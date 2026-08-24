@@ -63,7 +63,7 @@ class DashboardWidgetBody extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              '${scheduledStart.toLocal().toString().substring(0, 16)} · '
+              '${_formatDateTime(scheduledStart)} · '
               'starts in ${_formatDuration(startsIn)}',
               style: TextStyle(color: mutedColor, fontSize: 13),
             ),
@@ -304,9 +304,11 @@ class DashboardWidgetBody extends StatelessWidget {
     if (seconds <= 0) return 'now';
     final h = seconds ~/ 3600;
     final m = (seconds % 3600) ~/ 60;
+    final s = seconds % 60;
     if (h > 24) return '${h ~/ 24} days';
     if (h > 0) return '$h h $m m';
-    return '$m minutes';
+    if (m > 0) return '$m min';
+    return '$s sec';
   }
 
   String _shortDate(DateTime? date) {
@@ -316,5 +318,18 @@ class DashboardWidgetBody extends StatelessWidget {
       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
     ];
     return '${date.day} ${months[date.month - 1]}';
+  }
+
+  String _formatDateTime(DateTime dt) {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    final d = dt.toLocal();
+    final hour = d.hour;
+    final h12 = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
+    final ampm = hour < 12 ? 'AM' : 'PM';
+    final dow = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][d.weekday - 1];
+    return '$dow ${d.day} ${months[d.month - 1]}, $h12:${d.minute.toString().padLeft(2, '0')} $ampm';
   }
 }

@@ -96,7 +96,7 @@ class _OfferingPicker extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
         child: DropdownButtonFormField<String>(
-          initialValue: selectedId,
+          value: selectedId,
           isExpanded: true,
         decoration: const InputDecoration(
           labelText: 'Which class',

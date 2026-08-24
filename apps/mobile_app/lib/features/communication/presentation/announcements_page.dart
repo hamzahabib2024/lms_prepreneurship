@@ -334,7 +334,7 @@ class _ComposerState extends State<_Composer> {
 
           // Audience
           DropdownButtonFormField<String>(
-            initialValue: _audience,
+            value: _audience,
             decoration: const InputDecoration(labelText: 'Audience'),
             items: [
               if (_sections.isNotEmpty)
@@ -353,7 +353,7 @@ class _ComposerState extends State<_Composer> {
           if (_audience == 'SECTION_SUBJECT') ...[
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
-              initialValue: _sectionSubjectId.isEmpty ? null : _sectionSubjectId,
+              value: _sectionSubjectId.isEmpty ? null : _sectionSubjectId,
               decoration: const InputDecoration(labelText: 'Subject'),
               items: _sections
                   .map((s) => DropdownMenuItem(

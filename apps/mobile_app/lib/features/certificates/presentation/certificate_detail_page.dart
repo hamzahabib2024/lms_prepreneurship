@@ -11,7 +11,7 @@ class CertificateDetailPage extends StatelessWidget {
 
   final Certificate certificate;
 
-  static const _verifyBaseUrl = 'http://localhost:5173/verify';
+  static const _verifyBaseUrl = 'https://ppship.org/verify';
 
   @override
   Widget build(BuildContext context) {

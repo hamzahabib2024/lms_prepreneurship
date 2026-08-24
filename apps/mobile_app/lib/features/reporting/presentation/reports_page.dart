@@ -230,7 +230,7 @@ class _ReportCardState extends State<_ReportCard> {
     switch (spec.type) {
       case 'section':
         return DropdownButtonFormField<String>(
-          initialValue: _filters[spec.key],
+          value: _filters[spec.key]?.isNotEmpty == true ? _filters[spec.key] : null,
           isExpanded: true,
           decoration: InputDecoration(
             labelText: spec.label + (spec.required ? ' *' : ''),
