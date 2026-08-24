@@ -171,8 +171,11 @@ class _BackupCard extends StatelessWidget {
                 child: Text(
                   backup.age ?? backup.id,
                   style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
+              const SizedBox(width: 8),
               if (backup.broken)
                 Pill(text: 'Broken', kind: PillKind.warn)
               else

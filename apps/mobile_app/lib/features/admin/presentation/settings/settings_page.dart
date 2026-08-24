@@ -191,35 +191,40 @@ class _SettingRow extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                if (setting.isOverridden)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                    decoration: BoxDecoration(
-                      color: (dark ? AppColorsDark.brand600 : AppColors.brand600).withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      'overridden',
-                      style: TextStyle(
-                        fontSize: 9,
-                        fontWeight: FontWeight.w600,
-                        color: dark ? AppColorsDark.brand600 : AppColors.brand600,
+            Flexible(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (setting.isOverridden)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: (dark ? AppColorsDark.brand600 : AppColors.brand600).withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        'overridden',
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w600,
+                          color: dark ? AppColorsDark.brand600 : AppColors.brand600,
+                        ),
                       ),
                     ),
+                  const SizedBox(height: 3),
+                  Text(
+                    setting.displayText,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: dark ? AppColorsDark.ink : AppColors.ink,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                const SizedBox(height: 3),
-                Text(
-                  setting.displayText,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: dark ? AppColorsDark.ink : AppColors.ink,
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ],
         ),
