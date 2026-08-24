@@ -5210,3 +5210,66 @@ details > summary:hover { text-decoration: underline; }
   .focus-bar { gap: .5rem; }
   .focus-position { order: 3; width: 100%; }
 }
+
+
+/* ------------------------------------------- deciding who has finished ----
+   The figures are evidence; the choice is a person's. Three states shown side
+   by side with the consequence of each on the control, because what somebody
+   needs is the consequence BEFORE they choose. */
+.completion-list { gap: 0; }
+.completion-row {
+  display: block; padding: 1rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.completion-row:last-child { border-bottom: none; }
+
+.completion-who {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  gap: 1rem; flex-wrap: wrap;
+}
+.completion-figures {
+  display: flex; gap: .9rem; align-items: center; flex-wrap: wrap;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+.completion-outstanding { margin: .3rem 0 0; }
+
+/* A radio group, not a row of buttons: one choice of three, announced as one
+   thing, and only one can be on. */
+.completion-choice {
+  border: 0; margin: .6rem 0 0; padding: 0;
+  display: flex; gap: .5rem; flex-wrap: wrap;
+}
+.completion-option {
+  display: grid; gap: .05rem;
+  padding: .45rem .7rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  background: var(--surface);
+  transition: border-color .15s var(--ease), background .15s var(--ease);
+}
+.completion-option:hover { background: var(--surface-2); }
+.completion-option input { position: absolute; opacity: 0; pointer-events: none; }
+.completion-option-label { font-size: .875rem; font-weight: 600; }
+/* The chosen one is marked by weight and a border as well as colour. */
+.completion-option.is-on { border-color: var(--brand-700); border-width: 2px; padding: calc(.45rem - 1px) calc(.7rem - 1px); }
+.completion-option.is-on.completion-completed { border-color: var(--ok); background: var(--ok-bg); }
+.completion-option.is-on.completion-not_completed { border-color: var(--error); background: var(--error-bg); }
+.completion-option.is-on.completion-in_progress { border-color: var(--line-strong); background: var(--surface-2); }
+
+/* Appears the moment the choice disagrees with the figures, not after a
+   refused save. */
+.completion-reason {
+  margin-top: .6rem; padding: .6rem .8rem;
+  border-left: 3px solid var(--warn);
+  border-radius: var(--radius-sm);
+  background: var(--warn-bg);
+}
+.completion-reason p { margin: 0 0 .4rem; display: flex; align-items: center; gap: .35rem; }
+.completion-reason svg { width: 15px; height: 15px; color: var(--warn); flex: 0 0 15px; }
+.completion-reason .field { margin-bottom: 0; }
+
+@media (max-width: 700px) {
+  .completion-choice { flex-direction: column; }
+  .completion-option { width: 100%; }
+}

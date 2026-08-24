@@ -655,6 +655,22 @@ const MODEL_POLICIES: Record<string, PolicyFn> = {
     return DENY_ALL;
   },
 
+  /**
+   * A completion decision follows the class it is about.
+   *
+   * A teacher sees the classes they teach — the same reach they have over
+   * marking, and for the same reason: they are the ones who decide. A student
+   * sees decisions about themselves and nobody else. There is deliberately no
+   * branch giving a student a whole class's decisions, because "who else
+   * passed" is not theirs to read.
+   */
+  SubjectCompletion: (a) => {
+    if (isAdmin(a)) return null;
+    if (isTeacher(a)) return { sectionSubjectId: { in: [...a.sectionSubjectIds] } };
+    if (isStudent(a)) return a.studentId ? { studentId: a.studentId } : DENY_ALL;
+    return DENY_ALL;
+  },
+
   // ------------------------------------------------------- communication --
 
   /**

@@ -20,6 +20,7 @@ import { ClassPage } from "./pages/ClassPage";
 import { WatchPage } from "./pages/WatchPage";
 import { MarkingPage } from "./pages/MarkingPage";
 import { GradingPage } from "./pages/GradingPage";
+import { CompletionPage } from "./pages/CompletionPage";
 import { QuizMarkingPage } from "./pages/QuizMarkingPage";
 import { QuizBuilderPage } from "./pages/QuizBuilderPage";
 import { ContentPage } from "./pages/ContentPage";
@@ -506,6 +507,15 @@ export function App() {
           />
           {/* Marking. The server refuses these for a student (ARC-003); the
               role check only keeps the interface from offering a refused page. */}
+          {/* FR-CRT — a teacher signs off their own classes; the office issues.
+              STAFF, because an administrator may sign off too when a teacher
+              has left, and the scope predicate limits a teacher to their own. */}
+          <Route
+            path="/completion/:sectionSubjectId"
+            element={
+              hasRole("super_admin", "admin", "teacher") ? <CompletionPage /> : <Navigate to="/" replace />
+            }
+          />
           <Route
             path="/marking"
             element={

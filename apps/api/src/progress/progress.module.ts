@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { ProgressService } from "./progress.service";
+import { CompletionService } from "./completion.service";
 import { ProgressController } from "./progress.controller";
 import { LiveModule } from "../live/live.module";
 
@@ -9,7 +10,7 @@ import { LiveModule } from "../live/live.module";
 @Module({
   imports: [LiveModule],
   controllers: [ProgressController],
-  providers: [ProgressService],
+  providers: [CompletionService, ProgressService],
   exports: [ProgressService],
 })
 export class ProgressModule {}

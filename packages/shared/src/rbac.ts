@@ -185,6 +185,24 @@ export const RESOURCES = [
   // progress — §4.5.9
   "progress",
   "progress_cohort",
+  /**
+   * A HUMAN SAYING THE STUDENT HAS FINISHED — FR-CRT, FR-PRG.
+   *
+   * Completion has been computed: attendance, work submitted, marks, lectures
+   * watched, weighed against criteria. That figure is evidence and it is not a
+   * decision. It cannot know that a student sat a viva, made up a missed brief
+   * over the summer, or did everything asked of them in a term that lost two
+   * weeks to a strike — and it cannot know that somebody scraped past every
+   * threshold and is plainly not ready.
+   *
+   * So the judgement is recorded separately from the arithmetic, by a person,
+   * with their name on it. A TEACHER may sign off the classes they teach,
+   * because they are the only one who knows. Issuing the certificate remains
+   * `certificate:create` — the office's — so the person who decides the
+   * student has finished is deliberately not the person who prints the
+   * document.
+   */
+  "subject_completion",
   "certificate",
   // communication — §4.5.10
   "announcement",
@@ -681,6 +699,18 @@ export const PERMISSION_MATRIX: Record<Resource, ResourcePolicy> = {
    * average grade. A student holds `progress:read` for their OWN figures, and
    * that must never be enough to open a class list.
    */
+  /**
+   * A teacher signs off their OWN classes and nobody else's — ASSIGNED scope,
+   * the same reach they have over marking. A student may read the decision
+   * about themselves: being told you have not completed, and being unable to
+   * see that anybody said so, is its own small cruelty.
+   */
+  subject_completion: {
+    super_admin: { actions: ["create", "read", "update"], scope: "ALL" },
+    admin: { actions: ["create", "read", "update"], scope: "ALL" },
+    teacher: { actions: ["create", "read", "update"], scope: "ASSIGNED" },
+    student: { actions: ["read"], scope: "OWN" },
+  },
   progress_cohort: {
     super_admin: { actions: ["read", "export"], scope: "ALL" },
     admin: { actions: ["read", "export"], scope: "ALL" },

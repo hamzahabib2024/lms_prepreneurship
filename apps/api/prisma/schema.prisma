@@ -273,6 +273,7 @@ model User {
   @@index([status])
   @@index([deletedAt])
   @@map("users")
+  completionDecisions SubjectCompletion[]
 }
 
 model Role {
@@ -644,6 +645,7 @@ model Student {
   @@index([currentSectionId, currentRollNo])
   @@index([registrationNoPrevious])
   @@map("students")
+  subjectCompletions SubjectCompletion[]
 }
 
 /// A staff note about a student — FR-REG-046, §4.5 `internal_note`.
@@ -876,6 +878,7 @@ model SectionSubject {
   @@index([sectionId])
   @@index([subjectId])
   @@map("section_subjects")
+  subjectCompletions SubjectCompletion[]
 }
 
 /// BR-ACC-04: THE SOLE SOURCE OF `ASSIGNED` SCOPE.
@@ -2397,6 +2400,60 @@ model MediaAsset {
 
   @@index([kind])
   @@map("media_assets")
+}
+
+/// A PERSON SAYING THE STUDENT HAS FINISHED — FR-CRT, FR-PRG.
+///
+/// Completion is computed from attendance, work, marks and lectures watched.
+/// That figure is EVIDENCE; this is the DECISION. They are kept apart because
+/// the arithmetic cannot know about a viva, a made-up brief, or a term that
+/// lost two weeks — nor that somebody scraped past every threshold by a point
+/// and is not ready to be handed the Institute's name on a document.
+///
+/// `computedPercent` and `criteriaMet` are copied on at the moment of the
+/// decision. That is what separates "agreed with the System" from "overrode
+/// it", and it is the answer when somebody later asks why a certificate went
+/// to a student whose attendance reads 61%.
+model SubjectCompletion {
+  id               String @id @default(uuid()) @db.Uuid
+  studentId        String @map("student_id") @db.Uuid
+  sectionSubjectId String @map("section_subject_id") @db.Uuid
+
+  decision CompletionDecision
+  /// Required when the decision disagrees with the arithmetic — a database
+  /// CHECK enforces it, because the moment to ask why is while the person
+  /// still knows.
+  note     String? @db.Text
+
+  /// The arithmetic as it stood when the decision was made. Null where the
+  /// subject has nothing recorded yet: 0 would be a lie about a course that
+  /// has not started.
+  computedPercent Decimal? @map("computed_percent") @db.Decimal(5, 2)
+  criteriaMet     Boolean  @default(false) @map("criteria_met")
+
+  decidedBy String   @map("decided_by") @db.Uuid
+  decidedAt DateTime @default(now()) @map("decided_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  student        Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  sectionSubject SectionSubject @relation(fields: [sectionSubjectId], references: [id], onDelete: Cascade)
+  decider        User           @relation(fields: [decidedBy], references: [id], onDelete: Restrict)
+
+  @@unique([studentId, sectionSubjectId])
+  @@index([sectionSubjectId, decision])
+  @@map("subject_completions")
+}
+
+enum CompletionDecision {
+  /// Still going. The default state of every enrolment, and never written.
+  IN_PROGRESS
+  /// Finished, in the judgement of whoever signed it off.
+  COMPLETED
+  /// Reached the end without completing. Not the same as still going, and the
+  /// difference matters to a student asking what happens next.
+  NOT_COMPLETED
 }
 
 /// What a course costs, in full, BEFORE anybody applies — FR-PAY-033.
