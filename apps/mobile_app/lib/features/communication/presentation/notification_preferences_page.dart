@@ -240,7 +240,7 @@ class _QuietHoursPicker extends StatelessWidget {
             children: [
               Expanded(
                 child: DropdownButtonFormField<int>(
-                  value: pref.quietHoursStart,
+                  initialValue: pref.quietHoursStart,
                   decoration: const InputDecoration(
                     labelText: 'Start',
                     isDense: true,
@@ -259,7 +259,7 @@ class _QuietHoursPicker extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: DropdownButtonFormField<int>(
-                  value: pref.quietHoursEnd,
+                  initialValue: pref.quietHoursEnd,
                   decoration: const InputDecoration(
                     labelText: 'End',
                     isDense: true,

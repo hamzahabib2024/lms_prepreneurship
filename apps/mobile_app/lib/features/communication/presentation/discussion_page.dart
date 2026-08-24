@@ -96,7 +96,7 @@ class _OfferingPicker extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
         child: DropdownButtonFormField<String>(
-          value: selectedId,
+          initialValue: selectedId,
           isExpanded: true,
         decoration: const InputDecoration(
           labelText: 'Which class',
@@ -394,11 +394,12 @@ class _AskComposerState extends State<_AskComposer> {
             children: [
               FilledButton(
                 onPressed: (_body.trim().length >= 2)
-                    ? () {
-                        context.read<DiscussionCubit>().createDiscussion(
+                    ? () async {
+                        await context.read<DiscussionCubit>().createDiscussion(
                               title: _title.trim(),
                               body: _body.trim(),
                             );
+                        if (!mounted) return;
                         setState(() {
                           _expanded = false;
                           _title = '';

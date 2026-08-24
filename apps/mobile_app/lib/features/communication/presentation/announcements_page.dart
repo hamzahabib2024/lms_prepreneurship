@@ -296,8 +296,9 @@ class _ComposerState extends State<_Composer> {
             section.sectionSubjectId: section,
       }.values.toList();
       if (mounted) setState(() => _sections = uniqueSections);
-    } catch (_) {
+    } catch (e) {
       // Sections unavailable — the composer still works for institute-wide.
+      debugPrint('Failed to load sections: $e');
     }
   }
 
@@ -334,7 +335,7 @@ class _ComposerState extends State<_Composer> {
 
           // Audience
           DropdownButtonFormField<String>(
-            value: _audience,
+            initialValue: _audience,
             decoration: const InputDecoration(labelText: 'Audience'),
             items: [
               if (_sections.isNotEmpty)
@@ -353,7 +354,7 @@ class _ComposerState extends State<_Composer> {
           if (_audience == 'SECTION_SUBJECT') ...[
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
-              value: _sectionSubjectId.isEmpty ? null : _sectionSubjectId,
+              initialValue: _sectionSubjectId.isEmpty ? null : _sectionSubjectId,
               decoration: const InputDecoration(labelText: 'Subject'),
               items: _sections
                   .map((s) => DropdownMenuItem(

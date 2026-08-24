@@ -79,13 +79,27 @@ class _InboxView extends StatelessWidget {
       context.read<InboxCubit>().markRead([item.id]);
     }
     if (item.linkPath != null) {
-      // Navigate to the linked screen — the linkPath is a relative route
-      // like /announcements or /discussions/:id. The shell's navigator
-      // handles it if the route exists.
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Navigate to: ${item.linkPath}')),
-      );
+      // The linkPath is a relative route like /announcements or /discussions/:id.
+      // Try to navigate; if the route doesn't exist, show a helpful message.
+      final routeName = item.linkPath!;
+      try {
+        Navigator.of(context, rootNavigator: true).pushNamed(routeName);
+      } on FlutterError {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Open the ${_tabLabel(routeName)} tab to view this.'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
     }
+  }
+
+  String _tabLabel(String path) {
+    if (path.contains('announcement')) return 'Announcements';
+    if (path.contains('discussion')) return 'Discussions';
+    if (path.contains('inbox') || path.contains('notification')) return 'Inbox';
+    return 'relevant';
   }
 }
 
