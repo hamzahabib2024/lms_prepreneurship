@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { ApiError, api } from "../api/client";
 import { EmptyState, Skeleton, SkeletonCards } from "../components/Ui";
 import { AtRiskPanel } from "../components/AtRiskPanel";
+import { HowItWorks } from "../components/HowItWorks";
 
 /**
  * A teacher's marking queue — SRS §13.6, FR-TCH-018.
@@ -96,6 +97,34 @@ export function MarkingPage() {
           </Link>
         </span>
       </header>
+      <HowItWorks
+        id="marking-queue"
+        title="How marking works"
+        intro="This page is the queue. Open an assignment to mark the work in it, one student at a time."
+        steps={[
+          {
+            icon: "clipboard",
+            title: "Pick an assignment",
+            body: "The count beside each one is how many submissions are still waiting for you.",
+          },
+          {
+            icon: "pen",
+            title: "Mark one at a time",
+            body: "The work, the marking guide and the mark box sit on one screen. Save and it moves you to the next.",
+          },
+          {
+            icon: "money",
+            title: "Enter the raw mark",
+            body: "Mark what the work is worth. Any late penalty is worked out for you — do not deduct it yourself.",
+          },
+          {
+            icon: "megaphone",
+            title: "Release the class together",
+            body: "Nothing is visible to any student until you release it. Then the whole class sees theirs at once.",
+          },
+        ]}
+        note="Marking every student's answer to the same question in one pass gives a more consistent standard than working through one student at a time."
+      />
       {sections.map((s) => (
         <SectionAssignments key={s.sectionSubjectId} section={s} />
       ))}

@@ -5067,3 +5067,146 @@ details > summary:hover { text-decoration: underline; }
   .voice-row { align-items: stretch; }
   .voice-player { flex-basis: 100%; }
 }
+
+
+/* ------------------------------------------------ how a screen works -------
+   Orientation, drawn as the sequence the task actually is. See HowItWorks.tsx
+   for why this is markup rather than a picture: it reflows, it reads aloud in
+   order, and it cannot go stale the way an SVG of a renamed button does. */
+.howto {
+  margin-bottom: 1.25rem; padding: 1rem 1.15rem;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--brand-700);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+.howto-collapsed {
+  padding: 0; border: 0; background: none; margin-bottom: .9rem;
+}
+.howto-collapsed .btn svg { width: 14px; height: 14px; margin-right: .35rem; }
+.howto-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: .75rem; margin-bottom: .35rem;
+}
+.howto-title { margin: 0; font-size: .95rem; }
+.howto-intro { margin: 0 0 .85rem; font-size: .875rem; color: var(--ink-2); }
+
+/*
+   THE DIAGRAM. A row of steps on a wide screen, a column on a narrow one, with
+   the connector rotating to match — the same figure in the shape that fits,
+   rather than a picture that shrinks until nobody can read it.
+*/
+.howto-steps {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; gap: .9rem;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+}
+.howto-step {
+  position: relative;
+  display: flex; gap: .6rem; align-items: flex-start;
+  padding-right: .9rem;
+}
+/* The connector. Decorative by construction — the list already numbers the
+   steps, so this says nothing a screen reader needs. */
+.howto-step:not(:last-child)::after {
+  content: "→";
+  position: absolute; right: -.15rem; top: .35rem;
+  color: var(--line-strong); font-size: .95rem; line-height: 1;
+}
+.howto-step-mark {
+  position: relative; flex: 0 0 auto;
+  display: grid; place-items: center;
+  width: 32px; height: 32px; border-radius: 999px;
+  background: var(--surface); border: 1px solid var(--line);
+  color: var(--brand-700);
+}
+.howto-step-mark svg { width: 15px; height: 15px; }
+.howto-step-n {
+  position: absolute; right: -5px; bottom: -5px;
+  display: grid; place-items: center;
+  width: 17px; height: 17px; border-radius: 999px;
+  background: var(--brand-700); color: var(--primary-ink);
+  font-size: .65rem; font-weight: 700; line-height: 1;
+}
+.howto-step-body { display: grid; gap: .1rem; min-width: 0; }
+.howto-step-body strong { font-size: .875rem; }
+
+/* The one thing people get wrong here. Amber rather than red: it is a warning
+   about a mistake, not a report of one. */
+.howto-note {
+  display: flex; gap: .5rem; align-items: flex-start;
+  margin: .9rem 0 0; padding-top: .75rem;
+  border-top: 1px solid var(--line);
+  font-size: .8125rem; color: var(--ink-2);
+}
+.howto-note svg { width: 15px; height: 15px; flex: 0 0 15px; color: var(--warn); margin-top: .1rem; }
+
+@media (max-width: 700px) {
+  .howto-steps { grid-template-columns: 1fr; gap: .7rem; }
+  /* The row became a column, so the arrow turns to match. */
+  .howto-step:not(:last-child)::after {
+    content: "↓"; right: auto; left: 12px; top: auto; bottom: -.6rem;
+  }
+  .howto-step { padding-right: 0; padding-bottom: .3rem; }
+}
+
+
+/* ---------------------------------------------- marking, one at a time ----
+   The list is the overview; this is the work. See FocusMarker in
+   GradingPage.tsx for why the two live side by side rather than one replacing
+   the other. */
+.focus-marker {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+  overflow: hidden;
+  margin-bottom: 1rem;
+}
+
+/* Sticky, because the position, the count and the Next are the three things a
+   teacher reaches for and a long submission would scroll them away. */
+.focus-bar {
+  position: sticky; top: 0; z-index: 3;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: .75rem; flex-wrap: wrap;
+  padding: .6rem .9rem;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--line);
+}
+.focus-bar .btn svg { width: 14px; height: 14px; }
+.focus-position {
+  display: flex; align-items: baseline; gap: .5rem;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.focus-who {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: .75rem; flex-wrap: wrap;
+  padding: .9rem 1.1rem .2rem;
+}
+.focus-who h2 { margin: 0; font-size: 1.05rem; }
+.focus-who p { margin: .15rem 0 0; }
+
+/*
+   The form the list already used, given room now that it is not inside a row.
+   IT IS `.assignment-body` — the class the accordion nests it in — and naming
+   the wrong one cost horizontal padding entirely: the content sat flush to the
+   panel edge and `overflow: hidden` above shaved the first character off every
+   filename. "palette.pdf" read as "alette.pdf", which looks like bad data
+   rather than bad CSS, and is the sort of thing nobody reports because it is
+   only slightly wrong.
+*/
+.focus-marker .assignment-body { padding: 0 1.1rem 1rem; border: 0; }
+
+.focus-hint {
+  display: block; margin: 0;
+  padding: .6rem 1.1rem .8rem;
+  border-top: 1px solid var(--line);
+  background: var(--surface-2);
+}
+
+@media (max-width: 700px) {
+  .focus-bar { gap: .5rem; }
+  .focus-position { order: 3; width: 100%; }
+}

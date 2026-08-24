@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ApiError, api } from "../api/client";
 import { VoiceRecorder, type Recording } from "../components/VoiceRecorder";
+import { HowItWorks } from "../components/HowItWorks";
 
 /**
  * Setting an assignment — SRS §13.6, FR-ASG-001..014.
@@ -40,6 +41,15 @@ export function AssignmentBuilderPage() {
    * half of.
    */
   const [brief, setBrief] = useState<Recording | null>(null);
+  /*
+   * THE MARKING GUIDES THIS TEACHER CAN ATTACH.
+   *
+   * RubricsPage has existed all along and NOTHING could use what it made: the
+   * API has accepted `rubricId` on an assignment since the beginning and this
+   * form never sent it, so every rubric a teacher wrote was a document with no
+   * way to reach a piece of work.
+   */
+  const [rubrics, setRubrics] = useState<Array<{ id: string; name: string; totalMarks?: number; criteriaCount?: number }>>([]);
   const [created, setCreated] = useState<{ id: string; title: string } | null>(null);
 
   const [form, setForm] = useState({
@@ -58,6 +68,9 @@ export function AssignmentBuilderPage() {
     maxFileSizeMb: "10",
     maxFileCount: "3",
     resubmissionPolicy: "NONE",
+    maxAttempts: "2",
+    graceMinutes: "0",
+    rubricId: "",
   });
 
   useEffect(() => {
@@ -65,6 +78,16 @@ export function AssignmentBuilderPage() {
       .get<{ widgets: { mySections?: TeacherSection[] } }>("/dashboards/me")
       .then((d) => setSections(d.widgets.mySections ?? []))
       .catch(() => setSections([]));
+  }, []);
+
+  useEffect(() => {
+    // A failure here costs the picker, not the form: an assignment without a
+    // marking guide is perfectly normal, and refusing to load the page because
+    // the rubric list did not arrive would be a worse trade.
+    api
+      .get<Array<{ id: string; name: string; totalMarks?: number; criteriaCount?: number }>>("/rubrics")
+      .then(setRubrics)
+      .catch(() => setRubrics([]));
   }, []);
 
   const set = (patch: Partial<typeof form>) => setForm({ ...form, ...patch });
@@ -104,6 +127,13 @@ export function AssignmentBuilderPage() {
             }
           : {}),
         resubmissionPolicy: form.resubmissionPolicy,
+        // Only where it means something: the API rejects a count on a policy
+        // that has no limit, and sending 0 grace is the same as sending none.
+        ...(form.resubmissionPolicy === "LIMITED"
+          ? { maxAttempts: Number(form.maxAttempts) }
+          : {}),
+        ...(Number(form.graceMinutes) > 0 ? { graceMinutes: Number(form.graceMinutes) } : {}),
+        ...(form.rubricId ? { rubricId: form.rubricId } : {}),
       });
 
       /*
@@ -160,6 +190,35 @@ export function AssignmentBuilderPage() {
           Back to marking
         </Link>
       </header>
+
+      <HowItWorks
+        id="assignment-builder"
+        title="How setting work goes"
+        intro="Everything below can be changed until you publish. Nothing reaches a student before that."
+        steps={[
+          {
+            icon: "pen",
+            title: "Describe the task",
+            body: "A title and what they have to do. You can record it in your own voice as well.",
+          },
+          {
+            icon: "calendar",
+            title: "Say when",
+            body: "When it opens, when it is due, and what happens to work that arrives late.",
+          },
+          {
+            icon: "clipboard",
+            title: "Say how it is marked",
+            body: "Out of a number, or against a marking guide that breaks the marks down for you.",
+          },
+          {
+            icon: "check",
+            title: "Publish it",
+            body: "Until you do, it is a draft only you can see. Save now, publish when you are ready.",
+          },
+        ]}
+        note="Marks stay hidden from the whole class until you release them, so you can mark over several days without anybody comparing notes early."
+      />
 
       {created && (
         <div className="alert alert-warn">
@@ -379,16 +438,84 @@ export function AssignmentBuilderPage() {
           </>
         )}
 
+        <div className="field-row">
+          <label className="field">
+            <span>Can they submit again?</span>
+            <select
+              value={form.resubmissionPolicy}
+              onChange={(e) => set({ resubmissionPolicy: e.target.value })}
+            >
+              <option value="NONE">No — one submission only</option>
+              <option value="UNLIMITED_UNTIL_DUE">Yes, until the deadline</option>
+              <option value="LIMITED">Yes, a limited number of times</option>
+            </select>
+          </label>
+
+          {/*
+            THE OPTION ABOVE WAS UNUSABLE WITHOUT THIS.
+            "A limited number of times" asks a question — how many? — that the
+            form never let anybody answer. The API has accepted `maxAttempts`
+            all along; nothing sent it, so choosing the option set no limit at
+            all and behaved as "unlimited" while claiming otherwise.
+          */}
+          {form.resubmissionPolicy === "LIMITED" && (
+            <label className="field">
+              <span>How many times?</span>
+              <input
+                type="number"
+                min={1}
+                max={20}
+                value={form.maxAttempts}
+                onChange={(e) => set({ maxAttempts: e.target.value })}
+              />
+              <span className="muted small">Counting the first one.</span>
+            </label>
+          )}
+        </div>
+
+        {/*
+          A GRACE PERIOD, which the deadline alone cannot express.
+          Every teacher has a student whose upload finished at 23:01, and
+          marking that late is a punishment for a slow connection rather than
+          for leaving it to the last minute. Accepted by the API since the
+          beginning; never offered.
+        */}
         <label className="field">
-          <span>Can they submit again?</span>
-          <select
-            value={form.resubmissionPolicy}
-            onChange={(e) => set({ resubmissionPolicy: e.target.value })}
-          >
-            <option value="NONE">No — one submission only</option>
-            <option value="UNLIMITED_UNTIL_DUE">Yes, until the deadline</option>
-            <option value="LIMITED">Yes, a limited number of times</option>
+          <span>Grace period after the deadline</span>
+          <input
+            type="number"
+            min={0}
+            max={10080}
+            value={form.graceMinutes}
+            onChange={(e) => set({ graceMinutes: e.target.value })}
+          />
+          <span className="muted small">
+            Minutes. Anything submitted within this is on time — not late, and no penalty. Zero
+            means the deadline is the deadline.
+          </span>
+        </label>
+
+        {/*
+          THE MARKING GUIDE, and the reason Rubrics existed with nothing to
+          point at. Optional, because most work is marked out of a number.
+        */}
+        <label className="field">
+          <span>Marking guide</span>
+          <select value={form.rubricId} onChange={(e) => set({ rubricId: e.target.value })}>
+            <option value="">None — mark it out of {form.marksAvailable || "the total"}</option>
+            {rubrics.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name}
+                {typeof r.totalMarks === "number" ? ` — ${r.totalMarks} marks` : ""}
+                {typeof r.criteriaCount === "number" ? `, ${r.criteriaCount} criteria` : ""}
+              </option>
+            ))}
           </select>
+          <span className="muted small">
+            {rubrics.length === 0
+              ? "You have not written any yet. Marking guides are made on the Marking guides screen."
+              : "Marking then shows each criterion with its own marks, and adds them up for you."}
+          </span>
         </label>
       </section>
 

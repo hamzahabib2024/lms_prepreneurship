@@ -70,8 +70,18 @@ export const DESTINATIONS: readonly Destination[] = [
 
   // ------------------------------------------------------------ teaching --
   { to: "/attendance", label: "Attendance", icon: "check", group: "Teaching", roles: STAFF, also: ["register", "present", "absent"] },
-  { to: "/marking", label: "Marking", icon: "pen", group: "Teaching", roles: STAFF, also: ["grading", "submissions"] },
-  { to: "/rubrics", label: "Rubrics", icon: "clipboard", group: "Teaching", roles: STAFF },
+  { to: "/marking", label: "Marking", icon: "pen", group: "Teaching", roles: STAFF, also: ["grading", "submissions", "to mark", "unmarked", "queue", "assignments to mark"] },
+  /*
+   * "Rubrics" IS THE WORD THE SOFTWARE USES, NOT THE WORD A TEACHER USES.
+   *
+   * It is a term of art in assessment, and to everybody else it is a noise
+   * that gives no clue what the screen does. "Marking guides" says it: the
+   * thing you write down so that two teachers give the same work the same
+   * mark. The address stays /rubrics — a renamed link is a broken bookmark —
+   * and `also` keeps the old word findable in the palette for anybody who
+   * knows it.
+   */
+  { to: "/rubrics", label: "Marking guides", icon: "clipboard", group: "Teaching", roles: STAFF, also: ["rubric", "rubrics", "criteria", "marking scheme", "grading guide"] },
   /*
    * Every class, with the two things visible nowhere else: which have
    * recordings waiting to be published, and which have no Drive folder

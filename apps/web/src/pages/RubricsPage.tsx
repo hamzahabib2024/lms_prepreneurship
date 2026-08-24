@@ -60,7 +60,7 @@ export function RubricsPage() {
     <>
       <header className="page-head">
         <div>
-          <h1>Rubrics</h1>
+          <h1>Marking guides</h1>
           <p className="muted small">
             A marking scheme you can reuse. Attach one to an assignment when you set it.
           </p>
