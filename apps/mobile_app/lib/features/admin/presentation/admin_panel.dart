@@ -23,15 +23,16 @@ class AdminPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocProvider(
       create: (_) => AdminCubit(repository: AdminRepository(api: api)),
-      child: _AdminPanelView(user: user),
+      child: _AdminPanelView(user: user, api: api),
     );
   }
 }
 
 class _AdminPanelView extends StatelessWidget {
-  const _AdminPanelView({required this.user});
+  const _AdminPanelView({required this.user, required this.api});
 
   final AuthUser user;
+  final ApiClient api;
 
   @override
   Widget build(BuildContext context) {
@@ -40,38 +41,38 @@ class _AdminPanelView extends StatelessWidget {
         icon: Icons.manage_accounts_outlined,
         title: 'Users & roles',
         subtitle: 'Staff accounts, roles, and access permissions',
-        builder: (context) => UsersPage(api: context.read<AdminCubit>().repository.api),
+        builder: (_) => UsersPage(api: api),
       ),
       _AdminEntry(
         icon: Icons.tune_outlined,
         title: 'System settings',
         subtitle: 'Attendance, progress, maintenance, institute configuration',
-        builder: (context) => SettingsPage(api: context.read<AdminCubit>().repository.api),
+        builder: (_) => SettingsPage(api: api),
       ),
       _AdminEntry(
         icon: Icons.swap_horiz_outlined,
         title: 'Bulk operations',
         subtitle: 'Section transfers and student withdrawals',
-        builder: (context) => BulkOperationsPage(api: context.read<AdminCubit>().repository.api),
+        builder: (_) => BulkOperationsPage(api: api),
       ),
       _AdminEntry(
         icon: Icons.history_outlined,
         title: 'Audit log',
         subtitle: 'Immutable record of every change in the system',
-        builder: (context) => AuditLogPage(api: context.read<AdminCubit>().repository.api),
+        builder: (_) => AuditLogPage(api: api),
       ),
       _AdminEntry(
         icon: Icons.shield_outlined,
         title: 'Security log',
         subtitle: 'Sign-in attempts, lockouts, and threat detection',
-        builder: (context) => SecurityPage(api: context.read<AdminCubit>().repository.api),
+        builder: (_) => SecurityPage(api: api),
         superAdminOnly: true,
       ),
       _AdminEntry(
         icon: Icons.backup_outlined,
         title: 'Backup & restore',
         subtitle: 'Data snapshots, verification, and point-in-time recovery',
-        builder: (context) => BackupPage(api: context.read<AdminCubit>().repository.api),
+        builder: (_) => BackupPage(api: api),
         superAdminOnly: true,
       ),
     ];
