@@ -149,6 +149,23 @@ export function AnnouncementsPage() {
  * makes it ignore a recipient's quiet hours. The note on each level says so,
  * because an author choosing red should know they are waking somebody up.
  */
+/**
+ * WHAT EACH AUDIENCE ACTUALLY DOES, said where the choice is made.
+ *
+ * The difference between "Everyone at the Institute" and "The public page
+ * only" is not guessable from the words, and getting it wrong means either a
+ * private notice on the front page or an open-day advertisement in the inbox
+ * of every student who is already enrolled.
+ */
+const AUDIENCE_NOTE: Record<string, string> = {
+  SECTION_SUBJECT: "Only the students in that subject, and its teacher.",
+  INSTITUTE: "Everybody with an account — students and staff.",
+  TEACHERS: "Teaching staff only. Students never see it.",
+  STAFF: "Teachers and the office. Students never see it.",
+  PUBLIC_ONLY:
+    "Visitors on the public page, and nobody with an account. For an open day or an admissions deadline.",
+};
+
 const PRIORITY: Record<
   string,
   { key: string; label: string; icon: string; note: string; help: string }
@@ -179,7 +196,8 @@ const PRIORITY: Record<
 function Composer({ onPosted }: { onPosted: () => void }) {
   const { hasRole } = useAuth();
   const [sections, setSections] = useState<TeacherSection[]>([]);
-  const [audience, setAudience] = useState<"INSTITUTE" | "SECTION_SUBJECT">("SECTION_SUBJECT");
+  type Audience = "INSTITUTE" | "SECTION_SUBJECT" | "TEACHERS" | "STAFF" | "PUBLIC_ONLY";
+  const [audience, setAudience] = useState<Audience>("SECTION_SUBJECT");
   const [sectionSubjectId, setSectionSubjectId] = useState("");
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
@@ -230,7 +248,9 @@ function Composer({ onPosted }: { onPosted: () => void }) {
     }
   };
 
-  const targetChosen = audience === "INSTITUTE" || sectionSubjectId !== "";
+  // Everything except a single subject addresses the Institute as a whole, so
+  // there is no target left to choose.
+  const targetChosen = audience !== "SECTION_SUBJECT" || sectionSubjectId !== "";
 
   return (
     <section className="card">
@@ -244,8 +264,26 @@ function Composer({ onPosted }: { onPosted: () => void }) {
             onChange={(e) => setAudience(e.target.value as typeof audience)}
           >
             <option value="SECTION_SUBJECT">One of my subjects</option>
-            {mayAddressInstitute && <option value="INSTITUTE">Everyone at the Institute</option>}
+            {mayAddressInstitute && (
+              <>
+                <option value="INSTITUTE">Everyone at the Institute</option>
+                {/*
+                  THE STAFF AUDIENCES. A staff meeting posted to everybody is
+                  how students learn to ignore notices, which is expensive the
+                  week one of them matters.
+                */}
+                <option value="TEACHERS">Teachers only</option>
+                <option value="STAFF">All staff — teachers and the office</option>
+                {/*
+                  And the one that reaches nobody with an account: written for
+                  visitors who have not applied yet.
+                */}
+                <option value="PUBLIC_ONLY">The public page only</option>
+              </>
+            )}
           </select>
+          {/* What each choice actually does, in the moment it is made. */}
+          <span className="muted small">{AUDIENCE_NOTE[audience]}</span>
         </label>
 
         {audience === "SECTION_SUBJECT" && (

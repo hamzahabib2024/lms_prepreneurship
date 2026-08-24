@@ -2058,6 +2058,15 @@ enum AnnouncementAudience {
   INSTITUTE
   SECTION
   SECTION_SUBJECT
+  /// Teaching staff only. A staff meeting is not a student's business, and
+  /// posting it to everybody is how students learn to ignore notices.
+  TEACHERS
+  /// Teachers and the office, but no students.
+  STAFF
+  /// Visitors on the public page, and NOBODY inside the System. An open day
+  /// or an admissions deadline is for people who have not applied yet;
+  /// advertising an intake to the students already on it is noise.
+  PUBLIC_ONLY
 }
 
 enum NotificationChannel {

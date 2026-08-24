@@ -196,7 +196,10 @@ export class PublicPageService {
       db.announcement.findMany({
         where: {
           isPublic: true,
-          audience: "INSTITUTE",
+          // The same two audiences the public page itself draws from. An
+          // editor showing a different list would be a second opinion about
+          // what strangers can see, and the page's is the one that matters.
+          audience: { in: ["INSTITUTE", "PUBLIC_ONLY"] },
           deletedAt: null,
           OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
         },

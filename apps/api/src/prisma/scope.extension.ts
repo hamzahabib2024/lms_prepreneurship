@@ -666,7 +666,34 @@ const MODEL_POLICIES: Record<string, PolicyFn> = {
    */
   Announcement: (a) => {
     if (isAdmin(a)) return null;
-    if (isTeacher(a) || isStudent(a)) {
+
+    /*
+     * THE STAFF AUDIENCES, AND THE ONE THAT REACHES NOBODY INSIDE.
+     *
+     * TEACHERS and STAFF are readable by teaching staff and NOT by students —
+     * a staff meeting is not a student's business, and this predicate is the
+     * only thing standing between the two. It is deliberately expressed as an
+     * explicit list rather than "not a student": a new audience added later
+     * defaults to invisible, which is the direction a mistake should fall.
+     *
+     * PUBLIC_ONLY appears in NEITHER branch. It is for visitors on the public
+     * page and reaches nobody with an account, teacher or student. The public
+     * page does not come through this predicate at all — it reads under
+     * asSystem with its own narrow projection (admission.service.ts) — so
+     * leaving it out here is what makes "public only" mean what it says.
+     */
+    if (isTeacher(a)) {
+      return {
+        OR: [
+          { audience: "INSTITUTE" },
+          { audience: "TEACHERS" },
+          { audience: "STAFF" },
+          { sectionSubjectId: { in: [...a.sectionSubjectIds] } },
+          { sectionId: { in: [...a.sectionIds] } },
+        ],
+      };
+    }
+    if (isStudent(a)) {
       return {
         OR: [
           { audience: "INSTITUTE" },

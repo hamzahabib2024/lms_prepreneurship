@@ -16,7 +16,15 @@ const templateSchema = z.object({
 
 const announcementSchema = z
   .object({
-    audience: z.enum(["INSTITUTE", "SECTION", "SECTION_SUBJECT"]),
+    audience: z.enum([
+      "INSTITUTE",
+      "SECTION",
+      "SECTION_SUBJECT",
+      // Staff-only, and the public page. See the enum in schema.prisma.
+      "TEACHERS",
+      "STAFF",
+      "PUBLIC_ONLY",
+    ]),
     sectionId: z.string().uuid().optional(),
     sectionSubjectId: z.string().uuid().optional(),
     title: z.string().trim().min(3).max(200),
@@ -42,14 +50,21 @@ const announcementSchema = z
     // which reads as the System losing it.
     message: "An expiry must be in the future.",
   })
-  .refine((v) => !v.isPublic || v.audience === "INSTITUTE", {
+  .refine((v) => !v.isPublic || v.audience === "INSTITUTE" || v.audience === "PUBLIC_ONLY", {
     path: ["isPublic"],
     // The database refuses this too. Refusing it here as well means the author
     // is told why while they are still writing, rather than getting a
     // constraint violation naming a table.
     message:
-      "Only an announcement to the whole Institute can be shown publicly. One addressed to a section was written for those students.",
-  });
+      "Only an announcement to the whole Institute, or one written for the public page, can be shown publicly. One addressed to a section was written for those students.",
+  })
+  /*
+   * A PUBLIC_ONLY NOTICE THAT IS NOT PUBLIC REACHES NOBODY AT ALL — it is
+   * excluded from every inbox by construction, so without this it would be a
+   * notice somebody wrote and no one ever saw. Set rather than refused: the
+   * author asked for the public page, and asking twice would be pedantry.
+   */
+  .transform((v) => (v.audience === "PUBLIC_ONLY" ? { ...v, isPublic: true } : v));
 
 const markReadSchema = z.object({
   notificationIds: z.array(z.string().uuid()).min(1).max(200),
