@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../auth/data/models/auth_session.dart';
 import '../../core/network/api_client.dart';
 import '../../core/theme/app_theme.dart';
+import '../admin/presentation/admin_panel.dart';
 import '../enrolment/enrolment_page.dart';
 import 'content/content_page.dart';
 import 'sections/sections_page.dart';
@@ -73,6 +74,13 @@ class AcademicPanel extends StatelessWidget {
         subtitle: 'Assign teachers to subjects and sections',
         builder: (context) => StaffingPage(api: api),
         staffOnly: true,
+        officeOnly: true,
+      ),
+      _Entry(
+        icon: Icons.admin_panel_settings_outlined,
+        title: 'Administration',
+        subtitle: 'User management, settings, backups, audit and security logs',
+        builder: (context) => AdminPanel(user: user, api: api),
         officeOnly: true,
       ),
     ];
