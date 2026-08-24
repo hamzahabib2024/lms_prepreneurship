@@ -592,6 +592,56 @@ export const CATALOGUE: SettingDefinition[] = [
     maxLength: 200,
     description: "The line under that heading.",
   },
+  /*
+   * THE ONE THING ON THIS PAGE THAT IS NOT FOR AN APPLICANT — FR-CRT-015.
+   *
+   * An employer with a certificate in their hand is not going to apply, will
+   * never have an account, and has exactly one question. The System could
+   * already answer it: /verify has been public since certificates existed. But
+   * every address into it was `/verify/<code>`, which serves the one person who
+   * scanned a QR code and nobody else — and the front page did not mention it
+   * at all. So a printed certificate with a smudged code, or a number read down
+   * the telephone, had nowhere to go.
+   *
+   * A band on the public page is the cheapest possible fix and it closes the
+   * loop the certificate itself opens.
+   */
+  {
+    key: "public.showVerify",
+    type: "boolean",
+    default: true,
+    group: "Public page",
+    description:
+      "Show the band inviting an employer to check a certificate. Turn it off only if the Institute has not issued any yet — the page it links to works whether or not this is shown.",
+  },
+  {
+    key: "public.verifyHeading",
+    type: "string",
+    default: "Holding one of our certificates?",
+    group: "Public page",
+    maxLength: 80,
+    description:
+      "The heading on that band. Addressed to an employer rather than to a student, which is the only part of this page that is.",
+  },
+  {
+    key: "public.verifyBody",
+    type: "string",
+    default:
+      "Check it against the Institute's own register. Type the number printed on the document and you will see who it belongs to, what it was awarded for, and whether it still stands. No account, no sign-up.",
+    group: "Public page",
+    maxLength: 400,
+    multiline: true,
+    description:
+      "The sentence on that band. Say that no account is needed — that is the part that decides whether somebody bothers.",
+  },
+  {
+    key: "public.verifyCta",
+    type: "string",
+    default: "Verify a certificate",
+    group: "Public page",
+    maxLength: 40,
+    description: "The wording on that band's button.",
+  },
   {
     key: "public.closingHeading",
     type: "string",

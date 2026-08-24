@@ -130,7 +130,20 @@ export function App() {
   // FR-CRT-015 — certificate verification is PUBLIC, and is checked before the
   // authentication gate below. An employer holding a printed certificate has no
   // account, and sending them to a login screen would make the link useless.
-  if (location.pathname.startsWith("/verify/")) {
+  /*
+   * `/verify` WITH NO CODE IS THE FRONT DOOR, and it did not exist.
+   *
+   * Every address here was `/verify/<something>`, which works for the one
+   * person who scanned a QR code and for nobody else. An employer holding a
+   * PRINTED certificate — no QR, or a camera that will not read it, or a
+   * number read down the phone — had nowhere to go. The page already had a
+   * lookup form on it, sitting under a heading that said "check ANOTHER
+   * certificate", reachable only after successfully checking a first one.
+   *
+   * This is the same gap /track filled for applications: the page promised a
+   * reference anybody could check, and there was nowhere to check it.
+   */
+  if (location.pathname === "/verify" || location.pathname.startsWith("/verify/")) {
     return (
       <Routes>
         {/* TWO SHAPES, ONE PAGE. The QR code on every certificate encodes
@@ -141,6 +154,8 @@ export function App() {
             tidied up. */}
         <Route path="/verify/certificate/:code" element={<VerifyPage />} />
         <Route path="/verify/:code" element={<VerifyPage />} />
+        {/* Nothing to look up yet: the page renders as the form. */}
+        <Route path="/verify" element={<VerifyPage />} />
       </Routes>
     );
   }

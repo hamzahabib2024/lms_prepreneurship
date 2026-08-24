@@ -284,6 +284,10 @@ export function PublicPageEditorPage() {
     "public.newsBlurb",
     "public.programmesHeading",
     "public.programmesBlurb",
+    "public.showVerify",
+    "public.verifyHeading",
+    "public.verifyBody",
+    "public.verifyCta",
     "public.closingHeading",
     "public.closingBody",
     "public.closingCta",
@@ -443,9 +447,27 @@ export function PublicPageEditorPage() {
             </p>
           </EditorSection>
 
-          {/* ───────────────────────────────────────── the closing band ── */}
+          {/* ──────────────────────────────────── verifying a certificate ── */}
           <EditorSection
             step={7}
+            title="Checking a certificate"
+            hint="The one part of the page written for an employer rather than an applicant. It links to a public lookup that works without an account — the same address the QR code on every certificate points at."
+          >
+            <SwitchField label="Show this band" {...bind("public.showVerify")} />
+            <TextField label="Heading" {...bind("public.verifyHeading")} />
+            <TextField label="The sentence under it" {...bind("public.verifyBody")} />
+            <div className="field-row">
+              <TextField label="Button" {...bind("public.verifyCta")} />
+            </div>
+            <p className="muted small">
+              The lookup itself is at <code>/verify</code> and needs nothing set up. Turning this
+              off hides the invitation, not the page.
+            </p>
+          </EditorSection>
+
+          {/* ───────────────────────────────────────── the closing band ── */}
+          <EditorSection
+            step={8}
             title="The last thing on the page"
             hint="For somebody who has read the whole thing and decided. It repeats one instruction and nothing else — a closing band that restates the page is a page nobody finished."
           >
@@ -458,7 +480,7 @@ export function PublicPageEditorPage() {
 
           {/* ──────────────────────────────────────────────── the footer ── */}
           <EditorSection
-            step={8}
+            step={9}
             title="Name and channels"
             hint="The foot of the page, and the one line under the Institute's name. An icon is shown only where a link is actually set — a row of dead social buttons is the mark of a template."
           >

@@ -126,6 +126,7 @@ states as a sweep across all pages after the role work.
 | Page | What it got |
 |---|---|
 | **LandingPage** | Cover art on every course card, with the artwork lifting on hover. Photographs became a cross-fading stage with a slow drift, arrows and dots. News rotates one notice at a time on a nine-second dwell with named tabs and a progress bar. A counted stat band, a closing band in full brand colour, one entrance on the hero |
+| **VerifyPage** | Given an address of its own. `/verify` with no code was unreachable — every route was `/verify/<code>`, which serves the one person who scanned a QR and nobody else, and the lookup form sat under a heading reading "check **another** certificate" that only appeared after a first one succeeded. Now the front door for an employer holding printed paper: an intro above the box, and a heading that says "another" only once there has been one |
 | **ApplyPage** | Stepper with completed steps ticked, per-field validation colour, the education level as a proper list |
 | **LoginPage** | Split panel — the brand on one side, the form on the other. Collapses on a phone so the form stays above the fold |
 | **VerifyPage** | Certificate verification, styled as a **result rather than a form**: the verdict is a sentence in the first line, with a coloured rim and a mark supporting it rather than carrying it. Three outcomes, not two — verified, revoked, and archived, which is genuine but withdrawn and must never be reported as revoked. A number box underneath for somebody holding a photocopy and no camera |
