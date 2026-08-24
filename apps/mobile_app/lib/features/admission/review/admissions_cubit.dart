@@ -77,13 +77,14 @@ class AdmissionsCubit extends Cubit<AdmissionsState> {
         note: note,
       );
       if (isClosed) return;
+      await loadQueue();
+      if (isClosed) return;
       emit(state.copyWith(
         busy: false,
         receipt: result,
         clearDetail: true,
         clearSelected: true,
       ));
-      await loadQueue();
     } on ApiException catch (error) {
       if (isClosed) return;
       emit(state.copyWith(busy: false, actionError: error));
