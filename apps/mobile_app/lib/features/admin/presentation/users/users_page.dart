@@ -6,6 +6,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/ui.dart';
+import '../../../auth/bloc/auth_bloc.dart';
 import '../../cubit/admin_cubit.dart';
 import '../../data/admin_repository.dart';
 import 'user_detail_page.dart';
@@ -57,11 +58,13 @@ class _UsersViewState extends State<_UsersView> {
             icon: const Icon(Icons.person_add_outlined, size: 22),
             tooltip: 'Create staff',
             onPressed: () {
+              final user = context.read<AuthBloc>().state.user;
+              if (user == null) return;
               Navigator.of(context).push(
                 MaterialPageRoute<void>(
                   builder: (_) => BlocProvider.value(
                     value: context.read<AdminCubit>(),
-                    child: const CreateStaffPage(),
+                    child: CreateStaffPage(user: user),
                   ),
                 ),
               );
