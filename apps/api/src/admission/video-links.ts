@@ -123,13 +123,36 @@ export function parseVideoLink(raw: string): VideoLink | null {
   }
 
   if (host.endsWith("facebook.com") || host === "fb.watch") {
+    /*
+     * FACEBOOK HAS TWO PLUGINS AND THEY ARE NOT INTERCHANGEABLE.
+     *
+     * Every facebook.com link used to be handed to plugins/video.php, which is
+     * correct for a video and renders EMPTY for anything else. A photo — the
+     * `/photo?fbid=…` shape the Institute actually pastes, because a photo is
+     * what a page posts most often — produced a card with a play button over a
+     * blank grey frame. It looked like the video had failed to load rather than
+     * like the wrong plugin, so the administrator's instinct is to re-paste the
+     * link, which changes nothing.
+     *
+     * plugins/post.php renders a photo, an album, a status or a shared link,
+     * and is what everything that is not a video wants.
+     */
+    const isVideo =
+      host === "fb.watch" ||
+      url.pathname.includes("/videos/") ||
+      url.pathname.includes("/reel/") ||
+      url.pathname === "/watch" ||
+      url.pathname === "/watch/";
+
+    const plugin = isVideo ? "video" : "post";
+
     return {
       url: url.toString(),
       provider: "facebook",
       id: null,
-      embedUrl: `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(
-        url.toString(),
-      )}&show_text=false`,
+      embedUrl:
+        `https://www.facebook.com/plugins/${plugin}.php?href=` +
+        `${encodeURIComponent(url.toString())}&show_text=false`,
       thumbnailUrl: null,
       portrait: false,
     };
