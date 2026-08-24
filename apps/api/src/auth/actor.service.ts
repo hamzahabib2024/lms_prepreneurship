@@ -19,7 +19,29 @@ import type { Actor } from "../prisma/actor-context";
 @Injectable()
 export class ActorService {
   private readonly cache = new Map<string, { actor: Omit<Actor, "correlationId">; at: number }>();
-  private readonly ttlMs = 15 * 60 * 1000;
+
+  /**
+   * FIFTEEN MINUTES IS THE CEILING ARC-047 ALLOWS. IT IS NOT A GOOD DEFAULT
+   * ON MORE THAN ONE NODE.
+   *
+   * The purge on a role change is synchronous and correct — on the process
+   * that handled it. Behind a load balancer the other nodes know nothing about
+   * it, so a teacher removed from a section, an account suspended, or a role
+   * revoked stays in force elsewhere for up to the full TTL. That is not a
+   * stale figure on a screen; it is somebody keeping reach they were just
+   * denied.
+   *
+   * A minute keeps almost all of the benefit — this resolves on every single
+   * request, so the cache still absorbs the overwhelming majority — and cuts
+   * the window a revoked permission survives by fifteen. It is configurable
+   * because the right number depends on how many nodes there are and how
+   * often roles change, and neither is knowable from here.
+   *
+   * THE REAL FIX IS SHARED STATE. Until this map is in Redis the purge cannot
+   * cross a process boundary, and the deployment notes say so rather than
+   * leaving it implied by a comment nobody reads.
+   */
+  private readonly ttlMs = Number(process.env["ACTOR_CACHE_TTL_MS"] ?? 60_000);
 
   constructor(private readonly prisma: PrismaService) {}
 

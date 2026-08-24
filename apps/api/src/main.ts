@@ -4,6 +4,11 @@ import { NestFactory } from "@nestjs/core";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import helmet from "helmet";
 import { AppModule } from "./app.module";
+import {
+  assessDeployment,
+  formatFindings,
+  readEnv,
+} from "./common/deployment-readiness";
 
 async function bootstrap(): Promise<void> {
   const logger = new Logger("Bootstrap");
@@ -91,6 +96,25 @@ async function bootstrap(): Promise<void> {
   await app.listen(port);
 
   logger.log(`API listening on http://localhost:${port}/${process.env["API_PREFIX"] ?? "api/v1"}`);
+
+  /*
+   * WHAT WILL BREAK IF THERE IS MORE THAN ONE OF THIS PROCESS.
+   *
+   * Reported at startup because that is the only moment anybody is looking,
+   * and every one of these problems is invisible until a student is affected:
+   * an upload that lands on one node's disk and cannot be read from another,
+   * a setting changed on one node and stale on the rest, a revoked role that
+   * survives elsewhere.
+   *
+   * AFTER `listen`, deliberately. This is information for whoever deployed it,
+   * not a reason to refuse to serve — a single node is a legitimate way to run
+   * this System and every check below is silent there.
+   */
+  for (const line of formatFindings(assessDeployment(readEnv(process.env)))) {
+    if (line.startsWith("[BLOCKER]")) logger.error(line);
+    else if (line.startsWith("[WARNING]")) logger.warn(line);
+    else logger.log(line);
+  }
   if (process.env["NODE_ENV"] !== "production") {
     logger.log(`API docs at http://localhost:${port}/docs`);
   }
