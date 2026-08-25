@@ -59,7 +59,8 @@ screen(doc, "Handing work in",
        "Assignments appear in the subject they belong to. Each one says what is wanted, what it "
        "is out of, when it is due, and what happens if it is late.",
        ["Open the assignment and read the instructions. If your teacher recorded a spoken brief, "
-        "choose Listen to hear it.",
+        "choose Listen to hear it, and download any files attached to it — a design task usually "
+        "comes with the file you are working from.",
         "Type your answer, attach files, or record your voice — whichever the assignment allows.",
         "Check the list of what you are about to send. You can remove anything before submitting.",
         "Choose Submit. You will see it confirmed straight away."],
@@ -80,6 +81,15 @@ callout(doc, "If nothing records:",
         "The browser blocked the microphone. Look for the padlock in the address bar, allow the "
         "microphone for this site, and press Record again. On a phone, check no other app is "
         "using the microphone.")
+
+screen(doc, "Joining your class online",
+       "Where a class is taught online, the subject carries a link to the meeting room. It is the "
+       "same link every week — you do not need a new one each time.",
+       ["Open the subject from My subjects.",
+        "Choose the Join button. It opens Google Meet, Zoom or whichever the Institute uses.",
+        "Read the note beside it if there is one — it may say to join early, or give a passcode."],
+       "If there is no Join button, that class is not taught online, or your teacher has not added "
+       "the link yet. Ask them rather than the office; it is theirs to set.")
 
 screen(doc, "Quizzes",
        "Quizzes appear in the subject they belong to, with how long you get and how many "
