@@ -11,6 +11,7 @@ import 'staffing/staffing_page.dart';
 import 'structure/structure_page.dart';
 import 'subjects/subjects_page.dart';
 import 'timetable/timetable_page.dart';
+import 'attendance/presentation/attendance_page.dart';
 
 /// The academic management hub — the mobile equivalent of the web sidebar's
 /// "Institute" block.
@@ -67,6 +68,13 @@ class AcademicPanel extends StatelessWidget {
         title: 'Timetable',
         subtitle: "Your classes, and a term's generated schedule",
         builder: (context) => TimetablePage(api: api, user: user),
+      ),
+      _Entry(
+        icon: Icons.how_to_reg_outlined,
+        title: 'Attendance',
+        subtitle: 'Take the register and mark student attendance',
+        builder: (context) => AttendancePage(api: api),
+        staffOnly: true,
       ),
       _Entry(
         icon: Icons.badge_outlined,
