@@ -16,6 +16,7 @@ import '../../cohort_import/data/cohort_import_repository.dart';
 import '../../cohort_import/cubit/cohort_import_cubit.dart';
 import '../../cohort_import/presentation/cohort_import_page.dart';
 import '../../public_page/presentation/public_page_editor.dart';
+import '../../notification_templates/presentation/templates_page.dart';
 
 class AdminPanel extends StatelessWidget {
   const AdminPanel({super.key, required this.user, required this.api});
@@ -91,6 +92,12 @@ class _AdminPanelView extends StatelessWidget {
         title: 'Public page',
         subtitle: 'Configure the public landing page content',
         builder: (_) => PublicPageEditorPage(api: api),
+      ),
+      _AdminEntry(
+        icon: Icons.notifications_outlined,
+        title: 'Messages',
+        subtitle: 'Customize notification templates',
+        builder: (_) => TemplatesPage(api: api),
       ),
     ];
 
