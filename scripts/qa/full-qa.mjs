@@ -52,7 +52,7 @@ async function call(role, method, path, body, isForm = false) {
 }
 
 const stamp = Date.now();
-const made = { assignments: [], announcements: [], quizzes: [] };
+const made = { assignments: [], announcements: [], quizzes: [], subjects: [], offerings: [] };
 
 // ══════════════════════════════════════════════════════════ 1. identity ═══
 sec("1. identity and sessions");
@@ -542,6 +542,7 @@ sec("18. deleting a course, batch or subject");
 
   if (subjectId) {
     const gone = await call("admin", "DELETE", `/subjects/${subjectId}`);
+    made.subjects.push(subjectId);
     ok("an unused subject is deleted", gone.status === 200, `got ${gone.status}`);
 
     const after = await call("admin", "GET", "/subjects");
@@ -607,6 +608,8 @@ sec("18. deleting a course, batch or subject");
       }
       const cleaned = await call("admin", "DELETE", `/subjects/${spareId}`);
       ok("the spare subject is removed again", cleaned.status === 200, `got ${cleaned.status}`);
+      made.subjects.push(spareId);
+      if (offeringId) made.offerings.push(offeringId);
     }
   }
 
@@ -626,6 +629,31 @@ sec("cleanup");
     if (r.status < 400) removed++;
   }
   ok("QA announcements withdrawn", removed === made.announcements.length, `${removed}/${made.announcements.length}`);
+
+  /*
+   * AND THE SUBJECTS IT MADE, ERASED RATHER THAN HIDDEN.
+   *
+   * Every run used to leave two soft-deleted subjects behind. Fourteen of them
+   * had accumulated before anybody looked, which is the exact complaint that
+   * put permanent deletion in the System — a test suite that leaves litter is
+   * a test suite nobody trusts the database after.
+   *
+   * The offerings go first: a soft-deleted offering is invisible but its row
+   * still holds a foreign key to the subject.
+   */
+  let erased = 0;
+  for (const id of made.offerings) {
+    const r = await call("admin", "DELETE", `/section-subjects/${id}/permanent`);
+    if (r.status === 200) erased++;
+  }
+  for (const id of made.subjects) {
+    const r = await call("admin", "DELETE", `/subjects/${id}/permanent`);
+    if (r.status === 200) erased++;
+  }
+  ok("QA subjects erased, not merely hidden",
+     erased === made.offerings.length + made.subjects.length,
+     `${erased}/${made.offerings.length + made.subjects.length}`);
+
   console.log(`  (assignments left for the cleanup script: ${made.assignments.length})`);
 }
 

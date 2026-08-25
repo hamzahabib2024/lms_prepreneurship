@@ -53,14 +53,19 @@ export class RemovalService {
    * office can act on every one of them; "violates foreign key constraint
    * section_subjects_section_id_fkey" is not something anybody can act on.
    */
-  private refuse(what: string, blockers: string[], alternative: string): never {
+  private refuse(
+    what: string,
+    blockers: string[],
+    alternative: string,
+    verb: "deleted" | "erased" = "deleted",
+  ): never {
     throw new AppError("RESOURCE_CONFLICT", {
       details: [
         {
           field: "id",
           code: "HAS_DEPENDENTS",
           message:
-            `This ${what} cannot be deleted because it still has ` +
+            `This ${what} cannot be ${verb} because it still has ` +
             `${joinList(blockers)}. ${alternative}`,
         },
       ],
@@ -341,6 +346,285 @@ export class RemovalService {
     });
     this.logger.log(`${offering.subject.code} removed from ${offering.section.code}`);
     return { ...removed, deleted: true };
+  }
+
+  // ══════════════════════════════ erasing it for good ══════════════════════
+
+  /**
+   * PERMANENT DELETION — the row itself, not a `deletedAt` stamp.
+   *
+   * ─────────────────────────────────────────────────────────────────────────
+   * The removals above hide a record: it leaves every list, every dropdown and
+   * every report, and a super administrator with a database at hand can put it
+   * back. That is the right default and it is what almost everybody wants.
+   *
+   * It is not what everybody wants. An Institute setting up its first term
+   * makes a dozen throwaway records while learning the software, and being
+   * told they are "deleted" while they sit in the database forever is its own
+   * kind of untidy — particularly for whoever inherits the system later and
+   * cannot tell a real record from a rehearsal.
+   *
+   * SO THIS ACTUALLY DELETES, and every safeguard from the soft version still
+   * applies. Nothing that has been taught can be erased, and the same counts
+   * decide it — WITH ONE DIFFERENCE: soft-deleted dependants count here too.
+   * A deleted assignment is invisible but its row still exists and still holds
+   * a foreign key, so a subject that looks clear on screen can be firmly held
+   * in the database, and finding that out from a constraint violation helps
+   * nobody.
+   *
+   * IT WORKS ON ALREADY-DELETED RECORDS, which is the ordinary path: delete it
+   * to get it off the screen, then purge it when you are sure.
+   *
+   * The lookups run as the System rather than through the scope predicate,
+   * because a soft-deleted row is invisible to the predicate by design and
+   * this is the one operation that has to see it. Safe because the routes are
+   * admin and super-admin only, and both hold ALL scope on these resources —
+   * there is no narrowing being skipped, only a `deletedAt` filter.
+   * ─────────────────────────────────────────────────────────────────────────
+   */
+
+  /**
+   * The last line of defence.
+   *
+   * Every foreign key into these tables is `Restrict`, and there are more of
+   * them than any one person keeps in their head. If a relation exists that
+   * the counts above do not cover, the database refuses — correctly — and
+   * this turns P2003 into a sentence the office can read instead of a stack
+   * trace. Better a refusal nobody expected than a crash nobody understands.
+   */
+  private async erase<T>(what: string, run: () => Promise<T>): Promise<T> {
+    try {
+      return await run();
+    } catch (e) {
+      const code = (e as { code?: string }).code;
+      if (code === "P2003" || code === "P2014") {
+        throw new AppError("RESOURCE_CONFLICT", {
+          details: [
+            {
+              field: "id",
+              code: "STILL_REFERENCED",
+              message:
+                `This ${what} cannot be erased because other records still point at it. ` +
+                `Delete it instead — that removes it from every screen and keeps the ` +
+                `records that depend on it intact.`,
+            },
+          ],
+        });
+      }
+      throw e;
+    }
+  }
+
+  /** Permanently erase a subject. */
+  async purgeSubject(id: string) {
+    const subject = await this.prisma.asSystem((db) =>
+      db.subject.findUnique({ where: { id }, select: { id: true, code: true, name: true } }),
+    );
+    if (!subject) throw new AppError("RESOURCE_NOT_FOUND");
+
+    // Deleted ones count too — see the note above.
+    const [offerings, modules] = await Promise.all([
+      this.prisma.asSystem((db) =>
+        db.sectionSubject.findMany({
+          where: { subjectId: id },
+          select: { section: { select: { code: true } } },
+          take: 6,
+        }),
+      ),
+      this.prisma.asSystem((db) => db.module.count({ where: { subjectId: id } })),
+    ]);
+    if (offerings.length > 0) {
+      this.refuse(
+        "subject",
+        [`${offerings.length === 6 ? "6 or more" : offerings.length} class${offerings.length === 1 ? "" : "es"} on record (${offerings.map((o) => o.section.code).join(", ")})`],
+        "Erase those first, or delete this subject instead of erasing it.",
+        "erased",
+      );
+    }
+    if (modules > 0) {
+      this.refuse(
+        "subject",
+        [`${modules} module${modules === 1 ? "" : "s"} of course material on record`],
+        "Erase the material first, or delete this subject instead of erasing it.",
+        "erased",
+      );
+    }
+
+    await this.erase("subject", () =>
+      this.prisma.asSystem((db) =>
+        db.$transaction(async (tx) => {
+          await tx.programmeSubject.deleteMany({ where: { subjectId: id } });
+          await tx.subject.delete({ where: { id } });
+        }),
+      ),
+    );
+
+    await this.audit.record({
+      action: "subject.purge",
+      entityType: "Subject",
+      entityId: id,
+      before: { code: subject.code, name: subject.name },
+      after: { erased: true },
+    });
+    this.logger.warn(`subject ${subject.code} ERASED permanently`);
+    return { id, code: subject.code, name: subject.name, erased: true };
+  }
+
+  /** Permanently erase a batch. */
+  async purgeBatch(id: string) {
+    const batch = await this.prisma.asSystem((db) =>
+      db.batch.findUnique({ where: { id }, select: { id: true, name: true } }),
+    );
+    if (!batch) throw new AppError("RESOURCE_NOT_FOUND");
+
+    const sections = await this.prisma.asSystem((db) =>
+      db.section.findMany({ where: { batchId: id }, select: { code: true }, take: 6 }),
+    );
+    if (sections.length > 0) {
+      this.refuse(
+        "batch",
+        [`${sections.length === 6 ? "6 or more" : sections.length} section${sections.length === 1 ? "" : "s"} on record (${sections.map((x) => x.code).join(", ")})`],
+        "Erase those sections first, or delete this batch instead of erasing it.",
+        "erased",
+      );
+    }
+
+    await this.erase("batch", () =>
+      this.prisma.asSystem((db) => db.batch.delete({ where: { id } })),
+    );
+
+    await this.audit.record({
+      action: "batch.purge",
+      entityType: "Batch",
+      entityId: id,
+      before: { name: batch.name },
+      after: { erased: true },
+    });
+    this.logger.warn(`batch ${batch.name} ERASED permanently`);
+    return { id, name: batch.name, erased: true };
+  }
+
+  /** Permanently erase a section. */
+  async purgeSection(id: string) {
+    const section = await this.prisma.asSystem((db) =>
+      db.section.findUnique({ where: { id }, select: { id: true, code: true, name: true } }),
+    );
+    if (!section) throw new AppError("RESOURCE_NOT_FOUND");
+
+    const [students, offerings, registrations] = await Promise.all([
+      this.prisma.asSystem((db) => db.student.count({ where: { currentSectionId: id } })),
+      this.prisma.asSystem((db) =>
+        db.sectionSubject.findMany({
+          where: { sectionId: id },
+          select: { subject: { select: { code: true } } },
+          take: 6,
+        }),
+      ),
+      this.prisma.asSystem((db) =>
+        db.registrationRequest.count({ where: { desiredSectionId: id } }),
+      ),
+    ]);
+
+    const blockers: string[] = [];
+    if (students > 0) blockers.push(`${students} student${students === 1 ? "" : "s"} on record`);
+    if (registrations > 0) {
+      blockers.push(`${registrations} admission${registrations === 1 ? "" : "s"} on record`);
+    }
+    if (offerings.length > 0) {
+      blockers.push(
+        `${offerings.length === 6 ? "6 or more" : offerings.length} subject${offerings.length === 1 ? "" : "s"} on record (${offerings.map((o) => o.subject.code).join(", ")})`,
+      );
+    }
+    if (blockers.length > 0) {
+      this.refuse(
+        "section",
+        blockers,
+        "Erase or move those first. If any of it is real, archive the section instead — that " +
+          "keeps the attendance and marks the students in it will need later.",
+        "erased",
+      );
+    }
+
+    await this.erase("section", () =>
+      this.prisma.asSystem((db) => db.section.delete({ where: { id } })),
+    );
+
+    await this.audit.record({
+      action: "section.purge",
+      entityType: "Section",
+      entityId: id,
+      before: { code: section.code, name: section.name },
+      after: { erased: true },
+    });
+    this.logger.warn(`section ${section.code} ERASED permanently`);
+    return { id, code: section.code, name: section.name, erased: true };
+  }
+
+  /** Permanently erase one subject's place on one class. */
+  async purgeSectionSubject(id: string) {
+    const offering = await this.prisma.asSystem((db) =>
+      db.sectionSubject.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          subject: { select: { code: true } },
+          section: { select: { code: true } },
+        },
+      }),
+    );
+    if (!offering) throw new AppError("RESOURCE_NOT_FOUND");
+
+    const [enrolments, assignments, quizzes, lectures, sessions, certificates, completions] =
+      await Promise.all([
+        this.prisma.asSystem((db) => db.enrolment.count({ where: { sectionSubjectId: id } })),
+        this.prisma.asSystem((db) => db.assignment.count({ where: { sectionSubjectId: id } })),
+        this.prisma.asSystem((db) => db.quiz.count({ where: { sectionSubjectId: id } })),
+        this.prisma.asSystem((db) => db.recordedLecture.count({ where: { sectionSubjectId: id } })),
+        this.prisma.asSystem((db) => db.liveSession.count({ where: { sectionSubjectId: id } })),
+        this.prisma.asSystem((db) => db.certificate.count({ where: { sectionSubjectId: id } })),
+        this.prisma.asSystem((db) =>
+          db.subjectCompletion.count({ where: { sectionSubjectId: id } }),
+        ),
+      ]);
+
+    const blockers: string[] = [];
+    if (enrolments > 0) blockers.push(`${enrolments} enrolment${enrolments === 1 ? "" : "s"} on record`);
+    if (assignments > 0) blockers.push(`${assignments} assignment${assignments === 1 ? "" : "s"} on record`);
+    if (quizzes > 0) blockers.push(`${quizzes} quiz${quizzes === 1 ? "" : "zes"} on record`);
+    if (lectures > 0) blockers.push(`${lectures} recording${lectures === 1 ? "" : "s"} on record`);
+    if (sessions > 0) blockers.push(`${sessions} class${sessions === 1 ? "" : "es"} on the register`);
+    if (certificates > 0) blockers.push(`${certificates} certificate${certificates === 1 ? "" : "s"} on record`);
+    if (completions > 0) blockers.push(`${completions} completion decision${completions === 1 ? "" : "s"}`);
+
+    if (blockers.length > 0) {
+      this.refuse(
+        "subject",
+        blockers,
+        "It has been taught. Delete it instead of erasing it — the students in it will need " +
+          "their marks and attendance long after the term ends.",
+        "erased",
+      );
+    }
+
+    await this.erase("subject", () =>
+      this.prisma.asSystem((db) =>
+        db.$transaction(async (tx) => {
+          await tx.teacherAssignment.deleteMany({ where: { sectionSubjectId: id } });
+          await tx.discussionPost.deleteMany({ where: { sectionSubjectId: id } });
+          await tx.sectionSubject.delete({ where: { id } });
+        }),
+      ),
+    );
+
+    await this.audit.record({
+      action: "section_subject.purge",
+      entityType: "SectionSubject",
+      entityId: id,
+      before: { subject: offering.subject.code, section: offering.section.code },
+      after: { erased: true },
+    });
+    this.logger.warn(`${offering.subject.code} ERASED from ${offering.section.code}`);
+    return { id, erased: true };
   }
 }
 

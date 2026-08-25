@@ -159,6 +159,20 @@ export class AcademicController {
     return this.removal.removeSubject(id);
   }
 
+  /**
+   * Erase a subject for good — the row, not a `deletedAt` stamp.
+   *
+   * A separate path rather than a flag on the one above, deliberately. A
+   * query parameter is something a caller adds by accident; a different
+   * address is something they mean.
+   */
+  @RequirePermission("subject", "delete")
+  @Delete("subjects/:id/permanent")
+  @HttpCode(200)
+  purgeSubject(@Param("id") id: string) {
+    return this.removal.purgeSubject(id);
+  }
+
   @RequirePermission("subject", "update")
   @Patch("subjects/:id")
   updateSubject(
@@ -212,6 +226,14 @@ export class AcademicController {
   @HttpCode(200)
   deleteBatch(@Param("id") id: string) {
     return this.removal.removeBatch(id);
+  }
+
+  /** Erase a batch for good. Works on one already deleted. */
+  @RequirePermission("batch", "delete")
+  @Delete("batches/:id/permanent")
+  @HttpCode(200)
+  purgeBatch(@Param("id") id: string) {
+    return this.removal.purgeBatch(id);
   }
 
   @RequirePermission("batch", "update")
@@ -284,6 +306,20 @@ export class AcademicController {
     return this.removal.removeSection(id);
   }
 
+  /**
+   * Erase a section for good.
+   *
+   * Counts records the soft delete does not: a DELETED assignment is invisible
+   * but its row still holds a foreign key, so a section that looks clear on
+   * screen can still be firmly held in the database.
+   */
+  @RequirePermission("section", "delete")
+  @Delete("sections/:id/permanent")
+  @HttpCode(200)
+  purgeSection(@Param("id") id: string) {
+    return this.removal.purgeSection(id);
+  }
+
   @RequirePermission("section", "read")
   @Get("sections/:id/roster")
   roster(@Param("id") id: string) {
@@ -323,6 +359,14 @@ export class AcademicController {
   @HttpCode(200)
   deleteOffering(@Param("id") id: string) {
     return this.removal.removeSectionSubject(id);
+  }
+
+  /** Erase one subject's place on one class for good. */
+  @RequirePermission("section_subject", "delete")
+  @Delete("section-subjects/:id/permanent")
+  @HttpCode(200)
+  purgeOffering(@Param("id") id: string) {
+    return this.removal.purgeSectionSubject(id);
   }
 
   // -------------------------------------------------------------- notes ----

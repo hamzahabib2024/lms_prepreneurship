@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { ApiError, api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
-import { EmptyState, SkeletonTable } from "../components/Ui";
+import { EmptyState, SkeletonTable, askPermanent } from "../components/Ui";
 import { HowItWorks } from "../components/HowItWorks";
 
 interface Programme {
@@ -177,7 +177,11 @@ Only possible while it holds no sections. ` +
       )
     )
       return;
-    await run(() => api.del(`/batches/${b.id}`), `Batch "${b.name}" deleted.`);
+    const forever = askPermanent(`the batch "${b.name}"`);
+    await run(
+      () => api.del(`/batches/${b.id}${forever ? "/permanent" : ""}`),
+      forever ? `Batch "${b.name}" erased permanently.` : `Batch "${b.name}" deleted.`,
+    );
   }
 
   async function saveBatch(id: string) {

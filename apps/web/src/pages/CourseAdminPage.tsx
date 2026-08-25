@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ApiError, api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
-import { EmptyState, ErrorState, SkeletonCards } from "../components/Ui";
+import { EmptyState, ErrorState, SkeletonCards, askPermanent } from "../components/Ui";
 import { CourseCover } from "../components/CourseCover";
 import { Icon } from "../components/Icon";
 import { money, whenDue, type Fee } from "../components/FeePanel";
@@ -518,10 +518,11 @@ function SubjectsPanel({
       )
     )
       return;
+    const forever = askPermanent(`${sub.code} — ${sub.name}`);
     setBusy(sub.id);
     setError(null);
     try {
-      await api.del(`/subjects/${sub.id}`);
+      await api.del(`/subjects/${sub.id}${forever ? "/permanent" : ""}`);
       onRemoved();
     } catch (e) {
       // The server says which classes teach it, by code. That sentence is the

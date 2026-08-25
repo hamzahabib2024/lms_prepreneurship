@@ -2,7 +2,7 @@ import { Fragment, useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { ApiError, api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
-import { EmptyState, Skeleton, SkeletonTable } from "../components/Ui";
+import { EmptyState, Skeleton, SkeletonTable, askPermanent } from "../components/Ui";
 import { HowItWorks } from "../components/HowItWorks";
 import { ClassRoom } from "../components/ClassRoom";
 
@@ -249,7 +249,11 @@ Only possible while nothing depends on it — no students, ` +
       )
     )
       return;
-    const ok = await run(() => api.del(`/sections/${sec.id}`), `${sec.code} deleted.`);
+    const forever = askPermanent(sec.code);
+    const ok = await run(
+      () => api.del(`/sections/${sec.id}${forever ? "/permanent" : ""}`),
+      forever ? `${sec.code} erased permanently.` : `${sec.code} deleted.`,
+    );
     if (ok && openId === sec.id) {
       setOpenId(null);
       setOfferings(null);
@@ -267,9 +271,12 @@ Only possible while it has not been ` +
       )
     )
       return;
+    const forever = askPermanent(`${o.subject.code} on this section`);
     const ok = await run(
-      () => api.del(`/section-subjects/${o.id}`),
-      `${o.subject.code} removed from the section.`,
+      () => api.del(`/section-subjects/${o.id}${forever ? "/permanent" : ""}`),
+      forever
+        ? `${o.subject.code} erased permanently.`
+        : `${o.subject.code} removed from the section.`,
     );
     if (ok) setOfferings(await api.get<Offering[]>(`/sections/${sectionId}/subjects`));
   }
