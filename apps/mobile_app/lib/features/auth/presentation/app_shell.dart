@@ -12,6 +12,8 @@ import '../../certificates/presentation/my_certificates_page.dart';
 import '../../certificates/presentation/issuance_page.dart';
 import '../../communication/presentation/communication_panel.dart';
 import '../../reporting/presentation/reports_page.dart';
+import '../../learning/presentation/my_subjects_page.dart';
+import '../../fees/presentation/fees_page.dart';
 
 /// Persistent bottom navigation shell for authenticated users.
 ///
@@ -58,6 +60,13 @@ class _AppShellState extends State<AppShell> {
           label: 'Courses',
           page: CoursesPage(api: widget.api, user: widget.user),
         ),
+        if (!_isStaff)
+          _TabEntry(
+            icon: Icons.menu_book_outlined,
+            activeIcon: Icons.menu_book,
+            label: 'Learning',
+            page: MySubjectsPage(api: widget.api),
+          ),
         if (_isAdmin)
           _TabEntry(
             icon: Icons.how_to_reg_outlined,
@@ -77,6 +86,12 @@ class _AppShellState extends State<AppShell> {
           activeIcon: Icons.notifications,
           label: 'Alerts',
           page: CommunicationPanel(api: widget.api, user: widget.user),
+        ),
+        _TabEntry(
+          icon: Icons.payments_outlined,
+          activeIcon: Icons.payments,
+          label: 'Fees',
+          page: FeesPage(user: widget.user, api: widget.api),
         ),
         if (_isStaff)
           _TabEntry(

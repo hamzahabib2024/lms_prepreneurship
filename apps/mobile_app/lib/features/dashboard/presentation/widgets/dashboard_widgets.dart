@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../core/network/api_client.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/ui.dart';
+import '../../../academic/class_page/data/class_page_repository.dart';
+import '../../../academic/class_page/presentation/class_page.dart';
 
 /// The title map — the web's WIDGET_TITLES, so an unknown widget still gets a
 /// readable heading rather than its camelCase key.
@@ -54,6 +58,7 @@ class DashboardWidgetBody extends StatelessWidget {
         final startsIn = (v['startsInSeconds'] as num?)?.toInt() ?? 0;
         final joinWindowOpen = v['joinWindowOpen'] == true;
         final linkReady = v['linkReady'] == true;
+        final sessionId = v['sessionId'] as String? ?? '';
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -71,7 +76,9 @@ class DashboardWidgetBody extends StatelessWidget {
             SizedBox(
               width: double.infinity,
               child: FilledButton(
-                onPressed: joinWindowOpen ? () {} : null,
+                onPressed: joinWindowOpen && sessionId.isNotEmpty
+                    ? () => _openClassPage(context, sessionId)
+                    : null,
                 child: Text(joinWindowOpen ? 'Join class' : 'Join opens shortly'),
               ),
             ),
@@ -332,4 +339,16 @@ class DashboardWidgetBody extends StatelessWidget {
     final dow = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][d.weekday - 1];
     return '$dow ${d.day} ${months[d.month - 1]}, $h12:${d.minute.toString().padLeft(2, '0')} $ampm';
   }
+}
+
+void _openClassPage(BuildContext context, String sessionId) {
+  final api = context.read<ApiClient>();
+  Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (_) => RepositoryProvider(
+        create: (_) => ClassPageRepository(api),
+        child: ClassPage(sessionId: sessionId),
+      ),
+    ),
+  );
 }
