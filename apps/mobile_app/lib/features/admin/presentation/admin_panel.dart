@@ -15,6 +15,7 @@ import 'users/users_page.dart';
 import '../../cohort_import/data/cohort_import_repository.dart';
 import '../../cohort_import/cubit/cohort_import_cubit.dart';
 import '../../cohort_import/presentation/cohort_import_page.dart';
+import '../../public_page/presentation/public_page_editor.dart';
 
 class AdminPanel extends StatelessWidget {
   const AdminPanel({super.key, required this.user, required this.api});
@@ -84,6 +85,12 @@ class _AdminPanelView extends StatelessWidget {
         subtitle: 'Import student cohorts via CSV upload',
         builder: (_) => const _CohortImportEntry(),
         superAdminOnly: true,
+      ),
+      _AdminEntry(
+        icon: Icons.public_outlined,
+        title: 'Public page',
+        subtitle: 'Configure the public landing page content',
+        builder: (_) => PublicPageEditorPage(api: api),
       ),
     ];
 
