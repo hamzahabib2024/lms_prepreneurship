@@ -1,12 +1,29 @@
-import { Controller, Get, Param } from "@nestjs/common";
+import { Body, Controller, Get, Param, Put } from "@nestjs/common";
+import { z } from "zod";
 import { ProgressService } from "./progress.service";
+import { CompletionService } from "./completion.service";
+import { zodBody } from "../common/zod-validation.pipe";
 import { RequirePermission } from "../rbac/permissions.guard";
 import { assertOwnStudent } from "../rbac/ownership";
 
 /** SRS §9.9 — progress endpoints. */
+
+/**
+ * The reason is optional HERE and required by the service when the decision
+ * disagrees with the arithmetic. Putting that rule in Zod would mean the schema
+ * needing to know a student's computed progress, which it cannot.
+ */
+const decisionSchema = z.object({
+  decision: z.enum(["IN_PROGRESS", "COMPLETED", "NOT_COMPLETED"]),
+  note: z.string().trim().max(2000).optional(),
+});
+
 @Controller()
 export class ProgressController {
-  constructor(private readonly progress: ProgressService) {}
+  constructor(
+    private readonly progress: ProgressService,
+    private readonly completion: CompletionService,
+  ) {}
 
   /** FR-PRG-004 — the breakdown, so the percentage is explicable. */
   @RequirePermission("progress", "read")
@@ -56,4 +73,48 @@ export class ProgressController {
   cohort(@Param("id") id: string) {
     return this.progress.forSectionSubject(id);
   }
+
+  // ───────────────────────────────────── signing off that a student finished ──
+
+  /**
+   * The end-of-term worklist: everybody in a class, where the arithmetic puts
+   * them, and what a person has decided.
+   *
+   * `subject_completion:read` at ASSIGNED for a teacher — they see their own
+   * classes and no others, and the scope predicate is what enforces that.
+   */
+  @RequirePermission("subject_completion", "read")
+  @Get("section-subjects/:id/completion")
+  completionRoster(@Param("id") id: string) {
+    return this.completion.roster(id);
+  }
+
+  /**
+   * Record it. PUT, because a student has ONE standing in a subject and this
+   * replaces it — the history of how it changed is the audit log's, and it
+   * already keeps it.
+   *
+   * A teacher may do this for the classes they teach. Issuing the certificate
+   * afterwards is `certificate:create`, which a teacher does not hold: the
+   * person who decides a student has finished is deliberately not the person
+   * who prints the document saying so.
+   */
+  @RequirePermission("subject_completion", "update")
+  @Put("section-subjects/:id/completion/:studentId")
+  decideCompletion(
+    @Param("id") id: string,
+    @Param("studentId") studentId: string,
+    @Body(zodBody(decisionSchema)) dto: z.infer<typeof decisionSchema>,
+  ) {
+    return this.completion.decide(id, studentId, dto);
+  }
+
+  /** What a student has been signed off for. Their own, or the office's view. */
+  @RequirePermission("subject_completion", "read")
+  @Get("students/:studentId/completion")
+  studentCompletion(@Param("studentId") studentId: string) {
+    assertOwnStudent(studentId);
+    return this.completion.forStudent(studentId);
+  }
+
 }

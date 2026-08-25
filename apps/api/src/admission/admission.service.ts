@@ -160,7 +160,20 @@ export class AdmissionService {
       db.announcement.findMany({
         where: {
           isPublic: true,
-          audience: "INSTITUTE",
+          /*
+           * BOTH KINDS OF PUBLIC NOTICE.
+           *
+           * INSTITUTE with isPublic is a notice to everybody that ALSO appears
+           * here. PUBLIC_ONLY is written for visitors and reaches nobody
+           * inside the System at all — an open day, an admissions deadline,
+           * addressed to people who have not applied yet.
+           *
+           * A section's notice still cannot reach this list: it is not in
+           * either audience, the database refuses isPublic on it, and the
+           * filter names the two audiences explicitly rather than excluding
+           * the ones it can currently think of.
+           */
+          audience: { in: ["INSTITUTE", "PUBLIC_ONLY"] },
           deletedAt: null,
           OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
         },

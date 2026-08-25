@@ -2,7 +2,7 @@
   "name": "lms",
   "version": "0.1.0",
   "private": true,
-  "description": "Online Learning Management System — implementation of SRS-LMS-001 v2.1",
+  "description": "Online Learning Management System \u2014 implementation of SRS-LMS-001 v2.1",
   "workspaces": [
     "packages/*",
     "apps/*"
@@ -36,7 +36,8 @@
     "db:constraints": "node -r dotenv/config scripts/apply-sql.mjs apps/api/prisma/sql/01_constraints_and_indexes.sql",
     "db:start": "node scripts/db-local.mjs start",
     "lint:types": "npm run lint --workspaces --if-present",
-    "lint:rules": "eslint apps/api/src apps/web/src packages/shared/src"
+    "lint:rules": "eslint apps/api/src apps/web/src packages/shared/src",
+    "qa": "node scripts/qa/full-qa.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",

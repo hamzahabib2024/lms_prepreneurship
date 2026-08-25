@@ -222,7 +222,26 @@ export class CertificateService {
       ),
     );
 
-    const unmet = perSubject.filter((p) => !p.completionCriteria.met);
+    /*
+     * ISSUING REQUIRES A SIGNATURE, not merely a threshold.
+     *
+     * The person who decides a student has finished is deliberately not the
+     * person who prints the document: a teacher signs off the class they
+     * taught, and the office issues. Neither can do the whole thing alone,
+     * which is the point.
+     */
+    const issueSignOffs = await this.prisma.asSystem((db) =>
+      db.subjectCompletion.findMany({
+        where: {
+          studentId,
+          sectionSubjectId: { in: perSubject.map((p) => p.sectionSubjectId) },
+          decision: "COMPLETED",
+        },
+        select: { sectionSubjectId: true },
+      }),
+    );
+    const approved = new Set(issueSignOffs.map((d) => d.sectionSubjectId));
+    const unmet = perSubject.filter((p) => !approved.has(p.sectionSubjectId));
     if (unmet.length > 0) {
       throw new AppError("VALIDATION_FAILED", {
         message:
@@ -681,7 +700,33 @@ export class CertificateService {
         this.progress.forSubject(studentId, e.sectionSubjectId),
       ),
     );
-    const complete = perSubject.filter((p) => p.completionCriteria.met);
+
+    /*
+     * WHAT A PERSON DECIDED, beside what the arithmetic says.
+     *
+     * A certificate is the most public thing this System makes — framed,
+     * photographed, shown to employers for years — and issuing one because a
+     * threshold was crossed is a decision nobody made. So a subject counts as
+     * complete when SOMEBODY SIGNED IT OFF, and the computed criteria are kept
+     * beside it as the evidence they were looking at.
+     *
+     * That is a deliberate tightening. Before this, meeting the criteria was
+     * enough on its own; now a teacher has to say so. The office can see, per
+     * subject, whether the hold-up is the student's work or a signature.
+     */
+    const signOffs = await this.prisma.asSystem((db) =>
+      db.subjectCompletion.findMany({
+        where: {
+          studentId,
+          sectionSubjectId: { in: enrolments.map((e: { sectionSubjectId: string }) => e.sectionSubjectId) },
+        },
+        select: { sectionSubjectId: true, decision: true, decidedAt: true },
+      }),
+    );
+    const signedOff = new Map(signOffs.map((d) => [d.sectionSubjectId, d]));
+    const isSignedOff = (id: string) => signedOff.get(id)?.decision === "COMPLETED";
+
+    const complete = perSubject.filter((p) => isSignedOff(p.sectionSubjectId));
     const issued = await this.prisma.scoped.certificate.findFirst({
       where: { studentId, programmeId, status: "ISSUED" },
       select: { certificateNo: true, issuedAt: true },
@@ -698,15 +743,36 @@ export class CertificateService {
         sectionSubjectId: p.sectionSubjectId,
         subject: p.subject?.name ?? "",
         overallPercent: p.overallPercent,
+        // What the arithmetic says — evidence, not the decision.
         met: p.completionCriteria.met,
         outstanding: p.completionCriteria.outstanding,
+        // What a person decided. `null` means nobody has looked yet, which is
+        // a different thing from somebody deciding they have not finished.
+        signedOff: signedOff.get(p.sectionSubjectId)?.decision ?? null,
+        signedOffAt: signedOff.get(p.sectionSubjectId)?.decidedAt ?? null,
       })),
-      message:
-        perSubject.length === 0
-          ? `This student has no compulsory subjects in ${programme.name}.`
-          : complete.length === perSubject.length
-            ? `All ${perSubject.length} subjects complete.`
-            : `${complete.length} of ${perSubject.length} subjects complete.`,
+      /*
+       * The message distinguishes the two reasons a student is not ready,
+       * because they need different people to act. Work still outstanding is
+       * the student's; a subject awaiting a signature is the teacher's, and an
+       * office chasing the student for it would be chasing the wrong person.
+       */
+      message: (() => {
+        if (perSubject.length === 0) {
+          return `This student has no compulsory subjects in ${programme.name}.`;
+        }
+        if (complete.length === perSubject.length) {
+          return `All ${perSubject.length} subjects signed off as complete.`;
+        }
+        const awaitingSignature = perSubject.filter(
+          (p) => p.completionCriteria.met && !isSignedOff(p.sectionSubjectId),
+        ).length;
+        const base = `${complete.length} of ${perSubject.length} subjects signed off.`;
+        return awaitingSignature > 0
+          ? `${base} ${awaitingSignature} ${awaitingSignature === 1 ? "meets" : "meet"} the ` +
+            `requirements and ${awaitingSignature === 1 ? "is" : "are"} waiting for a teacher to sign off.`
+          : base;
+      })(),
     };
   }
 

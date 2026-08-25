@@ -50,6 +50,8 @@ export class DiscussionService {
       orderBy: [{ isPinned: "desc" }, { createdAt: "desc" }],
       include: {
         author: { select: { id: true, fullName: true } },
+        endorser: { select: { fullName: true } },
+        resolver: { select: { fullName: true } },
         _count: { select: { replies: { where: { deletedAt: null } } } },
       },
       take: 100,
@@ -62,14 +64,22 @@ export class DiscussionService {
   async thread(postId: string) {
     const post = await this.prisma.scoped.discussionPost.findFirst({
       where: { id: postId, parentPostId: null },
-      include: { author: { select: { id: true, fullName: true } } },
+      include: {
+        author: { select: { id: true, fullName: true } },
+        endorser: { select: { fullName: true } },
+        resolver: { select: { fullName: true } },
+      },
     });
     if (!post) throw new AppError("RESOURCE_NOT_FOUND");
 
     const replies = await this.prisma.scoped.discussionPost.findMany({
       where: { parentPostId: postId },
       orderBy: { createdAt: "asc" },
-      include: { author: { select: { id: true, fullName: true } } },
+      include: {
+        author: { select: { id: true, fullName: true } },
+        endorser: { select: { fullName: true } },
+        resolver: { select: { fullName: true } },
+      },
     });
 
     return {
@@ -79,7 +89,7 @@ export class DiscussionService {
   }
 
   /** FR-DSC-004 — ask a question. */
-  async create(sectionSubjectId: string, title: string, body: string) {
+  async create(sectionSubjectId: string, title: string, body: string, isAnonymous = false) {
     const actor = await this.actor();
 
     const empty = refuseEmpty(body);
@@ -99,10 +109,15 @@ export class DiscussionService {
         data: {
           sectionSubjectId,
           authorUserId: actor.userId,
+          isAnonymous,
           title: title.trim() || body.trim().slice(0, 80),
           body: body.trim(),
         },
-        include: { author: { select: { id: true, fullName: true } } },
+        include: {
+        author: { select: { id: true, fullName: true } },
+        endorser: { select: { fullName: true } },
+        resolver: { select: { fullName: true } },
+      },
       }),
     );
 
@@ -117,7 +132,7 @@ export class DiscussionService {
   }
 
   /** FR-DSC-005 — answer one. */
-  async reply(parentId: string, body: string) {
+  async reply(parentId: string, body: string, isAnonymous = false) {
     const actor = await this.actor();
 
     const empty = refuseEmpty(body);
@@ -131,10 +146,15 @@ export class DiscussionService {
         data: {
           sectionSubjectId: parent.row.sectionSubjectId,
           authorUserId: actor.userId,
+          isAnonymous,
           parentPostId: parent.row.parentPostId ?? parent.row.id,
           body: body.trim(),
         },
-        include: { author: { select: { id: true, fullName: true } } },
+        include: {
+        author: { select: { id: true, fullName: true } },
+        endorser: { select: { fullName: true } },
+        resolver: { select: { fullName: true } },
+      },
       }),
     );
 
@@ -183,7 +203,11 @@ export class DiscussionService {
           // means for everyone who already read it.
           editedAt: new Date(),
         },
-        include: { author: { select: { id: true, fullName: true } } },
+        include: {
+        author: { select: { id: true, fullName: true } },
+        endorser: { select: { fullName: true } },
+        resolver: { select: { fullName: true } },
+      },
       }),
     );
 
@@ -280,7 +304,11 @@ export class DiscussionService {
           ...(change.isPinned !== undefined ? { isPinned: change.isPinned } : {}),
           ...(change.isLocked !== undefined ? { isLocked: change.isLocked } : {}),
         },
-        include: { author: { select: { id: true, fullName: true } } },
+        include: {
+        author: { select: { id: true, fullName: true } },
+        endorser: { select: { fullName: true } },
+        resolver: { select: { fullName: true } },
+      },
       }),
     );
 
@@ -361,10 +389,35 @@ export class DiscussionService {
       createdAt: Date;
       authorUserId: string;
       author?: { id: string; fullName: string };
+      isAnonymous?: boolean;
+      endorsedAt?: Date | null;
+      endorser?: { fullName: string } | null;
+      resolvedAt?: Date | null;
+      resolver?: { fullName: string } | null;
     },
     replyCount: number,
   ) {
     const removed = p.deletedAt != null;
+
+    /*
+     * ANONYMITY IS ENFORCED HERE AND NOWHERE ELSE, and that is the whole
+     * reason this method exists as the single projection.
+     *
+     * A student posts anonymously so that their CLASSMATES cannot see who
+     * asked. Staff always can: a forum where nobody can be identified at all
+     * is one where nobody can be held to anything, and it stops being usable
+     * within a term. So the name is withheld from students and shown to a
+     * teacher, along with the fact that the student asked for anonymity — a
+     * teacher who cannot tell would answer as though the class could see.
+     *
+     * The AUTHOR still sees their own name, because a post that appears to
+     * have been written by nobody is one people repost, thinking it failed.
+     */
+    const actor = getActor();
+    const staff = !!actor && !actor.studentId;
+    const isOwn = !!actor && actor.userId === p.authorUserId;
+    const hideName = p.isAnonymous === true && !staff && !isOwn;
+
     return {
       id: p.id,
       title: p.title,
@@ -374,8 +427,24 @@ export class DiscussionService {
       body: removed ? null : p.body,
       removed,
       removedByModerator: removed ? p.removedByModerator : false,
-      author: removed ? null : (p.author?.fullName ?? null),
-      authorUserId: removed ? null : p.authorUserId,
+      author: removed || hideName ? null : (p.author?.fullName ?? null),
+      // Withheld with the name. An id is an identity as surely as a name is,
+      // and handing one to the interface would let a determined student match
+      // it against the roster.
+      authorUserId: removed || hideName ? null : p.authorUserId,
+      isAnonymous: p.isAnonymous === true,
+      /*
+       * Whether the READER can see who it was. Staff and the author get true,
+       * everybody else false — so the interface can say "Anonymous (you)" or
+       * "Anonymous — Hina Malik" without deciding the rule itself.
+       */
+      identityVisible: !removed && !hideName,
+      // FR-DSC — the answer worth reading, and who said so.
+      endorsedAt: p.endorsedAt ?? null,
+      endorsedBy: p.endorser?.fullName ?? null,
+      // FR-DSC — whether this question is settled.
+      resolvedAt: p.resolvedAt ?? null,
+      resolvedBy: p.resolver?.fullName ?? null,
       isPinned: p.isPinned,
       isLocked: p.isLocked,
       // FR-DSC-006 — shown, always. A thread whose answers changed after people
@@ -385,4 +454,106 @@ export class DiscussionService {
       replyCount,
     };
   }
+
+  /**
+   * FR-DSC — THE ANSWER WORTH READING.
+   *
+   * The reason a course forum beats a chat log is that somebody arriving with
+   * the same question next term reads ONE good answer instead of sifting forty
+   * replies for it. Nothing in a thread says which reply that is, and the
+   * loudest is not reliably the best — so a teacher says so, and it floats.
+   *
+   * A TEACHER, NOT A VOTE. A student upvote measures agreement among people
+   * who do not yet know the answer, which is exactly the wrong electorate.
+   */
+  async endorse(replyId: string, endorsed: boolean) {
+    const actor = await this.actor();
+
+    const reply = await this.prisma.scoped.discussionPost.findFirst({
+      where: { id: replyId, deletedAt: null },
+      select: { id: true, parentPostId: true, sectionSubjectId: true },
+    });
+    if (!reply) throw new AppError("RESOURCE_NOT_FOUND");
+
+    if (!reply.parentPostId) {
+      throw new AppError("VALIDATION_FAILED", {
+        details: [
+          {
+            field: "id",
+            code: "NOT_A_REPLY",
+            // The database refuses this too. Saying it here means the person
+            // is told why rather than shown a constraint naming a table.
+            message: "A question cannot be endorsed — endorse the reply that answers it.",
+          },
+        ],
+      });
+    }
+
+    await this.prisma.asSystem((db) =>
+      db.discussionPost.update({
+        where: { id: replyId },
+        data: endorsed
+          ? { endorsedBy: actor.userId, endorsedAt: new Date() }
+          : { endorsedBy: null, endorsedAt: null },
+      }),
+    );
+
+    await this.audit.record({
+      action: endorsed ? "discussion.endorse" : "discussion.unendorse",
+      entityType: "DiscussionPost",
+      entityId: replyId,
+      after: { endorsed },
+    });
+
+    return { id: replyId, endorsed };
+  }
+
+  /**
+   * FR-DSC — this question is settled.
+   *
+   * Without it there is no answer to "which questions has nobody dealt with",
+   * which is the one thing a teacher opens a forum to find out. A question with
+   * forty replies and no resolution is indistinguishable from one nobody has
+   * touched, and the busiest threads are exactly where a teacher stops looking.
+   */
+  async resolve(questionId: string, resolved: boolean) {
+    const actor = await this.actor();
+
+    const question = await this.prisma.scoped.discussionPost.findFirst({
+      where: { id: questionId, deletedAt: null },
+      select: { id: true, parentPostId: true },
+    });
+    if (!question) throw new AppError("RESOURCE_NOT_FOUND");
+
+    if (question.parentPostId) {
+      throw new AppError("VALIDATION_FAILED", {
+        details: [
+          {
+            field: "id",
+            code: "NOT_A_QUESTION",
+            message: "A reply cannot be resolved — resolve the question it belongs to.",
+          },
+        ],
+      });
+    }
+
+    await this.prisma.asSystem((db) =>
+      db.discussionPost.update({
+        where: { id: questionId },
+        data: resolved
+          ? { resolvedBy: actor.userId, resolvedAt: new Date() }
+          : { resolvedBy: null, resolvedAt: null },
+      }),
+    );
+
+    await this.audit.record({
+      action: resolved ? "discussion.resolve" : "discussion.reopen",
+      entityType: "DiscussionPost",
+      entityId: questionId,
+      after: { resolved },
+    });
+
+    return { id: questionId, resolved };
+  }
+
 }

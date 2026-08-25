@@ -521,6 +521,17 @@ export class AssignmentService {
         marksAvailable: Number(a.marksAvailable),
         publicationStatus: a.publicationStatus,
         gradesReleased: a.gradesReleased,
+        /*
+         * THE RULES THE TEACHER SET, READ BACK.
+         *
+         * These are stored correctly and were returned to nobody, so a teacher
+         * who allowed three attempts and a quarter of an hour's grace had no
+         * way to confirm either without opening the database. A setting you
+         * cannot read back is a setting you end up setting twice.
+         */
+        resubmissionPolicy: a.resubmissionPolicy,
+        maxAttempts: a.maxAttempts,
+        graceMinutes: a.graceMinutes,
         submittedCount,
         gradedCount: graded.get(a.id) ?? 0,
         // The number that decides what a teacher does next, so it is computed

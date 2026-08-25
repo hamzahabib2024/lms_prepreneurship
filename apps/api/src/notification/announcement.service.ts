@@ -11,7 +11,7 @@ import {
 } from "../rbac/ownership";
 
 export interface CreateAnnouncementInput {
-  audience: "INSTITUTE" | "SECTION" | "SECTION_SUBJECT";
+  audience: "INSTITUTE" | "SECTION" | "SECTION_SUBJECT" | "TEACHERS" | "STAFF" | "PUBLIC_ONLY";
   sectionId?: string;
   sectionSubjectId?: string;
   title: string;
@@ -82,8 +82,22 @@ export class AnnouncementService {
 
     this.assertTargetMatchesAudience(input);
 
-    // The scope check the predicate cannot make.
-    if (input.audience === "INSTITUTE") assertInstituteWide();
+    /*
+     * The scope check the predicate cannot make.
+     *
+     * TEACHERS, STAFF and PUBLIC_ONLY all address the whole Institute rather
+     * than a class of it, so they need the same authority INSTITUTE does — a
+     * teacher may announce to their own class and must not be able to announce
+     * to every teacher, or to the front page.
+     */
+    if (
+      input.audience === "INSTITUTE" ||
+      input.audience === "TEACHERS" ||
+      input.audience === "STAFF" ||
+      input.audience === "PUBLIC_ONLY"
+    ) {
+      assertInstituteWide();
+    }
     if (input.audience === "SECTION") assertOwnsSection(input.sectionId as string);
     if (input.audience === "SECTION_SUBJECT") {
       assertOwnsSectionSubject(input.sectionSubjectId as string);
@@ -103,7 +117,9 @@ export class AnnouncementService {
         // Belt and braces with the schema and the CHECK constraint. Three
         // places agree that a sectional notice is not public, and the cheapest
         // one to get wrong later is the schema.
-        isPublic: (input.isPublic ?? false) && input.audience === "INSTITUTE",
+        isPublic:
+          input.audience === "PUBLIC_ONLY" ||
+          ((input.isPublic ?? false) && input.audience === "INSTITUTE"),
         expiresAt: input.expiresAt ?? null,
         authorUserId: actor.userId,
       },
@@ -237,6 +253,39 @@ export class AnnouncementService {
       if (input.audience === "INSTITUTE") {
         const users = await db.user.findMany({
           where: { status: "ACTIVE", deletedAt: null },
+          select: { id: true },
+        });
+        return users.map((u: { id: string }) => u.id);
+      }
+
+      /*
+       * NOBODY. A public-only notice is written for visitors, and its whole
+       * point is that it does not land in the inbox of everyone who already
+       * enrolled. Returning an empty list here is what makes that true —
+       * the scope predicate keeps it out of their announcement LIST, and this
+       * keeps it out of their notifications.
+       */
+      if (input.audience === "PUBLIC_ONLY") return [];
+
+      /*
+       * The staff audiences, resolved by ROLE rather than by enrolment.
+       *
+       * TEACHERS is the teaching staff. STAFF is them plus the office, which
+       * is every active account that is not solely a student — expressed as
+       * "holds one of these roles" rather than "is not a student", so that an
+       * account with no role at all is left out rather than swept in.
+       */
+      if (input.audience === "TEACHERS" || input.audience === "STAFF") {
+        const roles =
+          input.audience === "TEACHERS"
+            ? ["teacher"]
+            : ["teacher", "admin", "super_admin"];
+        const users = await db.user.findMany({
+          where: {
+            status: "ACTIVE",
+            deletedAt: null,
+            roles: { some: { role: { key: { in: roles } } } },
+          },
           select: { id: true },
         });
         return users.map((u: { id: string }) => u.id);

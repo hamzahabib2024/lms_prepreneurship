@@ -1,5 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Skeleton } from "../components/Ui";
+import { MonthView, WeekView } from "../components/CalendarViews";
+import { HowItWorks } from "../components/HowItWorks";
+import { Icon } from "../components/Icon";
 import { ApiError, api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 
@@ -71,18 +74,128 @@ export function TimetablePage() {
   const canGenerate = hasRole("super_admin", "admin", "teacher");
   const [timetable, setTimetable] = useState<Timetable | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [weeks, setWeeks] = useState(2);
+
+  /**
+   * WHICH SHAPE OF THE SAME WEEK — agenda, week or month.
+   *
+   * The agenda is the default and stays the default. It answers "what is
+   * next", which is what almost everybody opens a timetable for, and it is the
+   * only one of the three that is genuinely usable on a phone. Month is for
+   * the other question — how does this look — which a list of twenty-eight
+   * days cannot answer.
+   *
+   * Remembered, because somebody who prefers the month view prefers it every
+   * time, and making them choose again each visit is a small daily tax.
+   */
+  const [view, setView] = useState<"agenda" | "week" | "month">(() => {
+    try {
+      const saved = window.localStorage.getItem("lms.timetable.view");
+      return saved === "week" || saved === "month" ? saved : "agenda";
+    } catch {
+      return "agenda";
+    }
+  });
+
+  /**
+   * The period being looked at, as a date inside it. Not a range: a range has
+   * to be recomputed on every move and the two ends drift apart. One anchor
+   * plus the view decides both ends, every time, the same way.
+   */
+  const [anchor, setAnchor] = useState(() => new Date());
+
+  const range = useMemo(() => {
+    const start = new Date(anchor);
+    const end = new Date(anchor);
+    if (view === "month") {
+      start.setDate(1);
+      // The grid shows the days either side of the month, so the data has to
+      // cover them or those cells lie about being empty.
+      start.setDate(start.getDate() - 7);
+      end.setMonth(end.getMonth() + 1, 0);
+      end.setDate(end.getDate() + 7);
+    } else if (view === "week") {
+      const lead = (start.getDay() + 6) % 7;
+      start.setDate(start.getDate() - lead);
+      end.setTime(start.getTime());
+      end.setDate(start.getDate() + 6);
+    } else {
+      // Agenda looks FORWARD from today rather than at a calendar period:
+      // "the next fortnight" is what somebody scanning a list wants, and a
+      // list that starts on Monday of a week half gone is mostly history.
+      end.setDate(end.getDate() + 14);
+    }
+    return { from: start.toISOString().slice(0, 10), to: end.toISOString().slice(0, 10) };
+  }, [anchor, view]);
 
   const load = useCallback(() => {
-    const from = new Date().toISOString().slice(0, 10);
-    const to = new Date(Date.now() + weeks * 7 * 86_400_000).toISOString().slice(0, 10);
     api
-      .get<Timetable>(`/timetable/me?from=${from}&to=${to}`)
+      .get<Timetable>(`/timetable/me?from=${range.from}&to=${range.to}`)
       .then(setTimetable)
       .catch((e) => setError(e instanceof ApiError ? e.message : "Could not load the timetable."));
-  }, [weeks]);
+  }, [range.from, range.to]);
 
   useEffect(load, [load]);
+
+  const chooseView = (next: "agenda" | "week" | "month") => {
+    setView(next);
+    /*
+     * LET GO OF THE RADIO.
+     *
+     * A radio group owns the arrow keys — that is correct and expected, and it
+     * is also the opposite of what the hint under the heading promises, which
+     * is that the arrows page through the calendar. While the switcher keeps
+     * focus they change the VIEW instead, so somebody follows the instruction
+     * and watches the screen do something else. Releasing focus after the
+     * choice makes the promise true; a keyboard user can still tab back to the
+     * switcher and use the arrows there in the ordinary way.
+     */
+    (document.activeElement as HTMLElement | null)?.blur?.();
+    try {
+      window.localStorage.setItem("lms.timetable.view", next);
+    } catch {
+      // The choice still holds for this visit; only the memory is lost.
+    }
+  };
+
+  const move = useCallback(
+    (direction: -1 | 1) => {
+      setAnchor((current) => {
+        const d = new Date(current);
+        if (view === "month") d.setMonth(d.getMonth() + direction);
+        else d.setDate(d.getDate() + direction * (view === "week" ? 7 : 14));
+        return d;
+      });
+    },
+    [view],
+  );
+
+  /*
+   * KEYBOARD, because a calendar is paged through repeatedly. Bound only when
+   * nothing is being typed into — a shortcut that fires inside the class-title
+   * box of the generate panel would page the calendar mid-word.
+   */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === "ArrowLeft") move(-1);
+      else if (e.key === "ArrowRight") move(1);
+      else if (e.key === "t" || e.key === "T") setAnchor(new Date());
+      else if (e.key === "m" || e.key === "M") chooseView("month");
+      else if (e.key === "w" || e.key === "W") chooseView("week");
+      else if (e.key === "a" || e.key === "A") chooseView("agenda");
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [move]);
+
+  const periodLabel =
+    view === "month"
+      ? anchor.toLocaleDateString(undefined, { month: "long", year: "numeric" })
+      : view === "week"
+        ? `Week of ${new Date(range.from).toLocaleDateString(undefined, { day: "numeric", month: "long" })}`
+        : "The next fortnight";
 
   return (
     <>
@@ -91,18 +204,52 @@ export function TimetablePage() {
           <h1>Timetable</h1>
           <p className="muted small">Your classes. Times are local.</p>
         </div>
-        <span className="row-actions">
-          {[1, 2, 4].map((w) => (
-            <button
-              key={w}
-              className={weeks === w ? "btn btn-primary" : "btn btn-quiet"}
-              onClick={() => setWeeks(w)}
-            >
-              {w} week{w === 1 ? "" : "s"}
-            </button>
-          ))}
-        </span>
+        <div className="row-actions cal-controls">
+          <button type="button" className="btn btn-sm" onClick={() => move(-1)} aria-label="Previous">
+            <Icon name="chevron-left" />
+          </button>
+          <button type="button" className="btn btn-sm" onClick={() => setAnchor(new Date())}>
+            Today
+          </button>
+          <button type="button" className="btn btn-sm" onClick={() => move(1)} aria-label="Next">
+            <Icon name="chevron-right" />
+          </button>
+
+          {/* Three shapes of the same information. A radio group, so a screen
+              reader announces one choice of three. */}
+          <fieldset className="cal-views">
+            <legend className="visually-hidden">How to show the timetable</legend>
+            {(["agenda", "week", "month"] as const).map((v) => (
+              <label key={v} className={view === v ? "cal-view is-on" : "cal-view"}>
+                <input
+                  type="radio"
+                  name="cal-view"
+                  checked={view === v}
+                  onChange={() => chooseView(v)}
+                />
+                {v === "agenda" ? "List" : v === "week" ? "Week" : "Month"}
+              </label>
+            ))}
+          </fieldset>
+        </div>
       </header>
+
+      <p className="muted small cal-period">
+        {periodLabel} · arrow keys move, T for today
+      </p>
+
+      <HowItWorks
+        id="timetable"
+        title="Reading your timetable"
+        intro="Three shapes of the same information. Start with whichever answers your question."
+        steps={[
+          { icon: "clock", title: "What is next", body: "Stated at the top in words, before any grid. Most people came for this one fact." },
+          { icon: "calendar", title: "List, week or month", body: "The list is best on a phone. The month shows the shape of a period — three assessments in one week, for instance." },
+          { icon: "chevron-right", title: "Move around", body: "The arrows page back and forth, Today returns. The arrow keys and T do the same." },
+          { icon: "play", title: "Join a class", body: "For an online class a Join button appears shortly before it starts." },
+        ]}
+        note="Times are shown in your own timezone, not the Institute's. If a class looks an hour out, check your device clock before reporting it."
+      />
 
       {error && (
         <div className="alert alert-error" role="alert">
@@ -127,14 +274,55 @@ export function TimetablePage() {
 
       {canGenerate && <GeneratePanel onGenerated={load} />}
 
+      {/*
+        THE EMPTY CASE IS PER VIEW, and it used to be checked before them.
+        That meant a free week rendered as a sentence instead of a calendar:
+        the grid never got the chance to draw, so paging into a quiet week
+        looked like the page had lost its timetable.
+        A LIST with nothing in it is genuinely nothing to show, so it still
+        says so in words. A GRID with nothing in it is the answer — an empty
+        month IS the shape of that month — so it draws, with the sentence
+        above it.
+      */}
       {!timetable ? (
         <Skeleton lines={2} />
-      ) : timetable.days.length === 0 ? (
+      ) : timetable.days.length === 0 && view === "agenda" ? (
         <div className="card">
           {/* In words. An empty page is ambiguous between "no classes" and
               "something failed". */}
           <p>{timetable.message ?? "No classes scheduled in this period."}</p>
         </div>
+      ) : view === "month" ? (
+        <section className="card cal-card">
+          {timetable.days.length === 0 && (
+            <p className="muted small">No classes scheduled in this month.</p>
+          )}
+          <MonthView
+            anchor={anchor}
+            days={timetable.days}
+            /* Choosing a day drops into the list for it — the month answers
+               "how does this look", and the moment somebody wants detail they
+               want the view that carries detail. */
+            onPickDay={(date) => {
+              setAnchor(new Date(`${date}T12:00:00`));
+              chooseView("agenda");
+            }}
+          />
+        </section>
+      ) : view === "week" ? (
+        <section className="card cal-card">
+          {timetable.days.length === 0 && (
+            <p className="muted small">No classes scheduled in this week.</p>
+          )}
+          <WeekView
+            anchor={anchor}
+            days={timetable.days}
+            onPickDay={(date) => {
+              setAnchor(new Date(`${date}T12:00:00`));
+              chooseView("agenda");
+            }}
+          />
+        </section>
       ) : (
         timetable.days.map((d) => (
           <section className="card" key={d.date}>

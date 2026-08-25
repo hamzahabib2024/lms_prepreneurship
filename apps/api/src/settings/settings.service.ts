@@ -50,6 +50,37 @@ export class SettingsService {
 
   /** All stored overrides. Small — one row per deliberate change. */
   private cache: StoredSetting[] | null = null;
+  /** When this process last read them. Null whenever `cache` is null. */
+  private cachedAt = 0;
+
+  /**
+   * HOW LONG A SETTING MAY BE WRONG ON A NODE THAT DID NOT CHANGE IT.
+   *
+   * ─────────────────────────────────────────────────────────────────────────
+   * THE BUG THIS CLOSES, AND IT ONLY APPEARS BEHIND A LOAD BALANCER.
+   *
+   * The cache was invalidated on write and never otherwise. On ONE process
+   * that is exactly right: the only way a setting changes is through this
+   * service, which clears its own cache immediately.
+   *
+   * Behind a load balancer it is silently, permanently wrong. A Super Admin
+   * changes the attendance threshold; the node that served the request clears
+   * its cache; every OTHER node keeps the old value until it is restarted.
+   * Not for fifteen minutes — FOREVER. Half the Institute is then warned at
+   * 75% and half at 70%, the screen shows the new number, and the audit log
+   * says it changed. There is nothing to see and nothing to blame.
+   *
+   * A time-to-live turns "forever" into "within a minute", with no Redis and
+   * no coordination: each node re-reads a table of a dozen rows once a minute.
+   * The immediate invalidation on write is kept, so the node that made the
+   * change is still correct instantly.
+   *
+   * IT IS NOT A SUBSTITUTE FOR SHARED STATE, and the deployment notes say so.
+   * It is the difference between a wrong value that heals and one that does
+   * not.
+   * ─────────────────────────────────────────────────────────────────────────
+   */
+  private readonly ttlMs = Number(process.env["SETTINGS_CACHE_TTL_MS"] ?? 60_000);
 
   constructor(
     private readonly prisma: PrismaService,
@@ -57,18 +88,20 @@ export class SettingsService {
   ) {}
 
   private async stored(): Promise<StoredSetting[]> {
-    if (this.cache) return this.cache;
+    if (this.cache && Date.now() - this.cachedAt < this.ttlMs) return this.cache;
     const rows = await this.prisma.asSystem((db) =>
       db.setting.findMany({
         select: { key: true, value: true, scopeType: true, scopeId: true },
       }),
     );
     this.cache = rows as StoredSetting[];
+    this.cachedAt = Date.now();
     return this.cache;
   }
 
   private invalidate(): void {
     this.cache = null;
+    this.cachedAt = 0;
   }
 
   /**

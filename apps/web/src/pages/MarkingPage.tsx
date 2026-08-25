@@ -4,6 +4,7 @@ import { ApiError, api } from "../api/client";
 import { EmptyState, Skeleton, SkeletonCards } from "../components/Ui";
 import { AtRiskPanel } from "../components/AtRiskPanel";
 import { HowItWorks } from "../components/HowItWorks";
+import { Icon } from "../components/Icon";
 
 /**
  * A teacher's marking queue — SRS §13.6, FR-TCH-018.
@@ -158,6 +159,16 @@ function SectionAssignments({ section }: { section: TeacherSection }) {
       <h2>
         {section.subject.name} <span className="muted small">{section.section.code}</span>
       </h2>
+
+      {/* FR-CRT — the end-of-term act, reached from the class it belongs to.
+          Kept out of the sidebar because it is done once a term, and a
+          destination used twice a year buries the ones used daily. */}
+      <div className="row-actions">
+        <Link className="btn btn-quiet btn-sm" to={`/completion/${section.sectionSubjectId}`}>
+          <Icon name="award" />
+          Who has finished
+        </Link>
+      </div>
 
       {items === null ? (
         <Skeleton lines={2} />

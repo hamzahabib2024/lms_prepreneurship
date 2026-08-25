@@ -31,6 +31,16 @@ interface Post {
   removedByModerator: boolean;
   author: string | null;
   authorUserId: string | null;
+  /** Asked or answered without the class seeing who. Staff always see. */
+  isAnonymous: boolean;
+  /** Whether THIS reader may see who wrote it — the server decides, not us. */
+  identityVisible: boolean;
+  /** A reply a teacher marked as the answer worth reading. */
+  endorsedAt: string | null;
+  endorsedBy: string | null;
+  /** A question somebody marked settled. */
+  resolvedAt: string | null;
+  resolvedBy: string | null;
   isPinned: boolean;
   isLocked: boolean;
   editedAt: string | null;
@@ -178,7 +188,7 @@ export function DiscussionPage() {
                   <li key={t.id}>
                     <button className="chat-list-row" onClick={() => void openThread(t.id)}>
                       <span className="chat-avatar" aria-hidden="true">
-                        {(t.removed ? "?" : (t.author ?? "?")).trim().charAt(0).toUpperCase()}
+                        {(t.removed || (t.isAnonymous && !t.identityVisible) ? "?" : (t.author ?? "?")).trim().charAt(0).toUpperCase()}
                       </span>
                       <span className="chat-list-text">
                         <span className="chat-list-title">
@@ -186,7 +196,7 @@ export function DiscussionPage() {
                           {t.removed ? "Question removed" : (t.title ?? "Untitled")}
                         </span>
                         <span className="muted small">
-                          {t.removed ? "—" : (t.author ?? "Unknown")} ·{" "}
+                          {t.removed ? "—" : t.isAnonymous && !t.identityVisible ? "Anonymous" : t.isAnonymous ? `Anonymous — ${t.author ?? "Unknown"}` : (t.author ?? "Unknown")} ·{" "}
                           {new Date(t.createdAt).toLocaleDateString(undefined, {
                             day: "numeric",
                             month: "short",
@@ -327,6 +337,7 @@ function ThreadView({
   onError: (m: string) => void;
 }) {
   const [reply, setReply] = useState("");
+  const [anon, setAnon] = useState(false);
   const [busy, setBusy] = useState(false);
   const endRef = useRef<HTMLDivElement | null>(null);
 
@@ -371,10 +382,27 @@ function ThreadView({
               : `${thread.replies.length} ${thread.replies.length === 1 ? "answer" : "answers"}`}
             {thread.isPinned && " · Pinned"}
             {thread.isLocked && " · Closed"}
+            {thread.resolvedAt && ` · Answered${thread.resolvedBy ? ` by ${thread.resolvedBy}` : ""}`}
           </p>
         </div>
         {isTeacher && !thread.removed && (
           <span className="row-actions">
+            {/*
+              WHICH QUESTIONS HAS NOBODY DEALT WITH is the one thing a teacher
+              opens a forum to find out, and it is unanswerable without a way
+              to say a question is settled. A thread with forty replies and no
+              resolution looks exactly like one nobody has touched — and the
+              busiest threads are where a teacher stops looking.
+            */}
+            <button
+              className={thread.resolvedAt ? "btn btn-quiet btn-sm" : "btn btn-sm"}
+              disabled={busy}
+              onClick={() =>
+                act(api.post(`/discussions/${thread.id}/resolve`, { on: !thread.resolvedAt }))
+              }
+            >
+              {thread.resolvedAt ? "Reopen" : "Mark answered"}
+            </button>
             <button
               className="btn btn-quiet btn-sm"
               disabled={busy}
@@ -433,6 +461,23 @@ function ThreadView({
         /* PINNED AT THE BOTTOM, which is where a reply box belongs and where
            every person using this has been trained to look for one. */
         <div className="chat-composer">
+          {/*
+            ASK WITHOUT THE CLASS SEEING WHO.
+            The reason a course forum goes quiet is not untidiness — it is
+            students afraid of looking ignorant in front of people they sit
+            next to. This is the single change with the largest effect on
+            whether it is used at all, and it says plainly that staff can
+            still see, because a promise of anonymity that turns out to be
+            partial is worse than none.
+          */}
+          <label className="chat-anon" title="Your teacher can still see who you are">
+            <input
+              type="checkbox"
+              checked={anon}
+              onChange={(e) => setAnon(e.target.checked)}
+            />
+            Hide my name
+          </label>
           <textarea
             rows={1}
             value={reply}
@@ -444,7 +489,7 @@ function ThreadView({
               // answer with paragraphs is still possible.
               if (e.key === "Enter" && !e.shiftKey && reply.trim().length >= 2) {
                 e.preventDefault();
-                act(api.post(`/discussions/${thread.id}/replies`, { body: reply }));
+                act(api.post(`/discussions/${thread.id}/replies`, { body: reply, isAnonymous: anon }));
                 setReply("");
               }
             }}
@@ -454,7 +499,7 @@ function ThreadView({
             disabled={busy || reply.trim().length < 2}
             aria-label="Send"
             onClick={() => {
-              act(api.post(`/discussions/${thread.id}/replies`, { body: reply }));
+              act(api.post(`/discussions/${thread.id}/replies`, { body: reply, isAnonymous: anon }));
               setReply("");
             }}
           >
@@ -541,6 +586,25 @@ function Bubble({
       <div className={isQuestion ? "chat-bubble is-question" : "chat-bubble"}>
         {!mine && <span className="chat-author">{p.author ?? "Unknown"}</span>}
 
+        {/*
+          THE ANSWER WORTH READING, marked as such.
+
+          The reason a forum beats a chat log is that somebody arriving with
+          the same question next term reads ONE good answer instead of sifting
+          forty replies. Nothing in a thread says which reply that is, and the
+          loudest is not reliably the best — so a teacher says so, and it is
+          marked wherever the reply appears.
+
+          A TEACHER, NOT A VOTE: a student upvote measures agreement among
+          people who do not yet know the answer.
+        */}
+        {p.endorsedAt && !isQuestion && (
+          <span className="chat-endorsed">
+            <Icon name="tick" />
+            Answer{p.endorsedBy ? ` — endorsed by ${p.endorsedBy}` : ""}
+          </span>
+        )}
+
         {editing === null ? (
           <p className="chat-text">{p.body}</p>
         ) : (
@@ -567,6 +631,16 @@ function Bubble({
               </button>
             </span>
           </>
+        )}
+
+        {isTeacher && !isQuestion && !p.removed && (
+          <button
+            className="btn btn-quiet btn-sm chat-endorse-btn"
+            disabled={busy}
+            onClick={() => onAct(api.post(`/discussions/${p.id}/endorse`, { on: !p.endorsedAt }))}
+          >
+            {p.endorsedAt ? "Remove endorsement" : "Mark as the answer"}
+          </button>
         )}
 
         <span className="chat-meta">
