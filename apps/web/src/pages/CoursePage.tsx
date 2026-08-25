@@ -8,6 +8,7 @@ import { Icon } from "../components/Icon";
 import { LectureFolderPicker } from "../components/LectureFolderPicker";
 import { LectureUpload } from "../components/LectureUpload";
 import { LectureThumb } from "../components/LectureThumb";
+import { ClassRoom } from "../components/ClassRoom";
 
 interface Lecture {
   id: string;
@@ -25,6 +26,9 @@ interface CourseLectures {
   subject: { id: string; code: string; name: string };
   section: { code: string; name: string };
   lectureFolderRef: string | null;
+  /** FR-LIV — the room this class meets in, week after week. */
+  meetingUrl: string | null;
+  meetingNote: string | null;
   canManage: boolean;
   /** Whether these recordings actually come from the store configured now. */
   storage?: { provider: string; live: boolean; mismatchedSources: string[] };
@@ -188,6 +192,22 @@ export function CoursePage() {
           <p>{blocked}</p>
         </div>
       )}
+
+      {/*
+        THE ROOM, ABOVE THE RECORDINGS — FR-LIV.
+
+        Deliberately the first thing on the page. A recording is what you watch
+        when you missed the class; the link is how you attend it. Putting the
+        archive above the door would be the wrong way round for the one reader
+        who is late and looking for a way in right now.
+      */}
+      <ClassRoom
+        sectionSubjectId={sectionSubjectId}
+        meetingUrl={data.meetingUrl}
+        meetingNote={data.meetingNote}
+        canManage={data.canManage}
+        onSaved={() => void load()}
+      />
 
       {/* Staff only, and it says where the recordings come from. Somebody
           wondering why nothing appears needs to see that no folder is set

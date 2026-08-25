@@ -361,6 +361,8 @@ export class ContentService {
       select: {
         id: true,
         lectureFolderRef: true,
+        meetingUrl: true,
+        meetingNote: true,
         subject: { select: { id: true, code: true, name: true } },
         section: {
           select: {
@@ -427,6 +429,15 @@ export class ContentService {
           // which is all a student could act on anyway.
           folderConnected: o.lectureFolderRef !== null,
           lectureFolderRef: isStudent ? null : o.lectureFolderRef,
+          /*
+           * THE CLASS'S ROOM, and the one field here a STUDENT needs more than
+           * staff do. Unlike the folder reference above it is not withheld:
+           * the whole point is that a student clicks it. It reaches only
+           * people the scope predicate already lets into this class, and it is
+           * in no public projection.
+           */
+          meetingUrl: o.meetingUrl,
+          meetingNote: o.meetingNote,
           latestRecordingOn: t.latest,
           canManage: !isStudent,
         };
@@ -455,6 +466,8 @@ export class ContentService {
       select: {
         id: true,
         lectureFolderRef: true,
+        meetingUrl: true,
+        meetingNote: true,
         subject: { select: { id: true, code: true, name: true } },
         section: { select: { code: true, name: true } },
       },
@@ -522,6 +535,9 @@ export class ContentService {
       section: offering.section,
       // Staff only: a student has no business knowing where the files live.
       lectureFolderRef: isStudent ? null : offering.lectureFolderRef,
+      // The room, for everybody in the class — see the note on the list above.
+      meetingUrl: offering.meetingUrl,
+      meetingNote: offering.meetingNote,
       canManage: !isStudent,
       storage: {
         provider: configured,
@@ -1056,4 +1072,71 @@ export class ContentService {
       .asSystem((db) => db.playbackTicket.deleteMany({ where: { expiresAt: { lt: new Date() } } }))
       .catch(() => undefined);
   }
+
+  /**
+   * THE CLASS'S STANDING ROOM — FR-LIV.
+   *
+   * One link for the subject AS TAUGHT TO THIS GROUP, used every week. Not the
+   * per-session link the System creates through a provider: this is the room
+   * the Institute already has, pasted in once at the start of term.
+   *
+   * OPAQUE, PER ARC-025 — stored and shown, never parsed. It is not required
+   * to be a Google link; an institute on Zoom or Teams pastes theirs and
+   * everything works. The one thing checked is that it is https, and that is
+   * not tidiness: this string is rendered into an anchor somebody clicks, and
+   * a `javascript:` URL in that position is a stored cross-site scripting hole
+   * while an http one hands the room's address to anybody on the same wifi.
+   */
+  async setMeetingLink(sectionSubjectId: string, url: string, note: string) {
+    // findFirst on the SCOPED client — a teacher naming a class they do not
+    // teach gets nothing back, so the check and the authorisation are one query.
+    const offering = await this.prisma.scoped.sectionSubject.findFirst({
+      where: { id: sectionSubjectId, deletedAt: null },
+      select: { id: true, meetingUrl: true },
+    });
+    if (!offering) throw new AppError("RESOURCE_NOT_FOUND");
+
+    // An empty string is a decision to REMOVE it, which is why the field is
+    // not optional: undefined would be indistinguishable from a caller that
+    // forgot it, and the class would keep a link nobody meant to keep.
+    const value = url.trim() === "" ? null : url.trim();
+    const noteValue = value === null ? null : note.trim() === "" ? null : note.trim();
+
+    if (value !== null && !value.startsWith("https://")) {
+      throw new AppError("VALIDATION_FAILED", {
+        details: [
+          {
+            field: "meetingUrl",
+            code: "NOT_HTTPS",
+            message:
+              "A meeting link must begin with https://. Paste the whole address from Google " +
+              "Meet, Zoom or Teams — including the https:// at the front.",
+          },
+        ],
+      });
+    }
+
+    const updated = await this.prisma.scoped.sectionSubject.update({
+      where: { id: sectionSubjectId },
+      data: { meetingUrl: value, meetingNote: noteValue },
+      select: { id: true, meetingUrl: true, meetingNote: true },
+    });
+
+    await this.audit.record({
+      action: value ? "class_meeting_link.set" : "class_meeting_link.cleared",
+      entityType: "SectionSubject",
+      entityId: sectionSubjectId,
+      /*
+       * The LINK ITSELF is recorded, and deliberately. It is a key to a room:
+       * "who changed the address students were sent to, and to what" is
+       * precisely the question the audit log exists to answer, and a log
+       * saying only "the link changed" answers none of it.
+       */
+      before: { meetingUrl: offering.meetingUrl },
+      after: { meetingUrl: value },
+    });
+
+    return updated;
+  }
+
 }

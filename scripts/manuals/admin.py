@@ -20,6 +20,7 @@ table(doc, ["Section", "What it covers"], [
     ["People", "Accounts, roles and suspensions"],
     ["Courses & fees", "What is taught and what it costs"],
     ["Sections & structure", "Classes, terms and intakes"],
+    ["Online classes", "The meeting link a class joins every week"],
     ["Fees & payments", "Charges, confirming payments, receipts"],
     ["Certificates", "Issuing, verifying, revoking"],
     ["Announcements", "Who a notice reaches, including the public page"],
@@ -87,6 +88,19 @@ screen(doc, "Sections and Structure",
         "Assign a teacher."],
        "A section with no teacher is invisible to every teacher, so nobody takes the register. "
        "It is the single most common thing to forget.")
+
+screen(doc, "The meeting link for an online class",
+       "Where a class is taught online, the subject inside the section carries the link to its "
+       "meeting room — one link, used every week. Teachers set their own; you can set any, which "
+       "matters when a teacher is away or a class is covered.",
+       ["Open the section and choose the subject within it. The link belongs to the subject "
+        "inside the class, not to the course — two sections of the same course meet in two "
+        "different rooms.",
+        "Paste the whole address, including the https:// at the front.",
+        "Add a note if students need one: a passcode, or when to join.",
+        "Clear the box to remove it."],
+       "It must begin with https:// and is refused otherwise. Set it once and it can be changed "
+       "at any point in the term — you do not have to have it ready before the course opens.")
 
 screen(doc, "Fees and payments",
        "What every student owes, what they have paid, and the receipts.",

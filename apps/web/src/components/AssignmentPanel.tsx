@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, api } from "../api/client";
 import { VoiceRecorder, VoiceNote, clock, type Recording } from "./VoiceRecorder";
 import { Icon } from "./Icon";
+import { BriefAttachments } from "./BriefAttachments";
 
 /**
  * Assignments for one subject — SRS §13.5, FR-ASG-011/013/014.
@@ -23,6 +24,8 @@ interface StudentAssignment {
   /** FR-ASG — whether the teacher also recorded the brief. */
   hasBriefAudio?: boolean;
   briefAudioSeconds?: number | null;
+  /** FR-ASG — how many files came with the brief. The names arrive on open. */
+  attachmentCount?: number;
   marksAvailable: number;
   opensAt: string;
   dueAt: string;
@@ -143,6 +146,17 @@ function AssignmentRow({
           {/* The teacher's own voice, where they recorded one. Under the
               written brief, because the written brief is the record. */}
           {a.hasBriefAudio && <BriefAudio assignmentId={a.id} seconds={a.briefAudioSeconds} />}
+          {/*
+            THE FILES THE TASK IS ABOUT — the logo to work from, the passage
+            to read. Rendered only where the list says there are some, so an
+            assignment without them costs no request: the count comes down
+            with the assignment, and the names only when it is opened.
+
+            Above the submit panel deliberately. A student who has to scroll
+            PAST the box they hand work into to find the file they were meant
+            to start from has been given the two things in the wrong order.
+          */}
+          {(a.attachmentCount ?? 0) > 0 && <BriefAttachments assignmentId={a.id} />}
           <SubmitPanel assignment={a} onChanged={onChanged} />
         </div>
       )}

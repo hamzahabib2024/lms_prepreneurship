@@ -67,3 +67,7 @@ __pycache__/
 /storage/
 /apps/api/storage/
 backups/
+
+# Word's lock files. They appear beside any .docx somebody has open and
+# vanish when they close it, so they are never something to commit.
+~$*

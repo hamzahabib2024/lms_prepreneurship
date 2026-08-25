@@ -18,6 +18,7 @@ import { AppError } from "@lms/shared";
 import { AssignmentService } from "./assignment.service";
 import { SubmissionFileService } from "./submission-file.service";
 import { VoiceBriefService, MAX_BRIEF_BYTES } from "./voice-brief.service";
+import { AttachmentService } from "./attachment.service";
 import { zodBody } from "../common/zod-validation.pipe";
 import { RequirePermission } from "../rbac/permissions.guard";
 
@@ -84,6 +85,7 @@ export class AssessmentController {
     private readonly assignments: AssignmentService,
     private readonly files: SubmissionFileService,
     private readonly voiceBrief: VoiceBriefService,
+    private readonly attachments: AttachmentService,
   ) {}
 
   @RequirePermission("assignment", "create")
@@ -334,4 +336,72 @@ export class AssessmentController {
   release(@Param("id") id: string) {
     return this.assignments.releaseGrades(id);
   }
+
+  // ───────────────────────────────────── files that come with the brief ──
+
+  /**
+   * FR-ASG — attach the thing the task is about.
+   *
+   * The logo to work from, the passage to read, the trial balance. Written
+   * instructions say what to do and a spoken brief says it in the teacher's
+   * own voice; this is what most briefs actually need alongside both.
+   *
+   * VALIDATED LIKE A STUDENT'S SUBMISSION, against the same institute policy.
+   * The FILE is the threat model, not the person who uploaded it.
+   */
+  @RequirePermission("assignment", "update")
+  @Post("assignments/:id/attachments")
+  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: UPLOAD_HARD_LIMIT_BYTES, files: 1 } }))
+  addAttachment(@Param("id") id: string, @UploadedFile() file?: Express.Multer.File) {
+    return this.attachments.upload(
+      id,
+      file
+        ? {
+            originalname: file.originalname,
+            buffer: file.buffer,
+            size: file.size,
+            mimetype: file.mimetype,
+          }
+        : undefined,
+    );
+  }
+
+  /** What is attached — for the teacher editing it and the student reading it. */
+  @RequirePermission("assignment", "read")
+  @Get("assignments/:id/attachments")
+  listAttachments(@Param("id") id: string) {
+    return this.attachments.list(id);
+  }
+
+  /**
+   * The file itself, as a download rather than inline.
+   *
+   * A teacher may attach anything the policy allows, and an HTML or SVG
+   * rendered inline would execute in the System's origin and read the
+   * reader's session — the same reason the submission download forces it.
+   */
+  @RequirePermission("assignment", "read")
+  @Get("assignment-attachments/:attachmentId/download")
+  @Header("X-Content-Type-Options", "nosniff")
+  async downloadAttachment(
+    @Param("attachmentId") attachmentId: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    const file = await this.attachments.download(attachmentId);
+    res.setHeader("Content-Type", file.contentType);
+    res.setHeader("Content-Length", String(file.sizeBytes));
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename*=UTF-8''${encodeURIComponent(file.filename)}`,
+    );
+    res.end(file.body);
+  }
+
+  @RequirePermission("assignment", "update")
+  @Delete("assignment-attachments/:attachmentId")
+  @HttpCode(200)
+  removeAttachment(@Param("attachmentId") attachmentId: string) {
+    return this.attachments.remove(attachmentId);
+  }
+
 }

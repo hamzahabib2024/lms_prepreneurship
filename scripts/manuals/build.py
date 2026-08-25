@@ -21,7 +21,13 @@ from docx.shared import Pt, Inches, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.table import WD_TABLE_ALIGNMENT
 
-OUT = r"e:\vs code\git\LMS@Prepreneurship\lms_prepreneurship\docs\manuals"
+# The repository root, not docs/manuals. These are documents the Institute
+# HANDS TO PEOPLE — a QA engineer, a new teacher — and burying them three
+# directories down makes them something only a developer ever finds.
+#
+# Derived from this file's own location rather than written out, so a clone
+# anywhere still writes to the right place.
+OUT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
 NAVY = RGBColor(0x1A, 0x3C, 0x5E)
 AMBER = RGBColor(0xC1, 0x7D, 0x11)

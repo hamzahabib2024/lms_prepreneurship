@@ -169,6 +169,17 @@ const progressSchema = z.object({
 });
 
 /** SRS §9.6 — content and recorded lectures. */
+
+/**
+ * An empty string REMOVES the link, which is why neither field is optional:
+ * undefined would be indistinguishable from a caller that forgot it, and the
+ * class would keep a link nobody meant to keep.
+ */
+const meetingLinkSchema = z.object({
+  meetingUrl: z.string().trim().max(1000),
+  note: z.string().trim().max(500).default(""),
+});
+
 @Controller()
 export class ContentController {
   constructor(
@@ -539,6 +550,37 @@ export class ContentController {
   providers() {
     return this.storage.listWithHealth();
   }
+
+
+  /**
+   * FR-LIV — the class's standing meeting room.
+   *
+   * `section_subject:update`, which the office and a teacher hold — a teacher
+   * for the classes they teach, decided by the scope predicate rather than by
+   * a check here. Set it once at the start of term and every student in the
+   * class has the same link every week, in the place they already look.
+   */
+  /*
+   * `live_session:update`, NOT `section_subject:update`.
+   *
+   * A teacher holds only READ on section_subject, and rightly: writing one
+   * changes the shape of the class — its dates, its status, whether it is
+   * compulsory — and that is the office's. But the MEETING ROOM is about
+   * running the class, which is exactly what a teacher does, and they hold
+   * live_session at ASSIGNED scope for their own classes.
+   *
+   * The same reasoning the lecture-folder route uses one screen away: pick the
+   * permission that matches the ACT, rather than the table the column happens
+   * to live in.
+   */
+  @RequirePermission("live_session", "update")
+  @Put("section-subjects/:id/meeting-link")
+  setMeetingLink(
+    @Param("id") id: string,
+    @Body(zodBody(meetingLinkSchema)) dto: z.infer<typeof meetingLinkSchema>,
+  ) {
+    return this.content.setMeetingLink(id, dto.meetingUrl, dto.note);
+  }
 }
 
 /**
@@ -589,4 +631,5 @@ export function parseRangeHeader(header: string | undefined): ByteRange | undefi
   if (!Number.isFinite(start) || start < 0) return undefined;
   const end = rawEnd === "" ? undefined : Number(rawEnd);
   return end !== undefined && Number.isFinite(end) ? { start, end } : { start };
+
 }
