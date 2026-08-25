@@ -19,6 +19,8 @@ import '../teaching/rubrics/data/rubrics_repository.dart';
 import '../teaching/rubrics/presentation/rubrics_page.dart';
 import '../teaching/assignment_builder/data/assignment_builder_repository.dart';
 import '../teaching/assignment_builder/presentation/assignment_builder_page.dart';
+import '../teaching/quiz_builder/data/quiz_builder_repository.dart';
+import '../teaching/quiz_builder/presentation/quiz_builder_page.dart';
 
 /// The academic management hub — the mobile equivalent of the web sidebar's
 /// "Institute" block.
@@ -110,6 +112,16 @@ class AcademicPanel extends StatelessWidget {
         builder: (context) => RepositoryProvider(
           create: (_) => AssignmentBuilderRepository(api),
           child: const AssignmentBuilderPage(),
+        ),
+        staffOnly: true,
+      ),
+      _Entry(
+        icon: Icons.quiz_outlined,
+        title: 'Quiz Builder',
+        subtitle: 'Create quizzes with multiple question types',
+        builder: (context) => RepositoryProvider(
+          create: (_) => QuizBuilderRepository(api),
+          child: const QuizBuilderPage(),
         ),
         staffOnly: true,
       ),
