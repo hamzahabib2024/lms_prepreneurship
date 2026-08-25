@@ -21,6 +21,7 @@ import '../teaching/assignment_builder/data/assignment_builder_repository.dart';
 import '../teaching/assignment_builder/presentation/assignment_builder_page.dart';
 import '../teaching/quiz_builder/data/quiz_builder_repository.dart';
 import '../teaching/quiz_builder/presentation/quiz_builder_page.dart';
+import '../teaching/completion/data/completion_repository.dart';
 
 /// The academic management hub — the mobile equivalent of the web sidebar's
 /// "Institute" block.
@@ -122,6 +123,16 @@ class AcademicPanel extends StatelessWidget {
         builder: (context) => RepositoryProvider(
           create: (_) => QuizBuilderRepository(api),
           child: const QuizBuilderPage(),
+        ),
+        staffOnly: true,
+      ),
+      _Entry(
+        icon: Icons.task_alt_outlined,
+        title: 'Completion Tracking',
+        subtitle: 'Sign off student completion status for certificates',
+        builder: (context) => RepositoryProvider(
+          create: (_) => CompletionRepository(api),
+          child: const _CompletionEntryPlaceholder(),
         ),
         staffOnly: true,
       ),
@@ -269,6 +280,43 @@ class _EntryTile extends StatelessWidget {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Simple placeholder that lets staff select a section to view completion.
+class _CompletionEntryPlaceholder extends StatelessWidget {
+  const _CompletionEntryPlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Completion Tracking')),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.task_alt_outlined,
+              size: 64,
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? AppColorsDark.muted
+                  : AppColors.muted,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Select a section from the Timetable or Sections page\n'
+              'to view and sign off student completion.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? AppColorsDark.muted
+                    : AppColors.muted,
+              ),
+            ),
+          ],
         ),
       ),
     );
