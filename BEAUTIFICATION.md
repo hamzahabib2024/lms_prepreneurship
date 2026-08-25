@@ -155,7 +155,7 @@ states as a sweep across all pages after the role work.
 | **CoursePage** | One class's recordings as cards: thumbnail drawn from the lecture's own title, duration badge bottom-right where every video service puts it, a red progress line under anything started, and a state as a word. Cards are **links now, not buttons** — watching has its own address. Drafts on a separate shelf rather than mixed in with a badge |
 | **WatchPage** | The shape everybody already knows: video large on the left against black, the rest of the class stacked down the right with the current row marked, "next in this class" above the queue where a phone reader actually meets it. **No autoplay** — a recording that starts talking on its own in a shared room is the most complained-about behaviour on the web — and no recommendations from other classes |
 | **AnnouncementsPage** | Pink page colour, calm diagonal texture |
-| **DiscussionPage** | As above |
+| **DiscussionPage** | The threading and the chat feel were already right. What was missing is everything that decides whether a course forum is USED: **posting without the class seeing who** — the failure mode is silence, not disorder, and students stay away because they fear looking ignorant in front of people they sit beside — plus a teacher-endorsed answer marked wherever the reply appears, and a way to say a question is settled so "which has nobody dealt with" is answerable. Anonymity is to CLASSMATES only; staff always see, and see that it was asked for. Enforced in the single `present()` projection, with the author id withheld alongside the name, because an id is an identity too |
 
 ### Teaching
 

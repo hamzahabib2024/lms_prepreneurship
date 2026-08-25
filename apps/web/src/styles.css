@@ -5390,3 +5390,38 @@ details > summary:hover { text-decoration: underline; }
   outline: 2px solid var(--brand-700);
   outline-offset: 2px;
 }
+
+
+/* ------------------------------------------- what makes a forum usable ----
+   The threading and the chat feel were already here. These three are what the
+   research on course forums says decides whether it is used at all: a way to
+   ask without the class seeing who, a way to mark the answer worth reading,
+   and a way to say a question is settled. */
+
+/* Beside the reply box, where the decision is actually made. */
+.chat-anon {
+  display: inline-flex; align-items: center; gap: .35rem;
+  font-size: .78rem; color: var(--ink-2); cursor: pointer;
+  padding: .2rem .45rem; border-radius: var(--radius-sm);
+  white-space: nowrap;
+}
+.chat-anon:hover { background: var(--surface-2); }
+.chat-anon input { accent-color: var(--brand-700); }
+
+/* THE ANSWER. Green and a tick and the word "Answer" — three signals, because
+   somebody scanning a long thread for the good reply should find it without
+   reading, and a reader who cannot see green still gets the word. */
+.chat-endorsed {
+  display: inline-flex; align-items: center; gap: .3rem;
+  margin-bottom: .3rem; padding: .1rem .45rem;
+  border-radius: 999px;
+  background: var(--ok-bg); color: var(--ok);
+  font-size: .72rem; font-weight: 700;
+}
+.chat-endorsed svg { width: 13px; height: 13px; }
+.chat-endorse-btn { margin-top: .3rem; align-self: flex-start; }
+
+/* An endorsed reply is worth finding at a glance in a wall of bubbles. */
+.chat-row:has(.chat-endorsed) .chat-bubble {
+  border-left: 3px solid var(--ok);
+}

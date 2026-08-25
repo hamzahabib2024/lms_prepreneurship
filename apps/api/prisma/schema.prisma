@@ -274,6 +274,8 @@ model User {
   @@index([deletedAt])
   @@map("users")
   completionDecisions SubjectCompletion[]
+  endorsedPosts DiscussionPost[] @relation("PostEndorsements")
+  resolvedPosts DiscussionPost[] @relation("PostResolutions")
 }
 
 model Role {
@@ -1678,12 +1680,35 @@ model DiscussionPost {
   removedByModerator Boolean @default(false) @map("removed_by_moderator")
   removalReason      String? @map("removal_reason") @db.Text
 
+  /// Hidden from CLASSMATES, never from staff — FR-DSC.
+  ///
+  /// The failure mode of a course forum is silence: students stay away because
+  /// they are afraid of looking ignorant in front of the class. This is the
+  /// single change with the largest effect on whether it is used at all. The
+  /// author is stored exactly as before; this only decides whose name other
+  /// students see. A forum where nobody can be identified AT ALL is one where
+  /// nobody can be held to anything, and it stops being usable within a term.
+  isAnonymous Boolean @default(false) @map("is_anonymous")
+
+  /// A reply a teacher has marked as the answer worth reading. Replies only —
+  /// endorsing a question means nothing, and a CHECK constraint refuses it.
+  endorsedBy String?   @map("endorsed_by") @db.Uuid
+  endorsedAt DateTime? @map("endorsed_at")
+
+  /// A question somebody has marked settled. Questions only. Without this
+  /// there is no answer to "which questions has nobody dealt with", which is
+  /// the one thing a teacher opens a forum to find out.
+  resolvedBy String?   @map("resolved_by") @db.Uuid
+  resolvedAt DateTime? @map("resolved_at")
+
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
 
   sectionSubject SectionSubject   @relation(fields: [sectionSubjectId], references: [id], onDelete: Restrict)
   author         User             @relation(fields: [authorUserId], references: [id], onDelete: Restrict)
+  endorser       User?            @relation("PostEndorsements", fields: [endorsedBy], references: [id], onDelete: SetNull)
+  resolver       User?            @relation("PostResolutions", fields: [resolvedBy], references: [id], onDelete: SetNull)
   parent         DiscussionPost?  @relation("PostReplies", fields: [parentPostId], references: [id], onDelete: Restrict)
   replies        DiscussionPost[] @relation("PostReplies")
 
