@@ -22,6 +22,7 @@ import '../teaching/assignment_builder/presentation/assignment_builder_page.dart
 import '../teaching/quiz_builder/data/quiz_builder_repository.dart';
 import '../teaching/quiz_builder/presentation/quiz_builder_page.dart';
 import '../teaching/completion/data/completion_repository.dart';
+import '../course_admin/presentation/course_admin_page.dart';
 
 /// The academic management hub — the mobile equivalent of the web sidebar's
 /// "Institute" block.
@@ -57,6 +58,13 @@ class AcademicPanel extends StatelessWidget {
         title: 'Enrolment',
         subtitle: 'Rosters, transfers, suspension, withdrawal and bulk moves',
         builder: (context) => EnrolmentPage(api: api, user: user),
+        staffOnly: true,
+      ),
+      _Entry(
+        icon: Icons.account_balance_outlined,
+        title: 'Courses & Fees',
+        subtitle: 'Manage courses, subjects, batches and fee structures',
+        builder: (context) => CourseAdminPage(api: api),
         staffOnly: true,
       ),
       _Entry(
