@@ -15,6 +15,8 @@ import 'timetable/timetable_page.dart';
 import 'attendance/presentation/attendance_page.dart';
 import '../teaching/marking/data/marking_repository.dart';
 import '../teaching/marking/presentation/marking_queue_page.dart';
+import '../teaching/rubrics/data/rubrics_repository.dart';
+import '../teaching/rubrics/presentation/rubrics_page.dart';
 
 /// The academic management hub — the mobile equivalent of the web sidebar's
 /// "Institute" block.
@@ -86,6 +88,16 @@ class AcademicPanel extends StatelessWidget {
         builder: (context) => RepositoryProvider(
           create: (_) => MarkingRepository(api),
           child: const MarkingQueuePage(),
+        ),
+        staffOnly: true,
+      ),
+      _Entry(
+        icon: Icons.rule_outlined,
+        title: 'Rubrics',
+        subtitle: 'Create and manage grading rubrics',
+        builder: (context) => RepositoryProvider(
+          create: (_) => RubricsRepository(api),
+          child: const RubricsPage(),
         ),
         staffOnly: true,
       ),
