@@ -5273,3 +5273,120 @@ details > summary:hover { text-decoration: underline; }
   .completion-choice { flex-direction: column; }
   .completion-option { width: 100%; }
 }
+
+
+/* ------------------------------------------------------- the calendar ----
+   Three shapes of one week. The agenda stays the default and the only one
+   genuinely usable on a phone; month answers the question a list cannot — how
+   does this period LOOK — and week sits between them. */
+.cal-controls { gap: .35rem; }
+.cal-controls .btn svg { width: 14px; height: 14px; }
+
+.cal-views {
+  display: flex; border: 1px solid var(--line); border-radius: var(--radius-sm);
+  overflow: hidden; margin: 0; padding: 0;
+}
+.cal-view {
+  padding: .3rem .7rem; font-size: .8125rem; cursor: pointer;
+  background: var(--surface); color: var(--ink-2);
+  border-right: 1px solid var(--line);
+}
+.cal-view:last-child { border-right: 0; }
+.cal-view input { position: absolute; opacity: 0; pointer-events: none; }
+.cal-view.is-on { background: var(--brand-700); color: var(--primary-ink); font-weight: 600; }
+
+.cal-period { margin: -.5rem 0 1rem; }
+.cal-card { padding: .75rem; }
+
+/* ------------------------------------------------------------- month ---- */
+.cal-month {
+  display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px;
+  background: var(--line); border: 1px solid var(--line);
+  border-radius: var(--radius-sm); overflow: hidden;
+}
+.cal-weekday {
+  background: var(--surface-2); padding: .35rem;
+  font-size: .72rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .04em; color: var(--ink-2); text-align: center;
+}
+/* SIX ROWS ALWAYS. A grid that changes height as you page through the year
+   makes everything under it jump, and the eye loses the cell it was reading. */
+.cal-cell {
+  display: flex; flex-direction: column; gap: 2px; align-items: stretch;
+  min-height: 92px; padding: .3rem;
+  background: var(--surface); border: 0; text-align: left; cursor: pointer;
+  font: inherit; color: inherit;
+}
+.cal-cell:hover { background: var(--surface-2); }
+.cal-outside { background: var(--surface-2); opacity: .55; }
+.cal-cell.is-today { box-shadow: inset 0 0 0 2px var(--brand-700); }
+.cal-cell.is-today .cal-date {
+  background: var(--brand-700); color: var(--primary-ink);
+  border-radius: 999px; padding: 0 .35rem;
+}
+.cal-date { font-size: .78rem; font-weight: 700; align-self: flex-start; }
+
+/* Colour by subject, and NEVER colour alone — the name is on every chip. */
+.cal-chip {
+  display: block; padding: .12rem .3rem; border-radius: 4px;
+  font-size: .68rem; line-height: 1.3;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  background: hsl(var(--chip-hue) 70% 92%);
+  border-left: 3px solid hsl(var(--chip-hue) 55% 45%);
+  color: hsl(var(--chip-hue) 60% 22%);
+}
+.cal-chip-time { font-weight: 700; margin-right: .2rem; }
+/* Counted, not hidden: a cell that truncates silently lies about a day. */
+.cal-more { font-size: .66rem; color: var(--muted); padding-left: .3rem; }
+
+/* -------------------------------------------------------------- week ---- */
+.cal-week {
+  display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px;
+  background: var(--line); border: 1px solid var(--line);
+  border-radius: var(--radius-sm); overflow: hidden;
+}
+.cal-col { background: var(--surface); display: flex; flex-direction: column; min-height: 160px; }
+.cal-col.is-today { box-shadow: inset 0 0 0 2px var(--brand-700); }
+.cal-col-head {
+  display: flex; flex-direction: column; align-items: center; gap: 0;
+  padding: .4rem; border: 0; background: var(--surface-2); cursor: pointer;
+  font: inherit; color: inherit;
+}
+.cal-col-head:hover { background: var(--line); }
+.cal-col-day { font-size: .7rem; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-2); }
+.cal-col-date { font-size: 1rem; font-weight: 700; }
+.cal-col.is-today .cal-col-date { color: var(--brand-700); }
+.cal-col-body { display: grid; gap: .25rem; padding: .3rem; align-content: start; }
+.cal-free { color: var(--muted); text-align: center; padding: .5rem 0; }
+.cal-event {
+  display: grid; gap: 0; padding: .3rem .4rem; border-radius: 4px;
+  font-size: .72rem; line-height: 1.35;
+  background: hsl(var(--chip-hue) 70% 93%);
+  border-left: 3px solid hsl(var(--chip-hue) 55% 45%);
+  color: hsl(var(--chip-hue) 60% 22%);
+  min-width: 0;
+}
+.cal-event-subject { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+
+/* A grid below about 360px is too small to act on, which is why the list
+   exists and stays the default. These two simply become scrollable rather
+   than shrinking into illegibility. */
+@media (max-width: 760px) {
+  .cal-month, .cal-week { min-width: 640px; }
+  .cal-card { overflow-x: auto; }
+  .cal-cell { min-height: 76px; }
+}
+
+
+/* ------------------------------------------- focus on a hidden control ----
+   Both the calendar's view switcher and the completion decision hide their
+   radio input and style the LABEL. That is the usual way to build a segmented
+   control and it has one failure: the input keeps focus, the label shows
+   nothing, and a keyboard user tabbing through has no idea where they are.
+   The ring is drawn on the label instead, using :has() so it follows the real
+   focus rather than being faked with JavaScript. */
+.cal-view:has(input:focus-visible),
+.completion-option:has(input:focus-visible) {
+  outline: 2px solid var(--brand-700);
+  outline-offset: 2px;
+}
