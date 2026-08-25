@@ -17,6 +17,8 @@ import '../teaching/marking/data/marking_repository.dart';
 import '../teaching/marking/presentation/marking_queue_page.dart';
 import '../teaching/rubrics/data/rubrics_repository.dart';
 import '../teaching/rubrics/presentation/rubrics_page.dart';
+import '../teaching/assignment_builder/data/assignment_builder_repository.dart';
+import '../teaching/assignment_builder/presentation/assignment_builder_page.dart';
 
 /// The academic management hub — the mobile equivalent of the web sidebar's
 /// "Institute" block.
@@ -98,6 +100,16 @@ class AcademicPanel extends StatelessWidget {
         builder: (context) => RepositoryProvider(
           create: (_) => RubricsRepository(api),
           child: const RubricsPage(),
+        ),
+        staffOnly: true,
+      ),
+      _Entry(
+        icon: Icons.assignment_outlined,
+        title: 'Assignment Builder',
+        subtitle: 'Create and manage assignments for your sections',
+        builder: (context) => RepositoryProvider(
+          create: (_) => AssignmentBuilderRepository(api),
+          child: const AssignmentBuilderPage(),
         ),
         staffOnly: true,
       ),
