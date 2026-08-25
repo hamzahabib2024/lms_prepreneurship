@@ -13,6 +13,7 @@ import '../../certificates/presentation/issuance_page.dart';
 import '../../communication/presentation/communication_panel.dart';
 import '../../reporting/presentation/reports_page.dart';
 import '../../learning/presentation/my_subjects_page.dart';
+import '../../fees/presentation/fees_page.dart';
 
 /// Persistent bottom navigation shell for authenticated users.
 ///
@@ -85,6 +86,12 @@ class _AppShellState extends State<AppShell> {
           activeIcon: Icons.notifications,
           label: 'Alerts',
           page: CommunicationPanel(api: widget.api, user: widget.user),
+        ),
+        _TabEntry(
+          icon: Icons.payments_outlined,
+          activeIcon: Icons.payments,
+          label: 'Fees',
+          page: FeesPage(user: widget.user, api: widget.api),
         ),
         if (_isStaff)
           _TabEntry(
