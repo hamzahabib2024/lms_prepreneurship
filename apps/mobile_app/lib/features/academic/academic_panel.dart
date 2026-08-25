@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../auth/data/models/auth_session.dart';
 import '../../core/network/api_client.dart';
@@ -12,6 +13,8 @@ import 'structure/structure_page.dart';
 import 'subjects/subjects_page.dart';
 import 'timetable/timetable_page.dart';
 import 'attendance/presentation/attendance_page.dart';
+import '../teaching/marking/data/marking_repository.dart';
+import '../teaching/marking/presentation/marking_queue_page.dart';
 
 /// The academic management hub — the mobile equivalent of the web sidebar's
 /// "Institute" block.
@@ -74,6 +77,16 @@ class AcademicPanel extends StatelessWidget {
         title: 'Attendance',
         subtitle: 'Take the register and mark student attendance',
         builder: (context) => AttendancePage(api: api),
+        staffOnly: true,
+      ),
+      _Entry(
+        icon: Icons.grading_outlined,
+        title: 'Marking & Grading',
+        subtitle: 'Review assignments, grade submissions and mark quizzes',
+        builder: (context) => RepositoryProvider(
+          create: (_) => MarkingRepository(api),
+          child: const MarkingQueuePage(),
+        ),
         staffOnly: true,
       ),
       _Entry(
