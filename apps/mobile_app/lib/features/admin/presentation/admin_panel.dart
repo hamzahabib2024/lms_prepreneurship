@@ -12,6 +12,9 @@ import 'bulk/bulk_operations_page.dart';
 import 'settings/settings_page.dart';
 import 'security/security_page.dart';
 import 'users/users_page.dart';
+import '../../cohort_import/data/cohort_import_repository.dart';
+import '../../cohort_import/cubit/cohort_import_cubit.dart';
+import '../../cohort_import/presentation/cohort_import_page.dart';
 
 class AdminPanel extends StatelessWidget {
   const AdminPanel({super.key, required this.user, required this.api});
@@ -73,6 +76,13 @@ class _AdminPanelView extends StatelessWidget {
         title: 'Backup & restore',
         subtitle: 'Data snapshots, verification, and point-in-time recovery',
         builder: (_) => BackupPage(api: api),
+        superAdminOnly: true,
+      ),
+      _AdminEntry(
+        icon: Icons.file_upload_outlined,
+        title: 'Cohort import',
+        subtitle: 'Import student cohorts via CSV upload',
+        builder: (_) => const _CohortImportEntry(),
         superAdminOnly: true,
       ),
     ];
@@ -200,6 +210,19 @@ class _AdminEntryTile extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _CohortImportEntry extends StatelessWidget {
+  const _CohortImportEntry();
+
+  @override
+  Widget build(BuildContext context) {
+    final api = context.read<ApiClient>();
+    return BlocProvider(
+      create: (_) => CohortImportCubit(CohortImportRepository(api)),
+      child: const CohortImportPage(),
     );
   }
 }
