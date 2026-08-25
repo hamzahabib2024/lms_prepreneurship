@@ -447,9 +447,43 @@ if (ss) {
   });
   ok("a student cannot set it", pushed.status === 403, `got ${pushed.status}`);
 
+  // ── THE OFFICE CAN DO EVERYTHING THE TEACHER CAN, and on any class ──
+  //
+  // A teacher holds live_session at ASSIGNED and the office at ALL, so this
+  // is the difference that matters: a class whose teacher is away, or one
+  // being covered, still needs its room set by somebody.
+  const byOffice = await call("admin", "PUT", `/section-subjects/${ss}/meeting-link`, {
+    meetingUrl: "https://meet.google.com/qa-office",
+    note: "Set by the office.",
+  });
+  ok("the office sets the link too", byOffice.status === 200, `got ${byOffice.status}`);
+
+  const seenAgain = await call("student", "GET", `/section-subjects/${ss}/lectures`);
+  ok("and the student sees the office's link",
+     seenAgain.data?.meetingUrl === "https://meet.google.com/qa-office",
+     seenAgain.data?.meetingUrl ?? "(none)");
+  ok("with the office's note", seenAgain.data?.meetingNote === "Set by the office.",
+     seenAgain.data?.meetingNote ?? "(none)");
+
+  // The office is not limited to classes it is assigned to — nobody assigns
+  // an administrator to a class at all.
+  const others = await call("admin", "GET", "/courses");
+  const elsewhere = (others.data ?? []).find((c) => c.id !== ss);
+  if (elsewhere) {
+    const anywhere = await call("admin", "PUT", `/section-subjects/${elsewhere.id}/meeting-link`, {
+      meetingUrl: "https://meet.google.com/qa-elsewhere",
+    });
+    ok("on a class nobody assigned them to", anywhere.status === 200, `got ${anywhere.status}`);
+    await call("admin", "PUT", `/section-subjects/${elsewhere.id}/meeting-link`, { meetingUrl: "" });
+  }
+
   const cleared = await call("teacher", "PUT", `/section-subjects/${ss}/meeting-link`, { meetingUrl: "" });
   ok("clearing it removes the link", cleared.status === 200 && cleared.data?.meetingUrl === null,
      String(cleared.data?.meetingUrl));
+
+  const afterClear = await call("student", "GET", `/section-subjects/${ss}/lectures`);
+  ok("and the student's link goes with it", afterClear.data?.meetingUrl === null,
+     String(afterClear.data?.meetingUrl));
 }
 
 // ══════════════════════════ 17. files that come with a brief ══════════════
