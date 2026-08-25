@@ -174,12 +174,14 @@ cases([
     ["5.3", "Teacher", "Publish it", "Now visible to the student"],
     ["5.4", "Teacher", "Choose 'a limited number of times', then set how many", "The number field appears and saves"],
     ["5.5", "Teacher", "Reopen the assignment", "The attempt limit and grace period you set are shown"],
-    ["5.6", "Teacher", "Attach a PDF to the brief", "Attached and listed"],
+    ["5.6", "Teacher", "Marking > an assignment > The brief > attach a PDF", "Attached and listed"],
     ["5.7", "Teacher", "Rename a JPEG to .pdf and attach it", "REFUSED — it says the contents are not a PDF"],
     ["5.8", "Teacher", "Attach the same file twice", "Accepted, not duplicated"],
     ["5.9", "Teacher", "Record a spoken brief", "Records, plays back, saves"],
     ["5.10", "Student", "Open the assignment", "Instructions, the attachment, and the spoken brief are all there"],
     ["5.11", "Student", "Download the attachment", "Downloads and opens"],
+    ["5.12", "Student", "Look for a way to remove the teacher's file", "There is none — only Download is offered"],
+    ["5.13", "Teacher", "Remove an attached file", "Gone, for the student too"],
     ["5.12", "Student", "Upload a file but do NOT press Submit, then reload", "Shows as NOT submitted — this is correct and important"],
     ["5.13", "Student", "Press Submit", "Confirmed on screen"],
     ["5.14", "Student", "Record a spoken answer and submit", "Appears in the list like any other file"],
@@ -214,12 +216,13 @@ cases([
 
 area(8, "The class meeting link")
 cases([
-    ["8.1", "Teacher", "Set a meeting link beginning https://", "Saved"],
-    ["8.2", "Teacher", "Set one beginning http:// (no s)", "REFUSED, and says why"],
-    ["8.3", "Teacher", "Add a note such as 'join five minutes early'", "Shown with the link"],
-    ["8.4", "Student", "Open the subject", "The link is there and opens the meeting"],
-    ["8.5", "Student", "Try to change the link", "Refused"],
-    ["8.6", "Teacher", "Clear the link", "It disappears for students"],
+    ["8.1", "Teacher", "Courses > a class > Set the meeting link, beginning https://", "Saved, and a Join button appears"],
+    ["8.2", "Teacher", "Set one beginning http:// (no s)", "REFUSED, and the message says it must begin https://"],
+    ["8.3", "Teacher", "Add a note such as 'join five minutes early'", "Shown under the Join button"],
+    ["8.4", "Student", "My subjects > the same subject", "A Join button, with the note, above the assignments"],
+    ["8.5", "Student", "Look for any way to change the link", "There is none — no editor is offered at all"],
+    ["8.6", "Teacher", "Clear the box and save", "The Join button disappears for the student too"],
+    ["8.7", "Office", "Set a link on a class you do not teach", "Allowed — the office can set any"],
 ])
 
 area(9, "Discussion")

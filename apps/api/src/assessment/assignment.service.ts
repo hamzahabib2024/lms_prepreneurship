@@ -813,6 +813,29 @@ export class AssignmentService {
       extensions.map((e: (typeof extensions)[number]) => [e.assignmentId, e.extendedTo]),
     );
 
+    /*
+     * HOW MANY FILES CAME WITH EACH BRIEF — FR-ASG.
+     *
+     * Grouped rather than counted per row. A subject with twenty assignments
+     * would otherwise issue twenty more queries to draw twenty small numbers,
+     * and this list is already the most-requested screen a student opens.
+     *
+     * A COUNT, never the files. The card only needs to know whether to show
+     * the section; the names and the bytes come from the attachment routes,
+     * which re-check scope, and only for the assignment actually opened.
+     */
+    const attachmentCounts = await this.prisma.scoped.assignmentAttachment.groupBy({
+      by: ["assignmentId"],
+      where: { assignmentId: { in: assignments.map((a: (typeof assignments)[number]) => a.id) } },
+      _count: { _all: true },
+    });
+    const attachmentsFor = new Map(
+      attachmentCounts.map((c: (typeof attachmentCounts)[number]) => [
+        c.assignmentId,
+        c._count._all,
+      ]),
+    );
+
     const now = new Date();
 
     return assignments.map((a: (typeof assignments)[number]) => {
@@ -835,6 +858,8 @@ export class AssignmentService {
          */
         hasBriefAudio: a.briefAudioKey !== null,
         briefAudioSeconds: a.briefAudioSeconds,
+        /** How many files came with the brief — the names are fetched on open. */
+        attachmentCount: attachmentsFor.get(a.id) ?? 0,
         marksAvailable: Number(a.marksAvailable),
         opensAt: a.opensAt,
         dueAt: a.dueAt,

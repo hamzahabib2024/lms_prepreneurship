@@ -4,6 +4,7 @@ import { Link, useParams } from "react-router-dom";
 import { ApiError, api, tokens } from "../api/client";
 import { StudentNotes } from "../components/StudentNotes";
 import { Icon } from "../components/Icon";
+import { BriefAttachments } from "../components/BriefAttachments";
 
 /**
  * Grading — SRS §13.6, FR-ASG-025/026/028, FR-TCH-019.
@@ -251,6 +252,24 @@ export function GradingPage() {
             </p>
           </>
         )}
+      </section>
+
+      {/*
+        THE BRIEF ITSELF, managed after the fact — FR-ASG.
+
+        The builder takes files at the moment an assignment is created, which
+        covers the teacher who has everything ready. It does not cover the far
+        commoner case: the assignment was set on Monday, a student asks on
+        Wednesday for the spreadsheet it refers to, and without this the answer
+        is WhatsApp and a re-upload for every student who joins late.
+
+        Files can be added and removed at any point in the assignment's life,
+        including after marks are released — a corrected brief is worth having
+        even then, and nothing here changes a mark.
+      */}
+      <section className="card">
+        <h2>The brief</h2>
+        <BriefAttachments assignmentId={a.id} canManage />
       </section>
 
       <section className="card">

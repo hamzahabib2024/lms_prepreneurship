@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { ApiError, api } from "../api/client";
 import { VoiceRecorder, type Recording } from "../components/VoiceRecorder";
 import { HowItWorks } from "../components/HowItWorks";
+import { formatSize } from "../components/BriefAttachments";
 
 /**
  * Setting an assignment — SRS §13.6, FR-ASG-001..014.
@@ -41,6 +42,19 @@ export function AssignmentBuilderPage() {
    * half of.
    */
   const [brief, setBrief] = useState<Recording | null>(null);
+  /*
+   * AND THE FILES THE TASK IS ABOUT, held for the same reason.
+   *
+   * An attachment belongs to an assignment id, and there is none until the
+   * form is saved, so the chosen files wait here and go up immediately after
+   * creation — before publishing, so a student cannot open a brief that
+   * mentions a spreadsheet which has not arrived.
+   *
+   * The FILES themselves rather than a promise of them: a teacher who picks
+   * three and then changes their mind about the second must be able to take
+   * it back out, and nothing has been sent anywhere yet.
+   */
+  const [attachments, setAttachments] = useState<File[]>([]);
   /*
    * THE MARKING GUIDES THIS TEACHER CAN ATTACH.
    *
@@ -158,6 +172,35 @@ export function AssignmentBuilderPage() {
               : "The assignment was created, but the recording did not upload.",
           ]);
         });
+      }
+
+      /*
+       * The same trade as the recording above: a file that fails to attach
+       * does NOT fail the assignment. It exists, it is correct, and losing a
+       * completed form because one upload was refused would cost the teacher
+       * far more than re-attaching a file from the assignment itself.
+       *
+       * Sequential rather than parallel. Three files at once on the Institute's
+       * connection is three uploads competing, and the failure message would
+       * name no file — which of them was too large is the only thing the
+       * teacher needs to know.
+       */
+      const failed: string[] = [];
+      for (const file of attachments) {
+        const body = new FormData();
+        body.append("file", file);
+        try {
+          await api.upload(`/assignments/${assignment.id}/attachments`, body);
+        } catch (e) {
+          failed.push(e instanceof ApiError ? `${file.name}: ${e.message}` : file.name);
+        }
+      }
+      if (failed.length > 0) {
+        setProblems((p) => [
+          ...p,
+          `The assignment was created, but ${failed.length === 1 ? "one file was" : `${failed.length} files were`} not attached. You can attach ${failed.length === 1 ? "it" : "them"} from the assignment itself.`,
+          ...failed,
+        ]);
       }
 
       if (publish) await api.post(`/assignments/${assignment.id}/publish`);
@@ -290,6 +333,55 @@ export function AssignmentBuilderPage() {
           onRecorded={setBrief}
           onDiscard={() => setBrief(null)}
         />
+
+        {/*
+          AND THE FILES THE TASK IS ABOUT — FR-ASG.
+
+          Not checked here. The rules are the Institute's and they live on the
+          server, which knows the current policy and verifies that a file's
+          CONTENTS match its name; a copy of those rules in this form would be
+          a second answer that goes stale the day an administrator changes the
+          first. Anything refused is refused on upload, by name, and can be
+          re-attached from the assignment itself.
+        */}
+        <div className="field">
+          <span className="field-label">Files that come with it (optional)</span>
+          <p className="muted small">
+            The logo to work from, the passage to read, the spreadsheet to reconcile. Students
+            download them from the assignment.
+          </p>
+          <input
+            type="file"
+            multiple
+            disabled={busy}
+            onChange={(e) => {
+              const chosen = Array.from(e.target.files ?? []);
+              // Added to what is already chosen, not replacing it: a teacher
+              // picking files from two different folders would otherwise lose
+              // the first lot without being told.
+              if (chosen.length > 0) setAttachments((f) => [...f, ...chosen]);
+              e.target.value = "";
+            }}
+          />
+          {attachments.length > 0 && (
+            <ul className="list small">
+              {attachments.map((f, i) => (
+                <li key={`${f.name}-${i}`}>
+                  <span>
+                    {f.name} <span className="muted">({formatSize(f.size)})</span>
+                  </span>
+                  <button
+                    type="button"
+                    className="btn btn-quiet"
+                    onClick={() => setAttachments((all) => all.filter((_, n) => n !== i))}
+                  >
+                    Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </section>
 
       <section className="card">

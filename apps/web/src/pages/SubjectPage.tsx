@@ -4,6 +4,7 @@ import { Link, useParams } from "react-router-dom";
 import { ApiError, api } from "../api/client";
 import { LecturePlayer } from "../components/LecturePlayer";
 import { AssignmentPanel } from "../components/AssignmentPanel";
+import { ClassRoom } from "../components/ClassRoom";
 import { QuizPanel } from "../components/QuizPanel";
 
 /**
@@ -47,6 +48,9 @@ interface Module {
 }
 
 interface SubjectProgress {
+  /** FR-LIV — where this class meets, if it meets online. */
+  meetingUrl?: string | null;
+  meetingNote?: string | null;
   sectionSubjectId: string;
   subject: { id: string; code: string; name: string };
   overallPercent: number;
@@ -149,6 +153,20 @@ export function SubjectPage() {
           </ul>
         )}
       </section>
+
+      {/*
+        THE WAY IN, above everything — FR-LIV.
+
+        A student opening this screen two minutes before a class starts wants
+        one thing, and it is not their progress bar. Nothing is rendered at all
+        where the class is taught in a room, so this costs the reader nothing
+        in that case.
+      */}
+      <ClassRoom
+        sectionSubjectId={sectionSubjectId}
+        meetingUrl={progress.meetingUrl ?? null}
+        meetingNote={progress.meetingNote ?? null}
+      />
 
       {/* Above the lectures: what is DUE is more urgent than what is available
           to watch, and a deadline the student scrolls past is a deadline
