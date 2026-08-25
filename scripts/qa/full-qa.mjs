@@ -495,6 +495,94 @@ if (aid) {
   }
 }
 
+// ═══════════════════════ 18. deleting what was made by mistake ════════════
+sec("18. deleting a course, batch or subject");
+{
+  // ── a subject nothing uses: created and removed cleanly ──────────────
+  const madeSubject = await call("admin", "POST", "/subjects", {
+    code: `QA${String(stamp).slice(-6)}`,
+    name: `QA subject ${stamp}`,
+  });
+  const subjectId = madeSubject.data?.id;
+  ok("a subject can be created", !!subjectId, madeSubject.error?.message);
+
+  if (subjectId) {
+    const gone = await call("admin", "DELETE", `/subjects/${subjectId}`);
+    ok("an unused subject is deleted", gone.status === 200, `got ${gone.status}`);
+
+    const after = await call("admin", "GET", "/subjects");
+    ok("and it leaves the list", !(after.data ?? []).some((x) => x.id === subjectId));
+  }
+
+  // ── a subject that IS taught: refused, and it says which classes ─────
+  if (ss) {
+    const offering = await call("admin", "GET", `/section-subjects/${ss}/lectures`);
+    const taughtId = offering.data?.subject?.id;
+    if (taughtId) {
+      const refused = await call("admin", "DELETE", `/subjects/${taughtId}`);
+      ok("a subject that is taught cannot be deleted", refused.status === 409, `got ${refused.status}`);
+      const why = refused.error?.details?.[0]?.message ?? "";
+      ok("and the refusal names the classes", /class/i.test(why), why.slice(0, 80) || "(no detail)");
+    }
+  }
+
+  // ── a batch with sections: refused, by section code ──────────────────
+  const batches = await call("admin", "GET", "/batches");
+  const withSections = (batches.data ?? [])[0];
+  if (withSections) {
+    const r = await call("admin", "DELETE", `/batches/${withSections.id}`);
+    // Either it has sections (409, named) or it is genuinely empty (200).
+    // Only the first is worth asserting on, and only when it is the case.
+    if (r.status === 409) {
+      const why = r.error?.details?.[0]?.message ?? "";
+      ok("a batch with sections is refused by name", /section/i.test(why), why.slice(0, 80));
+    } else {
+      ok("an empty batch deletes", r.status === 200, `got ${r.status} (batch was empty)`);
+    }
+  }
+
+  // ── a section with students: refused, and told to archive ────────────
+  const sections = await call("admin", "GET", "/sections");
+  const busySection = (sections.data ?? []).find((x) => (x._count?.sectionSubjects ?? 0) > 0);
+  if (busySection) {
+    const r = await call("admin", "DELETE", `/sections/${busySection.id}`);
+    ok("a section in use cannot be deleted", r.status === 409, `got ${r.status}`);
+    const why = r.error?.details?.[0]?.message ?? "";
+    ok("and the refusal explains what to do instead",
+       /archive|subject|student/i.test(why), why.slice(0, 90) || "(no detail)");
+  }
+
+  // ── a subject put on a class by mistake: added, then taken off ───────
+  if (busySection) {
+    const spare = await call("admin", "POST", "/subjects", {
+      code: `QB${String(stamp).slice(-6)}`,
+      name: `QA spare subject ${stamp}`,
+    });
+    const spareId = spare.data?.id;
+    if (spareId) {
+      const offered = await call("admin", "POST", `/sections/${busySection.id}/subjects`, {
+        subjectId: spareId,
+        isCompulsory: false,
+      });
+      const offeringId = offered.data?.id;
+      ok("a subject is added to a section", !!offeringId, offered.error?.message);
+
+      if (offeringId) {
+        const off = await call("admin", "DELETE", `/section-subjects/${offeringId}`);
+        ok("and can be taken back off while untaught", off.status === 200, `got ${off.status}`);
+      }
+      const cleaned = await call("admin", "DELETE", `/subjects/${spareId}`);
+      ok("the spare subject is removed again", cleaned.status === 200, `got ${cleaned.status}`);
+    }
+  }
+
+  // ── nobody below the office may delete any of it ─────────────────────
+  const t1 = await call("teacher", "DELETE", `/subjects/${subjectId ?? "00000000-0000-0000-0000-000000000000"}`);
+  ok("a teacher cannot delete a subject", t1.status === 403, `got ${t1.status}`);
+  const t2 = await call("student", "DELETE", `/sections/${busySection?.id ?? "00000000-0000-0000-0000-000000000000"}`);
+  ok("a student cannot delete a section", t2.status === 403, `got ${t2.status}`);
+}
+
 // ══════════════════════════════════════════════════════ cleanup ═══════════
 sec("cleanup");
 {

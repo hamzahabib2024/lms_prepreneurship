@@ -4,6 +4,7 @@ import { ApiError, api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { EmptyState, Skeleton, SkeletonTable } from "../components/Ui";
 import { HowItWorks } from "../components/HowItWorks";
+import { ClassRoom } from "../components/ClassRoom";
 
 interface Section {
   id: string;
@@ -38,6 +39,9 @@ interface Offering {
   id: string;
   isCompulsory: boolean;
   status: string;
+  /** FR-LIV — this class's standing room. One link, the same every week. */
+  meetingUrl: string | null;
+  meetingNote: string | null;
   subject: Subject;
   hasTeacher: boolean;
   needsTeacher: boolean;
@@ -64,14 +68,32 @@ const pretty = (s: string) => s.toLowerCase().replace(/_/g, " ");
  * dozen of them in a row; seeing the ones that exist while typing the next is
  * how a collision gets noticed before it is saved rather than after.
  *
- * There is no delete. FR-CRS-013 and BR-DAT-04 — a section that has ever held
- * an enrolment is archived, never removed, because its attendance and its marks
- * outlive it. The server has no DELETE route to call even if this screen
- * offered one.
+ * ARCHIVE AND DELETE ARE BOTH HERE, and they are not alternatives. FR-CRS-013
+ * and BR-DAT-04: a section that has ever held an enrolment is ARCHIVED, because
+ * its attendance and its marks outlive it and are somebody's evidence they
+ * attended. A section created by mistake and never used has nothing to keep,
+ * and living with it in every dropdown for a year is not a policy.
+ *
+ * The server decides which case a section is in, not this screen. Delete is
+ * offered on every row and refused — by name, saying what is in the way — the
+ * moment anything depends on it.
  */
 export function SectionsPage() {
   const { hasRole } = useAuth();
   const mayEdit = hasRole("super_admin", "admin");
+  /*
+   * WHO MAY SET A CLASS'S MEETING LINK — a different question from who may
+   * edit the section itself, and a wider answer.
+   *
+   * A teacher owns the room their class meets in; they hold live_session at
+   * ASSIGNED scope and set it from the course screen already. Denying it here
+   * would mean the same person can do the same thing on one screen and not on
+   * another, which reads as a bug rather than as a rule.
+   *
+   * Safe because this list is scoped by the server (ARC-051): a teacher only
+   * ever sees the sections they teach, and the route re-checks scope anyway.
+   */
+  const maySetRoom = hasRole("super_admin", "admin", "teacher");
 
   const [rows, setRows] = useState<Section[] | null>(null);
   const [batches, setBatches] = useState<Batch[]>([]);
@@ -88,6 +110,15 @@ export function SectionsPage() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [offerings, setOfferings] = useState<Offering[] | null>(null);
   const [newOffering, setNewOffering] = useState({ subjectId: "", isCompulsory: true });
+  /*
+   * WHICH SUBJECT ROW HAS ITS MEETING LINK OPEN.
+   *
+   * One at a time, and in a row of its own under the subject rather than in a
+   * cell. A URL is 60 characters and a note is a sentence; both squeezed into
+   * a table column would wrap the whole table into unreadability, and every
+   * other column would grow to fit a field only one row is using.
+   */
+  const [roomFor, setRoomFor] = useState<string | null>(null);
 
   const [creating, setCreating] = useState(false);
   const [blank, setBlank] = useState({
@@ -196,6 +227,51 @@ export function SectionsPage() {
     )
       return;
     await run(() => api.post(`/sections/${s.id}/archive`), `${s.code} archived.`);
+  }
+
+  /**
+   * REMOVING WHAT WAS CREATED BY MISTAKE.
+   *
+   * The confirmation says what is about to go and, for a section, what the
+   * difference is from archiving — because the two are genuinely different
+   * and the wrong one is the one that loses a student's marks. The server
+   * refuses anything that has been taught, so the worst a mis-click can do is
+   * produce a message explaining why it will not happen.
+   */
+  async function removeSection(sec: Section) {
+    if (
+      !window.confirm(
+        `Delete ${sec.code}?
+
+Only possible while nothing depends on it — no students, ` +
+          `no admissions, no subjects. If it has been taught, archive it instead: that ` +
+          `takes it out of the lists and keeps the attendance and marks.`,
+      )
+    )
+      return;
+    const ok = await run(() => api.del(`/sections/${sec.id}`), `${sec.code} deleted.`);
+    if (ok && openId === sec.id) {
+      setOpenId(null);
+      setOfferings(null);
+    }
+  }
+
+  async function removeOffering(sectionId: string, o: Offering) {
+    if (
+      !window.confirm(
+        `Take ${o.subject.code} off this section?
+
+Only possible while it has not been ` +
+          `taught — no enrolments, no assignments, no register. The teacher's posting to ` +
+          `it is removed with it.`,
+      )
+    )
+      return;
+    const ok = await run(
+      () => api.del(`/section-subjects/${o.id}`),
+      `${o.subject.code} removed from the section.`,
+    );
+    if (ok) setOfferings(await api.get<Offering[]>(`/sections/${sectionId}/subjects`));
   }
 
   async function addOffering(sectionId: string) {
@@ -553,6 +629,21 @@ export function SectionsPage() {
                                     Archive
                                   </button>
                                 )}
+                                {/* Delete sits BESIDE archive, not instead of
+                                    it, because they answer different
+                                    questions: archive is for a section that
+                                    finished, delete is for one that should
+                                    never have existed. The server refuses to
+                                    delete anything that has been taught, so
+                                    choosing wrong here costs a message rather
+                                    than a student's marks. */}
+                                <button
+                                  className="btn btn-quiet btn-sm"
+                                  disabled={busy}
+                                  onClick={() => void removeSection(s)}
+                                >
+                                  Delete
+                                </button>
                               </>
                             ))}
                         </td>
@@ -577,36 +668,90 @@ export function SectionsPage() {
                                     <th />
                                     <th>Required</th>
                                     <th>Teacher</th>
+                                    <th>Meeting link</th>
                                     <th className="num">Enrolled</th>
+                                    {mayEdit && <th />}
                                   </tr>
                                 </thead>
                                 <tbody>
                                   {offerings.map((o) => (
-                                    <tr key={o.id}>
-                                      <td>
-                                        <code>{o.subject.code}</code> {o.subject.name}
-                                      </td>
-                                      <td>
-                                        {/* Straight to the recordings for this
-                                            class — where the folder is
-                                            connected and drafts are published. */}
-                                        <Link to={`/courses/${o.id}`}>Recordings</Link>
-                                      </td>
-                                      <td>{o.isCompulsory ? "compulsory" : "elective"}</td>
-                                      <td>
-                                        {/* FR-CRS-026 — an uncovered class
-                                            should be noticed by the Institute
-                                            rather than by its students. */}
-                                        {o.hasTeacher ? (
-                                          o.assignments
-                                            .map((a) => a.teacher.user.fullName)
-                                            .join(", ")
-                                        ) : (
-                                          <span className="pill pill-warn">no teacher</span>
+                                    <Fragment key={o.id}>
+                                      <tr>
+                                        <td>
+                                          <code>{o.subject.code}</code> {o.subject.name}
+                                        </td>
+                                        <td>
+                                          {/* Straight to the recordings for this
+                                              class — where the folder is
+                                              connected and drafts are published. */}
+                                          <Link to={`/courses/${o.id}`}>Recordings</Link>
+                                        </td>
+                                        <td>{o.isCompulsory ? "compulsory" : "elective"}</td>
+                                        <td>
+                                          {/* FR-CRS-026 — an uncovered class
+                                              should be noticed by the Institute
+                                              rather than by its students. */}
+                                          {o.hasTeacher ? (
+                                            o.assignments
+                                              .map((a) => a.teacher.user.fullName)
+                                              .join(", ")
+                                          ) : (
+                                            <span className="pill pill-warn">no teacher</span>
+                                          )}
+                                        </td>
+                                        {/* FR-LIV — the room this subject meets in,
+                                            for THIS group. Its own teacher and its
+                                            own link: the same subject taught to the
+                                            evening class is a different row with a
+                                            different one. */}
+                                        <td>
+                                          <button
+                                            type="button"
+                                            className="btn btn-quiet btn-sm"
+                                            aria-expanded={roomFor === o.id}
+                                            onClick={() =>
+                                              setRoomFor(roomFor === o.id ? null : o.id)
+                                            }
+                                          >
+                                            {o.meetingUrl ? shortLink(o.meetingUrl) : "not set"}
+                                          </button>
+                                        </td>
+                                        <td className="num">{o._count.enrolments}</td>
+                                        {mayEdit && (
+                                          <td>
+                                            <button
+                                              type="button"
+                                              className="btn btn-quiet btn-sm"
+                                              disabled={busy}
+                                              onClick={() => void removeOffering(s.id, o)}
+                                            >
+                                              Remove
+                                            </button>
+                                          </td>
                                         )}
-                                      </td>
-                                      <td className="num">{o._count.enrolments}</td>
-                                    </tr>
+                                      </tr>
+                                      {roomFor === o.id && (
+                                        <tr>
+                                          <td colSpan={mayEdit ? 7 : 6}>
+                                            {/* The same editor the course screen
+                                                uses, so the rules, the refusals and
+                                                the wording are written once. */}
+                                            <ClassRoom
+                                              sectionSubjectId={o.id}
+                                              meetingUrl={o.meetingUrl}
+                                              meetingNote={o.meetingNote}
+                                              canManage={maySetRoom}
+                                              onSaved={() => {
+                                                void api
+                                                  .get<Offering[]>(`/sections/${s.id}/subjects`)
+                                                  .then(setOfferings)
+                                                  .catch(() => undefined);
+                                              }}
+                                            />
+                                          </td>
+                                        </tr>
+                                      )}
+                                    </Fragment>
                                   ))}
                                 </tbody>
                               </table>
@@ -675,4 +820,20 @@ export function SectionsPage() {
       </section>
     </>
   );
+}
+
+/**
+ * Enough of a meeting link to recognise in a table cell.
+ *
+ * A full Meet URL is around sixty characters and would set the width of the
+ * whole column; the host and path are what tells an administrator whether the
+ * class points at the room they meant.
+ */
+function shortLink(url: string): string {
+  try {
+    const u = new URL(url);
+    return `${u.host}${u.pathname}`.replace(/\/$/, "");
+  } catch {
+    return url;
+  }
 }

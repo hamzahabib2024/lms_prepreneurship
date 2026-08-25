@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Query } from "@nestjs/common";
 import {
   academicSessionCreateSchema,
   academicSessionUpdateSchema,
@@ -44,6 +44,7 @@ import { EnrolmentService } from "./enrolment.service";
 import { zodBody } from "../common/zod-validation.pipe";
 import { RequirePermission } from "../rbac/permissions.guard";
 import { CourseBuilderService } from "./course-builder.service";
+import { RemovalService } from "./removal.service";
 import { assertOwnStudent } from "../rbac/ownership";
 
 /** SRS §9.5 — academic structure and enrolment endpoints. */
@@ -55,6 +56,7 @@ export class AcademicController {
     private readonly assignments: AssignmentService,
     private readonly enrolments: EnrolmentService,
     private readonly notes: StudentNoteService,
+    private readonly removal: RemovalService,
   ) {}
 
   // ----------------------------------------------------------- programmes --
@@ -143,6 +145,20 @@ export class AcademicController {
     return this.academic.createSubject(dto);
   }
 
+  /**
+   * Remove a subject from the Institute's catalogue.
+   *
+   * Refused while any class teaches it, or while it has course material —
+   * a subject deleted out from under a module leaves lessons pointing at
+   * nothing, which is worse than the duplicate somebody was trying to tidy.
+   */
+  @RequirePermission("subject", "delete")
+  @Delete("subjects/:id")
+  @HttpCode(200)
+  deleteSubject(@Param("id") id: string) {
+    return this.removal.removeSubject(id);
+  }
+
   @RequirePermission("subject", "update")
   @Patch("subjects/:id")
   updateSubject(
@@ -185,6 +201,17 @@ export class AcademicController {
   @Post("batches")
   createBatch(@Body(zodBody(batchCreateSchema)) dto: BatchCreateInput) {
     return this.academic.createBatch(dto);
+  }
+
+  /**
+   * Remove a batch. Refused while it holds any section — the students and the
+   * marks are down there, not here, so an empty-looking batch is not empty.
+   */
+  @RequirePermission("batch", "delete")
+  @Delete("batches/:id")
+  @HttpCode(200)
+  deleteBatch(@Param("id") id: string) {
+    return this.removal.removeBatch(id);
   }
 
   @RequirePermission("batch", "update")
@@ -230,14 +257,31 @@ export class AcademicController {
   }
 
   /**
-   * FR-CRS-013 — archive, never delete. A section that has ever had an
-   * enrolment cannot be removed (BR-DAT-04), so there is deliberately no
-   * DELETE route here.
+   * FR-CRS-013 — archive is what a section that has been TAUGHT gets. It
+   * leaves every list an administrator works in while keeping the attendance
+   * and the marks, which outlive the section itself (BR-DAT-04).
+   *
+   * The DELETE below is the other half of the same rule, not a contradiction
+   * of it: a section created by mistake and never used has nothing to keep.
    */
   @RequirePermission("section", "update")
   @Post("sections/:id/archive")
   archiveSection(@Param("id") id: string) {
     return this.academic.archiveSection(id);
+  }
+
+  /**
+   * Remove a section that was created by mistake — FR-CRS-013.
+   *
+   * Refused, by name, the moment anything depends on it: a student in it, an
+   * admission pointing at it, a subject on it. The office is told which, and
+   * told to archive instead where that is the right answer.
+   */
+  @RequirePermission("section", "delete")
+  @Delete("sections/:id")
+  @HttpCode(200)
+  deleteSection(@Param("id") id: string) {
+    return this.removal.removeSection(id);
   }
 
   @RequirePermission("section", "read")
@@ -261,6 +305,24 @@ export class AcademicController {
     @Body(zodBody(offeringCreateSchema)) dto: OfferingCreateInput,
   ) {
     return this.academic.offerSubject(id, dto);
+  }
+
+  /**
+   * Take one subject off one class — "remove Maths from the evening group".
+   *
+   * Addressed by the OFFERING'S OWN ID rather than by section and subject
+   * together: that id is what the whole model hangs off (BR-CNT-03), it is
+   * what every screen already holds, and a two-part address would let a
+   * caller name a pair that does not exist and get a confusing 404.
+   *
+   * The teacher's posting to the class goes with it. Everything else — a
+   * register, an assignment, a certificate — refuses the removal instead.
+   */
+  @RequirePermission("section_subject", "delete")
+  @Delete("section-subjects/:id")
+  @HttpCode(200)
+  deleteOffering(@Param("id") id: string) {
+    return this.removal.removeSectionSubject(id);
   }
 
   // -------------------------------------------------------------- notes ----

@@ -158,6 +158,28 @@ export function StructurePage() {
     }
   }
 
+  /**
+   * Remove a batch created by mistake.
+   *
+   * Refused while it holds any section, and the refusal names them. A batch
+   * looks empty from this screen — the students and the marks are a level
+   * further down, in the sections — so "it has nothing in it" is exactly the
+   * judgement an administrator cannot safely make from here, and the server
+   * makes it instead.
+   */
+  async function removeBatch(b: Batch) {
+    if (
+      !window.confirm(
+        `Delete the batch "${b.name}"?
+
+Only possible while it holds no sections. ` +
+          `It leaves every list and every dropdown.`,
+      )
+    )
+      return;
+    await run(() => api.del(`/batches/${b.id}`), `Batch "${b.name}" deleted.`);
+  }
+
   async function saveBatch(id: string) {
     const ok = await run(
       () =>
@@ -516,15 +538,24 @@ export function StructurePage() {
                               </button>
                             </>
                           ) : (
-                            <button
-                              className="btn btn-quiet btn-sm"
-                              onClick={() => {
-                                setEditing(`b:${b.id}`);
-                                setDraft({});
-                              }}
-                            >
-                              Edit
-                            </button>
+                            <>
+                              <button
+                                className="btn btn-quiet btn-sm"
+                                onClick={() => {
+                                  setEditing(`b:${b.id}`);
+                                  setDraft({});
+                                }}
+                              >
+                                Edit
+                              </button>
+                              <button
+                                className="btn btn-quiet btn-sm"
+                                disabled={busy}
+                                onClick={() => void removeBatch(b)}
+                              >
+                                Delete
+                              </button>
+                            </>
                           )}
                         </td>
                       )}

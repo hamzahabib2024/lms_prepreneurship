@@ -141,7 +141,8 @@ screen(doc, "Your class's meeting room",
        "One link for the class, used every week. Set it once at the start of term and every "
        "student sees it in the place they already look, instead of scrolling back through "
        "WhatsApp to find it.",
-       ["Open the class and choose to set the meeting link.",
+       ["Open the class from Courses — or from Sections, where each subject in the class has "
+        "its own Meeting link column beside its teacher.",
         "Paste the whole address, INCLUDING the https:// at the front.",
         "Add a note if students need one — a passcode, or 'join five minutes early'.",
         "Clear the box to remove it."],

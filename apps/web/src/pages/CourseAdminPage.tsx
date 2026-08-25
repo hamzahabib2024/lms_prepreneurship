@@ -227,7 +227,7 @@ export function CourseAdminPage() {
         onChanged={() => void load()}
       />
 
-      <SubjectsPanel subjects={subjects} mayEdit={mayEdit} />
+      <SubjectsPanel subjects={subjects} mayEdit={mayEdit} onRemoved={() => void load()} />
     </>
   );
 }
@@ -492,10 +492,49 @@ const AUDIENCE_LABEL: Record<string, string> = {
 function SubjectsPanel({
   subjects,
   mayEdit,
+  onRemoved,
 }: {
   subjects: Subject[] | null;
   mayEdit: boolean;
+  onRemoved: () => void;
 }) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  /**
+   * Remove a subject from the catalogue.
+   *
+   * Refused by the server the moment any class teaches it or it has course
+   * material, and the refusal names what — so the button is offered on every
+   * card rather than being hidden on the ones that would fail. Hiding it would
+   * mean this screen deciding, from a count it does not have, what the server
+   * is going to say.
+   */
+  async function remove(sub: Subject) {
+    if (
+      !window.confirm(
+        `Delete ${sub.code} — ${sub.name}?\n\nOnly possible while no class teaches it and it ` +
+          `has no course material. It leaves every list and every dropdown.`,
+      )
+    )
+      return;
+    setBusy(sub.id);
+    setError(null);
+    try {
+      await api.del(`/subjects/${sub.id}`);
+      onRemoved();
+    } catch (e) {
+      // The server says which classes teach it, by code. That sentence is the
+      // whole value of the refusal (NFR-USE-007).
+      setError(
+        e instanceof ApiError
+          ? (e.details?.map((d) => d.message).join(" ") ?? e.message)
+          : "That subject could not be deleted.",
+      );
+    } finally {
+      setBusy(null);
+    }
+  }
 
   return (
     <section className="card">
@@ -511,6 +550,12 @@ function SubjectsPanel({
         A subject is taught within a programme. Offer it to a section under Sections — a subject
         that is not offered anywhere has no students and no register.
       </p>
+
+      {error && (
+        <div className="alert alert-error" role="alert">
+          <p>{error}</p>
+        </div>
+      )}
 
 
 
@@ -545,6 +590,14 @@ function SubjectsPanel({
                     <Link className="btn btn-quiet" to={`/courses-admin/subject/${s.id}`}>
                       Edit
                     </Link>
+                    <button
+                      type="button"
+                      className="btn btn-quiet"
+                      disabled={busy === s.id}
+                      onClick={() => void remove(s)}
+                    >
+                      {busy === s.id ? "Deleting…" : "Delete"}
+                    </button>
                   </div>
                 )}
               </div>
