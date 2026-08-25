@@ -10,14 +10,14 @@ class ClassPageRepository {
 
   Future<JoinRoute> getJoinRoute(String sessionId) async {
     final result = await _api.get<Map<String, dynamic>>(
-      '/api/v1/live-sessions/$sessionId/join-route',
+      '/live-sessions/$sessionId/join-route',
     );
     return JoinRoute.fromJson(result);
   }
 
   Future<void> checkIn(String sessionId) async {
     await _api.post<dynamic>(
-      '/api/v1/live-sessions/$sessionId/check-in',
+      '/live-sessions/$sessionId/check-in',
     );
   }
 }

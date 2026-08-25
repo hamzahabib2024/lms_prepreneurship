@@ -10,7 +10,7 @@ class AssignmentBuilderRepository {
 
   Future<List<SectionSubject>> getSectionSubjects() async {
     final result = await _api.get<Map<String, dynamic>>(
-      '/api/v1/marking/sections',
+      '/marking/sections',
     );
     return (result['sections'] as List<dynamic>? ?? const [])
         .whereType<Map<String, dynamic>>()
@@ -20,7 +20,7 @@ class AssignmentBuilderRepository {
 
   Future<AssignmentDraft> createAssignment(AssignmentDraft draft) async {
     final result = await _api.post<Map<String, dynamic>>(
-      '/api/v1/assignments',
+      '/assignments',
       draft.toJson(),
     );
     return AssignmentDraft(
@@ -38,7 +38,7 @@ class AssignmentBuilderRepository {
 
   Future<AssignmentDraft> updateAssignment(AssignmentDraft draft) async {
     final result = await _api.put<Map<String, dynamic>>(
-      '/api/v1/assignments/${draft.id}',
+      '/assignments/${draft.id}',
       draft.toJson(),
     );
     return AssignmentDraft(
@@ -56,13 +56,13 @@ class AssignmentBuilderRepository {
 
   Future<void> publishAssignment(String id) async {
     await _api.post<dynamic>(
-      '/api/v1/assignments/$id/publish',
+      '/assignments/$id/publish',
     );
   }
 
   Future<void> deleteAssignment(String id) async {
     await _api.delete<dynamic>(
-      '/api/v1/assignments/$id',
+      '/assignments/$id',
     );
   }
 }

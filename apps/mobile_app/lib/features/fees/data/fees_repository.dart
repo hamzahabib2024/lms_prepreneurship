@@ -14,21 +14,21 @@ class FeesRepository {
 
   Future<FeeSummary> getMyFeeSummary() async {
     final result = await _api.get<Map<String, dynamic>>(
-      '/api/v1/fees/submissions/context',
+      '/fees/submissions/context',
     );
     return FeeSummary.fromJson(result['summary'] as Map<String, dynamic>? ?? const {});
   }
 
   Future<BankDetails> getBankDetails() async {
     final result = await _api.get<Map<String, dynamic>>(
-      '/api/v1/fees/submissions/context',
+      '/fees/submissions/context',
     );
     return BankDetails.fromJson(result['bankDetails'] as Map<String, dynamic>? ?? const {});
   }
 
   Future<List<PaymentSubmission>> getMySubmissions() async {
     final result = await _api.get<Map<String, dynamic>>(
-      '/api/v1/fees/submissions/mine',
+      '/fees/submissions/mine',
     );
     return (result['submissions'] as List<dynamic>? ?? const [])
         .whereType<Map<String, dynamic>>()
@@ -52,7 +52,7 @@ class FeesRepository {
     if (studentNote != null) body['studentNote'] = studentNote;
 
     final result = await _api.post<Map<String, dynamic>>(
-      '/api/v1/fees/submissions',
+      '/fees/submissions',
       body,
     );
     return PaymentSubmission.fromJson(result);
@@ -67,18 +67,18 @@ class FeesRepository {
       'file': MultipartFile.fromBytes(fileBytes, filename: filename),
     });
     await _api.uploadForm<dynamic>(
-      '/api/v1/fees/submissions/proof?submissionId=$submissionId',
+      '/fees/submissions/proof?submissionId=$submissionId',
       formData,
     );
   }
 
   Future<void> withdrawSubmission(String submissionId) async {
-    await _api.delete<dynamic>('/api/v1/fees/submissions/$submissionId');
+    await _api.delete<dynamic>('/fees/submissions/$submissionId');
   }
 
   Future<Receipt> getReceipt(String paymentId) async {
     final result = await _api.get<Map<String, dynamic>>(
-      '/api/v1/payments/$paymentId/receipt',
+      '/payments/$paymentId/receipt',
     );
     return Receipt.fromJson(result);
   }
@@ -87,7 +87,7 @@ class FeesRepository {
 
   Future<List<DebtorRow>> getDebtors() async {
     final result = await _api.get<Map<String, dynamic>>(
-      '/api/v1/fees/debtors',
+      '/fees/debtors',
     );
     return (result['debtors'] as List<dynamic>? ?? const [])
         .whereType<Map<String, dynamic>>()
@@ -97,7 +97,7 @@ class FeesRepository {
 
   Future<VerificationStats> getVerificationStats() async {
     final result = await _api.get<Map<String, dynamic>>(
-      '/api/v1/fees/submissions/stats',
+      '/fees/submissions/stats',
     );
     return VerificationStats.fromJson(result);
   }
@@ -115,7 +115,7 @@ class FeesRepository {
         : '';
 
     final result = await _api.get<Map<String, dynamic>>(
-      '/api/v1/fees/submissions$queryString',
+      '/fees/submissions$queryString',
     );
     return (result['submissions'] as List<dynamic>? ?? const [])
         .whereType<Map<String, dynamic>>()
@@ -134,7 +134,7 @@ class FeesRepository {
     if (note != null) body['note'] = note;
 
     await _api.post<dynamic>(
-      '/api/v1/fees/submissions/$submissionId/verify',
+      '/fees/submissions/$submissionId/verify',
       body,
     );
   }
@@ -144,7 +144,7 @@ class FeesRepository {
     required String reason,
   }) async {
     await _api.post<dynamic>(
-      '/api/v1/fees/submissions/$submissionId/reject',
+      '/fees/submissions/$submissionId/reject',
       {'reason': reason},
     );
   }
