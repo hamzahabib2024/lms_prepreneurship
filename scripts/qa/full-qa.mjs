@@ -415,6 +415,86 @@ sec("15. one student cannot reach another");
   }
 }
 
+// ══════════════════════════════ 16. the class's meeting room ══════════════
+sec("16. the class meeting link");
+if (ss) {
+  // http:// must be refused, and the refusal must SAY WHY. A generic 422 is
+  // a failure here even though the link was correctly not saved: a teacher
+  // who cannot tell what is wrong with their link pastes it again.
+  const insecure = await call("teacher", "PUT", `/section-subjects/${ss}/meeting-link`, {
+    meetingUrl: "http://meet.google.com/qa-insecure",
+  });
+  ok("an http:// meeting link is refused", insecure.status >= 400, `got ${insecure.status}`);
+  const why = insecure.error?.details?.[0]?.message ?? "";
+  ok("and the refusal says why", /https:\/\//.test(why), why.slice(0, 60) || "(no detail)");
+
+  const set = await call("teacher", "PUT", `/section-subjects/${ss}/meeting-link`, {
+    meetingUrl: "https://meet.google.com/qa-room",
+    note: "QA. Safe to clear.",
+  });
+  ok("a teacher sets the link on their own class", set.status === 200, `got ${set.status}`);
+
+  // The student half: they must SEE it — this is a door they walk through,
+  // unlike the lecture folder, which they must not see.
+  const seen = await call("student", "GET", `/section-subjects/${ss}/lectures`);
+  ok("the student sees the meeting link", seen.data?.meetingUrl === "https://meet.google.com/qa-room",
+     seen.data?.meetingUrl ?? "(none)");
+  ok("but not where the recordings live", seen.data?.lectureFolderRef === null,
+     String(seen.data?.lectureFolderRef));
+
+  const pushed = await call("student", "PUT", `/section-subjects/${ss}/meeting-link`, {
+    meetingUrl: "https://meet.google.com/qa-student",
+  });
+  ok("a student cannot set it", pushed.status === 403, `got ${pushed.status}`);
+
+  const cleared = await call("teacher", "PUT", `/section-subjects/${ss}/meeting-link`, { meetingUrl: "" });
+  ok("clearing it removes the link", cleared.status === 200 && cleared.data?.meetingUrl === null,
+     String(cleared.data?.meetingUrl));
+}
+
+// ══════════════════════════ 17. files that come with a brief ══════════════
+sec("17. files attached to an assignment");
+if (aid) {
+  // A real PDF. The server checks the CONTENTS against the extension, so a
+  // text file called .pdf is refused — correctly, and that is checked below.
+  const pdf = Buffer.from(
+    ["%PDF-1.4", "1 0 obj<</Type/Catalog>>endobj", "trailer<</Root 1 0 R>>", "%%EOF", ""].join("\n"),
+  );
+  const form = new FormData();
+  form.append("file", new Blob([pdf], { type: "application/pdf" }), "qa-brief.pdf");
+  const up = await call("teacher", "POST", `/assignments/${aid}/attachments`, form, true);
+  ok("a teacher attaches a file to the brief", up.status === 201 || up.status === 200, `got ${up.status}`);
+
+  // The same bytes again must not make a second row: a teacher who fixes a
+  // typo and re-uploads should not leave a student choosing between two
+  // files with different names and identical contents.
+  const form2 = new FormData();
+  form2.append("file", new Blob([pdf], { type: "application/pdf" }), "qa-brief-again.pdf");
+  const dup = await call("teacher", "POST", `/assignments/${aid}/attachments`, form2, true);
+  ok("the same file twice keeps one copy", dup.data?.alreadyAttached === true, String(dup.data?.alreadyAttached));
+
+  // A JPEG renamed .pdf. The teacher is staff and is checked anyway: the
+  // FILE is the threat model, not the person who uploaded it.
+  const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 16, 0x4a, 0x46, 0x49, 0x46, 0, 1, 1, 0, 0, 1, 0, 1, 0, 0]);
+  const form3 = new FormData();
+  form3.append("file", new Blob([jpeg], { type: "application/pdf" }), "not-really.pdf");
+  const liar = await call("teacher", "POST", `/assignments/${aid}/attachments`, form3, true);
+  ok("a file whose contents belie its name is refused", liar.status >= 400, `got ${liar.status}`);
+
+  const listed = await call("student", "GET", `/assignments/${aid}/attachments`);
+  ok("the student sees what is attached", listed.status === 200 && (listed.data?.length ?? 0) === 1,
+     `${listed.data?.length ?? 0} file(s)`);
+
+  const one = listed.data?.[0];
+  if (one) {
+    const got = await call("student", "GET", `/assignment-attachments/${one.id}/download`);
+    ok("and can download it", got.status === 200, `got ${got.status}`);
+
+    const meddling = await call("student", "DELETE", `/assignment-attachments/${one.id}`);
+    ok("a student cannot remove it", meddling.status === 403, `got ${meddling.status}`);
+  }
+}
+
 // ══════════════════════════════════════════════════════ cleanup ═══════════
 sec("cleanup");
 {

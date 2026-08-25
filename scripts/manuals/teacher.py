@@ -63,6 +63,8 @@ screen(doc, "Setting work",
        ["Choose New assignment from the Marking screen.",
         "Give it a title and say what they have to do. You can also record a spoken brief — "
         "for design or language work, forty seconds of explanation beats four paragraphs.",
+        "Attach any files the task is about: the logo to work from, the passage to read, the "
+        "spreadsheet to reconcile. Students download them from the assignment itself.",
         "Set when it opens, when it is due, and what happens to late work.",
         "Say what they may hand in: typed answers, files, or a spoken answer.",
         "Choose a marking guide if you want the marks broken down.",
@@ -134,6 +136,18 @@ screen(doc, "Recordings",
        "Changing a class's folder clears the recordings from the old one and pulls in the new "
        "folder's. Nothing is destroyed: point it back and they return, with each student's "
        "watch progress intact.")
+
+screen(doc, "Your class's meeting room",
+       "One link for the class, used every week. Set it once at the start of term and every "
+       "student sees it in the place they already look, instead of scrolling back through "
+       "WhatsApp to find it.",
+       ["Open the class and choose to set the meeting link.",
+        "Paste the whole address, INCLUDING the https:// at the front.",
+        "Add a note if students need one — a passcode, or 'join five minutes early'.",
+        "Clear the box to remove it."],
+       "It must begin with https:// and will be refused otherwise. That is not fussiness: an "
+       "http link hands the room's address to anybody on the same café wifi. Any provider works "
+       "— Google Meet, Zoom or Teams.")
 
 screen(doc, "Content",
        "Course material, in three levels: a course holds modules, a module holds lessons, and a "

@@ -537,6 +537,35 @@ const MODEL_POLICIES: Record<string, PolicyFn> = {
     return DENY_ALL;
   },
 
+  /**
+   * A file attached to a brief follows the brief.
+   *
+   * Nested through Assignment rather than restated, so the rule cannot drift:
+   * a student reaches an attachment exactly when they reach the assignment,
+   * which for them means PUBLISHED and in a class they are enrolled in. A
+   * teacher reaches the ones in classes they teach.
+   *
+   * That nesting matters more here than usual. An attachment id is the only
+   * thing a download route receives, and an id says nothing about who may read
+   * it — so if this were left open, a student holding one id could fetch the
+   * brief for a class they are not in, or for an assignment still in draft.
+   */
+  AssignmentAttachment: (a) => {
+    if (isAdmin(a)) return null;
+    if (isTeacher(a)) {
+      return { assignment: { sectionSubjectId: { in: [...a.sectionSubjectIds] } } };
+    }
+    if (isStudent(a)) {
+      return {
+        assignment: {
+          sectionSubjectId: { in: [...a.sectionSubjectIds] },
+          publicationStatus: "PUBLISHED",
+        },
+      };
+    }
+    return DENY_ALL;
+  },
+
   AssignmentSubmission: (a) => {
     if (isAdmin(a)) return null;
     if (isTeacher(a)) {

@@ -799,6 +799,18 @@ code {
   border-radius: var(--radius-sm);
   font: inherit; font-size: .875rem; font-weight: 550;
   cursor: pointer;
+  /*
+    A BUTTON IS NOT UNDERLINED, whichever element it is.
+
+    `.btn` is worn by both <button> and <Link>, and without this the link
+    version inherits the global underline on `a` — so "Back", "All subjects"
+    and every other navigation button rendered with a line under the text
+    while the identical-looking <button> beside it did not. The underline
+    earns its keep on prose links, where it is the only thing marking a word
+    as clickable. On something already drawn as a button it says nothing and
+    reads as a mistake.
+  */
+  text-decoration: none;
   transition: background .15s var(--ease), border-color .15s var(--ease),
               box-shadow .15s var(--ease), transform .06s var(--ease);
 }
@@ -1203,6 +1215,31 @@ code {
    Deliberately NOT an alert: setup that is not finished is a step, not a
    fault, and colouring it red reads as though the recordings listed below
    are broken when they are perfectly fine. */
+/*
+  THE CLASS'S MEETING ROOM — FR-LIV.
+
+  A SOLID PANEL, where the folder panel beside it is dashed. That difference
+  carries meaning rather than decoration: the dashed one is staff plumbing,
+  and this is a door a student walks through. Solid over tinted says it is
+  something that is here now, not something waiting to be configured.
+*/
+.class-room {
+  margin-bottom: 1rem;
+  padding: .8rem .9rem;
+  background: var(--surface-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+}
+.class-room-live { display: flex; align-items: flex-start; gap: .6rem; }
+.class-room-live svg { width: 17px; height: 17px; color: var(--muted); flex: none; margin-top: .5rem; }
+/* The note and the address stack under the button rather than beside it: a
+   passcode wrapping mid-string is a passcode somebody mistypes. */
+.class-room-text { display: flex; flex-direction: column; align-items: flex-start;
+  gap: .35rem; min-width: 0; }
+.class-room-text code { overflow-wrap: anywhere; }
+.class-room > .btn { margin-top: .6rem; }
+.class-room-editor { margin-top: .7rem; }
+
 .lecture-source {
   margin-bottom: 1rem;
   background: var(--surface-2);
@@ -1817,6 +1854,23 @@ code {
   gap: 1rem; flex-wrap: wrap;
 }
 .assignment-body { margin-top: .5rem; }
+
+/*
+  FILES THAT COME WITH THE BRIEF — FR-ASG.
+
+  Set apart from the instructions above it by a rule and a tint rather than a
+  border on all four sides. A box inside the assignment card inside the list
+  is three nested frames, and by the third one nothing is emphasised because
+  everything is.
+*/
+.brief-files {
+  margin-top: .6rem; padding-top: .6rem;
+  border-top: 1px solid var(--line);
+}
+.brief-files > strong { display: block; margin-bottom: .35rem; }
+/* Download and Remove sit together, and stay together when the filename beside
+   them is long enough to wrap. */
+.brief-files-actions { display: inline-flex; gap: .35rem; flex-shrink: 0; }
 
 .question { padding: .9rem 0; border-bottom: 1px solid var(--line); }
 .response { margin-top: .5rem; padding-left: .9rem; border-left: 2px solid var(--line); }

@@ -276,6 +276,7 @@ model User {
   completionDecisions SubjectCompletion[]
   endorsedPosts DiscussionPost[] @relation("PostEndorsements")
   resolvedPosts DiscussionPost[] @relation("PostResolutions")
+  assignmentAttachments AssignmentAttachment[]
 }
 
 model Role {
@@ -856,6 +857,25 @@ model SectionSubject {
   /// Null means nobody has connected one, and the sweep skips the class
   /// entirely rather than guessing at a folder.
   lectureFolderRef String? @map("lecture_folder_ref") @db.VarChar(255)
+
+  /// THE CLASS'S STANDING ROOM — FR-LIV.
+  ///
+  /// One link, the same every week, for the subject AS TAUGHT TO THIS GROUP.
+  /// Deliberately not on Subject: Graphic Designing is taught to four sections
+  /// at four different times, and one link on the subject would put all four
+  /// in the same room.
+  ///
+  /// Distinct from the per-session join link on LiveSessionProviderBinding,
+  /// which is a meeting the System created for one occurrence. This is the
+  /// room the Institute already has.
+  ///
+  /// OPAQUE (ARC-025) — stored, shown, never parsed. Not required to be
+  /// Google: Zoom or Teams works identically. https only, enforced by a CHECK,
+  /// because this is rendered into an anchor somebody clicks.
+  meetingUrl  String? @map("meeting_url") @db.VarChar(1000)
+  /// What a student needs to know before clicking — a passcode, or "join five
+  /// minutes early, we use the waiting room".
+  meetingNote String? @map("meeting_note") @db.VarChar(500)
 
   progressWeights    Json? @map("progress_weights") // per-subject override of Figure 5-3
   completionCriteria Json? @map("completion_criteria") // FR-PRG-009
@@ -1921,6 +1941,7 @@ model Assignment {
   @@index([sectionSubjectId, publicationStatus])
   @@index([dueAt])
   @@map("assignments")
+  attachments AssignmentAttachment[]
 }
 
 /// FR-ASG-022 / BR-ASG-07 — every version is retained; the latest is graded.
@@ -2425,6 +2446,42 @@ model MediaAsset {
 
   @@index([kind])
   @@map("media_assets")
+}
+
+/// A FILE THE BRIEF NEEDS — FR-ASG.
+///
+/// The third way a teacher sets a task, beside the written instructions and
+/// the spoken brief: the logo to work from, the passage to read, the trial
+/// balance. Without somewhere to put these the teacher sends them on WhatsApp
+/// and a student who joins late has to ask for them every time.
+///
+/// A TABLE rather than columns, unlike briefAudio: one assignment has at most
+/// one recording, and any number of attachments. Reached only through an
+/// authenticated route — there is no public endpoint, which is what separates
+/// this from MediaAsset.
+model AssignmentAttachment {
+  id           String @id @default(uuid()) @db.Uuid
+  assignmentId String @map("assignment_id") @db.Uuid
+
+  storageKey String @map("storage_key") @db.VarChar(500)
+  /// The teacher's name for it, shown to students. Never used as a path — the
+  /// stored name is generated (SEC-FIL-005).
+  originalFilename String @map("original_filename") @db.VarChar(255)
+  /// Determined by CONTENT, not by the extension (SEC-FIL-003).
+  contentType String @map("content_type") @db.VarChar(100)
+  sizeBytes   BigInt @map("size_bytes")
+  contentHash String @map("content_hash") @db.VarChar(64)
+
+  uploadedBy String   @map("uploaded_by") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  uploader   User       @relation(fields: [uploadedBy], references: [id], onDelete: Restrict)
+
+  /// The same file twice is a mistake, not an intention.
+  @@unique([assignmentId, contentHash])
+  @@index([assignmentId, createdAt])
+  @@map("assignment_attachments")
 }
 
 /// A PERSON SAYING THE STUDENT HAS FINISHED — FR-CRT, FR-PRG.

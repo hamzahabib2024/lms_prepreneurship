@@ -162,6 +162,20 @@ export class ProgressService {
       // hang off the offering rather than the subject.
       sectionSubjectId,
       subject: ss.subject,
+      /*
+       * THE CLASS'S ROOM — FR-LIV.
+       *
+       * Here because this is the payload the subject screen already fetches,
+       * and the alternative is a second request on every subject a student
+       * opens to carry one string. The record is loaded above regardless.
+       *
+       * Not withheld from a student the way the lecture folder is: the folder
+       * reference is where the Institute's files live, and this is a door the
+       * student is meant to walk through. It reaches only somebody the scope
+       * predicate has already admitted to this class.
+       */
+      meetingUrl: ss.meetingUrl,
+      meetingNote: ss.meetingNote,
       overallPercent: progress.overallPercent,
       // FR-PRG-006 — computed on read, so it is never stale. Returned anyway
       // so the interface can display "as at" consistently (ARC-048).
