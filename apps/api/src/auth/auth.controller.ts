@@ -70,7 +70,6 @@ export class AuthController {
     if (req.sessionId) await this.auth.logout(req.sessionId);
   }
 
-  @RequirePermission("own_password", "update")
   /**
    * FR-AUT — "I have forgotten my password."
    *
@@ -107,6 +106,7 @@ export class AuthController {
     return this.reset.complete(dto.token, dto.newPassword, req.ip ?? null);
   }
 
+  @RequirePermission("own_password", "update")
   @Post("password/change")
   @HttpCode(200)
   async changePassword(
