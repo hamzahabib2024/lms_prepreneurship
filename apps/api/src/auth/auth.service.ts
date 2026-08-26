@@ -323,19 +323,7 @@ export class AuthService {
       });
     }
 
-    const roles = user.roles.map((r) => r.role.key as Role);
-    const minLength = this.policyFor(roles).minLength;
-    if (next.length < minLength) {
-      throw new AppError("VALIDATION_FAILED", {
-        details: [
-          {
-            field: "newPassword",
-            code: "TOO_SHORT",
-            message: `Use at least ${minLength} characters for this account type.`,
-          },
-        ],
-      });
-    }
+    await this.assertPasswordAcceptable(userId, next);
 
     await this.prisma.asSystem(async (db) => {
       await db.user.update({
@@ -362,6 +350,57 @@ export class AuthService {
    * is called on every page load, and §4.7 keeps sensitive fields to the
    * screens that genuinely need them.
    */
+  /**
+   * The password rules for one account, applied.
+   *
+   * FACTORED OUT OF changePassword SO THE RESET LINK CANNOT DIVERGE FROM IT.
+   * A super administrator has a longer minimum than a student, and a second
+   * door into setting a password is a second place for that to be forgotten —
+   * which is how the strict rule ends up applying on one screen and not the
+   * other.
+   */
+  async assertPasswordAcceptable(userId: string, password: string): Promise<void> {
+    const user = await this.prisma.asSystem((db) =>
+      db.user.findUnique({
+        where: { id: userId },
+        include: { roles: { include: { role: true } } },
+      }),
+    );
+    if (!user) throw new AppError("AUTH_TOKEN_INVALID");
+
+    const roles = user.roles.map((r) => r.role.key as Role);
+    const minLength = this.policyFor(roles).minLength;
+    if (password.length < minLength) {
+      throw new AppError("VALIDATION_FAILED", {
+        details: [
+          {
+            field: "newPassword",
+            code: "TOO_SHORT",
+            message: `Use at least ${minLength} characters for this account type.`,
+          },
+        ],
+      });
+    }
+  }
+
+  /**
+   * Write to the security log from an UNAUTHENTICATED flow.
+   *
+   * `recordSecurityEvent` is private and stays that way — it is called from
+   * inside this service's own paths, which know the actor. The forgotten-
+   * password flow has no actor by definition, so it needs a door of its own
+   * rather than the private one being opened to everybody.
+   */
+  async recordPublicSecurityEvent(
+    eventType: string,
+    userId: string | null,
+    email: string | null,
+    ip: string | null,
+    detail?: Record<string, unknown>,
+  ): Promise<void> {
+    await this.recordSecurityEvent(eventType, userId, email, ip ?? undefined, undefined, detail);
+  }
+
   async profileFor(userId: string) {
     const user = await this.prisma.asSystem((db) =>
       db.user.findUnique({

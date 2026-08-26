@@ -4,6 +4,7 @@ import { ConfigModule, ConfigService } from "@nestjs/config";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { AuthService } from "./auth.service";
+import { PasswordResetService } from "./password-reset.service";
 import { AuthController } from "./auth.controller";
 import { ActorService } from "./actor.service";
 import { ActorContextMiddleware } from "./actor-context.middleware";
@@ -70,7 +71,7 @@ function readKey(path: string): string {
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, ActorService, ActorContextMiddleware],
+  providers: [AuthService, ActorService, ActorContextMiddleware, PasswordResetService],
   exports: [AuthService, ActorService, JwtModule],
 })
 export class AuthModule {}

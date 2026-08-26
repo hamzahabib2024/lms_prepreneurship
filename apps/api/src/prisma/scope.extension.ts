@@ -227,6 +227,23 @@ const MODEL_POLICIES: Record<string, PolicyFn> = {
 
   UserSession: (a) => (isAdmin(a) ? null : { userId: a.userId }),
 
+  /*
+   * NOBODY. Not the holder, not an administrator, not a Super Admin.
+   *
+   * A live reset token is a credential for the next thirty minutes. Any actor
+   * who could read one could take over the account it belongs to, and an
+   * administrator being able to do that quietly is strictly worse than the
+   * forgotten password it would be solving — they already have a reset button
+   * that leaves a name in the audit trail.
+   *
+   * The flow that legitimately touches this table is unauthenticated by
+   * definition and runs through `asSystem`, which does not consult this map.
+   * So the predicate that is correct here is the one that matches no rows at
+   * all, and saying it out loud is better than leaving the model unlisted —
+   * "absent" and "deliberately unreachable" look identical otherwise.
+   */
+  PasswordResetToken: () => ({ id: { in: [] } }),
+
   UserRole: (a) => (isAdmin(a) ? null : { userId: a.userId }),
 
   // ------------------------------------------------------------- students --

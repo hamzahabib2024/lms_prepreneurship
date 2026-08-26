@@ -620,6 +620,45 @@ sec("18. deleting a course, batch or subject");
   ok("a student cannot delete a section", t2.status === 403, `got ${t2.status}`);
 }
 
+// ══════════════════════════════ 19. a forgotten password ══════════════════
+sec("19. forgotten passwords");
+{
+  /*
+   * THE PROPERTY THAT MATTERS MOST IS THE ONE THAT LOOKS LIKE A BUG: asking
+   * about an address that does not exist succeeds, identically. An endpoint
+   * that says "no such account" is a membership test anybody can run against
+   * a list of email addresses, and at an institute that list is the roster.
+   */
+  const real = await call(null, "POST", "/auth/password/forgot", { email: WHO.student[0] });
+  const fake = await call(null, "POST", "/auth/password/forgot", {
+    email: `nobody-${stamp}@nowhere.invalid`,
+  });
+  ok("asking about a real address succeeds", real.status === 200, `got ${real.status}`);
+  ok("asking about an unknown one succeeds too", fake.status === 200, `got ${fake.status}`);
+  ok("and the two answers are word for word identical",
+     real.data?.message === fake.data?.message && typeof real.data?.message === "string");
+
+  const badToken = await call(null, "POST", "/auth/password/reset", {
+    token: "n0t-a-real-token-but-long-enough-to-pass-the-schema",
+    newPassword: `QaForgot!${String(stamp).slice(-4)}`,
+  });
+  ok("an invented token is refused", badToken.status >= 400, `got ${badToken.status}`);
+  ok("without saying why it was wrong",
+     !/expired|used|unknown|not found/i.test(badToken.error?.message ?? "") ||
+       /may have/i.test(badToken.error?.message ?? ""),
+     (badToken.error?.message ?? "").slice(0, 70));
+
+  // Neither route may be reachable while signed in as somebody else, and
+  // neither may need a token to reach — they are for people who cannot sign in.
+  const noAuth = await fetch(`${API}/auth/password/forgot`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: WHO.student[0] }),
+  });
+  ok("it works with no token at all", noAuth.status === 200 || noAuth.status === 429,
+     `got ${noAuth.status}`);
+}
+
 // ══════════════════════════════════════════════════════ cleanup ═══════════
 sec("cleanup");
 {

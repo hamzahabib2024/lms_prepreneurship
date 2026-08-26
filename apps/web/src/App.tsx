@@ -2,6 +2,8 @@ import { Fragment, useCallback, useEffect, useState } from "react";
 import { NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { useAuth } from "./auth/AuthContext";
 import { LoginPage } from "./pages/LoginPage";
+import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
+import { ResetPasswordPage } from "./pages/ResetPasswordPage";
 import { LandingPage } from "./pages/LandingPage";
 import { ApplyPage } from "./pages/ApplyPage";
 import { DashboardPage } from "./pages/DashboardPage";
@@ -220,6 +222,10 @@ export function App() {
     return (
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        {/* FR-AUT — both are for somebody who cannot sign in, so both have to
+            be reachable without signing in. */}
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
         {/* FR-REG-001 — no account, no login. The whole point of the public
             application is that the person filling it in cannot have one. */}
         <Route path="/apply" element={<ApplyPage />} />
@@ -475,6 +481,8 @@ export function App() {
             so the URL bar ends up saying / and a reload does the right thing.
           */}
           <Route path="/login" element={<Navigate to="/" replace />} />
+          <Route path="/forgot-password" element={<Navigate to="/" replace />} />
+          <Route path="/reset-password" element={<Navigate to="/" replace />} />
           <Route path="/apply" element={<Navigate to="/" replace />} />
           <Route
             path="/admissions"
