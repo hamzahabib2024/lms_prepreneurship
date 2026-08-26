@@ -181,7 +181,7 @@ export function AdmissionsPage() {
                       {r.isOverdue && <span className="pill pill-warn">waiting</span>}
                     </span>
                     <span className="muted small">
-                      {r.trackingRef} · {r.desiredSection?.code ?? "no section"} ·{" "}
+                      {r.trackingRef} · {r.desiredSection?.code ?? "no batch"} ·{" "}
                       {daysAgo(r.createdAt)}
                     </span>
                   </button>
@@ -398,8 +398,8 @@ function ReviewPanel({
           offered; the approve button simply cannot be used. */}
       {genderBlocked && (
         <div className="alert alert-error" role="alert">
-          <strong>This section admits {section?.genderRestriction.toLowerCase()} students only</strong>
-          <p className="small">Choose a different section. This restriction cannot be overridden.</p>
+          <strong>This batch admits {section?.genderRestriction.toLowerCase()} students only</strong>
+          <p className="small">Choose a different batch. This restriction cannot be overridden.</p>
         </div>
       )}
 
@@ -431,7 +431,7 @@ function ReviewPanel({
           <option value="SLIP_ILLEGIBLE">Slip illegible</option>
           <option value="DUPLICATE_APPLICATION">Duplicate application</option>
           <option value="INELIGIBLE">Ineligible</option>
-          <option value="SECTION_FULL">Section full</option>
+          <option value="SECTION_FULL">Batch full</option>
           <option value="OTHER">Other</option>
         </select>
         <button className="btn" onClick={() => void reject()} disabled={busy !== null}>
@@ -460,7 +460,7 @@ function ApprovalReceipt({
       <dl className="facts">
         <div><dt>Registration no.</dt><dd><code>{result.student.registrationNo}</code></dd></div>
         <div><dt>Roll no.</dt><dd>{result.student.rollNo}</dd></div>
-        <div><dt>Section</dt><dd>{result.student.sectionName}</dd></div>
+        <div><dt>Batch</dt><dd>{result.student.sectionName}</dd></div>
         <div><dt>Subjects</dt><dd>{result.enrolments.count} enrolled</dd></div>
       </dl>
 

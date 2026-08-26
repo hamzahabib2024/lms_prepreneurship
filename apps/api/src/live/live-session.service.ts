@@ -72,7 +72,7 @@ export class LiveSessionService {
           {
             field: "sectionSubjectId",
             code: "NOT_FOUND",
-            message: "That subject is not offered to that section.",
+            message: "That subject is not offered to that batch.",
           },
         ],
       });

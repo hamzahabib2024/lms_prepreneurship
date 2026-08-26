@@ -155,7 +155,7 @@ export function CoursesPage() {
           <input
             id="course-q"
             type="search"
-            placeholder="Subject, section or teacher…"
+            placeholder="Subject, batch or teacher…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -165,7 +165,7 @@ export function CoursesPage() {
       {courses.length === 0 ? (
         <EmptyState icon="book" title="No classes yet">
           {canManage
-            ? "Once a section has subjects on it, each one appears here as a class."
+            ? "Once a batch has subjects on it, each one appears here as a class."
             : "You are not enrolled on any classes yet."}
         </EmptyState>
       ) : shown.length === 0 ? (

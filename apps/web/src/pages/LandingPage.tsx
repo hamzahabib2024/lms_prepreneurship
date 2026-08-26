@@ -118,7 +118,7 @@ const FALLBACK: Copy = {
   heroPill: "Prepreneurship Institute",
   heroHeadline: "Learn the craft.\nBuild the business.",
   heroBody:
-    "Practical programmes in design and digital marketing, taught in small sections with " +
+    "Practical programmes in design and digital marketing, taught in small batches with " +
     "attendance, coursework and progress you can see from the first week — not a mark at the " +
     "end of the term.",
   heroPrimaryCta: "Apply now",
@@ -135,7 +135,7 @@ const FALLBACK: Copy = {
   newsHeading: "Latest from the Institute",
   newsBlurb: "Notices we have published for everyone.",
   programmesHeading: "What we are running",
-  programmesBlurb: "Straight from the Institute's own records — if a section is listed, it is open.",
+  programmesBlurb: "Straight from the Institute's own records — if a batch is listed, it is open.",
   /*
    * OFF when the showcase did not load, and that is the deliberate choice.
    *
@@ -299,7 +299,7 @@ export function LandingPage() {
             </div>
             <div className="stat-item">
               <strong>{programmes.reduce((n, p) => n + p.sections.length, 0)}</strong>
-              <span>sections open now</span>
+              <span>batches open now</span>
             </div>
             <div className="stat-item">
               <strong>
@@ -385,7 +385,7 @@ export function LandingPage() {
                   <h3>{p.name}</h3>
                   {p.description && <p className="muted small">{p.description}</p>}
 
-                <div className="section-label">Sections open</div>
+                <div className="section-label">Batches open</div>
                 <ul className="list small">
                   {p.sections.map((s) => (
                     <li key={s.id}>

@@ -87,7 +87,7 @@ export function assertOwnsSectionSubject(sectionSubjectId: string): void {
     // 403 rather than 404: the caller supplied this id, so they already know it
     // exists. Pretending otherwise buys nothing and reads as a fault.
     throw new AppError("AUTH_FORBIDDEN", {
-      message: "You are not assigned to teach that subject-section.",
+      message: "You are not assigned to teach that subject.",
     });
   }
 }
@@ -100,7 +100,7 @@ export function assertOwnsSection(sectionId: string): void {
 
   if (!actor.sectionIds.includes(sectionId)) {
     throw new AppError("AUTH_FORBIDDEN", {
-      message: "You are not assigned to that section.",
+      message: "You are not assigned to that batch.",
     });
   }
 }

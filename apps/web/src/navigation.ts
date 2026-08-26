@@ -120,7 +120,17 @@ export const DESTINATIONS: readonly Destination[] = [
      a teacher holds `programme:read` but no create on programme or subject, and
      nothing but read on fee_structure. */
   { to: "/courses-admin", label: "Courses & fees", icon: "book", group: "Institute", roles: OFFICE, also: ["programmes", "subjects", "fee", "fees", "price", "instalments", "thumbnail", "picture"] },
-  { to: "/sections", label: "Sections", icon: "layers", group: "Institute", roles: STAFF, also: ["subjects", "classes"] },
+  /*
+   * "Batches", because that is what the Institute calls a class group. The
+   * software still calls it a Section everywhere below the surface, and the
+   * address is still /sections — renaming a model is a migration across
+   * every table that references it, for a benefit nobody sees.
+   *
+   * "sections" stays in the search aliases on purpose. Staff who learned the
+   * old word will type it for a long time, and a search that finds nothing is
+   * how somebody concludes the screen has been removed.
+   */
+  { to: "/sections", label: "Batches", icon: "layers", group: "Institute", roles: STAFF, also: ["subjects", "classes", "sections", "section"] },
   { to: "/structure", label: "Structure", icon: "calendar", group: "Institute", roles: STAFF, also: ["terms", "batches", "sessions"] },
   /* A TEACHER holds no `payment` grant at all (§4.5) — offering them the page
      would be offering a 403. */

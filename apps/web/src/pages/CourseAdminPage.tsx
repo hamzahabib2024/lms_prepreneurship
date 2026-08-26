@@ -548,7 +548,7 @@ function SubjectsPanel({
         )}
       </div>
       <p className="muted small">
-        A subject is taught within a programme. Offer it to a section under Sections — a subject
+        A subject is taught within a programme. Offer it to a batch under Batches — a subject
         that is not offered anywhere has no students and no register.
       </p>
 
@@ -565,7 +565,7 @@ function SubjectsPanel({
       ) : subjects.length === 0 ? (
         <EmptyState icon="book" title="No subjects yet">
           {mayEdit
-            ? "Create the subjects taught in your programmes, then offer them to a section."
+            ? "Create the subjects taught in your programmes, then offer them to a batch."
             : "The office has not set up any subjects yet."}
         </EmptyState>
       ) : (

@@ -49,8 +49,10 @@ const day = (iso: string) => (iso ? iso.slice(0, 10) : "");
  * once and never again, so `POST /sections` was a door with no handle on this
  * side — reachable, correctly guarded, and impossible to call.
  *
- * The order on screen is the order of the dependency: a term holds batches, a
- * batch holds sections. Choosing a term filters the batches beneath it, because
+ * The order on screen is the order of the dependency: a term holds intakes, an
+ * intake holds batches. (The models are still called Batch and Section — only
+ * the words on screen moved, see navigation.ts.) Choosing a term filters the
+ * intakes beneath it, because
  * "which term is this batch in" is the question somebody gets wrong at the start
  * of every year.
  */
@@ -137,7 +139,7 @@ export function StructurePage() {
 
   async function createBatch(e: FormEvent) {
     e.preventDefault();
-    const ok = await run(() => api.post("/batches", newBatch), `Batch "${newBatch.name}" created.`);
+    const ok = await run(() => api.post("/batches", newBatch), `Intake "${newBatch.name}" created.`);
     if (ok) setNewBatch({ academicSessionId: "", name: "", deliveryPattern: "" });
   }
 
@@ -170,17 +172,17 @@ export function StructurePage() {
   async function removeBatch(b: Batch) {
     if (
       !window.confirm(
-        `Delete the batch "${b.name}"?
+        `Delete the intake "${b.name}"?
 
-Only possible while it holds no sections. ` +
+Only possible while it holds no batches. ` +
           `It leaves every list and every dropdown.`,
       )
     )
       return;
-    const forever = askPermanent(`the batch "${b.name}"`);
+    const forever = askPermanent(`the intake "${b.name}"`);
     await run(
       () => api.del(`/batches/${b.id}${forever ? "/permanent" : ""}`),
-      forever ? `Batch "${b.name}" erased permanently.` : `Batch "${b.name}" deleted.`,
+      forever ? `Intake "${b.name}" erased permanently.` : `Intake "${b.name}" deleted.`,
     );
   }
 
@@ -191,7 +193,7 @@ Only possible while it holds no sections. ` +
           ...(draft["name"] ? { name: draft["name"] } : {}),
           ...(draft["deliveryPattern"] ? { deliveryPattern: draft["deliveryPattern"] } : {}),
         }),
-      "Batch updated.",
+      "Intake updated.",
     );
     if (ok) {
       setEditing(null);
@@ -216,12 +218,12 @@ Only possible while it holds no sections. ` +
         <div>
           <h1>Academic structure</h1>
           <p className="muted small">
-            Terms hold batches; batches hold sections. Set these up before the intake opens.
+            Terms hold intakes; intakes hold batches. Set these up before teaching starts.
           </p>
         </div>
         <span className="muted small">
           {sessions.length} {sessions.length === 1 ? "term" : "terms"} · {batches.length}{" "}
-          {batches.length === 1 ? "batch" : "batches"}
+          {batches.length === 1 ? "intake" : "intakes"}
         </span>
       </header>
 
@@ -231,9 +233,9 @@ Only possible while it holds no sections. ` +
         intro="The calendar the whole Institute runs on. Set once a term, then left alone."
         steps={[
           { icon: "calendar", title: "Make the session", body: "The term itself — its name and the dates it runs between." },
-          { icon: "users", title: "Add the intakes", body: "A group starting together. Sections belong to one of these." },
+          { icon: "users", title: "Add the intakes", body: "A group starting together. Every batch belongs to one." },
           { icon: "clock", title: "Set the dates", body: "Everything else — deadlines, attendance, certificates — is measured against these." },
-          { icon: "check", title: "Make it current", body: "The current term is the one new sections and applications default to." },
+          { icon: "check", title: "Make it current", body: "The current term is the one new batches and applications default to." },
         ]}
         note="Dates here are the ones everything else is judged against, so a term with the wrong end date makes every completion figure wrong at once."
       />
@@ -269,7 +271,7 @@ Only possible while it holds no sections. ` +
                   <th>Name</th>
                   <th>Programme</th>
                   <th>Runs</th>
-                  <th className="num">Batches</th>
+                  <th className="num">Intakes</th>
                   <th>Status</th>
                   {mayEdit && <th />}
                 </tr>
@@ -455,7 +457,7 @@ Only possible while it holds no sections. ` +
       {/* ---------------------------------------------------------- batches */}
       <section className="card">
         <div className="card-head">
-          <h2>Batches</h2>
+          <h2>Intakes</h2>
           <label className="field field-inline">
             <span>Term</span>
             <select value={termFilter} onChange={(e) => setTermFilter(e.target.value)}>
@@ -471,9 +473,9 @@ Only possible while it holds no sections. ` +
 
         {visibleBatches.length === 0 ? (
           <EmptyState
-            title={termFilter ? "No batches in that term" : "No batches yet"}
+            title={termFilter ? "No intakes in that term" : "No intakes yet"}
           >
-            A batch groups the sections that run together — one delivery pattern, one intake.
+            An intake groups the batches that run together — one delivery pattern, one start.
           </EmptyState>
         ) : (
           <div className="table-scroll">
@@ -483,7 +485,7 @@ Only possible while it holds no sections. ` +
                   <th>Name</th>
                   <th>Pattern</th>
                   <th>Term</th>
-                  <th className="num">Sections</th>
+                  <th className="num">Batches</th>
                   {mayEdit && <th />}
                 </tr>
               </thead>
@@ -495,7 +497,7 @@ Only possible while it holds no sections. ` +
                       <td>
                         {isEditing ? (
                           <input
-                            aria-label="Batch name"
+                            aria-label="Intake name"
                             value={draft["name"] ?? b.name}
                             onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
                           />
@@ -573,7 +575,7 @@ Only possible while it holds no sections. ` +
 
         {mayEdit && (
           <form className="inline-form" onSubmit={(e) => void createBatch(e)}>
-            <h3>Add a batch</h3>
+            <h3>Add an intake</h3>
             <div className="form-row">
               <label className="field">
                 <span>Term</span>
@@ -614,7 +616,7 @@ Only possible while it holds no sections. ` +
               </label>
             </div>
             <button className="btn btn-primary" disabled={busy}>
-              {busy ? "Working…" : "Create batch"}
+              {busy ? "Working…" : "Create intake"}
             </button>
             {/* Named rather than left as an empty list somebody stares at. */}
             {openSessions.length === 0 && sessions.length > 0 && (

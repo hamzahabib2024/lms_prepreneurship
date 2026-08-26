@@ -193,7 +193,7 @@ export function SectionsPage() {
     e.preventDefault();
     const ok = await run(
       () => api.post("/sections", { ...blank, capacity: Number(blank.capacity) }),
-      `Section ${blank.code} created.`,
+      `Batch ${blank.code} created.`,
     );
     if (ok) {
       setCreating(false);
@@ -210,7 +210,7 @@ export function SectionsPage() {
           ...(draft["status"] ? { status: draft["status"] } : {}),
           ...(draft["shift"] ? { shift: draft["shift"] } : {}),
         }),
-      "Section updated.",
+      "Batch updated.",
     );
     if (ok) {
       setEditing(null);
@@ -263,7 +263,7 @@ Only possible while nothing depends on it — no students, ` +
   async function removeOffering(sectionId: string, o: Offering) {
     if (
       !window.confirm(
-        `Take ${o.subject.code} off this section?
+        `Take ${o.subject.code} off this batch?
 
 Only possible while it has not been ` +
           `taught — no enrolments, no assignments, no register. The teacher's posting to ` +
@@ -271,12 +271,12 @@ Only possible while it has not been ` +
       )
     )
       return;
-    const forever = askPermanent(`${o.subject.code} on this section`);
+    const forever = askPermanent(`${o.subject.code} on this batch`);
     const ok = await run(
       () => api.del(`/section-subjects/${o.id}${forever ? "/permanent" : ""}`),
       forever
         ? `${o.subject.code} erased permanently.`
-        : `${o.subject.code} removed from the section.`,
+        : `${o.subject.code} removed from the batch.`,
     );
     if (ok) setOfferings(await api.get<Offering[]>(`/sections/${sectionId}/subjects`));
   }
@@ -284,7 +284,7 @@ Only possible while it has not been ` +
   async function addOffering(sectionId: string) {
     const ok = await run(
       () => api.post(`/sections/${sectionId}/subjects`, newOffering),
-      "Subject added to the section.",
+      "Subject added to the batch.",
     );
     if (ok) {
       setNewOffering({ subjectId: "", isCompulsory: true });
@@ -301,9 +301,9 @@ Only possible while it has not been ` +
     <>
       <header className="page-head">
         <div>
-          <h1>Sections</h1>
+          <h1>Batches</h1>
           <p className="muted small">
-            A section is a class group — one shift, one capacity, one register.
+            A batch is a class group — one shift, one capacity, one register.
           </p>
         </div>
         <span className="muted small">{rows.length} visible to you</span>
@@ -311,15 +311,15 @@ Only possible while it has not been ` +
 
       <HowItWorks
         id="sections"
-        title="What a section is"
-        intro="A section is one group of students being taught together — a class. The course is what is taught; the section is who is in the room."
+        title="What a batch is"
+        intro="A batch is one group of students being taught together — a class. The course is what is taught; the batch is who is in the room."
         steps={[
-          { icon: "layers", title: "Pick the course", body: "A section always belongs to one course." },
+          { icon: "layers", title: "Pick the course", body: "A batch always belongs to one course." },
           { icon: "users", title: "Name the group", body: "Morning A, Evening B. Whatever the office already calls it on paper." },
           { icon: "calendar", title: "Say when it runs", body: "The shift and the term. This is what an applicant chooses between." },
-          { icon: "pen", title: "Give it a teacher", body: "A teacher only ever sees the sections they are assigned to." },
+          { icon: "pen", title: "Give it a teacher", body: "A teacher only ever sees the batches they are assigned to." },
         ]}
-        note="A section with no teacher assigned is invisible to every teacher, so nobody takes the register. It is the most common thing to forget."
+        note="A batch with no teacher assigned is invisible to every teacher, so nobody takes the register. It is the most common thing to forget."
       />
 
       {error && (
@@ -337,13 +337,13 @@ Only possible while it has not been ` +
 
       <section className="card">
         <div className="card-head">
-          <h2>All sections</h2>
+          <h2>All batches</h2>
           <div className="row-actions">
             {batches.length > 0 && (
               <label className="field field-inline">
-                <span>Batch</span>
+                <span>Intake</span>
                 <select value={batchFilter} onChange={(e) => setBatchFilter(e.target.value)}>
-                  <option value="">All batches</option>
+                  <option value="">All intakes</option>
                   {batches.map((b) => (
                     <option key={b.id} value={b.id}>
                       {b.academicSession.code} · {b.name}
@@ -354,7 +354,7 @@ Only possible while it has not been ` +
             )}
             {mayEdit && (
               <button className="btn btn-primary" onClick={() => setCreating((c) => !c)}>
-                {creating ? "Close" : "New section"}
+                {creating ? "Close" : "New batch"}
               </button>
             )}
           </div>
@@ -362,10 +362,10 @@ Only possible while it has not been ` +
 
         {mayEdit && creating && (
           <form className="inline-form" onSubmit={(e) => void createSection(e)}>
-            <h3>New section</h3>
+            <h3>New batch</h3>
             <div className="form-row">
               <label className="field">
-                <span>Batch</span>
+                <span>Intake</span>
                 <select
                   required
                   value={blank.batchId}
@@ -459,11 +459,11 @@ Only possible while it has not been ` +
               </label>
             </div>
             <button className="btn btn-primary" disabled={busy}>
-              {busy ? "Working…" : "Create section"}
+              {busy ? "Working…" : "Create batch"}
             </button>
             {batches.length === 0 && (
               <p className="warn small">
-                No batch exists yet. Create a term and a batch under Structure first — a section
+                No intake exists yet. Create a term and an intake under Structure first — a batch
                 has to belong to one.
               </p>
             )}
@@ -471,10 +471,10 @@ Only possible while it has not been ` +
         )}
 
         {rows.length === 0 ? (
-          <EmptyState title={batchFilter ? "No sections in that batch" : "No sections yet"}>
+          <EmptyState title={batchFilter ? "No batches in that intake" : "No batches yet"}>
             {mayEdit
-              ? "A section is a class group. Create one above, or clear the batch filter."
-              : "If you are a teacher, you see only the sections you are assigned to."}
+              ? "A batch is a class group. Create one above, or clear the intake filter."
+              : "If you are a teacher, you see only the batches you are assigned to."}
           </EmptyState>
         ) : (
           <div className="table-scroll">
@@ -508,7 +508,7 @@ Only possible while it has not been ` +
                         <td>
                           {isEditing ? (
                             <input
-                              aria-label="Section name"
+                              aria-label="Batch name"
                               value={draft["name"] ?? s.name}
                               onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
                             />
@@ -664,7 +664,7 @@ Only possible while it has not been ` +
                               <Skeleton lines={2} />
                             ) : offerings.length === 0 ? (
                               <p className="muted">
-                                No subjects yet. A section with no subjects has nothing to teach,
+                                No subjects yet. A batch with no subjects has nothing to teach,
                                 mark or attend.
                               </p>
                             ) : (
@@ -811,7 +811,7 @@ Only possible while it has not been ` +
                             )}
                             {mayEdit && addable.length === 0 && subjects.length > 0 && (
                               <p className="muted small">
-                                Every subject is already offered in this section.
+                                Every subject is already offered in this batch.
                               </p>
                             )}
                           </td>

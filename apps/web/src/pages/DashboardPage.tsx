@@ -415,12 +415,12 @@ function WidgetBody({
           />
           <Counter
             n={v["activeSections"]}
-            label="active sections"
+            label="active batches"
             to={may(COUNTER_LINKS["instituteKpis.activeSections"])}
           />
           <Counter
             n={v["sectionsAtCapacity"]}
-            label="sections full"
+            label="batches full"
             warn
             to={may(COUNTER_LINKS["instituteKpis.sectionsAtCapacity"])}
           />

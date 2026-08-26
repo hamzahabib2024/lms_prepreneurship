@@ -197,7 +197,7 @@ export function CourseEditPage() {
           <p className="small">
             A course is <strong>two or more subjects taught together</strong> — the{" "}
             <em>Diploma in Graphic Designing</em>. It carries the fee and the public page. It then
-            runs as one or more <strong>batches</strong> — Section A, Section B — and students are
+            runs as one or more <strong>batches</strong> — Batch A, Batch B — and students are
             admitted into a batch, never into the course itself.
           </p>
         ) : (

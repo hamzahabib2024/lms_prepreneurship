@@ -72,8 +72,8 @@ export function CourseHierarchy({ compact = false }: { compact?: boolean }) {
               <Icon name="users" /> Batches
             </strong>
             <p className="muted small">
-              The same course, run as separate groups — <em>Section A</em>, <em>Section B</em>,{" "}
-              <em>Section C</em>. Same subjects, different students: one morning, one evening, one
+              The same course, run as separate groups — <em>Batch A</em>, <em>Batch B</em>,{" "}
+              <em>Batch C</em>. Same subjects, different students: one morning, one evening, one
               female, one male. Each has its own seats, register and timetable.
             </p>
           </div>

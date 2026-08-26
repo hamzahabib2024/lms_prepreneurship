@@ -24,7 +24,7 @@ cover(doc, "QA Test Pack",
 
 # ───────────────────────────────────────────────────────────── contents ──
 doc.add_heading("What is in this pack", level=1)
-table(doc, ["Section", "What it covers"], [
+table(doc, ["Batch", "What it covers"], [
     ["1. Before you start", "What you need, and the accounts to use"],
     ["2. How to report", "What makes a report actionable"],
     ["3. Things that are NOT bugs", "Read this before raising anything"],
@@ -223,19 +223,19 @@ cases([
     ["8.5", "Student", "Look for any way to change the link", "There is none — no editor is offered at all"],
     ["8.6", "Teacher", "Clear the box and save", "The Join button disappears for the student too"],
     ["8.7", "Office", "Set a link on a class you do not teach", "Allowed — the office can set any"],
-    ["8.8", "Office", "Sections > a section > Subjects > the Meeting link column", "Each subject has its own link and its own teacher"],
-    ["8.9", "Teacher", "Set the link from Sections rather than Courses", "Works — same editor, same rules"],
+    ["8.8", "Office", "Batches > a batch > Subjects > the Meeting link column", "Each subject has its own link and its own teacher"],
+    ["8.9", "Teacher", "Set the link from Batches rather than Courses", "Works — same editor, same rules"],
 ])
 
-area(8.5, "Deleting a course, batch or subject")
+area(8.5, "Deleting a course, intake or subject")
 cases([
     ["8.5.1", "Office", "Courses & fees > create a subject, then Delete it", "Gone from the list"],
     ["8.5.2", "Office", "Delete a subject a class is teaching", "REFUSED, naming the classes by code"],
-    ["8.5.3", "Office", "Structure > Delete a batch that has sections", "REFUSED, naming the sections"],
-    ["8.5.4", "Office", "Sections > Delete a section that has subjects on it", "REFUSED, naming the subjects"],
-    ["8.5.5", "Office", "Sections > open subjects > Remove one that has never been taught", "Removed"],
+    ["8.5.3", "Office", "Structure > Delete an intake that has batches", "REFUSED, naming the batches"],
+    ["8.5.4", "Office", "Batches > Delete a batch that has subjects on it", "REFUSED, naming the subjects"],
+    ["8.5.5", "Office", "Batches > open subjects > Remove one that has never been taught", "Removed"],
     ["8.5.6", "Office", "Remove a subject that HAS assignments or a register", "REFUSED, saying what it has"],
-    ["8.5.7", "Teacher", "Look for any Delete on Sections", "There is none — no delete is offered at all"],
+    ["8.5.7", "Teacher", "Look for any Delete on Batches", "There is none — no delete is offered at all"],
     ["8.5.8", "Office", "After any refusal, read the message", "It names what is in the way and what to do"],
 ])
 

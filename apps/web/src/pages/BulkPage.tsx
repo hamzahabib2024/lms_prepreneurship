@@ -59,7 +59,7 @@ export function BulkPage() {
     api
       .get<Section[]>("/sections")
       .then(setSections)
-      .catch((e) => setError(e instanceof ApiError ? e.message : "Could not load sections."));
+      .catch((e) => setError(e instanceof ApiError ? e.message : "Could not load batches."));
   }, []);
 
   useEffect(() => {
@@ -107,7 +107,7 @@ export function BulkPage() {
           <h1>Bulk changes</h1>
           <p className="muted small">
             Move or withdraw many students at once. Every student goes through the same checks as
-            a single change, so a batch cannot get past a gender restriction or a full section.
+            a single change, so a batch cannot get past a gender restriction or a full batch.
           </p>
         </div>
       </header>
@@ -115,7 +115,7 @@ export function BulkPage() {
       <HowItWorks
         id="bulk"
         title="Changing many records at once"
-        intro="Moving a group between sections, or changing something for a whole cohort. Powerful, and worth slowing down for."
+        intro="Moving a group between batches, or changing something for a whole cohort. Powerful, and worth slowing down for."
         steps={[
           { icon: "users", title: "Choose who", body: "Filter down to exactly the students you mean. The count is shown before anything happens." },
           { icon: "shuffle", title: "Choose the change", body: "One change, applied to all of them." },
@@ -136,7 +136,7 @@ export function BulkPage() {
           <label className="field">
             <span>From</span>
             <select value={fromId} onChange={(e) => setFromId(e.target.value)}>
-              <option value="">Choose a section</option>
+              <option value="">Choose a batch</option>
               {sections.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.code} — {s.name}
@@ -147,7 +147,7 @@ export function BulkPage() {
           <label className="field">
             <span>To</span>
             <select value={toId} onChange={(e) => setToId(e.target.value)}>
-              <option value="">Choose a section</option>
+              <option value="">Choose a batch</option>
               {sections
                 .filter((s) => s.id !== fromId)
                 .map((s) => (
@@ -167,7 +167,7 @@ export function BulkPage() {
           <input
             value={reason}
             onChange={(e) => setReason(e.target.value)}
-            placeholder="Merging the evening section into the morning one."
+            placeholder="Merging the evening batch into the morning one."
           />
         </label>
       </section>
@@ -192,9 +192,9 @@ export function BulkPage() {
           </div>
 
           {roster.length === 0 ? (
-            <EmptyState icon="users" title="That section has no students">
+            <EmptyState icon="users" title="That batch has no students">
               Nobody is enrolled in it yet, so there is nothing to move. Enrol students from
-              Admissions, or choose a different section above.
+              Admissions, or choose a different batch above.
             </EmptyState>
           ) : (
             <ul className="list">

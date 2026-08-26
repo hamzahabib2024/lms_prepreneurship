@@ -14,7 +14,7 @@ cover(doc, "Teacher Guide",
       "For teaching staff at the Prepreneurship Institute")
 
 doc.add_heading("What is in this guide", level=1)
-table(doc, ["Section", "What it covers"], [
+table(doc, ["Batch", "What it covers"], [
     ["Getting started", "Signing in, and what you can reach"],
     ["Attendance", "Taking the register, and who is at risk"],
     ["Setting work", "Assignments, spoken briefs, and marking guides"],
@@ -35,7 +35,7 @@ para(doc, "You see the classes you are assigned to and nothing else. That is del
           "not a matter of trust but of keeping one teacher's records out of another's screen. "
           "If a class you teach is missing, you have not been assigned to it — ask the office.")
 callout(doc, "The most common first-day problem:",
-        "A section with no teacher assigned is invisible to every teacher, so nobody takes the "
+        "A batch with no teacher assigned is invisible to every teacher, so nobody takes the "
         "register. If your timetable looks empty, this is almost always why.")
 
 doc.add_heading("Your screens, one by one", level=1)
@@ -141,7 +141,7 @@ screen(doc, "Your class's meeting room",
        "One link for the class, used every week. Set it once at the start of term and every "
        "student sees it in the place they already look, instead of scrolling back through "
        "WhatsApp to find it.",
-       ["Open the class from Courses — or from Sections, where each subject in the class has "
+       ["Open the class from Courses — or from Batches, where each subject in the class has "
         "its own Meeting link column beside its teacher.",
         "Paste the whole address, INCLUDING the https:// at the front.",
         "Add a note if students need one — a passcode, or 'join five minutes early'.",
@@ -163,7 +163,7 @@ screen(doc, "Content",
 screen(doc, "Announcements and Discussion",
        "Announcements reach a whole class or one subject. Discussion is where students ask "
        "questions and everybody can read the answer.",
-       ["Choose the audience: one of your subjects, or a whole section.",
+       ["Choose the audience: one of your subjects, or a whole batch.",
         "Write a clear title — many people read only that.",
         "Set an expiry if it is about an event, so it takes itself down.",
         "Post it. It reaches everybody in that audience immediately."],

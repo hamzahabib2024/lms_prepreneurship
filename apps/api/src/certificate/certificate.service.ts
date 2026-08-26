@@ -1279,7 +1279,7 @@ export class CertificateService {
       throw new AppError("VALIDATION_FAILED", {
         message: "That subject could not be found.",
         details: [
-          { field: "sectionSubjectId", code: "NOT_FOUND", message: "No such subject-section." },
+          { field: "sectionSubjectId", code: "NOT_FOUND", message: "No such subject on that batch." },
         ],
       });
     }

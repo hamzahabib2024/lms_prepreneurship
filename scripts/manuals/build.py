@@ -3,7 +3,7 @@ Four user manuals, as Word documents.
 
 WRITTEN FOR THE PERSON WHO HAS THE ROLE, not for somebody reading about the
 software. That decides everything: a student's manual never mentions a
-"section-subject", an admin's says what a decision COSTS rather than which
+"batch-subject", an admin's says what a decision COSTS rather than which
 button makes it, and none of them contain the word "endpoint".
 
 The structure of each is the same on purpose — Getting started, then one

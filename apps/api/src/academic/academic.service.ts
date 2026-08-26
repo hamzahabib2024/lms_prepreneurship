@@ -497,7 +497,7 @@ export class AcademicService {
             field: "capacity",
             code: "BELOW_ENROLLED",
             message:
-              `This section already has ${before.enrolledCount} students. ` +
+              `This batch already has ${before.enrolledCount} students. ` +
               `Capacity cannot be set below that.`,
           },
         ],

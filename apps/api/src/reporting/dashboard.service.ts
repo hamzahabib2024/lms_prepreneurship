@@ -411,7 +411,7 @@ export class DashboardService {
         key: "sections_without_teacher",
         count: sectionsWithoutTeacher,
         // FR-CRS-026 — noticed by the Institute rather than by its students.
-        message: `${sectionsWithoutTeacher} subject-section(s) have no assigned teacher.`,
+        message: `${sectionsWithoutTeacher} subject(s) have no teacher assigned.`,
         severity: "high" as const,
       },
       missingLectures > 0 && {

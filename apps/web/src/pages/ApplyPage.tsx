@@ -254,12 +254,12 @@ export function ApplyPage() {
 
                   {programme && (
                     <label className="field">
-                      <span>Which section</span>
+                      <span>Which batch</span>
                       <select
                         value={f.desiredSectionId}
                         onChange={(e) => set("desiredSectionId")(e.target.value)}
                       >
-                        <option value="">Choose a section…</option>
+                        <option value="">Choose a batch…</option>
                         {programme.sections.map((s) => (
                           <option key={s.id} value={s.id}>
                             {s.name} — {SHIFT[s.shift] ?? s.shift}
@@ -310,7 +310,7 @@ export function ApplyPage() {
                     <div className="alert alert-warn">
                       <p className="small">
                         {section.name} admits {section.genderRestriction.toLowerCase()} students
-                        only. If that is not you, please choose another section — this cannot be
+                        only. If that is not you, please choose another batch — this cannot be
                         waived.
                       </p>
                     </div>
