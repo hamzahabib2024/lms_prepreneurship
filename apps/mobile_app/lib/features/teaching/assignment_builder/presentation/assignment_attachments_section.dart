@@ -1,7 +1,7 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
-import '../../../core/theme/app_theme.dart';
+import '../../../../core/theme/app_theme.dart';
 
 class AssignmentAttachmentsSection extends StatelessWidget {
   const AssignmentAttachmentsSection({
@@ -56,12 +56,9 @@ class AssignmentAttachmentsSection extends StatelessWidget {
   }
 
   void _pickFiles() async {
-    final result = await FilePicker.platform.pickFiles(
-      allowMultiple: true,
-      withData: true,
-    );
-    if (result != null && result.files.isNotEmpty) {
-      onAdd(result.files);
+    final result = await FilePicker.pickFiles();
+    if (result.isNotEmpty) {
+      onAdd(result);
     }
   }
 }

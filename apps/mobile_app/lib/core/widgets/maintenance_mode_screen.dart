@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../../core/network/api_client.dart';
-import '../../../core/theme/app_theme.dart';
-import '../../auth/data/repositories/auth_repository.dart';
+import '../network/api_client.dart';
+import '../theme/app_theme.dart';
+import '../../features/auth/data/repositories/auth_repository.dart';
 
 class MaintenanceModeScreen extends StatelessWidget {
   const MaintenanceModeScreen({super.key, required this.api});
@@ -66,7 +66,7 @@ class MaintenanceModeScreen extends StatelessWidget {
                     const SizedBox(height: 16),
                     TextButton(
                       onPressed: () {
-                        context.read<AuthRepository>().signOut();
+                        context.read<AuthRepository>().logout();
                       },
                       child: const Text('Sign out'),
                     ),

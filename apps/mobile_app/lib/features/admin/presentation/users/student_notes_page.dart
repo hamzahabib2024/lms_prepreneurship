@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../../core/network/api_client.dart';
-import '../../../core/theme/app_theme.dart';
-import '../../auth/data/models/auth_session.dart';
-import '../data/models/student_notes.dart';
-import '../data/student_notes_repository.dart';
+import '../../../../core/network/api_client.dart';
+import '../../../../core/theme/app_theme.dart';
+import '../../data/models/student_notes.dart';
+import '../../data/student_notes_repository.dart';
 
 /// Staff-only page for managing pastoral/internal notes about a student.
 class StudentNotesPage extends StatelessWidget {
@@ -67,7 +66,7 @@ class _StudentNotesViewState extends State<_StudentNotesView> {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text(state.error!.message)),
             );
-            context.read<StudentNotesCubit>().copyWith(clearError: true);
+            context.read<StudentNotesCubit>().load();
           }
         },
         builder: (context, state) {

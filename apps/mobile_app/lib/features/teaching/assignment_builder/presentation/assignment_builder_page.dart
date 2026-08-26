@@ -448,14 +448,14 @@ class _VoiceBriefSection extends StatelessWidget {
             else
               FilledButton.icon(
                 onPressed: () async {
-                  final result = await FilePicker.platform.pickFiles(
+                  final result = await FilePicker.pickFiles(
                     type: FileType.audio,
                   );
-                  if (result != null && result.files.single.path != null) {
-                    onUpload(File(result.files.single.path!));
+                  if (result.isNotEmpty) {
+                    onUpload(File(result.single.path!));
                   }
                 },
-                icon: const Icon(Icons.upload_audio, size: 18),
+                icon: const Icon(Icons.audiotrack, size: 18),
                 label: const Text('Choose audio file'),
               ),
           ],

@@ -258,7 +258,7 @@ class AdminCubit extends Cubit<AdminState> {
     if (state.busy) return;
     emit(state.copyWith(busy: true, actionError: null));
     try {
-      final url = await repository.downloadBackupUrl(id: id);
+      await repository.downloadBackupUrl(id: id);
       if (isClosed) return;
       emit(state.copyWith(busy: false, actionSuccess: 'Download link ready'));
     } on ApiException catch (error) {

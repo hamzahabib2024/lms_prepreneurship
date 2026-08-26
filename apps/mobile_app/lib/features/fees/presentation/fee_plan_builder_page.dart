@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../../core/network/api_client.dart';
-import '../../../core/theme/app_theme.dart';
-import '../../../core/widgets/ui.dart';
+import '../../../../core/network/api_client.dart';
+import '../../../../core/theme/app_theme.dart';
 
 class FeePlanBuilderPage extends StatefulWidget {
   const FeePlanBuilderPage({
@@ -100,7 +98,7 @@ class _FeePlanBuilderPageState extends State<FeePlanBuilderPage> {
                           '${widget.currency} $_remaining',
                           style: TextStyle(
                             fontWeight: FontWeight.w700,
-                            color: _remaining < 0 ? AppColors.error : AppColors.success,
+                            color: _remaining < 0 ? AppColors.error : AppColors.ok,
                           ),
                         ),
                       ],

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../../core/network/api_client.dart';
-import '../../../core/theme/app_theme.dart';
-import '../../auth/data/models/auth_session.dart';
+import '../network/api_client.dart';
+import '../theme/app_theme.dart';
+import '../../features/auth/data/models/auth_session.dart';
 
 /// A quick-search command palette for navigating to any feature.
 ///

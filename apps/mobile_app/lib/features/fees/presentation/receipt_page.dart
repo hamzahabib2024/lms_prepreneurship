@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../../core/network/api_client.dart';
-import '../../../core/theme/app_theme.dart';
-import '../../../core/widgets/ui.dart';
+import '../../../../core/network/api_client.dart';
+import '../../../../core/theme/app_theme.dart';
 import '../cubit/fees_cubit.dart';
-import '../data/fees_models.dart';
 import '../data/fees_repository.dart';
 
 class ReceiptPage extends StatelessWidget {
@@ -93,7 +91,7 @@ class _ReceiptView extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                       decoration: BoxDecoration(
                         color: receipt.status == 'VERIFIED'
-                            ? AppColors.successBg
+                            ? AppColors.okBg
                             : receipt.status == 'REVERSED'
                                 ? AppColors.errorBg
                                 : AppColors.warnBg,
@@ -105,7 +103,7 @@ class _ReceiptView extends StatelessWidget {
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
                           color: receipt.status == 'VERIFIED'
-                              ? AppColors.success
+                              ? AppColors.ok
                               : receipt.status == 'REVERSED'
                                   ? AppColors.error
                                   : AppColors.warn,

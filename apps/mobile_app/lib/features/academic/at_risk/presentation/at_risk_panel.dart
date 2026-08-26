@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../../core/network/api_client.dart';
-import '../../../core/theme/app_theme.dart';
+import '../../../../core/network/api_client.dart';
+import '../../../../core/theme/app_theme.dart';
 import '../data/at_risk_repository.dart';
 
 /// Displays at-risk students (attendance warnings) for a section-subject.
@@ -71,7 +71,6 @@ class _AtRiskBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
     final warnFg = dark ? AppColorsDark.warn : AppColors.warn;
-    final errorFg = dark ? AppColorsDark.error : AppColors.error;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),

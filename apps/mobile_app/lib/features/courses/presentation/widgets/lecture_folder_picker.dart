@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/network/api_client.dart';
-import '../../../core/theme/app_theme.dart';
+import '../../../../core/network/api_client.dart';
+import '../../../../core/theme/app_theme.dart';
 
 class LectureFolderPicker extends StatefulWidget {
   const LectureFolderPicker({
@@ -23,7 +23,6 @@ class _LectureFolderPickerState extends State<LectureFolderPicker> {
   List<FolderItem> _folders = [];
   bool _loading = true;
   String? _selectedFolderId;
-  final String _currentPath = '';
 
   @override
   void initState() {
