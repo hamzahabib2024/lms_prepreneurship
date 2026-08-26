@@ -133,6 +133,7 @@ class DiscussionCubit extends Cubit<DiscussionState> {
   Future<void> createDiscussion({
     required String title,
     required String body,
+    bool isAnonymous = false,
   }) async {
     final offeringId = state.selectedOfferingId;
     if (offeringId == null) return;
@@ -143,6 +144,7 @@ class DiscussionCubit extends Cubit<DiscussionState> {
         sectionSubjectId: offeringId,
         title: title,
         body: body,
+        isAnonymous: isAnonymous,
       );
       emit(state.copyWith(posting: false));
       await loadThreads(offeringId);
@@ -151,10 +153,18 @@ class DiscussionCubit extends Cubit<DiscussionState> {
     }
   }
 
-  Future<void> reply({required String postId, required String body}) async {
+  Future<void> reply({
+    required String postId,
+    required String body,
+    bool isAnonymous = false,
+  }) async {
     emit(state.copyWith(replyBusy: true, clearError: true));
     try {
-      await repository.replyToDiscussion(postId: postId, body: body);
+      await repository.replyToDiscussion(
+        postId: postId,
+        body: body,
+        isAnonymous: isAnonymous,
+      );
       final thread = await repository.getThread(postId);
       emit(state.copyWith(replyBusy: false, openThread: thread));
     } on ApiException catch (e) {
@@ -203,6 +213,30 @@ class DiscussionCubit extends Cubit<DiscussionState> {
         isPinned: isPinned,
         isLocked: isLocked,
       );
+      if (state.openThread != null) {
+        final thread = await repository.getThread(state.openThread!.id);
+        emit(state.copyWith(openThread: thread));
+      }
+    } on ApiException catch (e) {
+      emit(state.copyWith(error: e));
+    }
+  }
+
+  Future<void> endorsePost({required String postId}) async {
+    try {
+      await repository.endorsePost(postId: postId);
+      if (state.openThread != null) {
+        final thread = await repository.getThread(state.openThread!.id);
+        emit(state.copyWith(openThread: thread));
+      }
+    } on ApiException catch (e) {
+      emit(state.copyWith(error: e));
+    }
+  }
+
+  Future<void> resolvePost({required String postId}) async {
+    try {
+      await repository.resolvePost(postId: postId);
       if (state.openThread != null) {
         final thread = await repository.getThread(state.openThread!.id);
         emit(state.copyWith(openThread: thread));

@@ -10,7 +10,7 @@ class CompletionRepository {
 
   Future<CompletionRoster> getRoster(String sectionSubjectId) async {
     final result = await _api.get<Map<String, dynamic>>(
-      '/api/v1/section-subjects/$sectionSubjectId/completion',
+      '/section-subjects/$sectionSubjectId/completion',
     );
     return CompletionRoster.fromJson(result);
   }
@@ -27,7 +27,7 @@ class CompletionRepository {
     if (note != null) body['note'] = note;
 
     await _api.put<dynamic>(
-      '/api/v1/section-subjects/$sectionSubjectId/completion/$studentId',
+      '/section-subjects/$sectionSubjectId/completion/$studentId',
       body,
     );
   }

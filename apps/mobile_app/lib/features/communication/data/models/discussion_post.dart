@@ -9,6 +9,12 @@ class DiscussionPost {
     this.authorUserId,
     required this.isPinned,
     required this.isLocked,
+    this.isAnonymous = false,
+    this.identityVisible = true,
+    this.endorsedAt,
+    this.endorsedBy,
+    this.resolvedAt,
+    this.resolvedBy,
     this.editedAt,
     required this.createdAt,
     required this.replyCount,
@@ -24,6 +30,12 @@ class DiscussionPost {
   final String? authorUserId;
   final bool isPinned;
   final bool isLocked;
+  final bool isAnonymous;
+  final bool identityVisible;
+  final DateTime? endorsedAt;
+  final String? endorsedBy;
+  final DateTime? resolvedAt;
+  final String? resolvedBy;
   final DateTime? editedAt;
   final DateTime createdAt;
   final int replyCount;
@@ -40,6 +52,16 @@ class DiscussionPost {
       authorUserId: json['authorUserId'] as String?,
       isPinned: json['isPinned'] as bool? ?? false,
       isLocked: json['isLocked'] as bool? ?? false,
+      isAnonymous: json['isAnonymous'] as bool? ?? false,
+      identityVisible: json['identityVisible'] as bool? ?? true,
+      endorsedAt: json['endorsedAt'] != null
+          ? DateTime.parse(json['endorsedAt'] as String)
+          : null,
+      endorsedBy: json['endorsedBy'] as String?,
+      resolvedAt: json['resolvedAt'] != null
+          ? DateTime.parse(json['resolvedAt'] as String)
+          : null,
+      resolvedBy: json['resolvedBy'] as String?,
       editedAt: json['editedAt'] != null
           ? DateTime.parse(json['editedAt'] as String)
           : null,
@@ -66,6 +88,12 @@ class DiscussionThread extends DiscussionPost {
     super.authorUserId,
     required super.isPinned,
     required super.isLocked,
+    super.isAnonymous,
+    super.identityVisible,
+    super.endorsedAt,
+    super.endorsedBy,
+    super.resolvedAt,
+    super.resolvedBy,
     super.editedAt,
     required super.createdAt,
     required super.replyCount,
@@ -85,6 +113,16 @@ class DiscussionThread extends DiscussionPost {
       authorUserId: json['authorUserId'] as String?,
       isPinned: json['isPinned'] as bool? ?? false,
       isLocked: json['isLocked'] as bool? ?? false,
+      isAnonymous: json['isAnonymous'] as bool? ?? false,
+      identityVisible: json['identityVisible'] as bool? ?? true,
+      endorsedAt: json['endorsedAt'] != null
+          ? DateTime.parse(json['endorsedAt'] as String)
+          : null,
+      endorsedBy: json['endorsedBy'] as String?,
+      resolvedAt: json['resolvedAt'] != null
+          ? DateTime.parse(json['resolvedAt'] as String)
+          : null,
+      resolvedBy: json['resolvedBy'] as String?,
       editedAt: json['editedAt'] != null
           ? DateTime.parse(json['editedAt'] as String)
           : null,

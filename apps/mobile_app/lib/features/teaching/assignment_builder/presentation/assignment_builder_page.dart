@@ -1,6 +1,9 @@
 /// Assignment builder page — SRS §13.6, FR-TCH-020.
 library;
 
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -235,6 +238,19 @@ class _AssignmentBuilderPageState extends State<AssignmentBuilderPage> {
                       },
                     ),
                   ),
+                  const SizedBox(height: 20),
+
+                  // Voice Brief
+                  _FormField(
+                    label: 'Voice Brief (optional)',
+                    child: _VoiceBriefSection(
+                      assignmentId: widget.assignmentId,
+                      hasBriefAudio: state.hasBriefAudio,
+                      uploading: state.uploadingBrief,
+                      onUpload: (file) => _cubit.uploadBriefAudio(file),
+                      onDelete: () => _cubit.deleteBriefAudio(),
+                    ),
+                  ),
                 ],
               ),
             );
@@ -299,6 +315,152 @@ class _FormField extends StatelessWidget {
         const SizedBox(height: 6),
         child,
       ],
+    );
+  }
+}
+
+// ── Voice Brief Section ──
+
+class _VoiceBriefSection extends StatelessWidget {
+  const _VoiceBriefSection({
+    required this.assignmentId,
+    required this.hasBriefAudio,
+    required this.uploading,
+    required this.onUpload,
+    required this.onDelete,
+  });
+
+  final String? assignmentId;
+  final bool hasBriefAudio;
+  final bool uploading;
+  final ValueChanged<File> onUpload;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+
+    if (assignmentId == null) {
+      return Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: dark ? AppColorsDark.surface2 : AppColors.surface2,
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.info_outline, size: 16, color: AppColorsDark.muted),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Save the assignment first, then add a voice brief.',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: dark ? AppColorsDark.muted : AppColors.muted,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: dark ? AppColorsDark.surface : Colors.white,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        border: Border.all(color: dark ? AppColorsDark.line : AppColors.line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (hasBriefAudio) ...[
+            Row(
+              children: [
+                Icon(Icons.audiotrack, size: 18, color: AppColors.ok),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text(
+                    'Voice brief attached',
+                    style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500),
+                  ),
+                ),
+                if (!uploading)
+                  TextButton.icon(
+                    onPressed: () {
+                      showDialog(
+                        context: context,
+                        builder: (_) => AlertDialog(
+                          title: const Text('Remove voice brief?'),
+                          content: const Text(
+                              'Students will no longer hear your spoken instructions.'),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: const Text('Cancel'),
+                            ),
+                            FilledButton(
+                              onPressed: () {
+                                Navigator.pop(context);
+                                onDelete();
+                              },
+                              child: const Text('Remove'),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.delete_outline, size: 16),
+                    label: const Text('Remove'),
+                  ),
+              ],
+            ),
+          ] else ...[
+            Row(
+              children: [
+                Icon(Icons.mic, size: 18, color: AppColorsDark.muted),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Record or upload a spoken brief for this assignment.',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: dark ? AppColorsDark.muted : AppColors.muted,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (uploading)
+              const Row(
+                children: [
+                  SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  SizedBox(width: 10),
+                  Text('Uploading\u2026', style: TextStyle(fontSize: 13)),
+                ],
+              )
+            else
+              FilledButton.icon(
+                onPressed: () async {
+                  final result = await FilePicker.pickFiles(
+                    type: FileType.audio,
+                  );
+                  if (result.isNotEmpty) {
+                    onUpload(File(result.single.path!));
+                  }
+                },
+                icon: const Icon(Icons.audiotrack, size: 18),
+                label: const Text('Choose audio file'),
+              ),
+          ],
+        ],
+      ),
     );
   }
 }

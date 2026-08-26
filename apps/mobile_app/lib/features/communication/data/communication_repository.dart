@@ -122,10 +122,11 @@ class CommunicationRepository {
     required String sectionSubjectId,
     required String title,
     required String body,
+    bool isAnonymous = false,
   }) async {
     final data = await api.post<Map<String, dynamic>>(
       '/section-subjects/$sectionSubjectId/discussions',
-      {'title': title, 'body': body},
+      {'title': title, 'body': body, if (isAnonymous) 'isAnonymous': true},
     );
     return DiscussionPost.fromJson(data);
   }
@@ -133,10 +134,11 @@ class CommunicationRepository {
   Future<DiscussionPost> replyToDiscussion({
     required String postId,
     required String body,
+    bool isAnonymous = false,
   }) async {
     final data = await api.post<Map<String, dynamic>>(
       '/discussions/$postId/replies',
-      {'body': body},
+      {'body': body, if (isAnonymous) 'isAnonymous': true},
     );
     return DiscussionPost.fromJson(data);
   }
@@ -169,6 +171,20 @@ class CommunicationRepository {
         if (isPinned != null) 'isPinned': isPinned,
         if (isLocked != null) 'isLocked': isLocked,
       },
+    );
+    return DiscussionPost.fromJson(data);
+  }
+
+  Future<DiscussionPost> endorsePost({required String postId}) async {
+    final data = await api.post<Map<String, dynamic>>(
+      '/discussions/$postId/endorse',
+    );
+    return DiscussionPost.fromJson(data);
+  }
+
+  Future<DiscussionPost> resolvePost({required String postId}) async {
+    final data = await api.post<Map<String, dynamic>>(
+      '/discussions/$postId/resolve',
     );
     return DiscussionPost.fromJson(data);
   }

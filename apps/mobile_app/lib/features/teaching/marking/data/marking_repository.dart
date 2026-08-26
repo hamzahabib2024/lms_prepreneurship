@@ -12,7 +12,7 @@ class MarkingRepository {
 
   Future<List<TeacherSection>> getTeacherSections() async {
     final result = await _api.get<Map<String, dynamic>>(
-      '/api/v1/marking/sections',
+      '/marking/sections',
     );
     return (result['sections'] as List<dynamic>? ?? const [])
         .whereType<Map<String, dynamic>>()
@@ -23,7 +23,7 @@ class MarkingRepository {
   Future<List<TeacherAssignment>> getAssignmentQueue(
       {required String sectionSubjectId}) async {
     final result = await _api.get<Map<String, dynamic>>(
-      '/api/v1/marking/assignments?sectionSubjectId=$sectionSubjectId',
+      '/marking/assignments?sectionSubjectId=$sectionSubjectId',
     );
     return (result['assignments'] as List<dynamic>? ?? const [])
         .whereType<Map<String, dynamic>>()
@@ -34,7 +34,7 @@ class MarkingRepository {
   Future<List<TeacherQuiz>> getQuizQueue(
       {required String sectionSubjectId}) async {
     final result = await _api.get<Map<String, dynamic>>(
-      '/api/v1/marking/quizzes?sectionSubjectId=$sectionSubjectId',
+      '/marking/quizzes?sectionSubjectId=$sectionSubjectId',
     );
     return (result['quizzes'] as List<dynamic>? ?? const [])
         .whereType<Map<String, dynamic>>()
@@ -47,7 +47,7 @@ class MarkingRepository {
   Future<GradingRoster> getGradingRoster(
       {required String assignmentId}) async {
     final result = await _api.get<Map<String, dynamic>>(
-      '/api/v1/assignments/$assignmentId/roster',
+      '/assignments/$assignmentId/roster',
     );
     return GradingRoster.fromJson(result);
   }
@@ -68,14 +68,14 @@ class MarkingRepository {
     if (internalNotes != null) body['internalNotes'] = internalNotes;
 
     await _api.post<dynamic>(
-      '/api/v1/assignments/$assignmentId/grade/$studentId',
+      '/assignments/$assignmentId/grade/$studentId',
       body,
     );
   }
 
   Future<void> releaseGrades({required String assignmentId}) async {
     await _api.post<dynamic>(
-      '/api/v1/assignments/$assignmentId/release',
+      '/assignments/$assignmentId/release',
     );
   }
 
@@ -83,7 +83,7 @@ class MarkingRepository {
 
   Future<MarkingQueue> getMarkingQueue({required String quizId}) async {
     final result = await _api.get<Map<String, dynamic>>(
-      '/api/v1/quizzes/$quizId/marking-queue',
+      '/quizzes/$quizId/marking-queue',
     );
     return MarkingQueue.fromJson(result);
   }
@@ -99,14 +99,14 @@ class MarkingRepository {
     if (graderComment != null) body['graderComment'] = graderComment;
 
     await _api.post<dynamic>(
-      '/api/v1/quizzes/answers/$answerId/mark',
+      '/quizzes/answers/$answerId/mark',
       body,
     );
   }
 
   Future<void> releaseQuizGrades({required String quizId}) async {
     await _api.post<dynamic>(
-      '/api/v1/quizzes/$quizId/release',
+      '/quizzes/$quizId/release',
     );
   }
 }

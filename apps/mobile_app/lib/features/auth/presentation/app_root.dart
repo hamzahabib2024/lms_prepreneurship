@@ -38,30 +38,33 @@ class _AppRootState extends State<AppRoot> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (_) => AuthBloc(
-        repository: AuthRepository(api: _api),
-        api: _api,
-        tokenStore: TokenStore.instance,
-      )..add(const AppStarted()),
-      child: BlocBuilder<AuthBloc, AuthState>(
-        builder: (context, state) {
-          switch (state.status) {
-            case AuthStatus.initial:
-            case AuthStatus.loading:
-              return const SplashPage();
-            case AuthStatus.unauthenticated:
-              return const LoginPage();
-            case AuthStatus.authenticated:
-              if (state.user == null) return const LoginPage();
-              if (state.mustChangePassword) {
-                return const ChangePasswordPage(forced: true);
-              }
-              return AppShell(user: state.user!, api: _api);
-            case AuthStatus.failure:
-              return const LoginPage();
-          }
-        },
+    return RepositoryProvider.value(
+      value: _api,
+      child: BlocProvider(
+        create: (_) => AuthBloc(
+          repository: AuthRepository(api: _api),
+          api: _api,
+          tokenStore: TokenStore.instance,
+        )..add(const AppStarted()),
+        child: BlocBuilder<AuthBloc, AuthState>(
+          builder: (context, state) {
+            switch (state.status) {
+              case AuthStatus.initial:
+              case AuthStatus.loading:
+                return const SplashPage();
+              case AuthStatus.unauthenticated:
+                return const LoginPage();
+              case AuthStatus.authenticated:
+                if (state.user == null) return const LoginPage();
+                if (state.mustChangePassword) {
+                  return const ChangePasswordPage(forced: true);
+                }
+                return AppShell(user: state.user!, api: _api);
+              case AuthStatus.failure:
+                return const LoginPage();
+            }
+          },
+        ),
       ),
     );
   }
