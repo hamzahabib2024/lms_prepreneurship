@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -18,7 +20,8 @@ class UserDetailPage extends StatelessWidget {
       listenWhen: (prev, curr) =>
           prev.actionSuccess != curr.actionSuccess ||
           prev.actionError != curr.actionError ||
-          prev.passwordResetResult != curr.passwordResetResult,
+          prev.passwordResetResult != curr.passwordResetResult ||
+          prev.personalDataExport != curr.personalDataExport,
       listener: (context, state) {
         if (state.actionSuccess != null) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -35,6 +38,10 @@ class UserDetailPage extends StatelessWidget {
         if (state.passwordResetResult != null) {
           _showPasswordResetDialog(context, state.passwordResetResult!.temporaryPassword);
           context.read<AdminCubit>().dismissResult();
+        }
+        if (state.personalDataExport != null) {
+          _showDataExportDialog(context, state.personalDataExport!);
+          context.read<AdminCubit>().clearPersonalDataExport();
         }
       },
       child: Builder(
@@ -148,6 +155,27 @@ class UserDetailPage extends StatelessWidget {
                     icon: Icons.exit_to_app_outlined,
                     onTap: () => _confirmRevokeSessions(context),
                   ),
+                const SizedBox(height: 8),
+                _ActionButton(
+                  label: 'Impersonate user',
+                  icon: Icons.switch_account_outlined,
+                  onTap: () => _confirmImpersonate(context),
+                ),
+                const SizedBox(height: 8),
+                _ActionButton(
+                  label: 'Export personal data',
+                  icon: Icons.download_outlined,
+                  onTap: () {
+                    context.read<AdminCubit>().exportPersonalData(userId: user.id);
+                  },
+                ),
+                const SizedBox(height: 8),
+                _ActionButton(
+                  label: 'Erase personal data',
+                  icon: Icons.delete_forever_outlined,
+                  destructive: true,
+                  onTap: () => _confirmEraseData(context),
+                ),
               ],
             ),
           );
@@ -314,6 +342,82 @@ class UserDetailPage extends StatelessWidget {
     );
   }
 
+  void _confirmImpersonate(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Impersonate user?'),
+        content: Text(
+          'You will be logged in as ${user.fullName}. '
+          'All actions will be recorded in the audit log under your name. '
+          'Restart the app to stop impersonating.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              context.read<AdminCubit>().impersonate(userId: user.id);
+            },
+            child: const Text('Impersonate'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmEraseData(BuildContext context) {
+    final confirmController = TextEditingController();
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Erase personal data?'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'This will permanently delete all personal data for this user. '
+                'This action cannot be undone.',
+                style: TextStyle(fontSize: 13.5),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: confirmController,
+                decoration: const InputDecoration(
+                  labelText: 'Type ERASE to confirm',
+                ),
+                onChanged: (_) => setDialogState(() {}),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: confirmController.text.trim() == 'ERASE'
+                  ? () {
+                      Navigator.of(ctx).pop();
+                      context.read<AdminCubit>().erasePersonalData(userId: user.id);
+                    }
+                  : null,
+              style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(ctx).colorScheme.error,
+              ),
+              child: const Text('Erase data'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _showPasswordResetDialog(BuildContext context, String password) {
     showDialog<void>(
       context: context,
@@ -365,6 +469,54 @@ class UserDetailPage extends StatelessWidget {
             FilledButton(
               onPressed: () => Navigator.of(ctx).pop(),
               child: const Text('Done'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showDataExportDialog(BuildContext context, Map<String, dynamic> data) {
+    final jsonStr = const JsonEncoder.withIndent('  ').convert(data);
+    showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        final dark = Theme.of(ctx).brightness == Brightness.dark;
+        return AlertDialog(
+          title: const Text('Personal Data Export'),
+          content: SizedBox(
+            width: double.maxFinite,
+            height: 400,
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: dark ? AppColorsDark.surface2 : AppColors.surface2,
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+              ),
+              child: SingleChildScrollView(
+                child: SelectableText(
+                  jsonStr,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontFamily: 'monospace',
+                  ),
+                ),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: jsonStr));
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  const SnackBar(content: Text('Data copied to clipboard')),
+                );
+              },
+              child: const Text('Copy'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Close'),
             ),
           ],
         );

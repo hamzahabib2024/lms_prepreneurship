@@ -333,6 +333,65 @@ class AdminCubit extends Cubit<AdminState> {
       clearPasswordResetResult: true,
     ));
   }
+
+  // ── GDPR / Personal Data ──
+
+  Future<void> exportPersonalData({required String userId}) async {
+    if (state.busy) return;
+    emit(state.copyWith(busy: true, actionError: null));
+    try {
+      final data = await repository.exportPersonalData(userId: userId);
+      if (isClosed) return;
+      emit(state.copyWith(busy: false, personalDataExport: data));
+    } on ApiException catch (error) {
+      if (isClosed) return;
+      emit(state.copyWith(busy: false, actionError: error));
+    }
+  }
+
+  Future<void> getErasurePlan({required String userId}) async {
+    if (state.busy) return;
+    emit(state.copyWith(busy: true, actionError: null));
+    try {
+      final data = await repository.getErasurePlan(userId: userId);
+      if (isClosed) return;
+      emit(state.copyWith(busy: false, erasurePlan: data));
+    } on ApiException catch (error) {
+      if (isClosed) return;
+      emit(state.copyWith(busy: false, actionError: error));
+    }
+  }
+
+  Future<void> erasePersonalData({required String userId}) async {
+    if (state.busy) return;
+    emit(state.copyWith(busy: true, actionError: null));
+    try {
+      await repository.erasePersonalData(userId: userId);
+      if (isClosed) return;
+      emit(state.copyWith(busy: false, actionSuccess: 'Personal data erased'));
+    } on ApiException catch (error) {
+      if (isClosed) return;
+      emit(state.copyWith(busy: false, actionError: error));
+    }
+  }
+
+  // ── Impersonation ──
+
+  Future<void> impersonate({required String userId}) async {
+    if (state.busy) return;
+    emit(state.copyWith(busy: true, actionError: null));
+    try {
+      await repository.impersonate(userId: userId);
+      if (isClosed) return;
+      emit(state.copyWith(busy: false, actionSuccess: 'Impersonation started. Restart the app to stop.'));
+    } on ApiException catch (error) {
+      if (isClosed) return;
+      emit(state.copyWith(busy: false, actionError: error));
+    }
+  }
+
+  void clearErasurePlan() => emit(state.copyWith(clearErasurePlan: true));
+  void clearPersonalDataExport() => emit(state.copyWith(clearPersonalDataExport: true));
 }
 
 class AdminState extends Equatable {
@@ -371,6 +430,8 @@ class AdminState extends Equatable {
     this.securityPage = 1,
     this.securityTotalPages = 1,
     this.maintenanceEnabled = false,
+    this.personalDataExport,
+    this.erasurePlan,
   });
 
   final List<UserDirectoryItem> users;
@@ -414,6 +475,9 @@ class AdminState extends Equatable {
 
   final bool maintenanceEnabled;
 
+  final Map<String, dynamic>? personalDataExport;
+  final Map<String, dynamic>? erasurePlan;
+
   AdminState copyWith({
     List<UserDirectoryItem>? users,
     bool? loadingUsers,
@@ -454,6 +518,10 @@ class AdminState extends Equatable {
     int? securityPage,
     int? securityTotalPages,
     bool? maintenanceEnabled,
+    Map<String, dynamic>? personalDataExport,
+    bool clearPersonalDataExport = false,
+    Map<String, dynamic>? erasurePlan,
+    bool clearErasurePlan = false,
   }) {
     return AdminState(
       users: users ?? this.users,
@@ -492,6 +560,8 @@ class AdminState extends Equatable {
       securityPage: securityPage ?? this.securityPage,
       securityTotalPages: securityTotalPages ?? this.securityTotalPages,
       maintenanceEnabled: maintenanceEnabled ?? this.maintenanceEnabled,
+      personalDataExport: clearPersonalDataExport ? null : (personalDataExport ?? this.personalDataExport),
+      erasurePlan: clearErasurePlan ? null : (erasurePlan ?? this.erasurePlan),
     );
   }
 
@@ -505,6 +575,6 @@ class AdminState extends Equatable {
         auditEntries, loadingAudit, auditError, auditPage, auditTotalPages,
         securityOverview, securityEvents, loadingSecurity, loadingSecurityEvents,
         securityError, securityPage, securityTotalPages,
-        maintenanceEnabled,
+        maintenanceEnabled, personalDataExport, erasurePlan,
       ];
 }
