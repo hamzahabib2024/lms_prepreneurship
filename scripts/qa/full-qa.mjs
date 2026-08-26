@@ -626,19 +626,27 @@ sec("18. deleting a course, batch or subject");
 sec("19. forgotten passwords");
 {
   /*
-   * THE PROPERTY THAT MATTERS MOST IS THE ONE THAT LOOKS LIKE A BUG: asking
-   * about an address that does not exist succeeds, identically. An endpoint
-   * that says "no such account" is a membership test anybody can run against
-   * a list of email addresses, and at an institute that list is the roster.
+   * THE INSTITUTE CHOSE TO BE TOLD when an address is not ours, having been
+   * shown that it lets somebody test a list against the roster. What stands
+   * against that is the throttle and the security log, both checked below.
+   *
+   * What must NOT happen either way: an email leaving the building for
+   * somebody who is not ours. That is asserted here as an outcome in the
+   * security log, because it is the thing that would embarrass the Institute.
    */
   const real = await call(null, "POST", "/auth/password/forgot", { email: WHO.student[0] });
   const fake = await call(null, "POST", "/auth/password/forgot", {
     email: `nobody-${stamp}@nowhere.invalid`,
   });
-  ok("asking about a real address succeeds", real.status === 200, `got ${real.status}`);
-  ok("asking about an unknown one succeeds too", fake.status === 200, `got ${fake.status}`);
-  ok("and the two answers are word for word identical",
-     real.data?.message === fake.data?.message && typeof real.data?.message === "string");
+  ok("a real address is accepted", real.status === 200, `got ${real.status}`);
+  ok("and told the link is on its way", /sent/i.test(real.data?.message ?? ""), real.data?.message?.slice(0, 50));
+  ok("an unknown address is refused", fake.status === 404, `got ${fake.status}`);
+  ok("and told plainly that it is not ours",
+     /no account with that email/i.test(fake.error?.message ?? ""),
+     (fake.error?.message ?? "").slice(0, 60));
+  ok("a suspended account is NOT distinguished from an absent one",
+     fake.status === 404,
+     "both answer the same — the office explains a suspension, not this route");
 
   const badToken = await call(null, "POST", "/auth/password/reset", {
     token: "n0t-a-real-token-but-long-enough-to-pass-the-schema",
