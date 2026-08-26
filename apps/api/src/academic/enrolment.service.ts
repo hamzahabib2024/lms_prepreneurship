@@ -85,7 +85,7 @@ export class EnrolmentService {
 
         if (student.currentSectionId === input.toSectionId) {
           throw new AppError("RESOURCE_CONFLICT", {
-            message: "The student is already in that section.",
+            message: "The student is already in that batch.",
           });
         }
 
@@ -101,13 +101,13 @@ export class EnrolmentService {
         if (!to) {
           throw new AppError("VALIDATION_FAILED", {
             details: [
-              { field: "toSectionId", code: "NOT_FOUND", message: "That section does not exist." },
+              { field: "toSectionId", code: "NOT_FOUND", message: "That batch does not exist." },
             ],
           });
         }
         if (to.status === "ARCHIVED") {
           throw new AppError("RESOURCE_CONFLICT", {
-            message: "That section is archived and cannot accept students.",
+            message: "That batch is archived and cannot accept students.",
           });
         }
 

@@ -14,13 +14,14 @@ cover(doc, "Administrator Guide",
       "For office and administrative staff")
 
 doc.add_heading("What is in this guide", level=1)
-table(doc, ["Section", "What it covers"], [
+table(doc, ["Batch", "What it covers"], [
     ["Getting started", "Signing in, and the shape of your role"],
     ["Admissions", "Turning an application into a student"],
     ["People", "Accounts, roles and suspensions"],
     ["Courses & fees", "What is taught and what it costs"],
-    ["Sections & structure", "Classes, terms and intakes"],
+    ["Batches & structure", "Classes, terms and intakes"],
     ["Online classes", "The meeting link a class joins every week"],
+    ["Deleting things", "Removing what was created by mistake"],
     ["Fees & payments", "Charges, confirming payments, receipts"],
     ["Certificates", "Issuing, verifying, revoking"],
     ["Announcements", "Who a notice reaches, including the public page"],
@@ -80,27 +81,58 @@ screen(doc, "Courses & fees",
        "The instalment lines have to add up to the total. The running total under each block "
        "tells you where you are, so you are not re-adding twelve numbers on the day you publish.")
 
-screen(doc, "Sections and Structure",
-       "A section is one group taught together — a class. Structure is the calendar the whole "
-       "Institute runs on: terms and intakes.",
+screen(doc, "Batches and Structure",
+       "A batch is one group of students taught together — a class. Structure is the calendar "
+       "the whole Institute runs on: terms and intakes.",
        ["In Structure, create the term and its intakes, with the dates.",
-        "In Sections, create the class: its course, its name, its shift and its term.",
+        "In Batches, create the class: its course, its name, its shift and its term.",
         "Assign a teacher."],
-       "A section with no teacher is invisible to every teacher, so nobody takes the register. "
+       "A batch with no teacher is invisible to every teacher, so nobody takes the register. "
        "It is the single most common thing to forget.")
 
 screen(doc, "The meeting link for an online class",
-       "Where a class is taught online, the subject inside the section carries the link to its "
-       "meeting room — one link, used every week. Teachers set their own; you can set any, which "
-       "matters when a teacher is away or a class is covered.",
-       ["Open the section and choose the subject within it. The link belongs to the subject "
-        "inside the class, not to the course — two sections of the same course meet in two "
-        "different rooms.",
-        "Paste the whole address, including the https:// at the front.",
+       "Where a class is taught online, the subject inside the batch carries the link to its "
+       "meeting room — one link, used every week, and permanent until somebody changes it. "
+       "Teachers set their own; you can set any, which matters when a teacher is away or a "
+       "class is covered.",
+       ["Open Batches, choose the batch, and open its subjects.",
+        "Each subject has its own teacher and its own Meeting link column. The link belongs to "
+        "the subject INSIDE the class, not to the course — two batches of the same course meet "
+        "in two different rooms at two different times.",
+        "Choose the link cell — it reads 'not set' until there is one — and paste the whole "
+        "address, including the https:// at the front.",
         "Add a note if students need one: a passcode, or when to join.",
-        "Clear the box to remove it."],
-       "It must begin with https:// and is refused otherwise. Set it once and it can be changed "
-       "at any point in the term — you do not have to have it ready before the course opens.")
+        "Come back and choose 'Change the link' at any point. Clearing the box removes it."],
+       "It must begin with https:// and is refused otherwise. You do not need it ready before "
+       "the course opens — set it whenever you have it, and every student sees it immediately.")
+
+# ─────────────────────────────────────────────────── deleting things ──
+screen(doc, "Deleting a course, an intake or a subject",
+       "Setting up a term means creating a lot of records quickly, and some of them are wrong: "
+       "an intake named for the wrong session, a subject added to the wrong class, a batch "
+       "created twice. You can delete any of them — while nothing depends on them.",
+       ["Subjects: Courses & fees, then Delete on the subject's card.",
+        "Intakes: Structure, then Delete on the intake's row.",
+        "Batches: the Batches screen, then Delete on the batch's row.",
+        "A subject on one class: open that batch's subjects and choose Remove on its row.",
+        "Every one asks you to confirm first, and says what it is about to do."],
+       "The System REFUSES to delete anything that has been used, and tells you exactly what is "
+       "in the way — 'this intake still has 1 batch (AAB-A-MALE)'. Work down the list: take the "
+       "subjects off the batch, then delete the batch, then the intake.")
+
+doc.add_heading("Delete or archive?", level=3)
+para(doc, "They are not two words for the same thing, and choosing wrong is the one mistake here "
+          "that matters:")
+table(doc, ["Archive", "Delete"], [
+    ["For a class that FINISHED", "For a record that should never have existed"],
+    ["Keeps attendance, marks and fees", "Only possible when there are none"],
+    ["Leaves the active lists", "Leaves every list and dropdown"],
+    ["Always available", "Refused the moment anything depends on it"],
+])
+para(doc, "A batch that has held one register is the only record that a student was marked "
+          "present on a Tuesday in March. Archive it. The student who needs that record is "
+          "usually applying for a job two years later, and by then nobody remembers the tidy-up.",
+     grey=True)
 
 screen(doc, "Fees and payments",
        "What every student owes, what they have paid, and the receipts.",
@@ -146,7 +178,7 @@ callout(doc, "The one worth re-reading:",
 screen(doc, "The public page",
        "What a visitor sees before they have an account: the headline, the videos, the "
        "photographs, the claims and the closing band. All of it editable, live the moment you save.",
-       ["Open Public page and work down the numbered sections.",
+       ["Open Public page and work down the numbered batches.",
         "Show the preview to see the real page beside the form.",
         "Photographs upload directly — use pictures of the Institute rather than stock images.",
         "Videos take the ordinary share link from YouTube, TikTok, Facebook or Instagram.",
@@ -157,7 +189,7 @@ screen(doc, "The public page",
 
 screen(doc, "Import and bulk changes",
        "For many records at once — a cohort joining from elsewhere, or moving a group between "
-       "sections.",
+       "batches.",
        ["Download the template and fill it in, one row per student.",
         "Upload it. Nothing is created yet.",
         "Read the preview — it shows exactly what would happen, row by row.",

@@ -144,7 +144,7 @@ export function ReportsPage() {
         intro="Counted from the Institute's own records at the moment you ask, never from a stored summary that has gone stale."
         steps={[
           { icon: "chart", title: "Choose the report", body: "Attendance, progress, enrolment, money. Each answers one kind of question." },
-          { icon: "calendar", title: "Narrow it", body: "By term, course or section. A report over everything is usually a report about nothing." },
+          { icon: "calendar", title: "Narrow it", body: "By term, course or batch. A report over everything is usually a report about nothing." },
           { icon: "search", title: "Read it on screen", body: "Check it says what you expected before you send it anywhere." },
           { icon: "upload", title: "Export it", body: "As a spreadsheet, for anybody who needs it outside this System." },
         ]}
@@ -178,7 +178,7 @@ export function ReportsPage() {
                       value={valuesFor(d.key)[spec.key] ?? ""}
                       onChange={(e) => setValue(d.key, spec.key, e.target.value)}
                     >
-                      <option value="">{spec.required ? "Choose one" : "All sections"}</option>
+                      <option value="">{spec.required ? "Choose one" : "All batches"}</option>
                       {sections.map((s) => (
                         <option key={s.id} value={s.id}>
                           {s.code} — {s.name}

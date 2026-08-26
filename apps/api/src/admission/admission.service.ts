@@ -869,7 +869,7 @@ export class AdmissionService {
         if (!section) {
           throw new AppError("VALIDATION_FAILED", {
             details: [
-              { field: "sectionId", code: "NOT_FOUND", message: "That section does not exist." },
+              { field: "sectionId", code: "NOT_FOUND", message: "That batch does not exist." },
             ],
           });
         }

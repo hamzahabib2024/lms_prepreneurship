@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Query } from "@nestjs/common";
 import {
   academicSessionCreateSchema,
   academicSessionUpdateSchema,
@@ -44,6 +44,7 @@ import { EnrolmentService } from "./enrolment.service";
 import { zodBody } from "../common/zod-validation.pipe";
 import { RequirePermission } from "../rbac/permissions.guard";
 import { CourseBuilderService } from "./course-builder.service";
+import { RemovalService } from "./removal.service";
 import { assertOwnStudent } from "../rbac/ownership";
 
 /** SRS §9.5 — academic structure and enrolment endpoints. */
@@ -55,6 +56,7 @@ export class AcademicController {
     private readonly assignments: AssignmentService,
     private readonly enrolments: EnrolmentService,
     private readonly notes: StudentNoteService,
+    private readonly removal: RemovalService,
   ) {}
 
   // ----------------------------------------------------------- programmes --
@@ -143,6 +145,34 @@ export class AcademicController {
     return this.academic.createSubject(dto);
   }
 
+  /**
+   * Remove a subject from the Institute's catalogue.
+   *
+   * Refused while any class teaches it, or while it has course material —
+   * a subject deleted out from under a module leaves lessons pointing at
+   * nothing, which is worse than the duplicate somebody was trying to tidy.
+   */
+  @RequirePermission("subject", "delete")
+  @Delete("subjects/:id")
+  @HttpCode(200)
+  deleteSubject(@Param("id") id: string) {
+    return this.removal.removeSubject(id);
+  }
+
+  /**
+   * Erase a subject for good — the row, not a `deletedAt` stamp.
+   *
+   * A separate path rather than a flag on the one above, deliberately. A
+   * query parameter is something a caller adds by accident; a different
+   * address is something they mean.
+   */
+  @RequirePermission("subject", "delete")
+  @Delete("subjects/:id/permanent")
+  @HttpCode(200)
+  purgeSubject(@Param("id") id: string) {
+    return this.removal.purgeSubject(id);
+  }
+
   @RequirePermission("subject", "update")
   @Patch("subjects/:id")
   updateSubject(
@@ -185,6 +215,25 @@ export class AcademicController {
   @Post("batches")
   createBatch(@Body(zodBody(batchCreateSchema)) dto: BatchCreateInput) {
     return this.academic.createBatch(dto);
+  }
+
+  /**
+   * Remove a batch. Refused while it holds any section — the students and the
+   * marks are down there, not here, so an empty-looking batch is not empty.
+   */
+  @RequirePermission("batch", "delete")
+  @Delete("batches/:id")
+  @HttpCode(200)
+  deleteBatch(@Param("id") id: string) {
+    return this.removal.removeBatch(id);
+  }
+
+  /** Erase a batch for good. Works on one already deleted. */
+  @RequirePermission("batch", "delete")
+  @Delete("batches/:id/permanent")
+  @HttpCode(200)
+  purgeBatch(@Param("id") id: string) {
+    return this.removal.purgeBatch(id);
   }
 
   @RequirePermission("batch", "update")
@@ -230,14 +279,45 @@ export class AcademicController {
   }
 
   /**
-   * FR-CRS-013 — archive, never delete. A section that has ever had an
-   * enrolment cannot be removed (BR-DAT-04), so there is deliberately no
-   * DELETE route here.
+   * FR-CRS-013 — archive is what a section that has been TAUGHT gets. It
+   * leaves every list an administrator works in while keeping the attendance
+   * and the marks, which outlive the section itself (BR-DAT-04).
+   *
+   * The DELETE below is the other half of the same rule, not a contradiction
+   * of it: a section created by mistake and never used has nothing to keep.
    */
   @RequirePermission("section", "update")
   @Post("sections/:id/archive")
   archiveSection(@Param("id") id: string) {
     return this.academic.archiveSection(id);
+  }
+
+  /**
+   * Remove a section that was created by mistake — FR-CRS-013.
+   *
+   * Refused, by name, the moment anything depends on it: a student in it, an
+   * admission pointing at it, a subject on it. The office is told which, and
+   * told to archive instead where that is the right answer.
+   */
+  @RequirePermission("section", "delete")
+  @Delete("sections/:id")
+  @HttpCode(200)
+  deleteSection(@Param("id") id: string) {
+    return this.removal.removeSection(id);
+  }
+
+  /**
+   * Erase a section for good.
+   *
+   * Counts records the soft delete does not: a DELETED assignment is invisible
+   * but its row still holds a foreign key, so a section that looks clear on
+   * screen can still be firmly held in the database.
+   */
+  @RequirePermission("section", "delete")
+  @Delete("sections/:id/permanent")
+  @HttpCode(200)
+  purgeSection(@Param("id") id: string) {
+    return this.removal.purgeSection(id);
   }
 
   @RequirePermission("section", "read")
@@ -261,6 +341,32 @@ export class AcademicController {
     @Body(zodBody(offeringCreateSchema)) dto: OfferingCreateInput,
   ) {
     return this.academic.offerSubject(id, dto);
+  }
+
+  /**
+   * Take one subject off one class — "remove Maths from the evening group".
+   *
+   * Addressed by the OFFERING'S OWN ID rather than by section and subject
+   * together: that id is what the whole model hangs off (BR-CNT-03), it is
+   * what every screen already holds, and a two-part address would let a
+   * caller name a pair that does not exist and get a confusing 404.
+   *
+   * The teacher's posting to the class goes with it. Everything else — a
+   * register, an assignment, a certificate — refuses the removal instead.
+   */
+  @RequirePermission("section_subject", "delete")
+  @Delete("section-subjects/:id")
+  @HttpCode(200)
+  deleteOffering(@Param("id") id: string) {
+    return this.removal.removeSectionSubject(id);
+  }
+
+  /** Erase one subject's place on one class for good. */
+  @RequirePermission("section_subject", "delete")
+  @Delete("section-subjects/:id/permanent")
+  @HttpCode(200)
+  purgeOffering(@Param("id") id: string) {
+    return this.removal.purgeSectionSubject(id);
   }
 
   // -------------------------------------------------------------- notes ----

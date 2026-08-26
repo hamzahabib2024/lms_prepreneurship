@@ -49,6 +49,7 @@ export class DashboardService {
 
     const widgets = await this.gather({
       nextClass: () => this.nextClass(),
+      myClasses: () => this.myClasses(),
       workDue: () => this.workDue(studentId),
       progress: () => this.progress.forStudent(studentId),
       attendance: () => this.attendance.studentSummary(studentId),
@@ -112,6 +113,7 @@ export class DashboardService {
             section: { select: { code: true, name: true } },
           },
         },
+        // meetingUrl and meetingNote come with the sectionSubject above.
       },
     });
 
@@ -141,6 +143,71 @@ export class DashboardService {
       joinWindowOpensAt: opensAt,
       joinWindowOpen: now >= opensAt,
       linkReady: session.binding?.status === "ACTIVE",
+      /*
+       * THE CLASS'S STANDING ROOM — FR-LIV.
+       *
+       * Distinct from `linkReady` above it, which is about a meeting the
+       * System created for this one occurrence through a provider binding.
+       * This is the room the Institute already has and uses every week, and
+       * for most classes it is the only one that exists.
+       *
+       * Carried here so the dashboard can offer a door rather than only a
+       * countdown. A student two minutes before class wants to get IN, and
+       * being told the class exists is not the same as being let into it.
+       */
+      sectionSubjectId: session.sectionSubjectId,
+      meetingUrl: session.sectionSubject.meetingUrl,
+      meetingNote: session.sectionSubject.meetingNote,
+    };
+  }
+
+  /**
+   * EVERY CLASS THE STUDENT CAN WALK INTO, on the dashboard — FR-LIV.
+   *
+   * `nextClass` above answers "what is on now?", which is the right question
+   * on a timetabled day and the wrong one the rest of the time: a class moved
+   * to a one-off catch-up session, or a subject with no session scheduled at
+   * all, has a room the student still needs and no way to reach it from here.
+   *
+   * ONLY CLASSES WITH A ROOM. A list that includes the ones taught in a
+   * building is a list where most rows do nothing, and the reader learns to
+   * skip all of them.
+   *
+   * The scope predicate decides the rows, so this is the student's own
+   * enrolments without a filter saying so.
+   */
+  private async myClasses() {
+    const offerings = await this.prisma.scoped.sectionSubject.findMany({
+      where: { deletedAt: null, meetingUrl: { not: null } },
+      select: {
+        id: true,
+        meetingUrl: true,
+        meetingNote: true,
+        subject: { select: { code: true, name: true } },
+        section: { select: { code: true, name: true } },
+      },
+      orderBy: { subject: { name: "asc" } },
+    });
+
+    if (offerings.length === 0) {
+      // NFR-USE-009 — say why it is empty. "No classes" would read as though
+      // the student were enrolled on nothing.
+      return {
+        classes: [],
+        message:
+          "None of your classes has an online meeting link yet. They appear here as your " +
+          "teachers add them.",
+      };
+    }
+
+    return {
+      classes: offerings.map((o: (typeof offerings)[number]) => ({
+        sectionSubjectId: o.id,
+        subject: o.subject,
+        section: o.section,
+        meetingUrl: o.meetingUrl,
+        meetingNote: o.meetingNote,
+      })),
     };
   }
 
@@ -344,7 +411,7 @@ export class DashboardService {
         key: "sections_without_teacher",
         count: sectionsWithoutTeacher,
         // FR-CRS-026 — noticed by the Institute rather than by its students.
-        message: `${sectionsWithoutTeacher} subject-section(s) have no assigned teacher.`,
+        message: `${sectionsWithoutTeacher} subject(s) have no teacher assigned.`,
         severity: "high" as const,
       },
       missingLectures > 0 && {

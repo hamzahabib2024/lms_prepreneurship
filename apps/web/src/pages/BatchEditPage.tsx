@@ -171,12 +171,12 @@ export function BatchEditPage() {
       title="New batch"
       subtitle={
         course
-          ? `A section of ${course.name} — same course, different group of students.`
-          : "A section of a course. Students are admitted into a batch, never into the course itself."
+          ? `A batch of ${course.name} — same course, different group of students.`
+          : "A batch of a course. Students are admitted into a batch, never into the course itself."
       }
       intro={
         <p className="small">
-          A batch is <strong>one group of students</strong> taking a course — Section A, Section B,
+          A batch is <strong>one group of students</strong> taking a course — Batch A, Batch B,
           the female batch, the evening batch. It has its own seats, its own register and its own
           timetable, and it teaches the subjects the course teaches.
         </p>
@@ -239,10 +239,10 @@ export function BatchEditPage() {
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Section A"
+            placeholder="Batch A"
           />
           <span className="muted small">
-            The section letter, or whatever staff and students call it — &ldquo;A&rdquo;,
+            The batch letter, or whatever staff and students call it — &ldquo;A&rdquo;,
             &ldquo;Morning A (Female)&rdquo;, &ldquo;Batch 2&rdquo;. A short code is generated for
             you.
           </span>

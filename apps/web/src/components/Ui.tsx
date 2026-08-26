@@ -258,3 +258,23 @@ export function ErrorState({
     </div>
   );
 }
+
+/**
+ * THE SECOND QUESTION: hide it, or erase it?
+ *
+ * Asked after the first confirmation rather than offered as its own button.
+ * A row carrying both Delete and Erase is a row where the irreversible one
+ * sits a few pixels from the safe one, and the two do not deserve equal
+ * prominence.
+ *
+ * CANCEL STILL DELETES, and the wording says so in as many words. A Cancel
+ * that silently abandoned the whole operation would teach people to press OK
+ * to be safe, which is precisely backwards when OK is the permanent one.
+ */
+export function askPermanent(what: string): boolean {
+  return window.confirm(
+    `Erase ${what} permanently?\n\n` +
+      `OK — the record is removed from the database for good. This cannot be undone.\n\n` +
+      `Cancel — it is still deleted and leaves every list, but can be restored later.`,
+  );
+}

@@ -885,7 +885,7 @@ function EarnedPanel({ onIssued }: { onIssued: () => void }) {
     api
       .get<{ items?: Section[] } | Section[]>("/sections")
       .then((r) => setSections(Array.isArray(r) ? r : (r.items ?? [])))
-      .catch((e) => setError(e instanceof ApiError ? e.message : "Could not load sections."));
+      .catch((e) => setError(e instanceof ApiError ? e.message : "Could not load batches."));
   }, []);
 
   useEffect(() => {
@@ -922,9 +922,9 @@ function EarnedPanel({ onIssued }: { onIssued: () => void }) {
       <section className="card">
         <div className="field-row">
           <label className="field">
-            <span>Section</span>
+            <span>Batch</span>
             <select value={sectionId} onChange={(e) => setSectionId(e.target.value)}>
-              <option value="">Choose a section…</option>
+              <option value="">Choose a batch…</option>
               {sections.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.code} — {s.name}
@@ -941,7 +941,7 @@ function EarnedPanel({ onIssued }: { onIssued: () => void }) {
               disabled={offerings.length === 0}
             >
               <option value="">
-                {offerings.length === 0 ? "Choose a section first" : "Choose a subject…"}
+                {offerings.length === 0 ? "Choose a batch first" : "Choose a subject…"}
               </option>
               {offerings.map((o) => (
                 <option key={o.id} value={o.id}>
@@ -957,7 +957,7 @@ function EarnedPanel({ onIssued }: { onIssued: () => void }) {
 
       {!loading && !offeringId && (
         <EmptyState icon="award" title="Choose a subject">
-          Pick a section and a subject above to see who has met the requirements for a certificate,
+          Pick a batch and a subject above to see who has met the requirements for a certificate,
           and who is short of them.
         </EmptyState>
       )}

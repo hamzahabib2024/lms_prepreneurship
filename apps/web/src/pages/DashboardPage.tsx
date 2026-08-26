@@ -28,6 +28,7 @@ interface DashboardResponse {
 
 const WIDGET_TITLES: Record<string, string> = {
   nextClass: "Next class",
+  myClasses: "Join a class",
   workDue: "Due soon",
   progress: "My progress",
   attendance: "My attendance",
@@ -264,18 +265,88 @@ function WidgetBody({
             does that. Sending them to the video directly would mark nobody
             present.
           */}
-          {v["joinWindowOpen"] ? (
-            <Link className="btn btn-primary" to={`/classes/${String(v["sessionId"])}`}>
-              Join class
-            </Link>
-          ) : (
-            <Link className="btn" to={`/classes/${String(v["sessionId"])}`}>
-              See the class
-            </Link>
+          <div className="row-actions">
+            {v["joinWindowOpen"] ? (
+              <Link className="btn btn-primary" to={`/classes/${String(v["sessionId"])}`}>
+                Join class
+              </Link>
+            ) : (
+              <Link className="btn" to={`/classes/${String(v["sessionId"])}`}>
+                See the class
+              </Link>
+            )}
+            {/*
+              THE ROOM ITSELF — FR-LIV.
+
+              Beside the class page, not instead of it. The page is what
+              records attendance, so it stays the primary way in; but a
+              student whose class starts in ninety seconds and whose teacher
+              takes the register by hand needs the door, and being sent to a
+              page that then sends them onward is one click of nothing.
+
+              Only rendered where a room exists. Most classes taught in a
+              building have none, and a dead button is worse than no button.
+            */}
+            {typeof v["meetingUrl"] === "string" && v["meetingUrl"] && (
+              <a
+                className={v["joinWindowOpen"] ? "btn" : "btn btn-primary"}
+                href={String(v["meetingUrl"])}
+                target="_blank"
+                rel="noreferrer noopener"
+              >
+                Open the meeting
+              </a>
+            )}
+          </div>
+          {typeof v["meetingNote"] === "string" && v["meetingNote"] && (
+            <p className="muted small">{String(v["meetingNote"])}</p>
           )}
-          {/* FR-LIV-019 — surfaced before the class, not during it. */}
-          {!v["linkReady"] && <p className="muted small">The class link is not ready yet.</p>}
+          {/* FR-LIV-019 — surfaced before the class, not during it. Silent
+              where the Institute uses its own standing room instead, because
+              then there is no provider link to be waiting for. */}
+          {!v["linkReady"] && !v["meetingUrl"] && (
+            <p className="muted small">The class link is not ready yet.</p>
+          )}
         </>
+      );
+    }
+
+    /*
+      EVERY CLASS THE STUDENT CAN WALK INTO — FR-LIV.
+
+      "Next class" answers what is on now. This answers the question a student
+      actually opens the dashboard with on a Tuesday afternoon: which of my
+      classes can I get into, and where is the link. One row per class, with
+      the room's own note under it where the teacher wrote one.
+    */
+    case "myClasses": {
+      const classes = (v["classes"] ?? []) as Array<{
+        sectionSubjectId: string;
+        subject: { code: string; name: string };
+        section: { code: string; name: string };
+        meetingUrl: string;
+        meetingNote: string | null;
+      }>;
+      if (classes.length === 0) return <p className="muted">{emptyMessage ?? "Nothing to join."}</p>;
+      return (
+        <ul className="list join-list">
+          {classes.map((c) => (
+            <li key={c.sectionSubjectId}>
+              <span className="join-list-what">
+                <Link to={`/subjects/${c.sectionSubjectId}`}>{c.subject.name}</Link>
+                {c.meetingNote && <span className="muted small">{c.meetingNote}</span>}
+              </span>
+              <a
+                className="btn btn-primary btn-sm"
+                href={c.meetingUrl}
+                target="_blank"
+                rel="noreferrer noopener"
+              >
+                Join
+              </a>
+            </li>
+          ))}
+        </ul>
       );
     }
 
@@ -344,12 +415,12 @@ function WidgetBody({
           />
           <Counter
             n={v["activeSections"]}
-            label="active sections"
+            label="active batches"
             to={may(COUNTER_LINKS["instituteKpis.activeSections"])}
           />
           <Counter
             n={v["sectionsAtCapacity"]}
-            label="sections full"
+            label="batches full"
             warn
             to={may(COUNTER_LINKS["instituteKpis.sectionsAtCapacity"])}
           />

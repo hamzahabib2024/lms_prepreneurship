@@ -25,7 +25,7 @@ para(doc, "Almost everything in this guide is either irreversible, invisible to 
           "these screens weekly, something else is wrong.", bold=True)
 
 doc.add_heading("What is in this guide", level=1)
-table(doc, ["Section", "What it covers"], [
+table(doc, ["Batch", "What it covers"], [
     ["Settings", "Institute policy, and what changing it does"],
     ["Roles and permissions", "Who can do what, and step-up"],
     ["Security", "Sign-ins, lockouts and sessions"],
@@ -54,7 +54,7 @@ callout(doc, "Changes are not retroactive:",
         "progress does not rewrite a certificate already issued. Anything already decided stays "
         "decided; these values inform decisions still to come.")
 callout(doc, "If a change appears to do nothing:",
-        "Look at where the value came from — shown on every row. A course or section may carry "
+        "Look at where the value came from — shown on every row. A course or batch may carry "
         "its own override, and the more specific one wins. This is the single most common reason "
         "somebody concludes the feature is broken.")
 
@@ -188,8 +188,8 @@ bullets(doc, [
 ])
 doc.add_heading("Every term", level=2)
 bullets(doc, [
-    "Create the new term and its intakes before sections are made.",
-    "Check that every section has a teacher assigned.",
+    "Create the new term and its intakes before batches are made.",
+    "Check that every batch has a teacher assigned.",
     "Review who still has an account and suspend those who have left.",
     "Read the audit log for role changes you did not expect.",
 ])

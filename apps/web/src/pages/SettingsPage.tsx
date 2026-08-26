@@ -129,7 +129,7 @@ export function SettingsPage() {
           { icon: "pen", title: "Change it", body: "Nothing saves until you press Save. The default is always shown beside it." },
           { icon: "clock", title: "It applies from now on", body: "Decisions already made stay made — lowering a threshold does not un-warn anybody." },
         ]}
-        note="If you change something and nothing happens, look at where the value came from. A course or section may have its own override, and the more specific one wins."
+        note="If you change something and nothing happens, look at where the value came from. A course or batch may have its own override, and the more specific one wins."
       />
 
       {!mayConfigure && (

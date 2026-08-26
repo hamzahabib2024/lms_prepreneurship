@@ -105,7 +105,7 @@ export function CohortImportPage() {
     api
       .get<Section[]>("/sections")
       .then(setSections)
-      .catch((e) => setError(e instanceof ApiError ? e.message : "Could not load sections."));
+      .catch((e) => setError(e instanceof ApiError ? e.message : "Could not load batches."));
   }, []);
 
   // Any change to the file or the destination invalidates the preview. Leaving
@@ -151,7 +151,7 @@ export function CohortImportPage() {
           <h1>Import a cohort</h1>
           <p className="muted small">
             Load students the Institute already has — a batch admitted on paper, or a register
-            kept in a spreadsheet — into one section. Every student goes through the same checks
+            kept in a spreadsheet — into one batch. Every student goes through the same checks
             as a single admission, so an import cannot get past a gender restriction.
           </p>
         </div>
@@ -195,7 +195,7 @@ export function CohortImportPage() {
         <section className="card">
           <div className="field-row">
             <label className="field">
-              <span>Into which section</span>
+              <span>Into which batch</span>
               <select
                 value={sectionId}
                 onChange={(e) => {
@@ -204,7 +204,7 @@ export function CohortImportPage() {
                   setResult(null);
                 }}
               >
-                <option value="">Choose a section</option>
+                <option value="">Choose a batch</option>
                 {sections.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.code} — {s.name}
@@ -312,7 +312,7 @@ export function CohortImportPage() {
                   onChange={(e) => setCapacityOverride(e.target.checked)}
                 />
                 <span>
-                  Load them anyway, past the section's capacity. This is recorded against your
+                  Load them anyway, past the batch's capacity. This is recorded against your
                   name.
                 </span>
               </label>
@@ -435,9 +435,9 @@ function PreviewPanel({ preview }: { preview: Preview }) {
           <p>
             <strong>
               {blocked.length} {blocked.length === 1 ? "student cannot" : "students cannot"} join
-              this section.
+              this batch.
             </strong>{" "}
-            {blocked[0]?.blocked} This cannot be overridden — put them in another section.
+            {blocked[0]?.blocked} This cannot be overridden — put them in another batch.
           </p>
           <ul className="list small">
             {blocked.slice(0, 10).map((r) => (

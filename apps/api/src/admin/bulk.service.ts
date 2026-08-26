@@ -83,12 +83,12 @@ export class BulkService {
       const name = student.user.fullName;
 
       if (student.currentSectionId === toSectionId) {
-        return { studentId, name, outcome: "SKIPPED" as const, message: "Already in that section." };
+        return { studentId, name, outcome: "SKIPPED" as const, message: "Already in that batch." };
       }
       if (section.status === "ARCHIVED") {
         return {
           studentId, name, outcome: "FAILED" as const,
-          message: "That section is archived and cannot accept students.",
+          message: "That batch is archived and cannot accept students.",
         };
       }
       if (section.genderRestriction !== "MIXED" && section.genderRestriction !== student.gender) {

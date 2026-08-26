@@ -14,7 +14,7 @@ cover(doc, "Student Guide",
 
 # ─────────────────────────────────────────────────────────────── contents ──
 doc.add_heading("What is in this guide", level=1)
-table(doc, ["Section", "What it covers"], [
+table(doc, ["Batch", "What it covers"], [
     ["Getting started", "Signing in, finding your way around"],
     ["Dashboard", "What is due and what needs your attention"],
     ["My subjects", "Your courses, recordings, assignments and quizzes"],

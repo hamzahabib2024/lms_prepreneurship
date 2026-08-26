@@ -56,7 +56,7 @@ const announcementSchema = z
     // is told why while they are still writing, rather than getting a
     // constraint violation naming a table.
     message:
-      "Only an announcement to the whole Institute, or one written for the public page, can be shown publicly. One addressed to a section was written for those students.",
+      "Only an announcement to the whole Institute, or one written for the public page, can be shown publicly. One addressed to a batch was written for those students.",
   })
   /*
    * A PUBLIC_ONLY NOTICE THAT IS NOT PUBLIC REACHES NOBODY AT ALL — it is

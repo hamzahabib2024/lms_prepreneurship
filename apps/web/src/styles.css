@@ -1240,6 +1240,18 @@ code {
 .class-room > .btn { margin-top: .6rem; }
 .class-room-editor { margin-top: .7rem; }
 
+/*
+  THE DASHBOARD'S LIST OF ROOMS — FR-LIV.
+
+  The subject on the left, the way in on the right, and the teacher's note
+  under the subject rather than beside the button. A passcode set next to the
+  thing you are about to press is a passcode you press past.
+*/
+.join-list-what { display: flex; flex-direction: column; gap: .1rem; min-width: 0; }
+.join-list-what .small { overflow-wrap: anywhere; }
+/* The button keeps its width while the subject name takes what is left. */
+.join-list > li > .btn { flex: none; }
+
 .lecture-source {
   margin-bottom: 1rem;
   background: var(--surface-2);

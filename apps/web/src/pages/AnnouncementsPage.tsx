@@ -61,12 +61,12 @@ export function AnnouncementsPage() {
         title="Telling people things"
         intro="Notices that reach students in the System, and — if you choose — visitors on the public page."
         steps={[
-          { icon: "users", title: "Choose who it reaches", body: "The whole Institute, one section, or one class." },
+          { icon: "users", title: "Choose who it reaches", body: "The whole Institute, one batch, or one class." },
           { icon: "pen", title: "Write it", body: "A clear title. Many people read only that." },
           { icon: "clock", title: "Set when it stops", body: "An expiry takes it down by itself. An event that has happened is not news." },
           { icon: "megaphone", title: "Post it", body: "It appears immediately for everybody it was addressed to." },
         ]}
-        note="Only a notice addressed to the whole Institute can be shown publicly. One written for a section was written for those students, and the System will not put it on the public page."
+        note="Only a notice addressed to the whole Institute can be shown publicly. One written for a batch was written for those students, and the System will not put it on the public page."
       />
 
       {error && (
