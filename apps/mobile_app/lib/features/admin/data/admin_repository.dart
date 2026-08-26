@@ -176,6 +176,13 @@ class AdminRepository {
     return data;
   }
 
+  Future<String> downloadBackupUrl({required String id}) async {
+    final data = await api.get<Map<String, dynamic>>(
+      '/admin/backups/${Uri.encodeComponent(id)}/download',
+    );
+    return data['url'] as String? ?? '';
+  }
+
   // ------------------------------------------------------------ maintenance ---
 
   Future<Map<String, dynamic>> getMaintenance() async {
@@ -306,5 +313,39 @@ class AdminRepository {
       {'studentIds': studentIds, 'reason': reason.trim()},
     );
     return BulkReport.fromJson(data);
+  }
+
+  // ── GDPR / Personal Data ──
+
+  Future<Map<String, dynamic>> exportPersonalData({required String userId}) async {
+    final data = await api.get<Map<String, dynamic>>(
+      '/admin/users/$userId/personal-data',
+    );
+    return data;
+  }
+
+  Future<Map<String, dynamic>> getErasurePlan({required String userId}) async {
+    final data = await api.get<Map<String, dynamic>>(
+      '/admin/users/$userId/erasure-plan',
+    );
+    return data;
+  }
+
+  Future<void> erasePersonalData({required String userId}) async {
+    await api.delete<void>('/admin/users/$userId/personal-data');
+  }
+
+  // ── Impersonation ──
+
+  Future<Map<String, dynamic>> impersonate({required String userId}) async {
+    final data = await api.post<Map<String, dynamic>>(
+      '/admin/impersonate',
+      {'userId': userId},
+    );
+    return data;
+  }
+
+  Future<void> stopImpersonation() async {
+    await api.post<void>('/admin/impersonate/stop');
   }
 }

@@ -347,6 +347,18 @@ class _ComposerState extends State<_Composer> {
                 value: 'INSTITUTE',
                 child: Text('Everyone at the Institute'),
               ),
+              const DropdownMenuItem(
+                value: 'TEACHERS',
+                child: Text('All teachers'),
+              ),
+              const DropdownMenuItem(
+                value: 'STAFF',
+                child: Text('All staff'),
+              ),
+              const DropdownMenuItem(
+                value: 'PUBLIC_ONLY',
+                child: Text('Public only'),
+              ),
             ],
             onChanged: (v) => setState(() => _audience = v ?? 'INSTITUTE'),
           ),

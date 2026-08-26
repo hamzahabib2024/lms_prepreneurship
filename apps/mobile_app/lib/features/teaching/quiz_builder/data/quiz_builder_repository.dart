@@ -10,9 +10,9 @@ class QuizBuilderRepository {
 
   Future<List<QuizSummary>> getQuizzes(String sectionSubjectId) async {
     final result = await _api.get<Map<String, dynamic>>(
-      '/api/v1/quizzes?sectionSubjectId=$sectionSubjectId',
+      '/quizzes?sectionSubjectId=$sectionSubjectId',
     );
-    return (result['quizzes'] as List<dynamic>? ?? const [])
+    return (result['/quizzes'] as List<dynamic>? ?? const [])
         .whereType<Map<String, dynamic>>()
         .map(QuizSummary.fromJson)
         .toList();
@@ -20,7 +20,7 @@ class QuizBuilderRepository {
 
   Future<QuizDraft> createQuiz(QuizDraft draft) async {
     final result = await _api.post<Map<String, dynamic>>(
-      '/api/v1/quizzes',
+      '/quizzes',
       draft.toJson(),
     );
     return QuizDraft(
@@ -55,7 +55,7 @@ class QuizBuilderRepository {
 
   Future<QuizDraft> updateQuiz(QuizDraft draft) async {
     final result = await _api.put<Map<String, dynamic>>(
-      '/api/v1/quizzes/${draft.id}',
+      '/quizzes/${draft.id}',
       draft.toJson(),
     );
     return QuizDraft(
@@ -72,10 +72,10 @@ class QuizBuilderRepository {
   }
 
   Future<void> publishQuiz(String id) async {
-    await _api.post<dynamic>('/api/v1/quizzes/$id/publish');
+    await _api.post<dynamic>('/quizzes/$id/publish');
   }
 
   Future<void> deleteQuiz(String id) async {
-    await _api.delete<dynamic>('/api/v1/quizzes/$id');
+    await _api.delete<dynamic>('/quizzes/$id');
   }
 }

@@ -205,6 +205,8 @@ class _LectureList extends StatelessWidget {
                             user: user,
                             sectionSubjectId: sectionSubjectId,
                             lecture: data.lectures[i],
+                            allLectures: data.lectures,
+                            currentIndex: i,
                           ),
                         ),
                       )

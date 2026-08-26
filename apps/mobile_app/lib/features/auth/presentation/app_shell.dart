@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/command_palette.dart';
 import '../../auth/data/models/auth_session.dart';
 import '../../dashboard/presentation/dashboard_page.dart';
 import '../../courses/presentation/courses_page.dart';
@@ -217,6 +218,14 @@ class _AppShellState extends State<AppShell> {
                               ],
                             ),
                           ),
+                          // Search button in More sheet
+                          IconButton(
+                            icon: const Icon(Icons.search, size: 22),
+                            onPressed: () {
+                              Navigator.of(context).pop();
+                              _openCommandPalette();
+                            },
+                          ),
                         ],
                       ),
                     ),
@@ -314,6 +323,50 @@ class _AppShellState extends State<AppShell> {
         );
       },
     );
+  }
+
+  void _openCommandPalette() {
+    CommandPalette.show(
+      context,
+      api: widget.api,
+      user: widget.user,
+      onNavigate: (destination) {
+        // Map destination to tab index
+        final tabIndex = _destinationToTabIndex(destination);
+        if (tabIndex != null) {
+          setState(() {
+            _selectedIndex = tabIndex;
+            if (tabIndex == 0) _dashboardRefreshKey++;
+          });
+        }
+      },
+    );
+  }
+
+  int? _destinationToTabIndex(PaletteDestination destination) {
+    switch (destination) {
+      case PaletteDestination.dashboard:
+        return 0;
+      case PaletteDestination.courses:
+        return 1;
+      case PaletteDestination.learning:
+        return _tabs.indexWhere((t) => t.label == 'Learning');
+      case PaletteDestination.admissions:
+        return _tabs.indexWhere((t) => t.label == 'Admissions');
+      case PaletteDestination.academic:
+        return _tabs.indexWhere((t) => t.label == 'Academic');
+      case PaletteDestination.announcements:
+      case PaletteDestination.discussions:
+        return _tabs.indexWhere((t) => t.label == 'Alerts');
+      case PaletteDestination.fees:
+        return _tabs.indexWhere((t) => t.label == 'Fees');
+      case PaletteDestination.reports:
+        return _tabs.indexWhere((t) => t.label == 'Reports');
+      case PaletteDestination.certificates:
+        return _tabs.indexWhere((t) => t.label == 'Certificates');
+      default:
+        return null;
+    }
   }
 
   @override

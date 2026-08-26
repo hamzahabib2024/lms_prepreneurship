@@ -54,6 +54,17 @@ class AuthRepository {
       'newPassword': newPassword,
     });
   }
+
+  /// Step-up re-authentication for sensitive operations (password changes,
+  /// financial approvals, impersonation). Returns true if the credentials
+  /// are valid and the step-up window is established server-side.
+  Future<bool> stepUp({required String email, required String password}) async {
+    await _api.post<void>('/auth/step-up', {
+      'email': email.trim(),
+      'password': password,
+    });
+    return true;
+  }
 }
 
 class MeResult {

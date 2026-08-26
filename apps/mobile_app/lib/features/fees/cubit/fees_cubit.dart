@@ -303,3 +303,43 @@ class VerificationQueueCubit extends Cubit<VerificationQueueState> {
     }
   }
 }
+
+// ── Receipt Cubit ──
+
+class FeesState extends Equatable {
+  const FeesState({
+    this.loadingReceipt = false,
+    this.receipt,
+  });
+
+  final bool loadingReceipt;
+  final Receipt? receipt;
+
+  @override
+  List<Object?> get props => [loadingReceipt, receipt];
+
+  FeesState copyWith({
+    bool? loadingReceipt,
+    Receipt? receipt,
+  }) {
+    return FeesState(
+      loadingReceipt: loadingReceipt ?? this.loadingReceipt,
+      receipt: receipt ?? this.receipt,
+    );
+  }
+}
+
+class FeesCubit extends Cubit<FeesState> {
+  FeesCubit({required this.repository}) : super(const FeesState());
+  final FeesRepository repository;
+
+  Future<void> loadReceipt(String paymentId) async {
+    emit(state.copyWith(loadingReceipt: true));
+    try {
+      final receipt = await repository.getReceipt(paymentId);
+      emit(state.copyWith(loadingReceipt: false, receipt: receipt));
+    } catch (e) {
+      emit(state.copyWith(loadingReceipt: false));
+    }
+  }
+}

@@ -9,7 +9,7 @@ class RubricsRepository {
   final ApiClient _api;
 
   Future<List<Rubric>> getRubrics() async {
-    final result = await _api.get<Map<String, dynamic>>('/api/v1/rubrics');
+    final result = await _api.get<Map<String, dynamic>>('/rubrics');
     return (result['rubrics'] as List<dynamic>? ?? const [])
         .whereType<Map<String, dynamic>>()
         .map(Rubric.fromJson)
@@ -17,7 +17,7 @@ class RubricsRepository {
   }
 
   Future<Rubric> getRubric(String id) async {
-    final result = await _api.get<Map<String, dynamic>>('/api/v1/rubrics/$id');
+    final result = await _api.get<Map<String, dynamic>>('/rubrics/$id');
     return Rubric.fromJson(result);
   }
 
@@ -42,13 +42,13 @@ class RubricsRepository {
       }).toList(),
     };
     final result = await _api.post<Map<String, dynamic>>(
-      '/api/v1/rubrics',
+      '/rubrics',
       body,
     );
     return Rubric.fromJson(result);
   }
 
   Future<void> deleteRubric(String id) async {
-    await _api.delete<dynamic>('/api/v1/rubrics/$id');
+    await _api.delete<dynamic>('/rubrics/$id');
   }
 }

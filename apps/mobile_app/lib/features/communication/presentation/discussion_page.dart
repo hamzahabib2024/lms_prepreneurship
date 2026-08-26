@@ -281,7 +281,7 @@ class _ThreadTile extends StatelessWidget {
                     Text(
                       thread.removed
                           ? '\u2014'
-                          : '${thread.author ?? "Unknown"} \u00b7 ${_formatDate(thread.createdAt)}${thread.isLocked ? " \u00b7 Closed" : ""}',
+                          : '${thread.isAnonymous ? "Anonymous" : (thread.author ?? "Unknown")} \u00b7 ${_formatDate(thread.createdAt)}${thread.isLocked ? " \u00b7 Closed" : ""}${thread.resolvedAt != null ? " \u00b7 Answered" : ""}',
                       style: TextStyle(fontSize: 12.5, color: muted),
                     ),
                   ],
@@ -345,6 +345,7 @@ class _AskComposerState extends State<_AskComposer> {
   bool _expanded = false;
   String _title = '';
   String _body = '';
+  bool _isAnonymous = false;
 
   @override
   Widget build(BuildContext context) {
@@ -389,6 +390,28 @@ class _AskComposerState extends State<_AskComposer> {
             maxLines: 3,
             onChanged: (v) => _body = v,
           ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Icon(Icons.visibility_off_outlined,
+                  size: 16,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant),
+              const SizedBox(width: 6),
+              Text(
+                'Hide my name',
+                style: TextStyle(
+                  fontSize: 12.5,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const Spacer(),
+              Switch(
+                value: _isAnonymous,
+                onChanged: (v) => setState(() => _isAnonymous = v),
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ],
+          ),
           const SizedBox(height: 12),
           Row(
             children: [
@@ -398,12 +421,14 @@ class _AskComposerState extends State<_AskComposer> {
                         await context.read<DiscussionCubit>().createDiscussion(
                               title: _title.trim(),
                               body: _body.trim(),
+                              isAnonymous: _isAnonymous,
                             );
                         if (!mounted) return;
                         setState(() {
                           _expanded = false;
                           _title = '';
                           _body = '';
+                          _isAnonymous = false;
                         });
                         widget.onAsked();
                       }
@@ -445,6 +470,7 @@ class _ThreadView extends StatefulWidget {
 class _ThreadViewState extends State<_ThreadView> {
   final _replyController = TextEditingController();
   final _scrollController = ScrollController();
+  bool _replyAnonymous = false;
 
   @override
   void dispose() {
@@ -489,6 +515,10 @@ class _ThreadViewState extends State<_ThreadView> {
                     const SizedBox(width: 8),
                     const Pill(text: 'Closed'),
                   ],
+                  if (widget.thread.resolvedAt != null) ...[
+                    const SizedBox(width: 8),
+                    const Pill(text: 'Answered'),
+                  ],
                 ],
               ),
               // Moderation buttons
@@ -512,6 +542,17 @@ class _ThreadViewState extends State<_ThreadView> {
                         context.read<DiscussionCubit>().moderate(
                               postId: widget.thread.id,
                               isLocked: !widget.thread.isLocked,
+                            );
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    _ModerationButton(
+                      label: widget.thread.resolvedAt != null
+                          ? 'Reopen'
+                          : 'Mark answered',
+                      onPressed: () {
+                        context.read<DiscussionCubit>().resolvePost(
+                              postId: widget.thread.id,
                             );
                       },
                     ),
@@ -576,40 +617,67 @@ class _ThreadViewState extends State<_ThreadView> {
             ),
             child: SafeArea(
               top: false,
-              child: Row(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _replyController,
-                      decoration: const InputDecoration(
-                        hintText: 'Write an answer\u2026',
-                        border: InputBorder.none,
-                        isDense: true,
+                  Row(
+                    children: [
+                      Icon(Icons.visibility_off_outlined,
+                          size: 14,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Hide name',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
                       ),
-                      maxLines: null,
-                      textInputAction: TextInputAction.newline,
-                    ),
+                      const Spacer(),
+                      Switch(
+                        value: _replyAnonymous,
+                        onChanged: (v) => setState(() => _replyAnonymous = v),
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                  IconButton(
-                    onPressed: (_replyController.text.trim().length >= 2 &&
-                            !widget.replyBusy)
-                        ? () {
-                            context.read<DiscussionCubit>().reply(
-                                  postId: widget.thread.id,
-                                  body: _replyController.text.trim(),
-                                );
-                            _replyController.clear();
-                          }
-                        : null,
-                    icon: widget.replyBusy
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.send),
-                    color: AppColors.brand600,
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _replyController,
+                          decoration: const InputDecoration(
+                            hintText: 'Write an answer\u2026',
+                            border: InputBorder.none,
+                            isDense: true,
+                          ),
+                          maxLines: null,
+                          textInputAction: TextInputAction.newline,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        onPressed: (_replyController.text.trim().length >= 2 &&
+                                !widget.replyBusy)
+                            ? () {
+                                context.read<DiscussionCubit>().reply(
+                                      postId: widget.thread.id,
+                                      body: _replyController.text.trim(),
+                                      isAnonymous: _replyAnonymous,
+                                    );
+                                _replyController.clear();
+                              }
+                            : null,
+                        icon: widget.replyBusy
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.send),
+                        color: AppColors.brand600,
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -746,7 +814,7 @@ class _BubbleState extends State<_Bubble> {
                     Padding(
                       padding: const EdgeInsets.only(bottom: 2),
                       child: Text(
-                        p.author ?? 'Unknown',
+                        p.isAnonymous ? 'Anonymous' : (p.author ?? 'Unknown'),
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
@@ -780,6 +848,17 @@ class _BubbleState extends State<_Bubble> {
                         Text(
                           '\u00b7 edited',
                           style: TextStyle(fontSize: 11, color: muted),
+                        ),
+                      ],
+                      if (p.endorsedAt != null) ...[
+                        const SizedBox(width: 4),
+                        Text(
+                          '\u2713 Endorsed',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: AppColors.ok,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ],
                       if (_editing) ...[
@@ -839,6 +918,25 @@ class _BubbleState extends State<_Bubble> {
                             ),
                           if (widget.mine && widget.isTeacher)
                             const SizedBox(width: 12),
+                          if (widget.isTeacher && !widget.isQuestion)
+                            GestureDetector(
+                              onTap: () {
+                                context.read<DiscussionCubit>().endorsePost(
+                                      postId: p.id,
+                                    );
+                              },
+                              child: Text(
+                                p.endorsedAt != null ? 'Unendorse' : 'Endorse',
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  color: p.endorsedAt != null
+                                      ? AppColors.ok
+                                      : AppColors.brand600,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          if (widget.isTeacher) const SizedBox(width: 12),
                           GestureDetector(
                             onTap: () => _confirmRemove(context),
                             child: Text(
