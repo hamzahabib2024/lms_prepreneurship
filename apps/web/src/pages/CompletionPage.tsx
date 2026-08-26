@@ -3,6 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { ApiError, api } from "../api/client";
 import { SkeletonList } from "../components/Ui";
 import { HowItWorks } from "../components/HowItWorks";
+import { ProgressSettings } from "../components/ProgressSettings";
 import { Icon } from "../components/Icon";
 
 /**
@@ -154,6 +155,19 @@ export function CompletionPage() {
           <p>{saved}</p>
         </div>
       )}
+
+      {/*
+        WHAT THE FIGURES BELOW ARE MADE OF — FR-PRG.
+
+        Above the roster deliberately. Every number on this screen is produced
+        by the weighting in this panel, and a teacher deciding whether somebody
+        has completed the course needs to know what "41%" was counting before
+        they judge anybody by it.
+
+        Changing it reloads the roster, because every percentage on the page is
+        now a different number.
+      */}
+      <ProgressSettings sectionSubjectId={sectionSubjectId} onChanged={load} />
 
       <section className="card">
         <ul className="list">

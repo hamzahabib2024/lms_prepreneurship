@@ -1,4 +1,6 @@
 import { Body, Controller, Get, HttpCode, Post, Req } from "@nestjs/common";
+import { Throttle } from "@nestjs/throttler";
+import { z } from "zod";
 import {
   AppError,
   changePasswordSchema,
@@ -11,14 +13,41 @@ import {
 } from "@lms/shared";
 import type { Request } from "express";
 import { AuthService } from "./auth.service";
+import { PasswordResetService } from "./password-reset.service";
 import { zodBody } from "../common/zod-validation.pipe";
 import { Public, RequirePermission } from "../rbac/permissions.guard";
 import { getActor } from "../prisma/actor-context";
 
+/**
+ * Asking for a reset link.
+ *
+ * The address is the only field, and it is not checked against anything here:
+ * whether it belongs to an account is exactly what this endpoint must not
+ * reveal, so an unknown address gets the same answer as a known one.
+ */
+const forgotSchema = z.object({
+  email: z.string().trim().email().max(320),
+});
+
+/**
+ * Spending it.
+ *
+ * The length floor here is a sanity check, not the policy — the real minimum
+ * depends on the account's roles and is applied by the service, because only
+ * it knows whose password this is.
+ */
+const resetSchema = z.object({
+  token: z.string().min(20).max(200),
+  newPassword: z.string().min(8).max(200),
+});
+
 /** §9.3 — authentication endpoints. */
 @Controller("auth")
 export class AuthController {
-  constructor(private readonly auth: AuthService) {}
+  constructor(
+    private readonly auth: AuthService,
+    private readonly reset: PasswordResetService,
+  ) {}
 
   @Public()
   @Post("login")
@@ -42,6 +71,42 @@ export class AuthController {
   }
 
   @RequirePermission("own_password", "update")
+  /**
+   * FR-AUT — "I have forgotten my password."
+   *
+   * ALWAYS 200, ALWAYS THE SAME SENTENCE. Whether the address is registered is
+   * the one thing this route must not disclose: an endpoint that says "no such
+   * account" is a free membership test, and at an institute the membership
+   * list is the student roster.
+   *
+   * THROTTLED HARD. Five an hour from one address is more than any genuine
+   * person needs and far less than is useful for mailbounce-bombing somebody
+   * or for grinding through a list of addresses.
+   */
+  @Public()
+  @Throttle({ default: { limit: 5, ttl: 3_600_000 } })
+  @Post("password/forgot")
+  @HttpCode(200)
+  forgotPassword(@Body(zodBody(forgotSchema)) dto: z.infer<typeof forgotSchema>, @Req() req: Request) {
+    return this.reset.request(dto.email, req.ip ?? null);
+  }
+
+  /**
+   * FR-AUT — set the password with the link that was emailed.
+   *
+   * Throttled more tightly than the request above: this one takes a SECRET, so
+   * the rate limit is part of what makes guessing hopeless rather than merely
+   * expensive. Thirty-two random bytes are already beyond guessing; the limit
+   * is what stops somebody trying anyway and filling the log doing it.
+   */
+  @Public()
+  @Throttle({ default: { limit: 10, ttl: 3_600_000 } })
+  @Post("password/reset")
+  @HttpCode(200)
+  resetPassword(@Body(zodBody(resetSchema)) dto: z.infer<typeof resetSchema>, @Req() req: Request) {
+    return this.reset.complete(dto.token, dto.newPassword, req.ip ?? null);
+  }
+
   @Post("password/change")
   @HttpCode(200)
   async changePassword(

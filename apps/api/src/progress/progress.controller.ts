@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Put } from "@nestjs/common";
 import { z } from "zod";
 import { ProgressService } from "./progress.service";
 import { CompletionService } from "./completion.service";
+import { ProgressSettingsService } from "./progress-settings.service";
 import { zodBody } from "../common/zod-validation.pipe";
 import { RequirePermission } from "../rbac/permissions.guard";
 import { assertOwnStudent } from "../rbac/ownership";
@@ -18,11 +19,41 @@ const decisionSchema = z.object({
   note: z.string().trim().max(2000).optional(),
 });
 
+/**
+ * HOW PROGRESS IS MEASURED IN ONE CLASS.
+ *
+ * Both halves are optional and OMITTING ONE CLEARS IT — that is how a class
+ * goes back to following the Institute, and it has to be expressible or a
+ * teacher who changes their mind is stuck with their own weighting forever.
+ *
+ * The "must total 100" rule lives in the service rather than here: Zod can see
+ * the four numbers but not what should happen when they are wrong, and the
+ * message a teacher needs says what they add up to now.
+ */
+const progressSettingsSchema = z.object({
+  weights: z
+    .object({
+      video: z.number().min(0).max(100),
+      assignment: z.number().min(0).max(100),
+      quiz: z.number().min(0).max(100),
+      attendance: z.number().min(0).max(100),
+    })
+    .optional(),
+  criteria: z
+    .object({
+      minProgressPercent: z.number().min(0).max(100).optional(),
+      minAttendancePercent: z.number().min(0).max(100).optional(),
+      minAverageGradePercent: z.number().min(0).max(100).optional(),
+    })
+    .optional(),
+});
+
 @Controller()
 export class ProgressController {
   constructor(
     private readonly progress: ProgressService,
     private readonly completion: CompletionService,
+    private readonly progressSettings: ProgressSettingsService,
   ) {}
 
   /** FR-PRG-004 — the breakdown, so the percentage is explicable. */
@@ -83,6 +114,34 @@ export class ProgressController {
    * `subject_completion:read` at ASSIGNED for a teacher — they see their own
    * classes and no others, and the scope predicate is what enforces that.
    */
+  /**
+   * FR-PRG — what progress is made of here, and where each number came from.
+   *
+   * `read`, not `configure`: an administrator answering "why is she at 41%?"
+   * should be able to see the weighting without holding the authority to
+   * change it.
+   */
+  @RequirePermission("progress", "read")
+  @Get("section-subjects/:id/progress-settings")
+  getProgressSettings(@Param("id") id: string) {
+    return this.progressSettings.get(id);
+  }
+
+  /**
+   * FR-PRG — change it, for this class only.
+   *
+   * Teacher on their own class, office on any. Sending neither half puts the
+   * class back on the Institute's settings.
+   */
+  @RequirePermission("progress", "configure")
+  @Put("section-subjects/:id/progress-settings")
+  setProgressSettings(
+    @Param("id") id: string,
+    @Body(zodBody(progressSettingsSchema)) dto: z.infer<typeof progressSettingsSchema>,
+  ) {
+    return this.progressSettings.set(id, dto);
+  }
+
   @RequirePermission("subject_completion", "read")
   @Get("section-subjects/:id/completion")
   completionRoster(@Param("id") id: string) {

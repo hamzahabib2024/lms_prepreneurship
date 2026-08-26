@@ -118,6 +118,24 @@ export interface CertificateDocument {
 
   instructor: { name: string; title: string } | null;
 
+  /**
+   * WHO SIGNED IT, in the order they print across the foot — FR-CRT.
+   *
+   * A SNAPSHOT taken when the certificate was issued, not a live lookup. The
+   * Principal retires and a certificate issued in 2026 still prints her name
+   * over her signature, which is the whole point of a signed document.
+   *
+   * Empty on certificates issued before the Institute had a signatory library;
+   * those still carry `instructor` and `institute.signatoryName` and are
+   * rendered from those instead, so nothing already issued changes appearance.
+   */
+  signatories: Array<{
+    name: string;
+    designation: string;
+    /** Where the scanned signature lives, or null for a ruled line alone. */
+    signatureUrl: string | null;
+  }>;
+
   institute: {
     name: string;
     tagline: string;

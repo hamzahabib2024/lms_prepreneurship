@@ -2,6 +2,8 @@ import { Fragment, useCallback, useEffect, useState } from "react";
 import { NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { useAuth } from "./auth/AuthContext";
 import { LoginPage } from "./pages/LoginPage";
+import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
+import { ResetPasswordPage } from "./pages/ResetPasswordPage";
 import { LandingPage } from "./pages/LandingPage";
 import { ApplyPage } from "./pages/ApplyPage";
 import { DashboardPage } from "./pages/DashboardPage";
@@ -220,6 +222,10 @@ export function App() {
     return (
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        {/* FR-AUT — both are for somebody who cannot sign in, so both have to
+            be reachable without signing in. */}
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
         {/* FR-REG-001 — no account, no login. The whole point of the public
             application is that the person filling it in cannot have one. */}
         <Route path="/apply" element={<ApplyPage />} />
@@ -365,19 +371,11 @@ export function App() {
             })}
           </nav>
 
-          {/* Whose session this is, at a glance and without opening anything.
-              What you DO about it — change password, appearance, sign out —
-              moved to the account menu in the top strip, because reaching it
-              here meant scrolling past every destination on a phone. */}
-          <div className="sidebar-foot">
-            <span className="avatar" aria-hidden="true">
-              {initials}
-            </span>
-            <span className="who">
-              <strong>{user.fullName || user.email}</strong>
-              <span>{roleLabel}</span>
-            </span>
-          </div>
+          {/* Whose session this is — and now also what you do about it.
+              This corner is where people press for their account, and it used
+              to be a plain <div> that looked pressable and was not. It is the
+              same menu as the one in the top strip, opening upward. */}
+          <AccountMenu initials={initials} roleLabel={roleLabel} variant="row" />
         </aside>
 
         {/* Tapping away closes the drawer, which is what every phone user
@@ -483,6 +481,8 @@ export function App() {
             so the URL bar ends up saying / and a reload does the right thing.
           */}
           <Route path="/login" element={<Navigate to="/" replace />} />
+          <Route path="/forgot-password" element={<Navigate to="/" replace />} />
+          <Route path="/reset-password" element={<Navigate to="/" replace />} />
           <Route path="/apply" element={<Navigate to="/" replace />} />
           <Route
             path="/admissions"

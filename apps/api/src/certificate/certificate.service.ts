@@ -19,6 +19,7 @@ import { assertOwnStudent } from "../rbac/ownership";
 import { RegistrationNumberService } from "../admission/registration-number.service";
 import { NotificationService } from "../notification/notification.service";
 import { TemplateService } from "../notification/template.service";
+import { SignatoryService, type SignatorySnapshot } from "./signatory.service";
 
 /**
  * Completion certificates — SRS §5.15, FR-CRT-001..020.
@@ -53,6 +54,7 @@ export class CertificateService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly signatories: SignatoryService,
     private readonly audit: AuditService,
     private readonly progress: ProgressService,
     private readonly config: ConfigService,
@@ -71,7 +73,15 @@ export class CertificateService {
    * minting a second number. A double-submitted form must not produce two
    * documents with different numbers for the same achievement.
    */
-  async issueForSubject(studentId: string, sectionSubjectId: string) {
+  /**
+   * @param options.override issue even where the requirements are not met.
+   *   The office's decision, recorded as one — see the note on the gate below.
+   */
+  async issueForSubject(
+    studentId: string,
+    sectionSubjectId: string,
+    options: { override?: boolean; reason?: string; signatoryIds?: readonly string[] } = {},
+  ) {
     const actor = getActor();
     if (!actor) throw new AppError("AUTH_TOKEN_INVALID");
 
@@ -84,7 +94,28 @@ export class CertificateService {
     // the check that makes the certificate mean something.
     const standing = await this.progress.forSubject(studentId, sectionSubjectId);
 
-    if (!standing.completionCriteria.met) {
+    /*
+     * THE GATE, AND THE OFFICE'S AUTHORITY TO STEP OVER IT.
+     *
+     * Recomputed here rather than trusting anything the caller sent — this is
+     * the check that makes a certificate mean something, and it stays the
+     * default for everybody.
+     *
+     * But the Institute issues its own qualifications, and the arithmetic does
+     * not know everything: a student who sat a viva instead of the final
+     * assignment, one whose attendance was wrecked by an illness the office
+     * accepted, a class whose recordings were lost so nobody's video figure is
+     * real. Refusing those is not rigour, it is the software overruling the
+     * people responsible for the decision.
+     *
+     * So `override` issues anyway — and RECORDS THAT IT DID. The certificate
+     * carries `issuedByOverride` with what was outstanding at the moment of
+     * issue, and the audit entry names who decided. That is not a restriction
+     * on the office; it is the difference between a certificate the Institute
+     * can stand behind in two years and one nobody can explain.
+     */
+    const met = standing.completionCriteria.met;
+    if (!met && !options.override) {
       throw new AppError("VALIDATION_FAILED", {
         message: "This student has not met the requirements for this subject.",
         // The specific gaps, so an administrator can tell the student what is
@@ -98,6 +129,15 @@ export class CertificateService {
     }
 
     const snapshot = await this.snapshot({ studentId, sectionSubjectId });
+    /*
+     * WHO SIGNS IT, FROZEN NOW — FR-CRT.
+     *
+     * Resolved here and stored as values, never as ids. The Principal retires
+     * and this certificate must still print her name over her signature in
+     * five years; reading through to the live rows at render time would
+     * rewrite it the day somebody was promoted.
+     */
+    const signatories = await this.signatories.panelFor(options.signatoryIds);
     const certificateNo = await this.nextCertificateNo();
 
     const created = await this.prisma.scoped.certificate.create({
@@ -116,7 +156,17 @@ export class CertificateService {
           minProgressPercent: standing.completionCriteria.minProgressPercent,
           minAttendancePercent: standing.completionCriteria.minAttendancePercent,
           minAverageGradePercent: standing.completionCriteria.minAverageGradePercent,
+          // Present only when somebody overruled the arithmetic, so its
+          // absence means the ordinary path was taken.
+          ...(met
+            ? {}
+            : {
+                issuedByOverride: true,
+                outstandingAtIssue: standing.completionCriteria.outstanding,
+                overrideReason: options.reason ?? null,
+              }),
         } as object,
+        signatoriesSnapshot: signatories.length > 0 ? (signatories as object[]) : undefined,
         status: "ISSUED",
         issuedBy: actor.userId,
         verificationCode: this.newVerificationCode(),
@@ -124,7 +174,7 @@ export class CertificateService {
     });
 
     await this.audit.record({
-      action: "certificate.issue",
+      action: met ? "certificate.issue" : "certificate.issue.override",
       entityType: "Certificate",
       entityId: created.id,
       after: {
@@ -132,6 +182,10 @@ export class CertificateService {
         studentId,
         sectionSubjectId,
         progressPercent: standing.overallPercent,
+        ...(met
+          ? {}
+          : { override: true, outstanding: standing.completionCriteria.outstanding,
+              reason: options.reason ?? null }),
       },
     });
 
@@ -788,6 +842,108 @@ export class CertificateService {
    * it already walks every enrolment and applies the same formula, and a second
    * implementation would be a second thing to keep in step.
    */
+  /**
+   * ISSUE TO THE WHOLE BATCH AT ONCE — FR-CRT.
+   *
+   * ───────────────────────────────────────────────────────────────────────────
+   * At the end of a term the office issues thirty certificates, and doing it a
+   * student at a time meant thirty presses on thirty rows and no way to tell,
+   * afterwards, whether one had been missed. That is not a small inconvenience:
+   * the student who gets missed is the one who does not know to ask.
+   *
+   * `everyone` is the office's authority to issue regardless of the arithmetic,
+   * and it is the whole point of the request this was built for. With it off,
+   * students who have not met the requirements are SKIPPED rather than failing
+   * the run — one unfinished student must not stop the other twenty-nine.
+   *
+   * IT NEVER SILENTLY DOES NOTHING. Every student comes back with an outcome
+   * and a reason: issued, issued over the requirements, already had one, or
+   * skipped and why. A bulk action whose result is a number is a bulk action
+   * nobody can check.
+   *
+   * Sequential, not parallel. Certificate numbers are allocated from a counter
+   * and thirty concurrent allocations is how two students end up sharing one.
+   * ───────────────────────────────────────────────────────────────────────────
+   */
+  async issueForWholeClass(
+    sectionSubjectId: string,
+    options: { everyone?: boolean; reason?: string; signatoryIds?: readonly string[] } = {},
+  ) {
+    const cohort = await this.progress.forSectionSubject(sectionSubjectId);
+
+    const results: Array<{
+      studentId: string;
+      name: string;
+      outcome: "ISSUED" | "ISSUED_OVER_REQUIREMENTS" | "ALREADY_HELD" | "SKIPPED";
+      certificateNo?: string;
+      message?: string;
+    }> = [];
+
+    for (const student of cohort.students) {
+      const met = student.completionMet;
+      if (!met && !options.everyone) {
+        results.push({
+          studentId: student.studentId,
+          name: student.name,
+          outcome: "SKIPPED",
+          message:
+            "Has not met the requirements. Choose to issue to everyone if you mean to " +
+            "override that.",
+        });
+        continue;
+      }
+
+      try {
+        const doc = await this.issueForSubject(student.studentId, sectionSubjectId, {
+          override: options.everyone === true,
+          reason: options.reason,
+          // The same panel for the whole batch: nobody chooses signatories
+          // thirty times, and thirty certificates from one ceremony that
+          // disagree about who signed them would be a mess to explain.
+          signatoryIds: options.signatoryIds,
+        });
+        const already = (doc as { alreadyIssued?: boolean }).alreadyIssued === true;
+        results.push({
+          studentId: student.studentId,
+          name: student.name,
+          outcome: already ? "ALREADY_HELD" : met ? "ISSUED" : "ISSUED_OVER_REQUIREMENTS",
+          certificateNo: (doc as { certificateNo?: string }).certificateNo,
+        });
+      } catch (e) {
+        // One student's problem is not the batch's. It is reported on their
+        // own row and the run carries on.
+        results.push({
+          studentId: student.studentId,
+          name: student.name,
+          outcome: "SKIPPED",
+          message: e instanceof AppError ? e.message : "Could not be issued.",
+        });
+      }
+    }
+
+    const count = (o: string) => results.filter((r) => r.outcome === o).length;
+    const summary = {
+      considered: results.length,
+      issued: count("ISSUED"),
+      issuedOverRequirements: count("ISSUED_OVER_REQUIREMENTS"),
+      alreadyHeld: count("ALREADY_HELD"),
+      skipped: count("SKIPPED"),
+    };
+
+    await this.audit.record({
+      action: "certificate.issue.batch",
+      entityType: "SectionSubject",
+      entityId: sectionSubjectId,
+      after: { ...summary, everyone: options.everyone === true, reason: options.reason ?? null },
+    });
+    this.logger.log(
+      `batch issue on ${sectionSubjectId}: ${summary.issued} issued, ` +
+        `${summary.issuedOverRequirements} over requirements, ${summary.skipped} skipped`,
+    );
+
+    return { sectionSubjectId, summary, students: results };
+  }
+
   async issuanceView(sectionSubjectId: string) {
     const cohort = await this.progress.forSectionSubject(sectionSubjectId);
 
@@ -1093,6 +1249,8 @@ export class CertificateService {
     instituteNameSnapshot: string;
     signatoryNameSnapshot: string | null;
     signatoryTitleSnapshot: string | null;
+    /** A JSON column, so `unknown` — read through `signatoriesOf` below. */
+    signatoriesSnapshot?: unknown;
     progressPercent: unknown;
     attendancePercent: unknown;
     averageGradePercent: unknown;
@@ -1111,6 +1269,29 @@ export class CertificateService {
 
     const decimal = (value: unknown): number | null =>
       value === null || value === undefined ? null : Number(value);
+
+    /*
+     * WHO SIGNED IT — and what to print when nobody recorded that.
+     *
+     * A certificate issued AFTER the Institute had a signatory library carries
+     * its own panel, and that panel is used exactly as stored: renaming
+     * somebody must never rewrite a document they signed last year.
+     *
+     * A certificate issued BEFORE it existed has no panel at all, and there is
+     * therefore no history to protect. Printing the Institute's CURRENT
+     * signatories is the best answer available for those — the alternative,
+     * which is what this did at first, was to leave every certificate ever
+     * issued showing a settings key and whoever happened to teach the subject,
+     * so that setting up three signatories appeared to do nothing.
+     *
+     * The distinction is `null` versus an array. A stored EMPTY array means
+     * "issued with nobody signing", which is a decision and is honoured.
+     */
+    const stored = c.signatoriesSnapshot;
+    const panel =
+      stored === null || stored === undefined
+        ? await this.signatories.panelFor(null).catch(() => [])
+        : signatoriesOf(stored);
 
     return {
       id: c.id,
@@ -1145,6 +1326,20 @@ export class CertificateService {
         signatoryName: c.signatoryNameSnapshot ?? "",
         signatoryTitle: c.signatoryTitleSnapshot ?? "",
       },
+      /*
+       * The panel as it was signed. The asset id becomes a URL here rather
+       * than in the renderer, because the renderer should not have to know how
+       * this System addresses its media — and the route it points at is the
+       * PUBLIC one, since a certificate is shown to employers who have no
+       * account and could not fetch an authenticated image.
+       */
+      signatories: panel.map((sig) => ({
+        name: sig.name,
+        designation: sig.designation,
+        signatureUrl: sig.signatureAssetId
+          ? `/api/v1/public/course-media/${sig.signatureAssetId}`
+          : null,
+      })),
       verification: {
         code: c.verificationCode,
         url: this.verificationUrl(c.verificationCode),
@@ -1297,4 +1492,29 @@ export class CertificateService {
       });
     }
   }
+}
+
+/**
+ * The stored panel, read defensively.
+ *
+ * It is a JSON column, so what comes back is whatever was written — including
+ * from a version of this code that no longer exists. A certificate whose panel
+ * cannot be read should print without one rather than fail to render at all:
+ * the name, the course and the number are the parts that matter, and a
+ * document nobody can open is worse than one missing a signature.
+ */
+function signatoriesOf(value: unknown): SignatorySnapshot[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) => {
+    if (!entry || typeof entry !== "object") return [];
+    const e = entry as Record<string, unknown>;
+    if (typeof e.name !== "string" || typeof e.designation !== "string") return [];
+    return [
+      {
+        name: e.name,
+        designation: e.designation,
+        signatureAssetId: typeof e.signatureAssetId === "string" ? e.signatureAssetId : null,
+      },
+    ];
+  });
 }

@@ -1,19 +1,53 @@
-import { Body, Controller, Get, Param, Post, Query } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from "@nestjs/common";
 import { Throttle } from "@nestjs/throttler";
-import type { z } from "zod";
+import { z } from "zod";
 import {
   certificateIssueSchema,
   certificateQuerySchema,
   certificateRevokeSchema,
 } from "@lms/shared";
 import { CertificateService } from "./certificate.service";
+import { SignatoryService, MAX_SIGNATORIES } from "./signatory.service";
 import { zodBody } from "../common/zod-validation.pipe";
 import { Public, RequirePermission } from "../rbac/permissions.guard";
 
 /** SRS §9.10 — certificate endpoints. */
+/**
+ * Issuing to a whole batch.
+ *
+ * `everyone` is the office overruling the requirements. The reason is optional
+ * on purpose: it is worth recording and it is not worth blocking on, and a
+ * required field here would be the software demanding an explanation from the
+ * people whose decision it is.
+ */
+const batchIssueSchema = z.object({
+  everyone: z.boolean().optional(),
+  reason: z.string().trim().max(500).optional(),
+  /** Whose names go at the foot. Omitted means the Institute's current panel. */
+  signatoryIds: z.array(z.string().uuid()).max(MAX_SIGNATORIES).optional(),
+});
+
+/** Issuing to one student, with a chosen panel. */
+const issueSchema = z.object({
+  signatoryIds: z.array(z.string().uuid()).max(MAX_SIGNATORIES).optional(),
+});
+
+/** Adding or changing somebody in the library. */
+const signatorySchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  designation: z.string().trim().min(1).max(150),
+  signatureAssetId: z.string().uuid().nullable().optional(),
+  isActive: z.boolean().optional(),
+  sortOrder: z.number().int().min(0).max(999).optional(),
+});
+const signatoryPatchSchema = signatorySchema.partial();
+
 @Controller()
 export class CertificateController {
-  constructor(private readonly certificates: CertificateService) {}
+  constructor(
+    private readonly certificates: CertificateService,
+    private readonly signatories: SignatoryService,
+  ) {}
 
   /*
    * ROUTE ORDER MATTERS IN THIS CONTROLLER.
@@ -36,6 +70,44 @@ export class CertificateController {
    * whole register to anybody who can see their own certificate. Only somebody
    * who may issue has any business with the register.
    */
+  // ───────────────────────────────────── who signs a certificate ──
+
+  /**
+   * FR-CRT — the Institute's signatories.
+   *
+   * `read` is wide on purpose: a teacher whose own name may appear at the foot
+   * of a certificate for their class should be able to see the panel, and
+   * there is nothing private in three names and three job titles.
+   */
+  @RequirePermission("signatory", "read")
+  @Get("signatories")
+  listSignatories(@Query("activeOnly") activeOnly?: string) {
+    return this.signatories.list(activeOnly !== "true");
+  }
+
+  @RequirePermission("signatory", "create")
+  @Post("signatories")
+  createSignatory(@Body(zodBody(signatorySchema)) dto: z.infer<typeof signatorySchema>) {
+    return this.signatories.create(dto);
+  }
+
+  @RequirePermission("signatory", "update")
+  @Patch("signatories/:id")
+  updateSignatory(
+    @Param("id") id: string,
+    @Body(zodBody(signatoryPatchSchema)) dto: z.infer<typeof signatoryPatchSchema>,
+  ) {
+    return this.signatories.update(id, dto);
+  }
+
+  /** Soft — see the note on the service. Certificates already signed are safe. */
+  @RequirePermission("signatory", "delete")
+  @Delete("signatories/:id")
+  @HttpCode(200)
+  removeSignatory(@Param("id") id: string) {
+    return this.signatories.remove(id);
+  }
+
   @RequirePermission("certificate", "create")
   @Get("certificates")
   register(@Query(zodBody(certificateQuerySchema)) query: z.infer<typeof certificateQuerySchema>) {
@@ -102,8 +174,11 @@ export class CertificateController {
   issueSubject(
     @Param("studentId") studentId: string,
     @Param("sectionSubjectId") sectionSubjectId: string,
+    @Body(zodBody(issueSchema)) dto: z.infer<typeof issueSchema>,
   ) {
-    return this.certificates.issueForSubject(studentId, sectionSubjectId);
+    return this.certificates.issueForSubject(studentId, sectionSubjectId, {
+      signatoryIds: dto.signatoryIds,
+    });
   }
 
   /**
@@ -191,6 +266,29 @@ export class CertificateController {
   @Get("section-subjects/:id/certificates")
   issuanceView(@Param("id") id: string) {
     return this.certificates.issuanceView(id);
+  }
+
+  /**
+   * FR-CRT — issue to the whole batch in one action.
+   *
+   * `everyone: true` issues regardless of the requirements. That is the
+   * office's authority and it is recorded as an override on each certificate
+   * and in the audit; it is not refused, and no reason is demanded, because
+   * demanding one would be this route deciding it knows better than the
+   * people who run the Institute.
+   *
+   * The same permission as issuing one, and deliberately: it is the same act
+   * done thirty times, and a second permission for "the same thing but more
+   * of it" is a name nobody could hold.
+   */
+  @RequirePermission("certificate", "create")
+  @Post("section-subjects/:id/certificates/issue-all")
+  @HttpCode(200)
+  issueWholeClass(
+    @Param("id") id: string,
+    @Body(zodBody(batchIssueSchema)) dto: z.infer<typeof batchIssueSchema>,
+  ) {
+    return this.certificates.issueForWholeClass(id, dto);
   }
 
   /** A student's own, including revoked ones (BR-ENR-08). */

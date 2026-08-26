@@ -11,6 +11,7 @@ import { CertificateModal } from "../components/CertificateModal";
 import { Icon } from "../components/Icon";
 import { ApiError, api } from "../api/client";
 import { HowItWorks } from "../components/HowItWorks";
+import { SignatoriesPanel, signatureUrl, type Signatory } from "../components/SignatoriesPanel";
 
 /**
  * The certificate register — SRS §13.7, FR-CRT-002/006/012.
@@ -34,12 +35,16 @@ import { HowItWorks } from "../components/HowItWorks";
  * about; the other two are things they came here intending to do.
  */
 
-type Tab = "register" | "earned" | "manual";
+type Tab = "register" | "earned" | "manual" | "signatories";
 
 const TABS: ReadonlyArray<{ id: Tab; label: string; hint: string }> = [
   { id: "register", label: "Register", hint: "Everything issued" },
   { id: "earned", label: "Issue for a subject", hint: "Who has met the requirements" },
   { id: "manual", label: "Issue by hand", hint: "Workshops and one-offs" },
+  /* Its own tab rather than a corner of Settings: it is part of what a
+     certificate IS, and the person setting it up is the person about to
+     issue one. */
+  { id: "signatories", label: "Who signs", hint: "Names, roles and signatures" },
 ];
 
 export function CertificatesPage() {
@@ -90,6 +95,7 @@ export function CertificatesPage() {
       {tab === "register" && <Register reloadKey={issued} />}
       {tab === "earned" && <EarnedPanel onIssued={() => setIssued((n) => n + 1)} />}
       {tab === "manual" && <ManualPanel onIssued={() => setIssued((n) => n + 1)} />}
+      {tab === "signatories" && <SignatoriesPanel />}
     </>
   );
 }
@@ -880,6 +886,16 @@ function EarnedPanel({ onIssued }: { onIssued: () => void }) {
   // is waiting for the server.
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /*
+   * THE RESULT OF A BATCH ISSUE LIVES HERE, not in the panel that produced it.
+   *
+   * Issuing refreshes this view, the refresh sets `loading`, and `loading`
+   * unmounts the section the panel sits in — so a result held inside the panel
+   * was destroyed by the very reload it asked for. The office pressed the
+   * button, thirty certificates were issued, and the screen said nothing at
+   * all.
+   */
+  const [batchResult, setBatchResult] = useState<BatchIssueResult | null>(null);
 
   useEffect(() => {
     api
@@ -892,6 +908,7 @@ function EarnedPanel({ onIssued }: { onIssued: () => void }) {
     setOfferings([]);
     setOfferingId("");
     setView(null);
+    setBatchResult(null);
     if (!sectionId) return;
     api
       .get<Offering[]>(`/sections/${sectionId}/subjects`)
@@ -970,6 +987,25 @@ function EarnedPanel({ onIssued }: { onIssued: () => void }) {
               : `${view.eligible} eligible to issue`}
             {view.issued > 0 ? ` · ${view.issued} already issued` : ""}
           </p>
+
+          {/*
+            THE WHOLE BATCH AT ONCE — FR-CRT.
+
+            At the end of a term this is thirty presses on thirty rows, with no
+            way afterwards to tell whether one was missed. The student who gets
+            missed is the one who does not know to ask.
+          */}
+          <IssueWholeBatch
+            sectionSubjectId={view.sectionSubjectId}
+            eligible={view.eligible}
+            total={view.students.length}
+            result={batchResult}
+            onDone={(r) => {
+              setBatchResult(r);
+              load();
+              onIssued();
+            }}
+          />
 
           <ul className="list">
             {[...view.students]
@@ -1264,5 +1300,257 @@ function CandidateRow({
 
       {made && <CertificateModal certificate={made} onClose={() => setMade(null)} />}
     </li>
+  );
+}
+
+/**
+ * ISSUING TO EVERY STUDENT ON THE BATCH.
+ *
+ * TWO BUTTONS, NOT ONE WITH A CHECKBOX. "Issue to the N who qualify" and
+ * "Issue to all N regardless" are different decisions with different
+ * consequences, and a checkbox beside a single button is the arrangement where
+ * somebody ticks it without reading and issues thirty certificates nobody
+ * earned. Written out, each button says what it will do before it is pressed.
+ *
+ * THE OVERRIDE IS NOT HIDDEN AND NOT DISCOURAGED. It is the office's authority
+ * and the arithmetic does not know everything — a viva sat instead of the
+ * final assignment, an illness the Institute accepted, a term whose recordings
+ * were lost so nobody's video figure is real. The reason box is offered and
+ * never required: demanding an explanation would be this screen deciding it
+ * knows better than the people who run the Institute.
+ *
+ * EVERY STUDENT COMES BACK WITH AN OUTCOME. A bulk action whose result is a
+ * number is a bulk action nobody can check.
+ */
+function IssueWholeBatch({
+  sectionSubjectId,
+  eligible,
+  total,
+  result,
+  onDone,
+}: {
+  sectionSubjectId: string;
+  eligible: number;
+  total: number;
+  /** Held by the parent — see the note on `batchResult`. */
+  result: BatchIssueResult | null;
+  onDone: (result: BatchIssueResult) => void;
+}) {
+  const [busy, setBusy] = useState<"ready" | "everyone" | null>(null);
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  /** Empty means "whoever the Institute currently has", which is the usual case. */
+  const [chosen, setChosen] = useState<string[]>([]);
+
+  const run = async (everyone: boolean) => {
+    if (
+      everyone &&
+      !window.confirm(
+        `Issue a certificate to all ${total} students on this batch?\n\n` +
+          `${total - eligible} of them have not met the requirements. They will be issued ` +
+          `anyway, and each certificate will record that it was issued over the requirements ` +
+          `and by whom.`,
+      )
+    )
+      return;
+    setBusy(everyone ? "everyone" : "ready");
+    setError(null);
+    try {
+      const r = await api.post<BatchIssueResult>(
+        `/section-subjects/${sectionSubjectId}/certificates/issue-all`,
+        {
+          everyone,
+          ...(reason.trim() ? { reason: reason.trim() } : {}),
+          ...(chosen.length > 0 ? { signatoryIds: chosen } : {}),
+        },
+      );
+      onDone(r);
+    } catch (e) {
+      setError(
+        e instanceof ApiError
+          ? (e.details?.map((d) => d.message).join(" ") ?? e.message)
+          : "That could not be done.",
+      );
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div className="batch-issue">
+      <SignatoryPicker chosen={chosen} onChange={setChosen} />
+
+      <div className="row-actions">
+        <button
+          className="btn"
+          disabled={busy !== null || eligible === 0}
+          onClick={() => void run(false)}
+        >
+          {busy === "ready"
+            ? "Issuing…"
+            : `Issue to the ${eligible} who qualify`}
+        </button>
+        <button
+          className="btn btn-primary"
+          disabled={busy !== null || total === 0}
+          onClick={() => void run(true)}
+        >
+          {busy === "everyone" ? "Issuing…" : `Issue to all ${total}, regardless`}
+        </button>
+      </div>
+
+      <label className="field">
+        <span>Why, if you are issuing regardless (optional)</span>
+        <input
+          type="text"
+          value={reason}
+          placeholder="End of term — assessed by viva."
+          onChange={(e) => setReason(e.target.value)}
+        />
+      </label>
+      <p className="muted small">
+        Anybody who already holds one is left alone. Nothing is issued twice.
+      </p>
+
+      {error && (
+        <div className="alert alert-error" role="alert">
+          <p>{error}</p>
+        </div>
+      )}
+
+      {result && (
+        <div className="alert alert-ok" role="status">
+          <strong>
+            {result.summary.issued + result.summary.issuedOverRequirements} issued
+          </strong>
+          <p>
+            {result.summary.issued} met the requirements
+            {result.summary.issuedOverRequirements > 0
+              ? `, ${result.summary.issuedOverRequirements} issued over them`
+              : ""}
+            {result.summary.alreadyHeld > 0
+              ? `, ${result.summary.alreadyHeld} already held one`
+              : ""}
+            {result.summary.skipped > 0 ? `, ${result.summary.skipped} skipped` : ""}.
+          </p>
+          {/* Named, not counted. "3 skipped" tells the office to go looking;
+              this tells them where. */}
+          {result.students.some((r) => r.outcome === "SKIPPED") && (
+            <ul className="list small">
+              {result.students
+                .filter((r) => r.outcome === "SKIPPED")
+                .map((r) => (
+                  <li key={r.studentId}>
+                    <span>{r.name}</span>
+                    <span className="muted">{r.message ?? "Skipped"}</span>
+                  </li>
+                ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface BatchIssueResult {
+  summary: {
+    considered: number;
+    issued: number;
+    issuedOverRequirements: number;
+    alreadyHeld: number;
+    skipped: number;
+  };
+  students: Array<{
+    studentId: string;
+    name: string;
+    outcome: "ISSUED" | "ISSUED_OVER_REQUIREMENTS" | "ALREADY_HELD" | "SKIPPED";
+    message?: string;
+  }>;
+}
+
+
+/**
+ * WHO SIGNS THIS BATCH — FR-CRT.
+ *
+ * Choosing nothing is the ordinary case and is not a mistake: it means the
+ * Institute's current panel, which is what a batch of thirty at the end of
+ * term wants. The picker exists for the exception — a guest examiner, a
+ * programme signed off by a different head — and says so, rather than
+ * demanding a choice nobody wanted to make.
+ *
+ * THE ORDER OF CHOOSING IS THE ORDER THEY PRINT, left to right, which is why
+ * this is a list of toggles rather than a set of checkboxes: a checkbox group
+ * has no order, and the panel does.
+ */
+function SignatoryPicker({
+  chosen,
+  onChange,
+}: {
+  chosen: string[];
+  onChange: (next: string[]) => void;
+}) {
+  const [people, setPeople] = useState<Signatory[] | null>(null);
+
+  useEffect(() => {
+    void api
+      .get<Signatory[]>("/signatories?activeOnly=true")
+      .then((r) => setPeople(r.filter((s) => s.isActive)))
+      .catch(() => setPeople([]));
+  }, []);
+
+  if (!people || people.length === 0) return null;
+
+  const toggle = (id: string) => {
+    if (chosen.includes(id)) {
+      onChange(chosen.filter((x) => x !== id));
+    } else if (chosen.length < 4) {
+      onChange([...chosen, id]);
+    }
+  };
+
+  return (
+    <div className="signatory-picker">
+      <span className="field-label">Who signs these</span>
+      <p className="muted small">
+        {chosen.length === 0
+          ? "Nobody chosen — the Institute's usual signatories will sign. Choose only if these certificates need somebody different."
+          : `${chosen.length} chosen, printed in this order: ${chosen
+              .map((id) => people.find((p) => p.id === id)?.name)
+              .filter(Boolean)
+              .join(", ")}`}
+      </p>
+      <ul className="list small signatory-choices">
+        {people.map((s) => {
+          const at = chosen.indexOf(s.id);
+          return (
+            <li key={s.id}>
+              <button
+                type="button"
+                className={at >= 0 ? "btn btn-sm btn-primary" : "btn btn-sm btn-quiet"}
+                aria-pressed={at >= 0}
+                onClick={() => toggle(s.id)}
+              >
+                {at >= 0 ? `${at + 1}. ` : ""}
+                {s.name}
+              </button>
+              <span className="muted small">{s.designation}</span>
+              {signatureUrl(s.signatureAssetId) && (
+                <img
+                  className="signatory-mark signatory-mark-sm"
+                  src={signatureUrl(s.signatureAssetId) ?? ""}
+                  alt=""
+                />
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      {chosen.length > 0 && (
+        <button type="button" className="btn btn-quiet btn-sm" onClick={() => onChange([])}>
+          Use the Institute's usual signatories
+        </button>
+      )}
+    </div>
   );
 }

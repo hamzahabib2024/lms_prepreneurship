@@ -144,11 +144,20 @@ function Signature({
   name,
   title,
   width = 250,
+  signatureUrl = null,
 }: {
   cx: number;
   name: string;
   title: string;
   width?: number;
+  /**
+   * A scanned signature, when there is one.
+   *
+   * It REPLACES the name written in script above the line rather than sitting
+   * beside it — the script is a stand-in FOR a signature, and printing both is
+   * the same name twice in two different hands.
+   */
+  signatureUrl?: string | null;
 }) {
   const scriptSize = fit(name, width - 10, 32, 20, advance.serif);
   return (
@@ -161,10 +170,24 @@ function Signature({
         fontStyle="italic"
         fontSize={scriptSize}
         fill={NAVY_DEEP}
-        opacity="0.9"
+        opacity={signatureUrl ? 0 : 0.9}
       >
-        {name}
+        {signatureUrl ? "" : name}
       </text>
+      {signatureUrl && (
+        /* preserveAspectRatio, always: a signature squashed to fill a box is
+           not that person's signature any more. It is anchored to the BOTTOM
+           of its box so it sits ON the rule rather than floating above it,
+           however tall the scan happens to be. */
+        <image
+          href={signatureUrl}
+          x={cx - width / 2}
+          y={806}
+          width={width}
+          height={56}
+          preserveAspectRatio="xMidYMax meet"
+        />
+      )}
       <line
         x1={cx - width / 2}
         y1={866}
@@ -214,12 +237,27 @@ export interface CertificateDocumentProps {
    * downloaded certificate with a hole where the logo was.
    */
   logoHref?: string;
+  /**
+   * The partner Institute's mark, shown opposite the Institute's own.
+   *
+   * A separate prop rather than an array, because the two are not
+   * interchangeable: this one appears once, in the header, while `logoHref` is
+   * also the watermark and the face of the seal. Passing them as a list would
+   * invite somebody to swap the order and quietly put the wrong mark on the
+   * seal of every certificate.
+   */
+  partnerLogoHref?: string;
   className?: string;
 }
 
 export const CertificateArtwork = forwardRef<SVGSVGElement, CertificateDocumentProps>(
   function CertificateArtwork(
-    { certificate: c, logoHref = "/brand/ppship-emblem.png", className },
+    {
+      certificate: c,
+      logoHref = "/brand/ppship-emblem.png",
+      partnerLogoHref = "/brand/as-saadah-logo.webp",
+      className,
+    },
     ref,
   ) {
     // The QR is the expensive part of this render — a version-5 symbol is 37×37
@@ -255,13 +293,50 @@ export const CertificateArtwork = forwardRef<SVGSVGElement, CertificateDocumentP
       c.completionDate ? `Completed ${longDate(c.completionDate)}` : null,
     ].filter((f): f is string => Boolean(f));
 
-    const hasSignatory = Boolean(c.institute.signatoryName);
-    const hasInstructor = Boolean(c.instructor);
-    // Two signatures sit either side of centre; one sits ON centre. A single
-    // block pushed off to the left with empty space beside it looks like
-    // something failed to load.
-    const instructorX = hasSignatory ? 545 : 707;
-    const signatoryX = hasInstructor ? 869 : 707;
+    /*
+     * WHO SIGNS IT — FR-CRT.
+     *
+     * The certificate carries its own panel, snapshotted when it was issued.
+     * A certificate from before the Institute had a signatory library has an
+     * empty one, so it falls back to the two names it has always printed —
+     * nothing already issued changes appearance.
+     */
+    const panel: Array<{ name: string; designation: string; signatureUrl: string | null }> =
+      c.signatories && c.signatories.length > 0
+        ? c.signatories.slice(0, 4)
+        : [
+            ...(c.instructor
+              ? [{ name: c.instructor.name, designation: c.instructor.title, signatureUrl: null }]
+              : []),
+            ...(c.institute.signatoryName
+              ? [
+                  {
+                    name: c.institute.signatoryName,
+                    designation: c.institute.signatoryTitle,
+                    signatureUrl: null,
+                  },
+                ]
+              : []),
+          ];
+
+    /*
+     * SPREAD ACROSS THE FOOT, whatever the count.
+     *
+     * One sits on centre; two sit either side of it; four fill the width. The
+     * old code hard-coded 545 and 869 for exactly two, and a single block left
+     * at 545 with empty space beside it read as something having failed to
+     * load. The blocks narrow as they multiply so four names do not collide.
+     */
+    /*
+     * The clear width is not the sheet's width. The QR sits at the left of
+     * this band and the seal at the right, and three blocks at the old 268
+     * ran the last underline straight under the seal. Everything here fits
+     * inside roughly 290–1130, which is what is actually free.
+     */
+    const panelWidth = panel.length >= 4 ? 190 : panel.length === 3 ? 240 : 250;
+    const panelGap = panel.length >= 4 ? 24 : panel.length === 3 ? 40 : 74;
+    const panelSpan = panel.length * panelWidth + (panel.length - 1) * panelGap;
+    const panelStart = 707 - panelSpan / 2 + panelWidth / 2;
 
     return (
       <svg
@@ -376,7 +451,32 @@ export const CertificateArtwork = forwardRef<SVGSVGElement, CertificateDocumentP
           <Corner x={CERT_WIDTH - 28} y={CERT_HEIGHT - 28} flipX flipY />
 
           {/* ---------------------------------------------------- header -- */}
-          <image href={logoHref} x={707 - 39} y="70" width="78" height="78" preserveAspectRatio="xMidYMid meet" />
+          {/*
+            TWO MARKS, FLANKING THE NAME — the Institute's on the left and the
+            partner's on the right.
+
+            Symmetric about the centre line so neither reads as the senior
+            partner, and both anchored to the same baseline so a tall mark and
+            a wide one still sit level. The Institute's name keeps the centre
+            because it is what the document is FROM; the marks frame it rather
+            than competing with it.
+          */}
+          <image
+            href={logoHref}
+            x={232 - 44}
+            y="66"
+            width="88"
+            height="88"
+            preserveAspectRatio="xMidYMid meet"
+          />
+          <image
+            href={partnerLogoHref}
+            x={1182 - 44}
+            y="66"
+            width="88"
+            height="88"
+            preserveAspectRatio="xMidYMid meet"
+          />
 
           <text
             x="707"
@@ -565,16 +665,16 @@ export const CertificateArtwork = forwardRef<SVGSVGElement, CertificateDocumentP
             </g>
           )}
 
-          {hasInstructor && c.instructor && (
-            <Signature cx={instructorX} name={c.instructor.name} title={c.instructor.title} />
-          )}
-          {hasSignatory && (
+          {panel.map((sig, i) => (
             <Signature
-              cx={signatoryX}
-              name={c.institute.signatoryName}
-              title={c.institute.signatoryTitle}
+              key={`${sig.name}-${i}`}
+              cx={panelStart + i * (panelWidth + panelGap)}
+              width={panelWidth}
+              name={sig.name}
+              title={sig.designation}
+              signatureUrl={sig.signatureUrl}
             />
-          )}
+          ))}
 
           {/* The seal, right. It balances the QR and it is the one element
               here whose only job is to say "this is official". */}

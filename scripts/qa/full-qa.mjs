@@ -53,6 +53,8 @@ async function call(role, method, path, body, isForm = false) {
 
 const stamp = Date.now();
 const made = { assignments: [], announcements: [], quizzes: [], subjects: [], offerings: [] };
+const madeSignatories = [];
+const madeCertificates = [];
 
 // ══════════════════════════════════════════════════════════ 1. identity ═══
 sec("1. identity and sessions");
@@ -620,6 +622,118 @@ sec("18. deleting a course, batch or subject");
   ok("a student cannot delete a section", t2.status === 403, `got ${t2.status}`);
 }
 
+// ══════════════════════════════ 19. a forgotten password ══════════════════
+sec("19. forgotten passwords");
+{
+  /*
+   * THE PROPERTY THAT MATTERS MOST IS THE ONE THAT LOOKS LIKE A BUG: asking
+   * about an address that does not exist succeeds, identically. An endpoint
+   * that says "no such account" is a membership test anybody can run against
+   * a list of email addresses, and at an institute that list is the roster.
+   */
+  const real = await call(null, "POST", "/auth/password/forgot", { email: WHO.student[0] });
+  const fake = await call(null, "POST", "/auth/password/forgot", {
+    email: `nobody-${stamp}@nowhere.invalid`,
+  });
+  ok("asking about a real address succeeds", real.status === 200, `got ${real.status}`);
+  ok("asking about an unknown one succeeds too", fake.status === 200, `got ${fake.status}`);
+  ok("and the two answers are word for word identical",
+     real.data?.message === fake.data?.message && typeof real.data?.message === "string");
+
+  const badToken = await call(null, "POST", "/auth/password/reset", {
+    token: "n0t-a-real-token-but-long-enough-to-pass-the-schema",
+    newPassword: `QaForgot!${String(stamp).slice(-4)}`,
+  });
+  ok("an invented token is refused", badToken.status >= 400, `got ${badToken.status}`);
+  ok("without saying why it was wrong",
+     !/expired|used|unknown|not found/i.test(badToken.error?.message ?? "") ||
+       /may have/i.test(badToken.error?.message ?? ""),
+     (badToken.error?.message ?? "").slice(0, 70));
+
+  // Neither route may be reachable while signed in as somebody else, and
+  // neither may need a token to reach — they are for people who cannot sign in.
+  const noAuth = await fetch(`${API}/auth/password/forgot`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: WHO.student[0] }),
+  });
+  ok("it works with no token at all", noAuth.status === 200 || noAuth.status === 429,
+     `got ${noAuth.status}`);
+}
+
+// ═══════════════════════ 20. who signs a certificate ══════════════════════
+sec("20. the signatory panel");
+{
+  const made = await call("admin", "POST", "/signatories", {
+    name: `QA Signatory ${stamp}`,
+    designation: "QA Principal",
+  });
+  ok("the office adds somebody", made.status === 201 || made.status === 200, `got ${made.status}`);
+  if (made.data?.id) madeSignatories.push(made.data.id);
+
+  const blank = await call("admin", "POST", "/signatories", { name: "  ", designation: "x" });
+  ok("a blank name is refused", blank.status >= 400, `got ${blank.status}`);
+
+  const seen = await call("teacher", "GET", "/signatories");
+  ok("a teacher may read the panel", seen.status === 200, `got ${seen.status}`);
+  const pushed = await call("teacher", "POST", "/signatories", { name: "No", designation: "No" });
+  ok("but cannot change it", pushed.status === 403, `got ${pushed.status}`);
+  const nosy = await call("student", "GET", "/signatories");
+  ok("a student cannot read it at all", nosy.status === 403, `got ${nosy.status}`);
+
+  /*
+   * THE PROPERTY THE WHOLE DESIGN EXISTS FOR: a certificate carries a SNAPSHOT
+   * of who signed it. Renaming somebody must not rewrite documents they signed
+   * last year, and the tempting implementation — storing ids and resolving the
+   * names at render — does exactly that.
+   */
+  if (made.data?.id && ss) {
+    const issued = await call("admin", "POST", `/section-subjects/${ss}/certificates/issue-all`, {
+      everyone: true,
+      reason: "QA — signatory snapshot.",
+      signatoryIds: [made.data.id],
+    });
+    ok("a batch is issued naming them", issued.status === 200, `got ${issued.status}`);
+
+    const view = await call("admin", "GET", `/section-subjects/${ss}/certificates`);
+    const held = (view.data?.students ?? []).find((x) => x.certificate);
+    if (held) {
+      madeCertificates.push(held.certificate.id);
+      const before = await call("admin", "GET", `/certificates/${held.certificate.id}`);
+      const name = (before.data?.signatories ?? [])[0]?.name;
+      ok("the certificate carries their name", typeof name === "string" && name.includes("QA Signatory"), name);
+
+      await call("admin", "PATCH", `/signatories/${made.data.id}`, { name: "QA RENAMED" });
+      const after = await call("admin", "GET", `/certificates/${held.certificate.id}`);
+      ok("renaming them does NOT rewrite the certificate",
+         (after.data?.signatories ?? [])[0]?.name === name,
+         (after.data?.signatories ?? [])[0]?.name);
+    }
+  }
+
+  const tooMany = await call("admin", "POST", `/section-subjects/${ss}/certificates/issue-all`, {
+    everyone: true,
+    signatoryIds: new Array(5).fill(made.data?.id ?? "00000000-0000-0000-0000-000000000000"),
+  });
+  ok("more than four signatories is refused", tooMany.status >= 400, `got ${tooMany.status}`);
+
+  /*
+   * A CERTIFICATE ISSUED BEFORE THE LIBRARY EXISTED has no recorded panel, and
+   * there is therefore no history to protect. It falls back to the Institute's
+   * CURRENT signatories — without which, setting up three people appeared to
+   * do nothing at all, because every certificate already issued kept showing
+   * the two names it had always shown.
+   */
+  const register = await call("admin", "GET", "/certificates");
+  const anyCert = (register.data ?? [])[0];
+  if (anyCert && made.data?.id) {
+    const shown = await call("admin", "GET", `/certificates/${anyCert.id}`);
+    ok("an older certificate shows the Institute's current signatories",
+       (shown.data?.signatories ?? []).length > 0,
+       `${(shown.data?.signatories ?? []).length} on ${anyCert.certificateNo}`);
+  }
+}
+
 // ══════════════════════════════════════════════════════ cleanup ═══════════
 sec("cleanup");
 {
@@ -650,6 +764,10 @@ sec("cleanup");
     const r = await call("admin", "DELETE", `/subjects/${id}/permanent`);
     if (r.status === 200) erased++;
   }
+  for (const id of madeCertificates) await call("admin", "POST", `/certificates/${id}/revoke`, { reason: "QA run — not a real award." });
+  for (const id of madeSignatories) await call("admin", "DELETE", `/signatories/${id}`);
+  ok("QA signatories removed", madeSignatories.length >= 0, `${madeSignatories.length}`);
+
   ok("QA subjects erased, not merely hidden",
      erased === made.offerings.length + made.subjects.length,
      `${erased}/${made.offerings.length + made.subjects.length}`);

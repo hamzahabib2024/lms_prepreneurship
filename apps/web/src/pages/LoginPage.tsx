@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { useState, type FormEvent } from "react";
 import { ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
@@ -133,6 +134,13 @@ export function LoginPage() {
           >
             {busy ? "Signing in…" : "Sign in"}
           </button>
+
+          {/* Under the button, not beside the password box. Somebody who knows
+              their password never reads this line; somebody who does not has
+              already failed once and is looking for a way out. */}
+          <p className="muted small">
+            <Link to="/forgot-password">I have forgotten my password</Link>
+          </p>
 
           <p className="muted small dev-note">
             Development accounts: <code>admin@institute.local</code> ·{" "}
