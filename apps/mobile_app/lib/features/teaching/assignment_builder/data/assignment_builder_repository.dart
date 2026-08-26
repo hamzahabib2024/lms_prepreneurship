@@ -1,6 +1,10 @@
 /// Repository for the assignment builder — SRS §13.6, FR-TCH-020.
 library;
 
+import 'dart:io';
+
+import 'package:dio/dio.dart';
+
 import '../../../../core/network/api_client.dart';
 import 'models/assignment_builder_models.dart';
 
@@ -64,5 +68,34 @@ class AssignmentBuilderRepository {
     await _api.delete<dynamic>(
       '/assignments/$id',
     );
+  }
+
+  // ── Voice Brief ──
+
+  Future<void> uploadBriefAudio({
+    required String assignmentId,
+    required File audioFile,
+  }) async {
+    final form = FormData.fromMap({
+      'brief': await MultipartFile.fromFile(
+        audioFile.path,
+        filename: audioFile.path.split('/').last,
+      ),
+    });
+    await _api.post<dynamic>(
+      '/assignments/$assignmentId/brief-audio',
+      form,
+    );
+  }
+
+  Future<void> deleteBriefAudio({required String assignmentId}) async {
+    await _api.delete<dynamic>('/assignments/$assignmentId/brief-audio');
+  }
+
+  Future<String> getBriefAudioUrl({required String assignmentId}) async {
+    final result = await _api.get<Map<String, dynamic>>(
+      '/assignments/$assignmentId/brief-audio',
+    );
+    return result['url'] as String? ?? '';
   }
 }

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -18,6 +20,8 @@ class AssignmentBuilderState extends Equatable {
     this.rubricId,
     this.saving,
     this.error,
+    this.hasBriefAudio = false,
+    this.uploadingBrief = false,
   });
 
   final AssignmentBuilderStatus status;
@@ -32,12 +36,15 @@ class AssignmentBuilderState extends Equatable {
   final String? rubricId;
   final bool? saving;
   final String? error;
+  final bool hasBriefAudio;
+  final bool uploadingBrief;
 
   @override
   List<Object?> get props => [
     status, sectionSubjects, selectedSectionSubject,
     title, description, marksAvailable, dueAt,
     latePolicy, publicationStatus, rubricId, saving, error,
+    hasBriefAudio, uploadingBrief,
   ];
 
   AssignmentBuilderState copyWith({
@@ -53,6 +60,8 @@ class AssignmentBuilderState extends Equatable {
     String? rubricId,
     bool? saving,
     String? error,
+    bool? hasBriefAudio,
+    bool? uploadingBrief,
   }) {
     return AssignmentBuilderState(
       status: status ?? this.status,
@@ -67,6 +76,8 @@ class AssignmentBuilderState extends Equatable {
       rubricId: rubricId ?? this.rubricId,
       saving: saving ?? this.saving,
       error: error ?? this.error,
+      hasBriefAudio: hasBriefAudio ?? this.hasBriefAudio,
+      uploadingBrief: uploadingBrief ?? this.uploadingBrief,
     );
   }
 }
@@ -164,6 +175,42 @@ class AssignmentBuilderCubit extends Cubit<AssignmentBuilderState> {
       emit(state.copyWith(
         saving: false,
         error: 'Failed to publish: $e',
+      ));
+    }
+  }
+
+  // ── Voice Brief ──
+
+  Future<void> uploadBriefAudio(File audioFile) async {
+    if (assignmentId == null) {
+      emit(state.copyWith(error: 'Save the assignment first'));
+      return;
+    }
+    emit(state.copyWith(uploadingBrief: true, error: null));
+    try {
+      await _repo.uploadBriefAudio(
+        assignmentId: assignmentId!,
+        audioFile: audioFile,
+      );
+      emit(state.copyWith(uploadingBrief: false, hasBriefAudio: true));
+    } catch (e) {
+      emit(state.copyWith(
+        uploadingBrief: false,
+        error: 'Failed to upload audio: $e',
+      ));
+    }
+  }
+
+  Future<void> deleteBriefAudio() async {
+    if (assignmentId == null) return;
+    emit(state.copyWith(uploadingBrief: true, error: null));
+    try {
+      await _repo.deleteBriefAudio(assignmentId: assignmentId!);
+      emit(state.copyWith(uploadingBrief: false, hasBriefAudio: false));
+    } catch (e) {
+      emit(state.copyWith(
+        uploadingBrief: false,
+        error: 'Failed to remove audio: $e',
       ));
     }
   }
