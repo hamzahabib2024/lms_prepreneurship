@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../auth/data/models/auth_session.dart';
 import '../../core/network/api_client.dart';
@@ -11,6 +12,17 @@ import 'staffing/staffing_page.dart';
 import 'structure/structure_page.dart';
 import 'subjects/subjects_page.dart';
 import 'timetable/timetable_page.dart';
+import 'attendance/presentation/attendance_page.dart';
+import '../teaching/marking/data/marking_repository.dart';
+import '../teaching/marking/presentation/marking_queue_page.dart';
+import '../teaching/rubrics/data/rubrics_repository.dart';
+import '../teaching/rubrics/presentation/rubrics_page.dart';
+import '../teaching/assignment_builder/data/assignment_builder_repository.dart';
+import '../teaching/assignment_builder/presentation/assignment_builder_page.dart';
+import '../teaching/quiz_builder/data/quiz_builder_repository.dart';
+import '../teaching/quiz_builder/presentation/quiz_builder_page.dart';
+import '../teaching/completion/data/completion_repository.dart';
+import '../course_admin/presentation/course_admin_page.dart';
 
 /// The academic management hub — the mobile equivalent of the web sidebar's
 /// "Institute" block.
@@ -49,6 +61,13 @@ class AcademicPanel extends StatelessWidget {
         staffOnly: true,
       ),
       _Entry(
+        icon: Icons.account_balance_outlined,
+        title: 'Courses & Fees',
+        subtitle: 'Manage courses, subjects, batches and fee structures',
+        builder: (context) => CourseAdminPage(api: api),
+        staffOnly: true,
+      ),
+      _Entry(
         icon: Icons.menu_book_outlined,
         title: 'Subjects',
         subtitle: 'The catalogue every section offers from',
@@ -67,6 +86,63 @@ class AcademicPanel extends StatelessWidget {
         title: 'Timetable',
         subtitle: "Your classes, and a term's generated schedule",
         builder: (context) => TimetablePage(api: api, user: user),
+      ),
+      _Entry(
+        icon: Icons.how_to_reg_outlined,
+        title: 'Attendance',
+        subtitle: 'Take the register and mark student attendance',
+        builder: (context) => AttendancePage(api: api),
+        staffOnly: true,
+      ),
+      _Entry(
+        icon: Icons.grading_outlined,
+        title: 'Marking & Grading',
+        subtitle: 'Review assignments, grade submissions and mark quizzes',
+        builder: (context) => RepositoryProvider(
+          create: (_) => MarkingRepository(api),
+          child: const MarkingQueuePage(),
+        ),
+        staffOnly: true,
+      ),
+      _Entry(
+        icon: Icons.rule_outlined,
+        title: 'Rubrics',
+        subtitle: 'Create and manage grading rubrics',
+        builder: (context) => RepositoryProvider(
+          create: (_) => RubricsRepository(api),
+          child: const RubricsPage(),
+        ),
+        staffOnly: true,
+      ),
+      _Entry(
+        icon: Icons.assignment_outlined,
+        title: 'Assignment Builder',
+        subtitle: 'Create and manage assignments for your sections',
+        builder: (context) => RepositoryProvider(
+          create: (_) => AssignmentBuilderRepository(api),
+          child: const AssignmentBuilderPage(),
+        ),
+        staffOnly: true,
+      ),
+      _Entry(
+        icon: Icons.quiz_outlined,
+        title: 'Quiz Builder',
+        subtitle: 'Create quizzes with multiple question types',
+        builder: (context) => RepositoryProvider(
+          create: (_) => QuizBuilderRepository(api),
+          child: const QuizBuilderPage(),
+        ),
+        staffOnly: true,
+      ),
+      _Entry(
+        icon: Icons.task_alt_outlined,
+        title: 'Completion Tracking',
+        subtitle: 'Sign off student completion status for certificates',
+        builder: (context) => RepositoryProvider(
+          create: (_) => CompletionRepository(api),
+          child: const _CompletionEntryPlaceholder(),
+        ),
+        staffOnly: true,
       ),
       _Entry(
         icon: Icons.badge_outlined,
@@ -212,6 +288,43 @@ class _EntryTile extends StatelessWidget {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Simple placeholder that lets staff select a section to view completion.
+class _CompletionEntryPlaceholder extends StatelessWidget {
+  const _CompletionEntryPlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Completion Tracking')),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.task_alt_outlined,
+              size: 64,
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? AppColorsDark.muted
+                  : AppColors.muted,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Select a section from the Timetable or Sections page\n'
+              'to view and sign off student completion.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? AppColorsDark.muted
+                    : AppColors.muted,
+              ),
+            ),
+          ],
         ),
       ),
     );

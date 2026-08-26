@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -60,16 +58,12 @@ class _ApplicationPageState extends State<ApplicationPage> {
 
   Future<void> _pickSlip(ApplicationCubit cubit) async {
     try {
-      // withData must be true for the bytes to come back at all — without it
-      // the picker appears to do nothing on every platform.
-      final picked = await FilePicker.platform.pickFiles(
+      final files = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: const ['jpg', 'jpeg', 'png', 'pdf'],
-        allowMultiple: false,
-        withData: true,
       );
-      final file = picked?.files.single;
-      if (file == null) return;
+      if (files.isEmpty) return;
+      final file = files.first;
 
       final name = file.name.toLowerCase();
       final allowed = ['jpg', 'jpeg', 'png', 'pdf'].any((e) => name.endsWith('.$e'));
@@ -77,16 +71,13 @@ class _ApplicationPageState extends State<ApplicationPage> {
         _showPickError('Choose a photo (JPEG, PNG) or a PDF of the slip.');
         return;
       }
-      if (file.size > 5 * 1024 * 1024) {
+
+      final bytes = await file.readAsBytes();
+      if (bytes.length > 5 * 1024 * 1024) {
         _showPickError('That file is larger than 5 MB. Please choose a smaller photo.');
         return;
       }
-
-      var bytes = file.bytes;
-      if (bytes == null && file.path != null) {
-        bytes = await File(file.path!).readAsBytes();
-      }
-      if (bytes == null || bytes.isEmpty) {
+      if (bytes.isEmpty) {
         _showPickError('That file could not be read. Please try another photo.');
         return;
       }
