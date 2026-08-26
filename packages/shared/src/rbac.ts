@@ -685,10 +685,21 @@ export const PERMISSION_MATRIX: Record<Resource, ResourcePolicy> = {
   },
 
   // ---------------------------------------------------- §4.5.9 progress ---
+  /*
+   * `configure` is HOW PROGRESS IS MEASURED, not what anybody's progress is.
+   *
+   * A teacher holds it for their own classes because they are the only person
+   * who knows whether attendance or submitted work says more about their
+   * subject — a practical workshop and a lecture course should not be judged
+   * by the same four numbers, and until this existed they were.
+   *
+   * A student reads their own and configures nothing, which needs no saying
+   * except that the matrix is the only place it IS said.
+   */
   progress: {
-    super_admin: { actions: ["read", "export"], scope: "ALL" },
-    admin: { actions: ["read", "export"], scope: "ALL" },
-    teacher: { actions: ["read", "export"], scope: "ASSIGNED" },
+    super_admin: { actions: ["read", "export", "configure"], scope: "ALL" },
+    admin: { actions: ["read", "export", "configure"], scope: "ALL" },
+    teacher: { actions: ["read", "export", "configure"], scope: "ASSIGNED" },
     student: { actions: ["read"], scope: "OWN" },
   },
   /**

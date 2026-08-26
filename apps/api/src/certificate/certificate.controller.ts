@@ -1,6 +1,6 @@
-import { Body, Controller, Get, Param, Post, Query } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, Param, Post, Query } from "@nestjs/common";
 import { Throttle } from "@nestjs/throttler";
-import type { z } from "zod";
+import { z } from "zod";
 import {
   certificateIssueSchema,
   certificateQuerySchema,
@@ -11,6 +11,19 @@ import { zodBody } from "../common/zod-validation.pipe";
 import { Public, RequirePermission } from "../rbac/permissions.guard";
 
 /** SRS §9.10 — certificate endpoints. */
+/**
+ * Issuing to a whole batch.
+ *
+ * `everyone` is the office overruling the requirements. The reason is optional
+ * on purpose: it is worth recording and it is not worth blocking on, and a
+ * required field here would be the software demanding an explanation from the
+ * people whose decision it is.
+ */
+const batchIssueSchema = z.object({
+  everyone: z.boolean().optional(),
+  reason: z.string().trim().max(500).optional(),
+});
+
 @Controller()
 export class CertificateController {
   constructor(private readonly certificates: CertificateService) {}
@@ -191,6 +204,29 @@ export class CertificateController {
   @Get("section-subjects/:id/certificates")
   issuanceView(@Param("id") id: string) {
     return this.certificates.issuanceView(id);
+  }
+
+  /**
+   * FR-CRT — issue to the whole batch in one action.
+   *
+   * `everyone: true` issues regardless of the requirements. That is the
+   * office's authority and it is recorded as an override on each certificate
+   * and in the audit; it is not refused, and no reason is demanded, because
+   * demanding one would be this route deciding it knows better than the
+   * people who run the Institute.
+   *
+   * The same permission as issuing one, and deliberately: it is the same act
+   * done thirty times, and a second permission for "the same thing but more
+   * of it" is a name nobody could hold.
+   */
+  @RequirePermission("certificate", "create")
+  @Post("section-subjects/:id/certificates/issue-all")
+  @HttpCode(200)
+  issueWholeClass(
+    @Param("id") id: string,
+    @Body(zodBody(batchIssueSchema)) dto: z.infer<typeof batchIssueSchema>,
+  ) {
+    return this.certificates.issueForWholeClass(id, dto);
   }
 
   /** A student's own, including revoked ones (BR-ENR-08). */

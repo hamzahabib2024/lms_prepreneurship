@@ -880,6 +880,16 @@ function EarnedPanel({ onIssued }: { onIssued: () => void }) {
   // is waiting for the server.
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /*
+   * THE RESULT OF A BATCH ISSUE LIVES HERE, not in the panel that produced it.
+   *
+   * Issuing refreshes this view, the refresh sets `loading`, and `loading`
+   * unmounts the section the panel sits in — so a result held inside the panel
+   * was destroyed by the very reload it asked for. The office pressed the
+   * button, thirty certificates were issued, and the screen said nothing at
+   * all.
+   */
+  const [batchResult, setBatchResult] = useState<BatchIssueResult | null>(null);
 
   useEffect(() => {
     api
@@ -892,6 +902,7 @@ function EarnedPanel({ onIssued }: { onIssued: () => void }) {
     setOfferings([]);
     setOfferingId("");
     setView(null);
+    setBatchResult(null);
     if (!sectionId) return;
     api
       .get<Offering[]>(`/sections/${sectionId}/subjects`)
@@ -970,6 +981,25 @@ function EarnedPanel({ onIssued }: { onIssued: () => void }) {
               : `${view.eligible} eligible to issue`}
             {view.issued > 0 ? ` · ${view.issued} already issued` : ""}
           </p>
+
+          {/*
+            THE WHOLE BATCH AT ONCE — FR-CRT.
+
+            At the end of a term this is thirty presses on thirty rows, with no
+            way afterwards to tell whether one was missed. The student who gets
+            missed is the one who does not know to ask.
+          */}
+          <IssueWholeBatch
+            sectionSubjectId={view.sectionSubjectId}
+            eligible={view.eligible}
+            total={view.students.length}
+            result={batchResult}
+            onDone={(r) => {
+              setBatchResult(r);
+              load();
+              onIssued();
+            }}
+          />
 
           <ul className="list">
             {[...view.students]
@@ -1265,4 +1295,162 @@ function CandidateRow({
       {made && <CertificateModal certificate={made} onClose={() => setMade(null)} />}
     </li>
   );
+}
+
+/**
+ * ISSUING TO EVERY STUDENT ON THE BATCH.
+ *
+ * TWO BUTTONS, NOT ONE WITH A CHECKBOX. "Issue to the N who qualify" and
+ * "Issue to all N regardless" are different decisions with different
+ * consequences, and a checkbox beside a single button is the arrangement where
+ * somebody ticks it without reading and issues thirty certificates nobody
+ * earned. Written out, each button says what it will do before it is pressed.
+ *
+ * THE OVERRIDE IS NOT HIDDEN AND NOT DISCOURAGED. It is the office's authority
+ * and the arithmetic does not know everything — a viva sat instead of the
+ * final assignment, an illness the Institute accepted, a term whose recordings
+ * were lost so nobody's video figure is real. The reason box is offered and
+ * never required: demanding an explanation would be this screen deciding it
+ * knows better than the people who run the Institute.
+ *
+ * EVERY STUDENT COMES BACK WITH AN OUTCOME. A bulk action whose result is a
+ * number is a bulk action nobody can check.
+ */
+function IssueWholeBatch({
+  sectionSubjectId,
+  eligible,
+  total,
+  result,
+  onDone,
+}: {
+  sectionSubjectId: string;
+  eligible: number;
+  total: number;
+  /** Held by the parent — see the note on `batchResult`. */
+  result: BatchIssueResult | null;
+  onDone: (result: BatchIssueResult) => void;
+}) {
+  const [busy, setBusy] = useState<"ready" | "everyone" | null>(null);
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const run = async (everyone: boolean) => {
+    if (
+      everyone &&
+      !window.confirm(
+        `Issue a certificate to all ${total} students on this batch?\n\n` +
+          `${total - eligible} of them have not met the requirements. They will be issued ` +
+          `anyway, and each certificate will record that it was issued over the requirements ` +
+          `and by whom.`,
+      )
+    )
+      return;
+    setBusy(everyone ? "everyone" : "ready");
+    setError(null);
+    try {
+      const r = await api.post<BatchIssueResult>(
+        `/section-subjects/${sectionSubjectId}/certificates/issue-all`,
+        { everyone, ...(reason.trim() ? { reason: reason.trim() } : {}) },
+      );
+      onDone(r);
+    } catch (e) {
+      setError(
+        e instanceof ApiError
+          ? (e.details?.map((d) => d.message).join(" ") ?? e.message)
+          : "That could not be done.",
+      );
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div className="batch-issue">
+      <div className="row-actions">
+        <button
+          className="btn"
+          disabled={busy !== null || eligible === 0}
+          onClick={() => void run(false)}
+        >
+          {busy === "ready"
+            ? "Issuing…"
+            : `Issue to the ${eligible} who qualify`}
+        </button>
+        <button
+          className="btn btn-primary"
+          disabled={busy !== null || total === 0}
+          onClick={() => void run(true)}
+        >
+          {busy === "everyone" ? "Issuing…" : `Issue to all ${total}, regardless`}
+        </button>
+      </div>
+
+      <label className="field">
+        <span>Why, if you are issuing regardless (optional)</span>
+        <input
+          type="text"
+          value={reason}
+          placeholder="End of term — assessed by viva."
+          onChange={(e) => setReason(e.target.value)}
+        />
+      </label>
+      <p className="muted small">
+        Anybody who already holds one is left alone. Nothing is issued twice.
+      </p>
+
+      {error && (
+        <div className="alert alert-error" role="alert">
+          <p>{error}</p>
+        </div>
+      )}
+
+      {result && (
+        <div className="alert alert-ok" role="status">
+          <strong>
+            {result.summary.issued + result.summary.issuedOverRequirements} issued
+          </strong>
+          <p>
+            {result.summary.issued} met the requirements
+            {result.summary.issuedOverRequirements > 0
+              ? `, ${result.summary.issuedOverRequirements} issued over them`
+              : ""}
+            {result.summary.alreadyHeld > 0
+              ? `, ${result.summary.alreadyHeld} already held one`
+              : ""}
+            {result.summary.skipped > 0 ? `, ${result.summary.skipped} skipped` : ""}.
+          </p>
+          {/* Named, not counted. "3 skipped" tells the office to go looking;
+              this tells them where. */}
+          {result.students.some((r) => r.outcome === "SKIPPED") && (
+            <ul className="list small">
+              {result.students
+                .filter((r) => r.outcome === "SKIPPED")
+                .map((r) => (
+                  <li key={r.studentId}>
+                    <span>{r.name}</span>
+                    <span className="muted">{r.message ?? "Skipped"}</span>
+                  </li>
+                ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface BatchIssueResult {
+  summary: {
+    considered: number;
+    issued: number;
+    issuedOverRequirements: number;
+    alreadyHeld: number;
+    skipped: number;
+  };
+  students: Array<{
+    studentId: string;
+    name: string;
+    outcome: "ISSUED" | "ISSUED_OVER_REQUIREMENTS" | "ALREADY_HELD" | "SKIPPED";
+    message?: string;
+  }>;
 }

@@ -15,9 +15,21 @@ import { useDismissable } from "./useDismissable";
  * button with no label next to your own name. It is now in the top strip,
  * which is where every product this will be compared to puts it.
  *
- * The sidebar footer keeps the name and the role — it is useful to see whose
- * session this is without opening anything, and on the rail it is the one
- * thing that says you are signed in at all.
+ * IT IS NOW IN BOTH PLACES, and that is not indecision. The bottom-left corner
+ * is where Slack, VS Code, Linear and every tool this will be used beside put
+ * your account, so that is where people press — and until now the footer there
+ * was a plain <div>: it LOOKED like the control they were reaching for and did
+ * nothing. Something that looks pressable and is not is worse than nothing at
+ * all, because the reader concludes the feature is missing.
+ *
+ * The same component serves both, in two shapes:
+ *
+ *   "icon"  the top strip — the avatar alone, panel dropping down.
+ *   "row"   the sidebar footer — avatar, name and role, panel opening UP,
+ *           because there is no room below it.
+ *
+ * One component rather than two, so the menu cannot come to hold different
+ * items depending on which corner you opened it from.
  */
 
 const THEMES: Array<{ value: Theme; label: string; icon: "monitor" | "sun" | "moon" }> = [
@@ -26,7 +38,16 @@ const THEMES: Array<{ value: Theme; label: string; icon: "monitor" | "sun" | "mo
   { value: "dark", label: "Dark", icon: "moon" },
 ];
 
-export function AccountMenu({ initials, roleLabel }: { initials: string; roleLabel: string }) {
+export function AccountMenu({
+  initials,
+  roleLabel,
+  variant = "icon",
+}: {
+  initials: string;
+  roleLabel: string;
+  /** "row" is the sidebar footer: it shows the name and opens upward. */
+  variant?: "icon" | "row";
+}) {
   const { user, signOut } = useAuth();
   const { theme, setTheme } = useTheme();
   const [open, setOpen] = useState(false);
@@ -50,12 +71,14 @@ export function AccountMenu({ initials, roleLabel }: { initials: string; roleLab
 
   const name = user.fullName || user.email;
 
+  const row = variant === "row";
+
   return (
-    <div className="account" ref={wrap}>
+    <div className={row ? "account account-in-rail" : "account"} ref={wrap}>
       <button
         ref={trigger}
         type="button"
-        className="account-trigger"
+        className={row ? "account-trigger sidebar-foot" : "account-trigger"}
         aria-label={`Account: ${name}`}
         aria-haspopup="menu"
         aria-expanded={open}
@@ -64,6 +87,16 @@ export function AccountMenu({ initials, roleLabel }: { initials: string; roleLab
         <span className="avatar" aria-hidden="true">
           {initials}
         </span>
+        {/* The name and role stay VISIBLE on the trigger in the sidebar. They
+            were the whole point of that corner before it did anything, and
+            hiding them inside the menu would trade a small gain in tidiness
+            for the one thing on the rail that says you are signed in. */}
+        {row && (
+          <span className="who">
+            <strong>{name}</strong>
+            <span>{roleLabel}</span>
+          </span>
+        )}
       </button>
 
       {open && (

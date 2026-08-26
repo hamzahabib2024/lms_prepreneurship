@@ -1241,6 +1241,28 @@ code {
 .class-room-editor { margin-top: .7rem; }
 
 /*
+  HOW PROGRESS IS MEASURED, AND ISSUING TO A WHOLE BATCH.
+
+  Both are panels that sit inside a card and hold a form, so both get the same
+  treatment: separated from the summary above by a rule rather than boxed,
+  because a box inside a card inside a page is the third frame and by then
+  nothing is emphasised.
+*/
+.progress-settings, .batch-issue {
+  margin-top: .8rem; padding-top: .8rem;
+  border-top: 1px solid var(--line);
+}
+.progress-settings h3 { margin-top: .9rem; }
+/* Four across on a desk, two on a laptop, one on a phone — the numbers are
+   short and reading them as a row is how you see they add up. */
+.progress-parts {
+  display: grid; gap: .7rem;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  margin-top: .5rem;
+}
+.batch-issue > .field { margin-top: .7rem; }
+
+/*
   THE DASHBOARD'S LIST OF ROOMS — FR-LIV.
 
   The subject on the left, the way in on the right, and the teacher's note
@@ -4180,6 +4202,30 @@ details > summary:hover { text-decoration: underline; }
  * this will be compared to puts it.
  */
 .account { position: relative; }
+
+/*
+  THE ACCOUNT MENU IN THE SIDEBAR FOOTER.
+
+  The trigger IS the footer row, so it keeps the border, the sticky bottom and
+  the full width it had as a plain div — nothing about the corner moves, it
+  simply becomes pressable. The panel opens upward because there is nothing
+  below it but the edge of the window.
+*/
+.account-in-rail { margin-top: auto; }
+.account-in-rail .account-trigger {
+  width: 100%; border-radius: 0; text-align: left;
+}
+.account-in-rail .account-trigger .avatar {
+  width: 34px; height: 34px; flex: 0 0 34px; font-size: .8rem;
+}
+/* Scoped to the rail rather than named on its own, so it beats `.account-panel`
+   on specificity instead of on source order — that rule is defined further
+   down the file and was winning the `top` outright. */
+.account-in-rail .account-panel {
+  top: auto; bottom: calc(100% + .4rem);
+  left: .5rem; right: .5rem;
+}
+
 .account-trigger {
   display: inline-flex; align-items: center; gap: .5rem;
   height: 38px; padding: 0 .35rem;

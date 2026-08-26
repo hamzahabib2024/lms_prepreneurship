@@ -365,19 +365,11 @@ export function App() {
             })}
           </nav>
 
-          {/* Whose session this is, at a glance and without opening anything.
-              What you DO about it — change password, appearance, sign out —
-              moved to the account menu in the top strip, because reaching it
-              here meant scrolling past every destination on a phone. */}
-          <div className="sidebar-foot">
-            <span className="avatar" aria-hidden="true">
-              {initials}
-            </span>
-            <span className="who">
-              <strong>{user.fullName || user.email}</strong>
-              <span>{roleLabel}</span>
-            </span>
-          </div>
+          {/* Whose session this is — and now also what you do about it.
+              This corner is where people press for their account, and it used
+              to be a plain <div> that looked pressable and was not. It is the
+              same menu as the one in the top strip, opening upward. */}
+          <AccountMenu initials={initials} roleLabel={roleLabel} variant="row" />
         </aside>
 
         {/* Tapping away closes the drawer, which is what every phone user

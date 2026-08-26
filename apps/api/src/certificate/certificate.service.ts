@@ -71,7 +71,15 @@ export class CertificateService {
    * minting a second number. A double-submitted form must not produce two
    * documents with different numbers for the same achievement.
    */
-  async issueForSubject(studentId: string, sectionSubjectId: string) {
+  /**
+   * @param options.override issue even where the requirements are not met.
+   *   The office's decision, recorded as one — see the note on the gate below.
+   */
+  async issueForSubject(
+    studentId: string,
+    sectionSubjectId: string,
+    options: { override?: boolean; reason?: string } = {},
+  ) {
     const actor = getActor();
     if (!actor) throw new AppError("AUTH_TOKEN_INVALID");
 
@@ -84,7 +92,28 @@ export class CertificateService {
     // the check that makes the certificate mean something.
     const standing = await this.progress.forSubject(studentId, sectionSubjectId);
 
-    if (!standing.completionCriteria.met) {
+    /*
+     * THE GATE, AND THE OFFICE'S AUTHORITY TO STEP OVER IT.
+     *
+     * Recomputed here rather than trusting anything the caller sent — this is
+     * the check that makes a certificate mean something, and it stays the
+     * default for everybody.
+     *
+     * But the Institute issues its own qualifications, and the arithmetic does
+     * not know everything: a student who sat a viva instead of the final
+     * assignment, one whose attendance was wrecked by an illness the office
+     * accepted, a class whose recordings were lost so nobody's video figure is
+     * real. Refusing those is not rigour, it is the software overruling the
+     * people responsible for the decision.
+     *
+     * So `override` issues anyway — and RECORDS THAT IT DID. The certificate
+     * carries `issuedByOverride` with what was outstanding at the moment of
+     * issue, and the audit entry names who decided. That is not a restriction
+     * on the office; it is the difference between a certificate the Institute
+     * can stand behind in two years and one nobody can explain.
+     */
+    const met = standing.completionCriteria.met;
+    if (!met && !options.override) {
       throw new AppError("VALIDATION_FAILED", {
         message: "This student has not met the requirements for this subject.",
         // The specific gaps, so an administrator can tell the student what is
@@ -116,6 +145,15 @@ export class CertificateService {
           minProgressPercent: standing.completionCriteria.minProgressPercent,
           minAttendancePercent: standing.completionCriteria.minAttendancePercent,
           minAverageGradePercent: standing.completionCriteria.minAverageGradePercent,
+          // Present only when somebody overruled the arithmetic, so its
+          // absence means the ordinary path was taken.
+          ...(met
+            ? {}
+            : {
+                issuedByOverride: true,
+                outstandingAtIssue: standing.completionCriteria.outstanding,
+                overrideReason: options.reason ?? null,
+              }),
         } as object,
         status: "ISSUED",
         issuedBy: actor.userId,
@@ -124,7 +162,7 @@ export class CertificateService {
     });
 
     await this.audit.record({
-      action: "certificate.issue",
+      action: met ? "certificate.issue" : "certificate.issue.override",
       entityType: "Certificate",
       entityId: created.id,
       after: {
@@ -132,6 +170,10 @@ export class CertificateService {
         studentId,
         sectionSubjectId,
         progressPercent: standing.overallPercent,
+        ...(met
+          ? {}
+          : { override: true, outstanding: standing.completionCriteria.outstanding,
+              reason: options.reason ?? null }),
       },
     });
 
@@ -788,6 +830,104 @@ export class CertificateService {
    * it already walks every enrolment and applies the same formula, and a second
    * implementation would be a second thing to keep in step.
    */
+  /**
+   * ISSUE TO THE WHOLE BATCH AT ONCE — FR-CRT.
+   *
+   * ───────────────────────────────────────────────────────────────────────────
+   * At the end of a term the office issues thirty certificates, and doing it a
+   * student at a time meant thirty presses on thirty rows and no way to tell,
+   * afterwards, whether one had been missed. That is not a small inconvenience:
+   * the student who gets missed is the one who does not know to ask.
+   *
+   * `everyone` is the office's authority to issue regardless of the arithmetic,
+   * and it is the whole point of the request this was built for. With it off,
+   * students who have not met the requirements are SKIPPED rather than failing
+   * the run — one unfinished student must not stop the other twenty-nine.
+   *
+   * IT NEVER SILENTLY DOES NOTHING. Every student comes back with an outcome
+   * and a reason: issued, issued over the requirements, already had one, or
+   * skipped and why. A bulk action whose result is a number is a bulk action
+   * nobody can check.
+   *
+   * Sequential, not parallel. Certificate numbers are allocated from a counter
+   * and thirty concurrent allocations is how two students end up sharing one.
+   * ───────────────────────────────────────────────────────────────────────────
+   */
+  async issueForWholeClass(
+    sectionSubjectId: string,
+    options: { everyone?: boolean; reason?: string } = {},
+  ) {
+    const cohort = await this.progress.forSectionSubject(sectionSubjectId);
+
+    const results: Array<{
+      studentId: string;
+      name: string;
+      outcome: "ISSUED" | "ISSUED_OVER_REQUIREMENTS" | "ALREADY_HELD" | "SKIPPED";
+      certificateNo?: string;
+      message?: string;
+    }> = [];
+
+    for (const student of cohort.students) {
+      const met = student.completionMet;
+      if (!met && !options.everyone) {
+        results.push({
+          studentId: student.studentId,
+          name: student.name,
+          outcome: "SKIPPED",
+          message:
+            "Has not met the requirements. Choose to issue to everyone if you mean to " +
+            "override that.",
+        });
+        continue;
+      }
+
+      try {
+        const doc = await this.issueForSubject(student.studentId, sectionSubjectId, {
+          override: options.everyone === true,
+          reason: options.reason,
+        });
+        const already = (doc as { alreadyIssued?: boolean }).alreadyIssued === true;
+        results.push({
+          studentId: student.studentId,
+          name: student.name,
+          outcome: already ? "ALREADY_HELD" : met ? "ISSUED" : "ISSUED_OVER_REQUIREMENTS",
+          certificateNo: (doc as { certificateNo?: string }).certificateNo,
+        });
+      } catch (e) {
+        // One student's problem is not the batch's. It is reported on their
+        // own row and the run carries on.
+        results.push({
+          studentId: student.studentId,
+          name: student.name,
+          outcome: "SKIPPED",
+          message: e instanceof AppError ? e.message : "Could not be issued.",
+        });
+      }
+    }
+
+    const count = (o: string) => results.filter((r) => r.outcome === o).length;
+    const summary = {
+      considered: results.length,
+      issued: count("ISSUED"),
+      issuedOverRequirements: count("ISSUED_OVER_REQUIREMENTS"),
+      alreadyHeld: count("ALREADY_HELD"),
+      skipped: count("SKIPPED"),
+    };
+
+    await this.audit.record({
+      action: "certificate.issue.batch",
+      entityType: "SectionSubject",
+      entityId: sectionSubjectId,
+      after: { ...summary, everyone: options.everyone === true, reason: options.reason ?? null },
+    });
+    this.logger.log(
+      `batch issue on ${sectionSubjectId}: ${summary.issued} issued, ` +
+        `${summary.issuedOverRequirements} over requirements, ${summary.skipped} skipped`,
+    );
+
+    return { sectionSubjectId, summary, students: results };
+  }
+
   async issuanceView(sectionSubjectId: string) {
     const cohort = await this.progress.forSectionSubject(sectionSubjectId);
 
