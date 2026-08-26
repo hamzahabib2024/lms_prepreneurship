@@ -8,6 +8,7 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/ui.dart';
 import '../../cubit/admin_cubit.dart';
 import '../../data/models/user_directory_item.dart';
+import 'student_notes_page.dart';
 
 class UserDetailPage extends StatelessWidget {
   const UserDetailPage({super.key, required this.user});
@@ -155,6 +156,25 @@ class UserDetailPage extends StatelessWidget {
                     icon: Icons.exit_to_app_outlined,
                     onTap: () => _confirmRevokeSessions(context),
                   ),
+                const SizedBox(height: 8),
+                _ActionButton(
+                  label: 'Student notes',
+                  icon: Icons.notes_outlined,
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => RepositoryProvider.value(
+                          value: context.read<AdminCubit>().repository,
+                          child: StudentNotesPage(
+                            api: context.read<AdminCubit>().repository.api,
+                            studentId: user.id,
+                            studentName: user.fullName,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
                 const SizedBox(height: 8),
                 _ActionButton(
                   label: 'Impersonate user',
