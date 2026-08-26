@@ -1270,6 +1270,29 @@ export class CertificateService {
     const decimal = (value: unknown): number | null =>
       value === null || value === undefined ? null : Number(value);
 
+    /*
+     * WHO SIGNED IT — and what to print when nobody recorded that.
+     *
+     * A certificate issued AFTER the Institute had a signatory library carries
+     * its own panel, and that panel is used exactly as stored: renaming
+     * somebody must never rewrite a document they signed last year.
+     *
+     * A certificate issued BEFORE it existed has no panel at all, and there is
+     * therefore no history to protect. Printing the Institute's CURRENT
+     * signatories is the best answer available for those — the alternative,
+     * which is what this did at first, was to leave every certificate ever
+     * issued showing a settings key and whoever happened to teach the subject,
+     * so that setting up three signatories appeared to do nothing.
+     *
+     * The distinction is `null` versus an array. A stored EMPTY array means
+     * "issued with nobody signing", which is a decision and is honoured.
+     */
+    const stored = c.signatoriesSnapshot;
+    const panel =
+      stored === null || stored === undefined
+        ? await this.signatories.panelFor(null).catch(() => [])
+        : signatoriesOf(stored);
+
     return {
       id: c.id,
       certificateNo: c.certificateNo,
@@ -1310,7 +1333,7 @@ export class CertificateService {
        * PUBLIC one, since a certificate is shown to employers who have no
        * account and could not fetch an authenticated image.
        */
-      signatories: signatoriesOf(c.signatoriesSnapshot).map((sig) => ({
+      signatories: panel.map((sig) => ({
         name: sig.name,
         designation: sig.designation,
         signatureUrl: sig.signatureAssetId

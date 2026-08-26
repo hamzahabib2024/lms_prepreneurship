@@ -716,6 +716,22 @@ sec("20. the signatory panel");
     signatoryIds: new Array(5).fill(made.data?.id ?? "00000000-0000-0000-0000-000000000000"),
   });
   ok("more than four signatories is refused", tooMany.status >= 400, `got ${tooMany.status}`);
+
+  /*
+   * A CERTIFICATE ISSUED BEFORE THE LIBRARY EXISTED has no recorded panel, and
+   * there is therefore no history to protect. It falls back to the Institute's
+   * CURRENT signatories — without which, setting up three people appeared to
+   * do nothing at all, because every certificate already issued kept showing
+   * the two names it had always shown.
+   */
+  const register = await call("admin", "GET", "/certificates");
+  const anyCert = (register.data ?? [])[0];
+  if (anyCert && made.data?.id) {
+    const shown = await call("admin", "GET", `/certificates/${anyCert.id}`);
+    ok("an older certificate shows the Institute's current signatories",
+       (shown.data?.signatories ?? []).length > 0,
+       `${(shown.data?.signatories ?? []).length} on ${anyCert.certificateNo}`);
+  }
 }
 
 // ══════════════════════════════════════════════════════ cleanup ═══════════
