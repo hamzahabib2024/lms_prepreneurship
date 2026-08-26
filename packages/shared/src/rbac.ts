@@ -126,6 +126,7 @@ export const RESOURCES = [
    *  without an account. Held apart from `lesson_resource` for exactly that
    *  reason: everything there is deliberately not public. */
   "course_media",
+  "signatory",
   "section_subject",
   "teacher_assignment",
   "enrolment",
@@ -426,6 +427,27 @@ export const PERMISSION_MATRIX: Record<Resource, ResourcePolicy> = {
     super_admin: { actions: ["create", "delete", "read"], scope: "ALL" },
     admin: { actions: ["create", "delete", "read"], scope: "ALL" },
     teacher: { actions: ["read"], scope: "ASSIGNED" },
+  },
+
+  /*
+   * WHO SIGNS A CERTIFICATE.
+   *
+   * The office manages the library and the office issues the certificates, so
+   * both sit with admin and super_admin — a second permission for "may upload
+   * a signature" would be a name nobody could hold and a rule nobody could
+   * explain.
+   *
+   * A teacher READS it, and needs to: their own name may be in the panel on a
+   * certificate for a class they taught, and being unable to see who signed it
+   * would make the document unexplainable to the student holding it.
+   *
+   * A student does not appear here at all. What they see is the SNAPSHOT
+   * printed on their own certificate, which is not this resource.
+   */
+  signatory: {
+    super_admin: { actions: FULL, scope: "ALL" },
+    admin: { actions: FULL, scope: "ALL" },
+    teacher: { actions: ["read"], scope: "ALL" },
   },
   /**
    * A NOTE ON THESE TWO SCOPES, because they do not mean what they appear to.

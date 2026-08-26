@@ -53,6 +53,8 @@ async function call(role, method, path, body, isForm = false) {
 
 const stamp = Date.now();
 const made = { assignments: [], announcements: [], quizzes: [], subjects: [], offerings: [] };
+const madeSignatories = [];
+const madeCertificates = [];
 
 // ══════════════════════════════════════════════════════════ 1. identity ═══
 sec("1. identity and sessions");
@@ -659,6 +661,63 @@ sec("19. forgotten passwords");
      `got ${noAuth.status}`);
 }
 
+// ═══════════════════════ 20. who signs a certificate ══════════════════════
+sec("20. the signatory panel");
+{
+  const made = await call("admin", "POST", "/signatories", {
+    name: `QA Signatory ${stamp}`,
+    designation: "QA Principal",
+  });
+  ok("the office adds somebody", made.status === 201 || made.status === 200, `got ${made.status}`);
+  if (made.data?.id) madeSignatories.push(made.data.id);
+
+  const blank = await call("admin", "POST", "/signatories", { name: "  ", designation: "x" });
+  ok("a blank name is refused", blank.status >= 400, `got ${blank.status}`);
+
+  const seen = await call("teacher", "GET", "/signatories");
+  ok("a teacher may read the panel", seen.status === 200, `got ${seen.status}`);
+  const pushed = await call("teacher", "POST", "/signatories", { name: "No", designation: "No" });
+  ok("but cannot change it", pushed.status === 403, `got ${pushed.status}`);
+  const nosy = await call("student", "GET", "/signatories");
+  ok("a student cannot read it at all", nosy.status === 403, `got ${nosy.status}`);
+
+  /*
+   * THE PROPERTY THE WHOLE DESIGN EXISTS FOR: a certificate carries a SNAPSHOT
+   * of who signed it. Renaming somebody must not rewrite documents they signed
+   * last year, and the tempting implementation — storing ids and resolving the
+   * names at render — does exactly that.
+   */
+  if (made.data?.id && ss) {
+    const issued = await call("admin", "POST", `/section-subjects/${ss}/certificates/issue-all`, {
+      everyone: true,
+      reason: "QA — signatory snapshot.",
+      signatoryIds: [made.data.id],
+    });
+    ok("a batch is issued naming them", issued.status === 200, `got ${issued.status}`);
+
+    const view = await call("admin", "GET", `/section-subjects/${ss}/certificates`);
+    const held = (view.data?.students ?? []).find((x) => x.certificate);
+    if (held) {
+      madeCertificates.push(held.certificate.id);
+      const before = await call("admin", "GET", `/certificates/${held.certificate.id}`);
+      const name = (before.data?.signatories ?? [])[0]?.name;
+      ok("the certificate carries their name", typeof name === "string" && name.includes("QA Signatory"), name);
+
+      await call("admin", "PATCH", `/signatories/${made.data.id}`, { name: "QA RENAMED" });
+      const after = await call("admin", "GET", `/certificates/${held.certificate.id}`);
+      ok("renaming them does NOT rewrite the certificate",
+         (after.data?.signatories ?? [])[0]?.name === name,
+         (after.data?.signatories ?? [])[0]?.name);
+    }
+  }
+
+  const tooMany = await call("admin", "POST", `/section-subjects/${ss}/certificates/issue-all`, {
+    everyone: true,
+    signatoryIds: new Array(5).fill(made.data?.id ?? "00000000-0000-0000-0000-000000000000"),
+  });
+  ok("more than four signatories is refused", tooMany.status >= 400, `got ${tooMany.status}`);
+}
+
 // ══════════════════════════════════════════════════════ cleanup ═══════════
 sec("cleanup");
 {
@@ -689,6 +748,10 @@ sec("cleanup");
     const r = await call("admin", "DELETE", `/subjects/${id}/permanent`);
     if (r.status === 200) erased++;
   }
+  for (const id of madeCertificates) await call("admin", "POST", `/certificates/${id}/revoke`, { reason: "QA run — not a real award." });
+  for (const id of madeSignatories) await call("admin", "DELETE", `/signatories/${id}`);
+  ok("QA signatories removed", madeSignatories.length >= 0, `${madeSignatories.length}`);
+
   ok("QA subjects erased, not merely hidden",
      erased === made.offerings.length + made.subjects.length,
      `${erased}/${made.offerings.length + made.subjects.length}`);

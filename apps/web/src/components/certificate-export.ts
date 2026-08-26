@@ -39,9 +39,15 @@ const PRINT_WIDTH_PX = 3508;
 const SHARE_WIDTH_PX = 2828;
 
 export interface CertificateAssets {
-  /** The Institute's mark as a data URI. */
-  logoHref: string;
-  /** @font-face rules with the woff2 files inlined. */
+  /**
+   * @font-face rules with the woff2 files inlined.
+   *
+   * The Institute's mark used to be here too, fetched up front and written
+   * over every <image> in the document. It is gone because `inlineImages`
+   * resolves each image from ITS OWN source now — the certificate carries
+   * several, and one shared data URI was the bug that would have printed the
+   * emblem in place of somebody's signature.
+   */
   fontCss: string;
 }
 
@@ -56,7 +62,6 @@ const FONTS = [
   },
 ];
 
-const LOGO = "/brand/ppship-emblem.png";
 
 function toBase64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
@@ -70,10 +75,65 @@ function toBase64(buffer: ArrayBuffer): string {
   return btoa(binary);
 }
 
+/**
+ * One file, inlined.
+ *
+ * `mime` is a FALLBACK, not an assertion. The certificate now carries several
+ * images of different kinds — a PNG emblem, a WebP partner mark, whatever a
+ * signature was scanned as — and hard-coding image/png for all of them
+ * produces a data URI that lies about its contents. Some renderers sniff and
+ * cope; a printer's RIP does not.
+ */
 async function dataUri(path: string, mime: string): Promise<string> {
   const response = await fetch(path);
   if (!response.ok) throw new Error(`Could not load ${path}`);
-  return `data:${mime};base64,${toBase64(await response.arrayBuffer())}`;
+  const declared = response.headers.get("content-type");
+  const type = declared && declared.startsWith("image/") ? declared.split(";")[0] : mime;
+  return `data:${type};base64,${toBase64(await response.arrayBuffer())}`;
+}
+
+/**
+ * EVERY image in the certificate, inlined BY ITS OWN SOURCE.
+ *
+ * This replaced a loop that set every <image> to the same logo. With one image
+ * in the document that was merely blunt; the moment a second mark and up to
+ * four scanned signatures appeared it became a bug that silently printed the
+ * Institute's emblem in place of somebody's signature — and only in the
+ * DOWNLOADED copy, so the screen would have looked right the whole time.
+ *
+ * Fetched once each per export, and a failure on any one is not fatal: a
+ * signature that will not load leaves the ruled line it sits on, which is a
+ * certificate missing a flourish rather than no certificate at all.
+ */
+async function inlineImages(svg: SVGSVGElement): Promise<void> {
+  const images = Array.from(svg.querySelectorAll("image"));
+  const sources = new Set<string>();
+  for (const image of images) {
+    const href = image.getAttribute("href") ?? image.getAttributeNS(XLINK_NS, "href");
+    if (href && !href.startsWith("data:")) sources.add(href);
+  }
+
+  const resolved = new Map<string, string>();
+  await Promise.all(
+    [...sources].map(async (src) => {
+      try {
+        resolved.set(src, await dataUri(src, "image/png"));
+      } catch {
+        // Left out of the map; the loop below leaves that image alone.
+      }
+    }),
+  );
+
+  for (const image of images) {
+    const href = image.getAttribute("href") ?? image.getAttributeNS(XLINK_NS, "href");
+    const inlined = href ? resolved.get(href) : undefined;
+    if (!inlined) continue;
+    image.setAttribute("href", inlined);
+    // Both spellings. `href` is SVG 2 and is what every current browser reads,
+    // but a standalone file may also be opened by an older renderer, a design
+    // tool or a printer's RIP — and those want xlink.
+    image.setAttributeNS(XLINK_NS, "xlink:href", inlined);
+  }
 }
 
 let assetsPromise: Promise<CertificateAssets> | null = null;
@@ -88,16 +148,13 @@ export function loadCertificateAssets(): Promise<CertificateAssets> {
   if (assetsPromise) return assetsPromise;
 
   assetsPromise = (async () => {
-    const [logoHref, ...fontData] = await Promise.all([
-      dataUri(LOGO, "image/png"),
-      ...FONTS.map((f) => dataUri(f.file, "font/woff2")),
-    ]);
+    const fontData = await Promise.all(FONTS.map((f) => dataUri(f.file, "font/woff2")));
 
     const fontCss = FONTS.map(
       (f, i) => `@font-face{font-family:'${f.family}';font-style:${f.style};font-weight:${f.weight};src:url(${fontData[i]}) format('woff2');}`,
     ).join("");
 
-    return { logoHref, fontCss };
+    return { fontCss };
   })().catch((error) => {
     // Do not cache a failure: a certificate that could not be downloaded
     // because of one dropped request should download on the second press.
@@ -115,7 +172,11 @@ export function loadCertificateAssets(): Promise<CertificateAssets> {
  * image at a same-origin path — is written into the markup here, because the
  * copy is about to be loaded as an isolated image with no access to either.
  */
-function standalone(source: SVGSVGElement, assets: CertificateAssets, width: number): SVGSVGElement {
+async function standalone(
+  source: SVGSVGElement,
+  assets: CertificateAssets,
+  width: number,
+): Promise<SVGSVGElement> {
   const clone = source.cloneNode(true) as SVGSVGElement;
   const height = Math.round((width * CERT_HEIGHT) / CERT_WIDTH);
 
@@ -131,13 +192,7 @@ function standalone(source: SVGSVGElement, assets: CertificateAssets, width: num
   style.textContent = assets.fontCss;
   clone.insertBefore(style, clone.firstChild);
 
-  for (const image of Array.from(clone.querySelectorAll("image"))) {
-    image.setAttribute("href", assets.logoHref);
-    // Both spellings. `href` is SVG 2 and is what every current browser reads,
-    // but a standalone file may also be opened by an older renderer, a design
-    // tool or a printer's RIP — and those want xlink.
-    image.setAttributeNS(XLINK_NS, "xlink:href", assets.logoHref);
-  }
+  await inlineImages(clone);
 
   return clone;
 }
@@ -151,7 +206,7 @@ async function toCanvas(
   width: number,
 ): Promise<HTMLCanvasElement> {
   const height = Math.round((width * CERT_HEIGHT) / CERT_WIDTH);
-  const markup = serialize(standalone(source, assets, width));
+  const markup = serialize(await standalone(source, assets, width));
 
   // A blob URL rather than a data URL: the markup carries ~100 kB of embedded
   // font, and percent-encoding all of it into a URL is both slower and closer
@@ -373,7 +428,7 @@ export async function printCertificate(
   assets: CertificateAssets,
   title: string,
 ): Promise<void> {
-  const markup = serialize(standalone(svg, assets, CERT_WIDTH));
+  const markup = serialize(await standalone(svg, assets, CERT_WIDTH));
 
   const frame = document.createElement("iframe");
   frame.setAttribute("aria-hidden", "true");

@@ -11,6 +11,7 @@ import { CertificateModal } from "../components/CertificateModal";
 import { Icon } from "../components/Icon";
 import { ApiError, api } from "../api/client";
 import { HowItWorks } from "../components/HowItWorks";
+import { SignatoriesPanel, signatureUrl, type Signatory } from "../components/SignatoriesPanel";
 
 /**
  * The certificate register — SRS §13.7, FR-CRT-002/006/012.
@@ -34,12 +35,16 @@ import { HowItWorks } from "../components/HowItWorks";
  * about; the other two are things they came here intending to do.
  */
 
-type Tab = "register" | "earned" | "manual";
+type Tab = "register" | "earned" | "manual" | "signatories";
 
 const TABS: ReadonlyArray<{ id: Tab; label: string; hint: string }> = [
   { id: "register", label: "Register", hint: "Everything issued" },
   { id: "earned", label: "Issue for a subject", hint: "Who has met the requirements" },
   { id: "manual", label: "Issue by hand", hint: "Workshops and one-offs" },
+  /* Its own tab rather than a corner of Settings: it is part of what a
+     certificate IS, and the person setting it up is the person about to
+     issue one. */
+  { id: "signatories", label: "Who signs", hint: "Names, roles and signatures" },
 ];
 
 export function CertificatesPage() {
@@ -90,6 +95,7 @@ export function CertificatesPage() {
       {tab === "register" && <Register reloadKey={issued} />}
       {tab === "earned" && <EarnedPanel onIssued={() => setIssued((n) => n + 1)} />}
       {tab === "manual" && <ManualPanel onIssued={() => setIssued((n) => n + 1)} />}
+      {tab === "signatories" && <SignatoriesPanel />}
     </>
   );
 }
@@ -1333,6 +1339,8 @@ function IssueWholeBatch({
   const [busy, setBusy] = useState<"ready" | "everyone" | null>(null);
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
+  /** Empty means "whoever the Institute currently has", which is the usual case. */
+  const [chosen, setChosen] = useState<string[]>([]);
 
   const run = async (everyone: boolean) => {
     if (
@@ -1350,7 +1358,11 @@ function IssueWholeBatch({
     try {
       const r = await api.post<BatchIssueResult>(
         `/section-subjects/${sectionSubjectId}/certificates/issue-all`,
-        { everyone, ...(reason.trim() ? { reason: reason.trim() } : {}) },
+        {
+          everyone,
+          ...(reason.trim() ? { reason: reason.trim() } : {}),
+          ...(chosen.length > 0 ? { signatoryIds: chosen } : {}),
+        },
       );
       onDone(r);
     } catch (e) {
@@ -1366,6 +1378,8 @@ function IssueWholeBatch({
 
   return (
     <div className="batch-issue">
+      <SignatoryPicker chosen={chosen} onChange={setChosen} />
+
       <div className="row-actions">
         <button
           className="btn"
@@ -1453,4 +1467,90 @@ interface BatchIssueResult {
     outcome: "ISSUED" | "ISSUED_OVER_REQUIREMENTS" | "ALREADY_HELD" | "SKIPPED";
     message?: string;
   }>;
+}
+
+
+/**
+ * WHO SIGNS THIS BATCH — FR-CRT.
+ *
+ * Choosing nothing is the ordinary case and is not a mistake: it means the
+ * Institute's current panel, which is what a batch of thirty at the end of
+ * term wants. The picker exists for the exception — a guest examiner, a
+ * programme signed off by a different head — and says so, rather than
+ * demanding a choice nobody wanted to make.
+ *
+ * THE ORDER OF CHOOSING IS THE ORDER THEY PRINT, left to right, which is why
+ * this is a list of toggles rather than a set of checkboxes: a checkbox group
+ * has no order, and the panel does.
+ */
+function SignatoryPicker({
+  chosen,
+  onChange,
+}: {
+  chosen: string[];
+  onChange: (next: string[]) => void;
+}) {
+  const [people, setPeople] = useState<Signatory[] | null>(null);
+
+  useEffect(() => {
+    void api
+      .get<Signatory[]>("/signatories?activeOnly=true")
+      .then((r) => setPeople(r.filter((s) => s.isActive)))
+      .catch(() => setPeople([]));
+  }, []);
+
+  if (!people || people.length === 0) return null;
+
+  const toggle = (id: string) => {
+    if (chosen.includes(id)) {
+      onChange(chosen.filter((x) => x !== id));
+    } else if (chosen.length < 4) {
+      onChange([...chosen, id]);
+    }
+  };
+
+  return (
+    <div className="signatory-picker">
+      <span className="field-label">Who signs these</span>
+      <p className="muted small">
+        {chosen.length === 0
+          ? "Nobody chosen — the Institute's usual signatories will sign. Choose only if these certificates need somebody different."
+          : `${chosen.length} chosen, printed in this order: ${chosen
+              .map((id) => people.find((p) => p.id === id)?.name)
+              .filter(Boolean)
+              .join(", ")}`}
+      </p>
+      <ul className="list small signatory-choices">
+        {people.map((s) => {
+          const at = chosen.indexOf(s.id);
+          return (
+            <li key={s.id}>
+              <button
+                type="button"
+                className={at >= 0 ? "btn btn-sm btn-primary" : "btn btn-sm btn-quiet"}
+                aria-pressed={at >= 0}
+                onClick={() => toggle(s.id)}
+              >
+                {at >= 0 ? `${at + 1}. ` : ""}
+                {s.name}
+              </button>
+              <span className="muted small">{s.designation}</span>
+              {signatureUrl(s.signatureAssetId) && (
+                <img
+                  className="signatory-mark signatory-mark-sm"
+                  src={signatureUrl(s.signatureAssetId) ?? ""}
+                  alt=""
+                />
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      {chosen.length > 0 && (
+        <button type="button" className="btn btn-quiet btn-sm" onClick={() => onChange([])}>
+          Use the Institute's usual signatories
+        </button>
+      )}
+    </div>
+  );
 }

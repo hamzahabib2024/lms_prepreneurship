@@ -370,6 +370,43 @@ model PasswordResetToken {
   @@map("password_reset_tokens")
 }
 
+/// SOMEBODY WHOSE NAME AND SIGNATURE GO ON A CERTIFICATE — FR-CRT.
+///
+/// A LIBRARY, NOT A SETTING. The Institute has a Principal, a Director and a
+/// Programme Head, and which of them signs depends on the award. Holding them
+/// as three settings keys would mean a developer every time somebody is
+/// promoted; holding them as rows means the office manages it.
+///
+/// THE SIGNATURE IMAGE IS OPTIONAL. A certificate with a printed name over a
+/// ruled line is a perfectly ordinary certificate — the scanned signature is a
+/// nicety, and demanding one would stop the Institute issuing anything until
+/// three people had found a scanner.
+model Signatory {
+  id          String @id @default(uuid()) @db.Uuid
+  name        String @db.VarChar(200)
+  /// "Principal", "Director of Studies". Printed under the name.
+  designation String @db.VarChar(150)
+
+  /// A transparent PNG of their signature, held like any other media asset.
+  /// Null means the certificate prints the ruled line without one.
+  signatureAssetId String? @map("signature_asset_id") @db.Uuid
+
+  /// Off rather than deleted, for somebody who has left: certificates they
+  /// signed keep their snapshot, and they stop appearing in the picker.
+  isActive  Boolean @default(true) @map("is_active")
+  /// The order they appear across the foot of the certificate, left to right.
+  sortOrder Int     @default(0) @map("sort_order") @db.SmallInt
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  signature MediaAsset? @relation("SignatoryImage", fields: [signatureAssetId], references: [id], onDelete: SetNull)
+
+  @@index([isActive, sortOrder])
+  @@map("signatories")
+}
+
 // ======================================================== admission (8.3.2)
 
 model RegistrationRequest {
@@ -1217,6 +1254,15 @@ model Certificate {
   instituteNameSnapshot         String  @map("institute_name_snapshot") @db.VarChar(200)
   signatoryNameSnapshot         String? @map("signatory_name_snapshot") @db.VarChar(200)
   signatoryTitleSnapshot        String? @map("signatory_title_snapshot") @db.VarChar(150)
+  /// WHO SIGNED IT, AS THEY WERE AT THE MOMENT OF ISSUE — FR-CRT.
+  ///
+  /// `[{ name, designation, signatureAssetId }]`, up to four. A SNAPSHOT and
+  /// not a list of ids, for the same reason every other field here is one: the
+  /// Principal retires, the row is switched off or the scanned signature is
+  /// replaced, and a certificate issued in 2026 must still print in 2031
+  /// exactly as it was signed. Reading through to the live rows would quietly
+  /// rewrite history every time somebody was promoted.
+  signatoriesSnapshot           Json?   @map("signatories_snapshot")
 
   /// When the work was finished, which is not always when the paper was
   /// issued. Null means "the same day it was issued".
@@ -2480,6 +2526,7 @@ model MediaAsset {
 
   @@index([kind])
   @@map("media_assets")
+  signatories Signatory[] @relation("SignatoryImage")
 }
 
 /// A FILE THE BRIEF NEEDS — FR-ASG.

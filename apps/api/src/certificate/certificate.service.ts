@@ -19,6 +19,7 @@ import { assertOwnStudent } from "../rbac/ownership";
 import { RegistrationNumberService } from "../admission/registration-number.service";
 import { NotificationService } from "../notification/notification.service";
 import { TemplateService } from "../notification/template.service";
+import { SignatoryService, type SignatorySnapshot } from "./signatory.service";
 
 /**
  * Completion certificates — SRS §5.15, FR-CRT-001..020.
@@ -53,6 +54,7 @@ export class CertificateService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly signatories: SignatoryService,
     private readonly audit: AuditService,
     private readonly progress: ProgressService,
     private readonly config: ConfigService,
@@ -78,7 +80,7 @@ export class CertificateService {
   async issueForSubject(
     studentId: string,
     sectionSubjectId: string,
-    options: { override?: boolean; reason?: string } = {},
+    options: { override?: boolean; reason?: string; signatoryIds?: readonly string[] } = {},
   ) {
     const actor = getActor();
     if (!actor) throw new AppError("AUTH_TOKEN_INVALID");
@@ -127,6 +129,15 @@ export class CertificateService {
     }
 
     const snapshot = await this.snapshot({ studentId, sectionSubjectId });
+    /*
+     * WHO SIGNS IT, FROZEN NOW — FR-CRT.
+     *
+     * Resolved here and stored as values, never as ids. The Principal retires
+     * and this certificate must still print her name over her signature in
+     * five years; reading through to the live rows at render time would
+     * rewrite it the day somebody was promoted.
+     */
+    const signatories = await this.signatories.panelFor(options.signatoryIds);
     const certificateNo = await this.nextCertificateNo();
 
     const created = await this.prisma.scoped.certificate.create({
@@ -155,6 +166,7 @@ export class CertificateService {
                 overrideReason: options.reason ?? null,
               }),
         } as object,
+        signatoriesSnapshot: signatories.length > 0 ? (signatories as object[]) : undefined,
         status: "ISSUED",
         issuedBy: actor.userId,
         verificationCode: this.newVerificationCode(),
@@ -855,7 +867,7 @@ export class CertificateService {
    */
   async issueForWholeClass(
     sectionSubjectId: string,
-    options: { everyone?: boolean; reason?: string } = {},
+    options: { everyone?: boolean; reason?: string; signatoryIds?: readonly string[] } = {},
   ) {
     const cohort = await this.progress.forSectionSubject(sectionSubjectId);
 
@@ -885,6 +897,10 @@ export class CertificateService {
         const doc = await this.issueForSubject(student.studentId, sectionSubjectId, {
           override: options.everyone === true,
           reason: options.reason,
+          // The same panel for the whole batch: nobody chooses signatories
+          // thirty times, and thirty certificates from one ceremony that
+          // disagree about who signed them would be a mess to explain.
+          signatoryIds: options.signatoryIds,
         });
         const already = (doc as { alreadyIssued?: boolean }).alreadyIssued === true;
         results.push({
@@ -1233,6 +1249,8 @@ export class CertificateService {
     instituteNameSnapshot: string;
     signatoryNameSnapshot: string | null;
     signatoryTitleSnapshot: string | null;
+    /** A JSON column, so `unknown` — read through `signatoriesOf` below. */
+    signatoriesSnapshot?: unknown;
     progressPercent: unknown;
     attendancePercent: unknown;
     averageGradePercent: unknown;
@@ -1285,6 +1303,20 @@ export class CertificateService {
         signatoryName: c.signatoryNameSnapshot ?? "",
         signatoryTitle: c.signatoryTitleSnapshot ?? "",
       },
+      /*
+       * The panel as it was signed. The asset id becomes a URL here rather
+       * than in the renderer, because the renderer should not have to know how
+       * this System addresses its media — and the route it points at is the
+       * PUBLIC one, since a certificate is shown to employers who have no
+       * account and could not fetch an authenticated image.
+       */
+      signatories: signatoriesOf(c.signatoriesSnapshot).map((sig) => ({
+        name: sig.name,
+        designation: sig.designation,
+        signatureUrl: sig.signatureAssetId
+          ? `/api/v1/public/course-media/${sig.signatureAssetId}`
+          : null,
+      })),
       verification: {
         code: c.verificationCode,
         url: this.verificationUrl(c.verificationCode),
@@ -1437,4 +1469,29 @@ export class CertificateService {
       });
     }
   }
+}
+
+/**
+ * The stored panel, read defensively.
+ *
+ * It is a JSON column, so what comes back is whatever was written — including
+ * from a version of this code that no longer exists. A certificate whose panel
+ * cannot be read should print without one rather than fail to render at all:
+ * the name, the course and the number are the parts that matter, and a
+ * document nobody can open is worse than one missing a signature.
+ */
+function signatoriesOf(value: unknown): SignatorySnapshot[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) => {
+    if (!entry || typeof entry !== "object") return [];
+    const e = entry as Record<string, unknown>;
+    if (typeof e.name !== "string" || typeof e.designation !== "string") return [];
+    return [
+      {
+        name: e.name,
+        designation: e.designation,
+        signatureAssetId: typeof e.signatureAssetId === "string" ? e.signatureAssetId : null,
+      },
+    ];
+  });
 }

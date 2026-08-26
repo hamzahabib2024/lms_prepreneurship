@@ -1248,6 +1248,36 @@ code {
   because a box inside a card inside a page is the third frame and by then
   nothing is emphasised.
 */
+/*
+  WHO SIGNS A CERTIFICATE — the library, and the picker beside the issue
+  buttons.
+
+  A signature is shown at the size it will PRINT relative to the name, not as a
+  thumbnail: the whole reason to display it is so somebody notices it came out
+  upside down or still has a white box behind it, and neither is visible at
+  24 pixels.
+*/
+/* The list itself: rows that breathe, because each carries an image, a name,
+   a role and five controls. */
+.signatory-list > li { padding-block: .55rem; }
+.signatory-row { align-items: center; gap: .8rem; }
+.signatory-row.is-off { opacity: .55; }
+.signatory-who { display: flex; align-items: center; gap: .8rem; min-width: 0; }
+.signatory-mark {
+  width: 96px; height: 40px; flex: none;
+  object-fit: contain; object-position: left bottom;
+  /* The scan is on white; the row is on the surface colour. Multiply makes a
+     white background disappear without demanding a transparent PNG. */
+  mix-blend-mode: multiply;
+}
+.signatory-mark-sm { width: 60px; height: 26px; }
+/* A dashed box where a signature is not yet: it says "something goes here"
+   rather than leaving the names out of line with each other. */
+.signatory-mark-empty { border-bottom: 1px dashed var(--line-strong); height: 40px; }
+
+.signatory-picker { margin-top: .8rem; padding-top: .8rem; border-top: 1px solid var(--line); }
+.signatory-choices > li { align-items: center; gap: .6rem; }
+
 .progress-settings, .batch-issue {
   margin-top: .8rem; padding-top: .8rem;
   border-top: 1px solid var(--line);

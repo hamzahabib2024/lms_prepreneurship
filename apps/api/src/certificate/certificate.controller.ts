@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Param, Post, Query } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from "@nestjs/common";
 import { Throttle } from "@nestjs/throttler";
 import { z } from "zod";
 import {
@@ -7,6 +7,7 @@ import {
   certificateRevokeSchema,
 } from "@lms/shared";
 import { CertificateService } from "./certificate.service";
+import { SignatoryService, MAX_SIGNATORIES } from "./signatory.service";
 import { zodBody } from "../common/zod-validation.pipe";
 import { Public, RequirePermission } from "../rbac/permissions.guard";
 
@@ -22,11 +23,31 @@ import { Public, RequirePermission } from "../rbac/permissions.guard";
 const batchIssueSchema = z.object({
   everyone: z.boolean().optional(),
   reason: z.string().trim().max(500).optional(),
+  /** Whose names go at the foot. Omitted means the Institute's current panel. */
+  signatoryIds: z.array(z.string().uuid()).max(MAX_SIGNATORIES).optional(),
 });
+
+/** Issuing to one student, with a chosen panel. */
+const issueSchema = z.object({
+  signatoryIds: z.array(z.string().uuid()).max(MAX_SIGNATORIES).optional(),
+});
+
+/** Adding or changing somebody in the library. */
+const signatorySchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  designation: z.string().trim().min(1).max(150),
+  signatureAssetId: z.string().uuid().nullable().optional(),
+  isActive: z.boolean().optional(),
+  sortOrder: z.number().int().min(0).max(999).optional(),
+});
+const signatoryPatchSchema = signatorySchema.partial();
 
 @Controller()
 export class CertificateController {
-  constructor(private readonly certificates: CertificateService) {}
+  constructor(
+    private readonly certificates: CertificateService,
+    private readonly signatories: SignatoryService,
+  ) {}
 
   /*
    * ROUTE ORDER MATTERS IN THIS CONTROLLER.
@@ -49,6 +70,44 @@ export class CertificateController {
    * whole register to anybody who can see their own certificate. Only somebody
    * who may issue has any business with the register.
    */
+  // ───────────────────────────────────── who signs a certificate ──
+
+  /**
+   * FR-CRT — the Institute's signatories.
+   *
+   * `read` is wide on purpose: a teacher whose own name may appear at the foot
+   * of a certificate for their class should be able to see the panel, and
+   * there is nothing private in three names and three job titles.
+   */
+  @RequirePermission("signatory", "read")
+  @Get("signatories")
+  listSignatories(@Query("activeOnly") activeOnly?: string) {
+    return this.signatories.list(activeOnly !== "true");
+  }
+
+  @RequirePermission("signatory", "create")
+  @Post("signatories")
+  createSignatory(@Body(zodBody(signatorySchema)) dto: z.infer<typeof signatorySchema>) {
+    return this.signatories.create(dto);
+  }
+
+  @RequirePermission("signatory", "update")
+  @Patch("signatories/:id")
+  updateSignatory(
+    @Param("id") id: string,
+    @Body(zodBody(signatoryPatchSchema)) dto: z.infer<typeof signatoryPatchSchema>,
+  ) {
+    return this.signatories.update(id, dto);
+  }
+
+  /** Soft — see the note on the service. Certificates already signed are safe. */
+  @RequirePermission("signatory", "delete")
+  @Delete("signatories/:id")
+  @HttpCode(200)
+  removeSignatory(@Param("id") id: string) {
+    return this.signatories.remove(id);
+  }
+
   @RequirePermission("certificate", "create")
   @Get("certificates")
   register(@Query(zodBody(certificateQuerySchema)) query: z.infer<typeof certificateQuerySchema>) {
@@ -115,8 +174,11 @@ export class CertificateController {
   issueSubject(
     @Param("studentId") studentId: string,
     @Param("sectionSubjectId") sectionSubjectId: string,
+    @Body(zodBody(issueSchema)) dto: z.infer<typeof issueSchema>,
   ) {
-    return this.certificates.issueForSubject(studentId, sectionSubjectId);
+    return this.certificates.issueForSubject(studentId, sectionSubjectId, {
+      signatoryIds: dto.signatoryIds,
+    });
   }
 
   /**

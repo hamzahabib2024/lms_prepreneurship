@@ -172,6 +172,16 @@ const DELIBERATELY_UNSCOPED = [
   // an Admin holds.
   "NotificationTemplate",
   /*
+   * WHO THE INSTITUTE'S SIGNATORIES ARE. Three names and three job titles
+   * that are printed on documents handed to students and shown to employers —
+   * the least private information in the System. There is nothing to scope
+   * them BY: they belong to the Institute, not to any student or class.
+   *
+   * Reaching them to CHANGE them needs signatory:create/update/delete, which
+   * only the office holds.
+   */
+  "Signatory",
+  /*
    * WHAT A COURSE COSTS, AND THE PICTURE ON ITS CARD.
    *
    * Both are the Institute talking about itself, not about anybody. A fee
