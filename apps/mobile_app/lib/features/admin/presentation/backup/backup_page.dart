@@ -206,7 +206,52 @@ class _BackupCard extends StatelessWidget {
                   textStyle: const TextStyle(fontSize: 12),
                 ),
               ),
+              const SizedBox(width: 8),
+              OutlinedButton.icon(
+                onPressed: () => _confirmVerify(context, backup),
+                icon: const Icon(Icons.verified_outlined, size: 16),
+                label: const Text('Verify'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  textStyle: const TextStyle(fontSize: 12),
+                ),
+              ),
+              const SizedBox(width: 8),
+              OutlinedButton.icon(
+                onPressed: () => context.read<AdminCubit>().downloadBackup(id: backup.id),
+                icon: const Icon(Icons.download_outlined, size: 16),
+                label: const Text('Download'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  textStyle: const TextStyle(fontSize: 12),
+                ),
+              ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmVerify(BuildContext context, BackupItem backup) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Verify backup'),
+        content: Text(
+          'This checks the integrity of the backup from ${backup.age ?? backup.id}.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              context.read<AdminCubit>().verifyBackup(id: backup.id);
+            },
+            child: const Text('Verify'),
           ),
         ],
       ),

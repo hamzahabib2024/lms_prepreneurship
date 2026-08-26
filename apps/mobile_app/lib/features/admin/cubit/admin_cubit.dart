@@ -237,6 +237,36 @@ class AdminCubit extends Cubit<AdminState> {
     }
   }
 
+  Future<void> verifyBackup({required String id}) async {
+    if (state.busy) return;
+    emit(state.copyWith(busy: true, actionError: null));
+    try {
+      final result = await repository.verifyBackup(id: id);
+      if (isClosed) return;
+      final ok = result['ok'] == true || result['valid'] == true;
+      emit(state.copyWith(
+        busy: false,
+        actionSuccess: ok ? 'Backup verified successfully' : 'Backup verification failed',
+      ));
+    } on ApiException catch (error) {
+      if (isClosed) return;
+      emit(state.copyWith(busy: false, actionError: error));
+    }
+  }
+
+  Future<void> downloadBackup({required String id}) async {
+    if (state.busy) return;
+    emit(state.copyWith(busy: true, actionError: null));
+    try {
+      final url = await repository.downloadBackupUrl(id: id);
+      if (isClosed) return;
+      emit(state.copyWith(busy: false, actionSuccess: 'Download link ready'));
+    } on ApiException catch (error) {
+      if (isClosed) return;
+      emit(state.copyWith(busy: false, actionError: error));
+    }
+  }
+
   // ------------------------------------------------------------ audit ---
 
   Future<void> loadAuditLog({int page = 1}) async {

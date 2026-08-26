@@ -176,6 +176,13 @@ class AdminRepository {
     return data;
   }
 
+  Future<String> downloadBackupUrl({required String id}) async {
+    final data = await api.get<Map<String, dynamic>>(
+      '/admin/backups/${Uri.encodeComponent(id)}/download',
+    );
+    return data['url'] as String? ?? '';
+  }
+
   // ------------------------------------------------------------ maintenance ---
 
   Future<Map<String, dynamic>> getMaintenance() async {
