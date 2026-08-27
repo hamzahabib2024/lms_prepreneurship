@@ -527,20 +527,23 @@ class _QuestionCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 8),
-              ...question.options.map((option) {
-                final isCorrect = option.id == question.correctAnswer;
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Row(
-                    children: [
-                      Radio<String>(
-                        value: option.id,
-                        groupValue: question.correctAnswer,
-                        onChanged: (v) {
-                          if (v != null) onCorrectChanged(v);
-                        },
-                        activeColor: AppColors.ok,
-                      ),
+              RadioGroup<String>(
+                groupValue: question.correctAnswer ?? '',
+                onChanged: (v) {
+                  if (v != null) onCorrectChanged(v);
+                },
+                child: Column(
+                  children: [
+                    ...question.options.map((option) {
+                      final isCorrect = option.id == question.correctAnswer;
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Row(
+                          children: [
+                            Radio<String>(
+                              value: option.id,
+                              activeColor: AppColors.ok,
+                            ),
                       Expanded(
                         child: TextField(
                           onChanged: (v) => onOptionChanged(option.id, v),
@@ -552,7 +555,7 @@ class _QuestionCard extends StatelessWidget {
                             ),
                             isDense: true,
                             filled: true,
-                            fillColor: dark ? AppColorsDark.surface : Colors.white,
+                            fillColor: dark ? AppColorsDark.surface : AppColors.surface,
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(AppRadius.sm),
                               borderSide: isCorrect
@@ -571,6 +574,9 @@ class _QuestionCard extends StatelessWidget {
                   ),
                 );
               }),
+                  ],
+                ),
+              ),
               OutlinedButton.icon(
                 onPressed: onAddOption,
                 icon: const Icon(Icons.add, size: 16),
