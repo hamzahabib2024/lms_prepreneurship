@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../core/formats.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/ui.dart';
@@ -500,17 +501,7 @@ class _ResultTable extends StatelessWidget {
     return s;
   }
 
-  static const _months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-  ];
+  String _formatDate(DateTime d) => Formats.shortDate(d);
 
-  String _formatDate(DateTime d) => '${d.day} ${_months[d.month - 1]} ${d.year}';
-
-  String _formatDateTime(DateTime d) {
-    final hour = d.hour;
-    final h12 = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
-    final ampm = hour < 12 ? 'AM' : 'PM';
-    return '${d.day} ${_months[d.month - 1]} ${d.year}, $h12:${d.minute.toString().padLeft(2, '0')} $ampm';
-  }
+  String _formatDateTime(DateTime d) => Formats.shortDateTime(d);
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../core/formats.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/ui.dart';
@@ -253,10 +254,6 @@ class _CertificateCard extends StatelessWidget {
   String _formatDate(String iso) {
     final date = DateTime.tryParse(iso);
     if (date == null) return iso;
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-    ];
-    return '${date.day} ${months[date.month - 1]} ${date.year}';
+    return Formats.shortDate(date);
   }
 }

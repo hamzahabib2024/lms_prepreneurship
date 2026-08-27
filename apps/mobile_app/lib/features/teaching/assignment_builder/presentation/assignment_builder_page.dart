@@ -7,6 +7,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../core/formats.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../cubit/assignment_builder_cubit.dart';
 import '../data/assignment_builder_repository.dart';
@@ -284,7 +285,7 @@ class _AssignmentBuilderPageState extends State<AssignmentBuilderPage> {
   String _formatDate(String dateStr) {
     try {
       final dt = DateTime.parse(dateStr);
-      return '${dt.day}/${dt.month}/${dt.year} ${dt.hour}:${dt.minute.toString().padLeft(2, '0')}';
+      return '${Formats.shortDate(dt)} ${dt.hour}:${dt.minute.toString().padLeft(2, '0')}';
     } catch (_) {
       return dateStr;
     }

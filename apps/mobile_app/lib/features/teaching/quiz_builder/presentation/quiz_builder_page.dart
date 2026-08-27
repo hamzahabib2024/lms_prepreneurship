@@ -4,6 +4,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../core/formats.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../cubit/quiz_builder_cubit.dart';
 import '../data/quiz_builder_repository.dart';
@@ -139,7 +140,7 @@ class _QuizBuilderPageState extends State<QuizBuilderPage> {
                               '${state.totalMarks}',
                               style: TextStyle(
                                 color: dark ? AppColorsDark.ink : AppColors.ink,
-                                fontWeight: FontWeight.bold,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ),
@@ -201,7 +202,7 @@ class _QuizBuilderPageState extends State<QuizBuilderPage> {
                         'Questions',
                         style: TextStyle(
                           color: dark ? AppColorsDark.ink : AppColors.ink,
-                          fontWeight: FontWeight.bold,
+                          fontWeight: FontWeight.w600,
                           fontSize: 16,
                         ),
                       ),
@@ -232,7 +233,7 @@ class _QuizBuilderPageState extends State<QuizBuilderPage> {
                       width: double.infinity,
                       padding: const EdgeInsets.all(24),
                       decoration: BoxDecoration(
-                        color: dark ? AppColorsDark.surface : Colors.white,
+                        color: dark ? AppColorsDark.surface : AppColors.surface,
                         borderRadius: BorderRadius.circular(AppRadius.sm),
                         border: Border.all(
                           color: dark ? AppColorsDark.line : AppColors.line,
@@ -384,7 +385,7 @@ class _DateTimePicker extends StatelessWidget {
   String _formatDate(String dateStr) {
     try {
       final dt = DateTime.parse(dateStr);
-      return '${dt.day}/${dt.month}/${dt.year} ${dt.hour}:${dt.minute.toString().padLeft(2, '0')}';
+      return '${Formats.shortDate(dt)} ${dt.hour}:${dt.minute.toString().padLeft(2, '0')}';
     } catch (_) {
       return dateStr;
     }
@@ -445,7 +446,7 @@ class _QuestionCard extends StatelessWidget {
                     'Q${index + 1}',
                     style: TextStyle(
                       color: dark ? AppColorsDark.brand600 : AppColors.brand600,
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w600,
                       fontSize: 12,
                     ),
                   ),
