@@ -6,6 +6,7 @@ import { ThumbnailField } from "../components/ThumbnailField";
 import { CourseCover } from "../components/CourseCover";
 import { Icon } from "../components/Icon";
 import { Skeleton } from "../components/Ui";
+import { Field } from "../components/Field";
 
 /**
  * One subject — SRS FR-CRS-015.
@@ -208,49 +209,35 @@ export function SubjectEditPage() {
         hint="The name students see on their timetable and their certificate."
       >
         <div className="form-row">
-          <label className="field">
-            <span>Name</span>
-            <input
+          <Field label="Name" required><input
               value={f.name}
               onChange={(e) => set("name")(e.target.value)}
               placeholder="Adobe Photoshop"
               autoFocus={creating}
             />
-          </label>
-          <label className="field">
-            <span>Code</span>
-            <input
+          </Field>
+          <Field label="Code" required hint={<>{creating
+                ? "2–20 letters or digits. It appears on transcripts, so it cannot be changed afterwards."
+                : "Cannot be changed — it appears on transcripts already issued."}</>}><input
               value={f.code}
               onChange={(e) => set("code")(e.target.value.toUpperCase())}
               placeholder="PS101"
               disabled={!creating}
               maxLength={20}
             />
-            <span className="muted small">
-              {creating
-                ? "2–20 letters or digits. It appears on transcripts, so it cannot be changed afterwards."
-                : "Cannot be changed — it appears on transcripts already issued."}
-            </span>
-          </label>
+          </Field>
         </div>
 
-        <label className="field">
-          <span>What students learn in it</span>
-          <textarea
+        <Field label="What students learn in it" hint={<>Shown on the course page. A sentence or two is enough.</>}><textarea
             rows={4}
             value={f.description}
             onChange={(e) => set("description")(e.target.value)}
             placeholder="Retouching, colour correction, and preparing artwork for print and screen."
           />
-          <span className="muted small">
-            Shown on the course page. A sentence or two is enough.
-          </span>
-        </label>
+        </Field>
 
         <div className="form-row">
-          <label className="field">
-            <span>Credits</span>
-            <input
+          <Field label="Credits" hint={<>Optional. Used when a programme weights subjects against each other.</>}><input
               type="number"
               min={1}
               max={20}
@@ -258,10 +245,7 @@ export function SubjectEditPage() {
               onChange={(e) => set("credits")(e.target.value)}
               placeholder="3"
             />
-            <span className="muted small">
-              Optional. Used when a programme weights subjects against each other.
-            </span>
-          </label>
+          </Field>
         </div>
       </EditorSection>
 
@@ -288,18 +272,13 @@ export function SubjectEditPage() {
           </div>
         </div>
 
-        <label className="field">
-          <span>Or link a picture already on the web</span>
-          <input
+        <Field label="Or link a picture already on the web" hint={<>An uploaded picture wins over this one. Useful when the artwork already lives on the
+            Institute&rsquo;s own site.</>}><input
             value={f.thumbnailUrl}
             onChange={(e) => set("thumbnailUrl")(e.target.value)}
             placeholder="https://prepreneurship.pk/images/photoshop.jpg"
           />
-          <span className="muted small">
-            An uploaded picture wins over this one. Useful when the artwork already lives on the
-            Institute&rsquo;s own site.
-          </span>
-        </label>
+        </Field>
       </EditorSection>
 
       {!creating && (

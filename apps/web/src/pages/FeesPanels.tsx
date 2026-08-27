@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ApiError, api } from "../api/client";
 import type { Statement } from "./FeesPage";
+import { Field } from "../components/Field";
 
 /**
  * The three panels that write to a student's ledger — SRS §13.11.
@@ -73,39 +74,31 @@ export function RecordPayment({
       </p>
 
       <div className="field-row">
-        <label className="field">
-          <span>Amount</span>
-          <input
+        <Field label="Amount" required><input
             inputMode="decimal"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             placeholder="30000"
           />
-        </label>
-        <label className="field">
-          <span>Date received</span>
-          <input type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} />
-        </label>
+        </Field>
+        <Field label="Date received" required><input type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} />
+        </Field>
       </div>
 
       <div className="field-row">
-        <label className="field">
-          <span>Method</span>
-          <select value={method} onChange={(e) => setMethod(e.target.value)}>
+        <Field label="Method" required><select value={method} onChange={(e) => setMethod(e.target.value)}>
             <option value="CASH_DEPOSIT">Cash deposit</option>
             <option value="BANK_TRANSFER">Bank transfer</option>
             <option value="CHEQUE">Cheque</option>
             <option value="OTHER">Other</option>
           </select>
-        </label>
-        <label className="field">
-          <span>Reference (optional)</span>
-          <input
+        </Field>
+        <Field label="Reference (optional)"><input
             value={reference}
             onChange={(e) => setReference(e.target.value)}
             placeholder="Slip or transaction number"
           />
-        </label>
+        </Field>
       </div>
 
       <span className="row-actions">
@@ -165,14 +158,12 @@ export function ReverseButton({
 
   return (
     <span className="danger-zone">
-      <label className="field">
-        <span>Why is this being reversed?</span>
-        <input
+      <Field label="Why is this being reversed?" required><input
           value={reason}
           onChange={(e) => setReason(e.target.value)}
           placeholder="e.g. Recorded against the wrong student"
         />
-      </label>
+      </Field>
       <p className="muted small">
         The payment stays on the statement, marked as reversed, and its receipt stays valid as a
         record — it will say so on its face.
@@ -274,9 +265,7 @@ export function PlanBuilder({
       {error && <p className="warn">{error}</p>}
 
       <div className="field-row">
-        <label className="field">
-          <span>Total</span>
-          <input
+        <Field label="Total" required><input
             inputMode="decimal"
             value={total}
             onChange={(e) => {
@@ -285,10 +274,8 @@ export function PlanBuilder({
             }}
             placeholder="90000"
           />
-        </label>
-        <label className="field">
-          <span>Instalments</span>
-          <input
+        </Field>
+        <Field label="Instalments" required><input
             inputMode="numeric"
             value={count}
             onChange={(e) => {
@@ -296,13 +283,11 @@ export function PlanBuilder({
               invalidate();
             }}
           />
-        </label>
+        </Field>
       </div>
 
       <div className="field-row">
-        <label className="field">
-          <span>First one due</span>
-          <input
+        <Field label="First one due" required><input
             type="date"
             value={firstDueDate}
             onChange={(e) => {
@@ -310,10 +295,8 @@ export function PlanBuilder({
               invalidate();
             }}
           />
-        </label>
-        <label className="field">
-          <span>Then every</span>
-          <select
+        </Field>
+        <Field label="Then every" required><select
             value={cadence}
             onChange={(e) => {
               setCadence(e.target.value);
@@ -324,12 +307,10 @@ export function PlanBuilder({
             <option value="FORTNIGHTLY">Fortnight</option>
             <option value="WEEKLY">Week</option>
           </select>
-        </label>
+        </Field>
       </div>
 
-      <label className="field">
-        <span>What it is for</span>
-        <input
+      <Field label="What it is for" required><input
           value={label}
           onChange={(e) => {
             setLabel(e.target.value);
@@ -337,7 +318,7 @@ export function PlanBuilder({
           }}
           placeholder="e.g. Spring 2026 tuition"
         />
-      </label>
+      </Field>
 
       <span className="row-actions">
         <button

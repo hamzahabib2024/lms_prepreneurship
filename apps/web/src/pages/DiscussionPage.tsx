@@ -4,6 +4,7 @@ import { Icon } from "../components/Icon";
 import { useParams } from "react-router-dom";
 import { ApiError, api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
+import { Field } from "../components/Field";
 
 /**
  * Discussion — SRS §13.13, FR-DSC-001..012.
@@ -135,9 +136,7 @@ export function DiscussionPage() {
 
       {!open && offerings.length > 1 && (
         <section className="card">
-          <label className="field">
-            <span>Which class</span>
-            <select
+          <Field label="Which class" required><select
               value={offeringId}
               onChange={(e) => {
                 setOfferingId(e.target.value);
@@ -150,7 +149,7 @@ export function DiscussionPage() {
                 </option>
               ))}
             </select>
-          </label>
+          </Field>
         </section>
       )}
 
@@ -247,24 +246,20 @@ function Ask({
 
   return (
     <section className="card">
-      <label className="field">
-        <span>Question</span>
-        <input
+      <Field label="Question" required><input
           value={form.title}
           autoFocus
           onChange={(e) => setForm({ ...form, title: e.target.value })}
           placeholder="How do I export at 300dpi?"
         />
-      </label>
-      <label className="field">
-        <span>Anything else worth knowing</span>
-        <textarea
+      </Field>
+      <Field label="Anything else worth knowing"><textarea
           rows={4}
           value={form.body}
           onChange={(e) => setForm({ ...form, body: e.target.value })}
           placeholder="What you have tried, and what happened."
         />
-      </label>
+      </Field>
       <span className="row-actions">
         <button
           className="btn btn-primary"

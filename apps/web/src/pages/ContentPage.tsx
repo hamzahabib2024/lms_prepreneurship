@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, api } from "../api/client";
 import { HowItWorks } from "../components/HowItWorks";
+import { Field } from "../components/Field";
 
 /**
  * Course content — SRS §13.6, FR-CRS-027..032, FR-VID-003..007.
@@ -118,9 +119,7 @@ export function ContentPage() {
       )}
 
       <section className="card">
-        <label className="field">
-          <span>Subject</span>
-          <select
+        <Field label="Subject" required><select
             value={chosen?.sectionSubjectId ?? ""}
             onChange={(e) => void choose(e.target.value)}
           >
@@ -131,7 +130,7 @@ export function ContentPage() {
               </option>
             ))}
           </select>
-        </label>
+        </Field>
       </section>
 
       {chosen && subjectId && (
@@ -181,14 +180,12 @@ function NewModule({ subjectId, onCreated }: { subjectId: string; onCreated: () 
   return (
     <section className="card">
       <div className="field-row">
-        <label className="field">
-          <span>New module</span>
-          <input
+        <Field label="New module"><input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Foundations of Design"
           />
-        </label>
+        </Field>
         <div className="field">
           <span>&nbsp;</span>
           <button
@@ -275,14 +272,12 @@ function ModuleCard({
       ))}
 
       <div className="field-row">
-        <label className="field">
-          <span>New lesson</span>
-          <input
+        <Field label="New lesson"><input
             value={lessonTitle}
             onChange={(e) => setLessonTitle(e.target.value)}
             placeholder="Colour theory"
           />
-        </label>
+        </Field>
         <div className="field">
           <span>&nbsp;</span>
           <button
@@ -588,9 +583,7 @@ function AttachLecture({
         </p>
       ) : (
         <>
-          <label className="field">
-            <span>File</span>
-            <select
+          <Field label="File"><select
               value={chosen?.storageRef ?? ""}
               onChange={(e) =>
                 setChosen(entries.find((x) => x.storageRef === e.target.value) ?? null)
@@ -603,16 +596,14 @@ function AttachLecture({
                 </option>
               ))}
             </select>
-          </label>
+          </Field>
 
-          <label className="field">
-            <span>Title students will see</span>
-            <input
+          <Field label="Title students will see" required><input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder={chosen?.name ?? "Colour theory"}
             />
-          </label>
+          </Field>
         </>
       )}
 

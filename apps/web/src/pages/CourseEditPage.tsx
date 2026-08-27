@@ -6,6 +6,7 @@ import { ThumbnailField } from "../components/ThumbnailField";
 import { CourseCover } from "../components/CourseCover";
 import { Icon } from "../components/Icon";
 import { Skeleton } from "../components/Ui";
+import { Field } from "../components/Field";
 
 /**
  * One course, and everything that decides whether it can actually take a
@@ -247,49 +248,35 @@ export function CourseEditPage() {
 
       <EditorSection step={1} title="What it is called" hint="What appears on the public page.">
         <div className="form-row">
-          <label className="field">
-            <span>Name</span>
-            <input
+          <Field label="Name" required><input
               value={f.name}
               onChange={(e) => set("name")(e.target.value)}
               placeholder="Diploma in Graphic Designing"
               autoFocus={creating}
             />
-          </label>
-          <label className="field">
-            <span>Code</span>
-            <input
+          </Field>
+          <Field label="Code" required hint={<>{creating
+                ? "2–10 letters or digits. It becomes part of every student's registration number, so it cannot be changed afterwards."
+                : "Cannot be changed — it is part of every registration number already issued."}</>}><input
               value={f.code}
               onChange={(e) => set("code")(e.target.value.toUpperCase())}
               placeholder="GD"
               disabled={!creating}
               maxLength={10}
             />
-            <span className="muted small">
-              {creating
-                ? "2–10 letters or digits. It becomes part of every student's registration number, so it cannot be changed afterwards."
-                : "Cannot be changed — it is part of every registration number already issued."}
-            </span>
-          </label>
+          </Field>
         </div>
 
-        <label className="field">
-          <span>What the course is</span>
-          <textarea
+        <Field label="What the course is" hint={<>An applicant reads this before deciding. Two or three sentences.</>}><textarea
             rows={4}
             value={f.description}
             onChange={(e) => set("description")(e.target.value)}
             placeholder="A six-month practical diploma covering design software, brand systems and a portfolio project."
           />
-          <span className="muted small">
-            An applicant reads this before deciding. Two or three sentences.
-          </span>
-        </label>
+        </Field>
 
         <div className="form-row">
-          <label className="field">
-            <span>How long it runs</span>
-            <input
+          <Field label="How long it runs" hint={<>In weeks. Shown on the public page.</>}><input
               type="number"
               min={1}
               max={520}
@@ -297,8 +284,7 @@ export function CourseEditPage() {
               onChange={(e) => set("durationWeeks")(e.target.value)}
               placeholder="26"
             />
-            <span className="muted small">In weeks. Shown on the public page.</span>
-          </label>
+          </Field>
         </div>
       </EditorSection>
 

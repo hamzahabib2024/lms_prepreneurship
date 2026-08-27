@@ -5,6 +5,7 @@ import { HowItWorks } from "../components/HowItWorks";
 import { Icon } from "../components/Icon";
 import { ApiError, api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
+import { Field } from "../components/Field";
 
 /**
  * The timetable — SRS §13.12, FR-LIV-030..036.
@@ -486,9 +487,7 @@ function GeneratePanel({ onGenerated }: { onGenerated: () => void }) {
         </div>
       )}
 
-      <label className="field">
-        <span>Which class</span>
-        <select
+      <Field label="Which class" required><select
           value={form.sectionSubjectId}
           onChange={(e) => {
             setForm({ ...form, sectionSubjectId: e.target.value });
@@ -502,7 +501,7 @@ function GeneratePanel({ onGenerated }: { onGenerated: () => void }) {
             </option>
           ))}
         </select>
-      </label>
+      </Field>
 
       <fieldset className="field">
         <legend>Which days</legend>
@@ -528,8 +527,7 @@ function GeneratePanel({ onGenerated }: { onGenerated: () => void }) {
 
       <div className="field-row">
         <label className="field">
-          <span>From</span>
-          <input
+          <span>From</span><input
             type="time"
             value={form.startTime}
             onChange={(e) => {
@@ -537,10 +535,10 @@ function GeneratePanel({ onGenerated }: { onGenerated: () => void }) {
               setPreview(null);
             }}
           />
+        
         </label>
         <label className="field">
-          <span>To</span>
-          <input
+          <span>To</span><input
             type="time"
             value={form.endTime}
             onChange={(e) => {
@@ -548,10 +546,9 @@ function GeneratePanel({ onGenerated }: { onGenerated: () => void }) {
               setPreview(null);
             }}
           />
+        
         </label>
-        <label className="field">
-          <span>Term starts</span>
-          <input
+        <Field label="Term starts" required><input
             type="date"
             value={form.fromDate}
             onChange={(e) => {
@@ -559,10 +556,8 @@ function GeneratePanel({ onGenerated }: { onGenerated: () => void }) {
               setPreview(null);
             }}
           />
-        </label>
-        <label className="field">
-          <span>Term ends</span>
-          <input
+        </Field>
+        <Field label="Term ends" required><input
             type="date"
             value={form.toDate}
             onChange={(e) => {
@@ -570,7 +565,7 @@ function GeneratePanel({ onGenerated }: { onGenerated: () => void }) {
               setPreview(null);
             }}
           />
-        </label>
+        </Field>
       </div>
 
       <span className="row-actions">

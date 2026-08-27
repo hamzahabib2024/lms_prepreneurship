@@ -4,6 +4,7 @@ import { SkeletonList } from "../components/Ui";
 import { ApiError, api } from "../api/client";
 import { SlipViewer } from "../components/SlipViewer";
 import { HowItWorks } from "../components/HowItWorks";
+import { Field } from "../components/Field";
 
 /**
  * Admission queue and review — SRS UC-02, §13.5.
@@ -333,34 +334,26 @@ function ReviewPanel({
 
       <h3 className="section-label">Verify payment</h3>
       <div className="field-row">
-        <label className="field">
-          <span>Amount received</span>
-          <input
+        <Field label="Amount received" required><input
             type="number"
             value={verifiedAmount}
             onChange={(e) => setVerifiedAmount(e.target.value)}
             min="1"
           />
-        </label>
-        <label className="field">
-          <span>Date received</span>
-          <input type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} />
-        </label>
+        </Field>
+        <Field label="Date received" required><input type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} />
+        </Field>
       </div>
       <div className="field-row">
-        <label className="field">
-          <span>Method</span>
-          <select value={method} onChange={(e) => setMethod(e.target.value)}>
+        <Field label="Method" required><select value={method} onChange={(e) => setMethod(e.target.value)}>
             <option value="BANK_TRANSFER">Bank transfer</option>
             <option value="CASH_DEPOSIT">Cash deposit</option>
             <option value="CHEQUE">Cheque</option>
             <option value="OTHER">Other</option>
           </select>
-        </label>
-        <label className="field">
-          <span>Bank reference</span>
-          <input value={bankReference} onChange={(e) => setBankReference(e.target.value)} />
-        </label>
+        </Field>
+        <Field label="Bank reference"><input value={bankReference} onChange={(e) => setBankReference(e.target.value)} />
+        </Field>
       </div>
 
       {hasVariance && (
@@ -381,9 +374,7 @@ function ReviewPanel({
           admitted INTO a batch — that is what gives them a register, a
           timetable and the subjects the batch teaches. */}
       <h3 className="section-label">Batch</h3>
-      <label className="field">
-        <span>Admit into</span>
-        <select value={sectionId} onChange={(e) => setSectionId(e.target.value)}>
+      <Field label="Admit into" required><select value={sectionId} onChange={(e) => setSectionId(e.target.value)}>
           <option value="">Choose a batch…</option>
           {sections.map((s) => (
             <option key={s.id} value={s.id}>
@@ -392,7 +383,7 @@ function ReviewPanel({
             </option>
           ))}
         </select>
-      </label>
+      </Field>
 
       {/* FR-CRS-009 / BR-ENR-05 — absolute. No override exists, so none is
           offered; the approve button simply cannot be used. */}

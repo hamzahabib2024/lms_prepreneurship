@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { ApiError, api } from "../api/client";
+import { Field } from "./Field";
 
 /**
  * Writing a question — SRS §13.6, FR-QIZ-004..012.
@@ -129,32 +130,26 @@ export function QuestionComposer({
 
   return (
     <div className="composer">
-      <label className="field">
-        <span>Type</span>
-        <select value={type} onChange={(e) => changeType(e.target.value as QuestionType)}>
+      <Field label="Type"><select value={type} onChange={(e) => changeType(e.target.value as QuestionType)}>
           {TYPES.map((t) => (
             <option key={t.value} value={t.value}>
               {t.label}
             </option>
           ))}
         </select>
-      </label>
+      </Field>
 
-      <label className="field">
-        <span>Question</span>
-        <textarea rows={2} value={stem} onChange={(e) => setStem(e.target.value)} />
-      </label>
+      <Field label="Question" required><textarea rows={2} value={stem} onChange={(e) => setStem(e.target.value)} />
+      </Field>
 
-      <label className="field">
-        <span>Marks</span>
-        <input
+      <Field label="Marks" required><input
           type="number"
           min={0.5}
           step="0.5"
           value={marks}
           onChange={(e) => setMarks(e.target.value)}
         />
-      </label>
+      </Field>
 
       {OPTION_TYPES.has(type) && (
         <>
@@ -199,20 +194,15 @@ export function QuestionComposer({
       )}
 
       {TYPED_TYPES.has(type) && (
-        <label className="field">
-          <span>Accepted answers — one per line</span>
-          <textarea
+        <Field label="Accepted answers — one per line" hint={<>{type === "NUMERIC"
+              ? "A number. Anything else is marked wrong."
+              : "Any of these counts as correct, so include the spellings you would accept."}</>}><textarea
             rows={3}
             value={answers}
             onChange={(e) => setAnswers(e.target.value)}
             placeholder={type === "NUMERIC" ? "42" : "CMYK\nC.M.Y.K"}
           />
-          <span className="muted small">
-            {type === "NUMERIC"
-              ? "A number. Anything else is marked wrong."
-              : "Any of these counts as correct, so include the spellings you would accept."}
-          </span>
-        </label>
+        </Field>
       )}
 
       {type === "ESSAY" && (

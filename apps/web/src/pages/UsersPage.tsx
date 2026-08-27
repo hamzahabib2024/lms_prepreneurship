@@ -4,6 +4,7 @@ import { ApiError, api, tokens } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { StepUpPrompt, needsStepUp } from "../components/StepUpPrompt";
 import { HowItWorks } from "../components/HowItWorks";
+import { Field } from "../components/Field";
 
 /**
  * User administration — SRS §13.7, FR-USR-003..015.
@@ -110,28 +111,26 @@ export function UsersPage() {
 
       <section className="card">
         <div className="field-row">
-          <label className="field">
-            <span>Role</span>
-            <select value={role} onChange={(e) => setRole(e.target.value)}>
+          <Field label="Role"><select value={role} onChange={(e) => setRole(e.target.value)}>
               <option value="">Everyone</option>
               <option value="super_admin">Super admins</option>
               <option value="admin">Administrators</option>
               <option value="teacher">Teachers</option>
               <option value="student">Students</option>
             </select>
-          </label>
+          </Field>
           <label className="field">
-            <span>Status</span>
-            <select value={status} onChange={(e) => setStatus(e.target.value)}>
+            <span>Status</span><select value={status} onChange={(e) => setStatus(e.target.value)}>
               <option value="">Any</option>
               <option value="ACTIVE">Active</option>
               <option value="SUSPENDED">Suspended</option>
               <option value="INVITED">Invited</option>
             </select>
+          
           </label>
           <label className="field">
-            <span>Search</span>
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name or email" />
+            <span>Search</span><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name or email" />
+          
           </label>
         </div>
       </section>
@@ -293,32 +292,24 @@ function NewStaff({ onCreated }: { onCreated: (issued: Issued) => void }) {
     <section className="card">
       <h2>New account</h2>
       <div className="field-row">
-        <label className="field">
-          <span>Full name</span>
-          <input value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} />
-        </label>
-        <label className="field">
-          <span>Email — they sign in with this</span>
-          <input
+        <Field label="Full name" required><input value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} />
+        </Field>
+        <Field label="Email — they sign in with this" required><input
             type="email"
             value={form.email}
             onChange={(e) => setForm({ ...form, email: e.target.value })}
           />
-        </label>
+        </Field>
       </div>
 
       <div className="field-row">
-        <label className="field">
-          <span>Phone</span>
-          <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-        </label>
-        <label className="field">
-          <span>Role</span>
-          <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
+        <Field label="Phone"><input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+        </Field>
+        <Field label="Role"><select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
             <option value="teacher">Teacher</option>
             <option value="admin">Administrator</option>
           </select>
-        </label>
+        </Field>
       </div>
 
       {form.role === "admin" && (
@@ -596,14 +587,12 @@ function UserRow({
             />
           )}
 
-          <label className="field">
-            <span>Reason — recorded in the audit log</span>
-            <input
+          <Field label="Reason — recorded in the audit log"><input
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="Left the Institute at the end of term."
             />
-          </label>
+          </Field>
 
           <span className="row-actions">
             <button

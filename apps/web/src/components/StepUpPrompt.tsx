@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { ApiError, api, tokens } from "../api/client";
+import { Field } from "./Field";
 
 /**
  * SEC-AUZ-011 — confirm your password again.
@@ -62,9 +63,7 @@ export function StepUpPrompt({
         from an unattended screen.
       </p>
       {error && <p className="warn">{error}</p>}
-      <label className="field">
-        <span>Your password</span>
-        <input
+      <Field label="Your password" required><input
           type="password"
           value={password}
           autoFocus
@@ -73,7 +72,7 @@ export function StepUpPrompt({
             if (e.key === "Enter" && password) void confirm();
           }}
         />
-      </label>
+      </Field>
       <span className="row-actions">
         <button className="btn btn-primary" disabled={busy || !password} onClick={() => void confirm()}>
           {busy ? "Confirming…" : "Confirm"}

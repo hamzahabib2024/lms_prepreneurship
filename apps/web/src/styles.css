@@ -1774,13 +1774,63 @@ code {
   border-color: var(--brand-600);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-600) 18%, transparent);
 }
-/* A required field says so in the label; this is the second, quieter signal. */
-.field input:required:not(:placeholder-shown):invalid {
+/* ------------------------------------------------- was this filled in right --
+   THE RULE THAT MATTERS: NOTHING IS RED BEFORE THE USER HAS DONE ANYTHING.
+
+   What was here before used `:not(:placeholder-shown)` to mean "the user has
+   typed something". That only works on an input which HAS a placeholder — an
+   input without one never shows placeholder text, so `:placeholder-shown` never
+   matches, `:not(:placeholder-shown)` is always true, and the field was drawn
+   with an ERROR BORDER FROM THE MOMENT THE PAGE LOADED. Twelve inputs across
+   eight screens were doing exactly that, including both boxes on the login page
+   and all three on Change password: the first thing a user saw was two red
+   boxes accusing them of a mistake they had not yet had the chance to make.
+
+   `:user-invalid` is the selector that actually means what was intended — the
+   browser only matches it AFTER the user has interacted with the field and
+   moved on. It is the whole feature, done properly, in one word.
+
+   Wrapped in @supports because that is a decision, not an accident: where the
+   selector is unavailable, NOTHING is styled automatically. That is deliberate.
+   No indicator is strictly better than the old behaviour of accusing everybody
+   on arrival, and the `[data-touched]` rules below still cover those browsers
+   wherever the Field component is used.
+   ---------------------------------------------------------------------------- */
+@supports selector(:user-invalid) {
+  .field input:user-invalid,
+  .field select:user-invalid,
+  .field textarea:user-invalid {
+    border-color: var(--error);
+  }
+
+  /*
+     REQUIRED ONLY, and that is not an oversight.
+
+     `:user-valid` also matches an EMPTY OPTIONAL field, which is valid in the
+     browser's eyes — so without `:required` here, tabbing through a form would
+     paint a green edge on every box somebody chose to leave blank, which says
+     "well done" about nothing at all. An optional field that HAS been filled in
+     gets its tick from the Field component, which knows the difference.
+  */
+  .field input:required:user-valid,
+  .field select:required:user-valid,
+  .field textarea:required:user-valid {
+    border-color: color-mix(in srgb, var(--ok) 45%, var(--line));
+  }
+}
+
+/* The same two states, driven by the Field component rather than the browser.
+   These work everywhere, and are what carries a form on a browser too old for
+   the selectors above. */
+.field input[data-touched="true"]:invalid,
+.field select[data-touched="true"]:invalid,
+.field textarea[data-touched="true"]:invalid,
+.field [aria-invalid="true"] {
   border-color: var(--error);
 }
-/* Somebody has filled this in correctly — a small reassurance on a four-step
-   application form where the alternative is wondering. */
-.field input:required:not(:placeholder-shown):valid {
+.field input[data-touched="true"]:required:valid,
+.field select[data-touched="true"]:required:valid,
+.field textarea[data-touched="true"]:required:valid {
   border-color: color-mix(in srgb, var(--ok) 45%, var(--line));
 }
 
@@ -5307,14 +5357,52 @@ details > summary:hover { text-decoration: underline; }
 /* ---------------------------------------------- marking, one at a time ----
    The list is the overview; this is the work. See FocusMarker in
    GradingPage.tsx for why the two live side by side rather than one replacing
-   the other. */
-.focus-marker {
+   the other.
+
+   THE WHOLE POINT OF THIS BLOCK IS THE HEIGHT MATH, so it is stated once here
+   rather than discovered again in every rule below.
+
+   The workspace fills the viewport and each pane scrolls INSIDE itself. That
+   means the page must stop being a document that grows downward and become a
+   fixed frame — hence `height: calc(100vh - …)` on the shell and
+   `overflow: auto` on the two children.
+
+   And `min-height: 0` appears on every ancestor of the document pane, which is
+   the rule people delete because it looks redundant. It is not. A grid and
+   flex child defaults to `min-height: auto`, meaning "never shrink below your
+   content" — so an <object> asking for 100% height resolves against a parent
+   that has no resolved height, and collapses to nothing. The symptom is a
+   blank right-hand half with no error anywhere, and it costs an afternoon
+   every single time.
+   ------------------------------------------------------------------------- */
+.marker {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface);
   box-shadow: var(--shadow-2);
   overflow: hidden;
-  margin-bottom: 1rem;
+  /* No bottom margin: nothing follows it, and the gap was a strip of empty
+     page under a pane that wanted the height. */
+  margin-bottom: 0;
+
+  /*
+     THE SHELL, AND IT TAKES EVERYTHING IT CAN.
+
+     The page heading is hidden while marking (see GradingPage), so the only
+     chrome left above this is the application's own top strip and the layout
+     padding — about 6rem. It was 13rem when the heading was still there, and
+     the seven rem it gives back is roughly a fifth of the document pane on a
+     laptop: the difference between most of a page and most of two thirds of
+     one.
+
+     `min-height` keeps it usable on a short window rather than collapsing the
+     panes to nothing; below that the page scrolls, which is the right
+     trade at 500px tall.
+  */
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 4.5rem);
+  min-height: 34rem;
 }
 
 /* Sticky, because the position, the count and the Next are the three things a
@@ -5326,37 +5414,171 @@ details > summary:hover { text-decoration: underline; }
   padding: .6rem .9rem;
   background: var(--surface-2);
   border-bottom: 1px solid var(--line);
+  flex: 0 0 auto;
 }
 .focus-bar .btn svg { width: 14px; height: 14px; }
 .focus-position {
-  display: flex; align-items: baseline; gap: .5rem;
+  display: flex; flex-direction: column; gap: .1rem;
   font-variant-numeric: lining-nums tabular-nums;
+  min-width: 0;
 }
 
-.focus-who {
-  display: flex; align-items: flex-start; justify-content: space-between;
-  gap: .75rem; flex-wrap: wrap;
-  padding: .9rem 1.1rem .2rem;
+/* ------------------------------------------------------------- the split --
+   Two-thirds to the work. A mark box holds a number and short text; an A4 page
+   stops being readable when it is squeezed to half a screen, and the marker is
+   reading it for minutes at a time. */
+.marker-split {
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 22rem) minmax(0, 1fr);
+  min-height: 0;          /* see the note at the top of this block */
 }
-.focus-who h2 { margin: 0; font-size: 1.05rem; }
-.focus-who p { margin: .15rem 0 0; }
 
-/*
-   The form the list already used, given room now that it is not inside a row.
-   IT IS `.assignment-body` — the class the accordion nests it in — and naming
-   the wrong one cost horizontal padding entirely: the content sat flush to the
-   panel edge and `overflow: hidden` above shaved the first character off every
-   filename. "palette.pdf" read as "alette.pdf", which looks like bad data
-   rather than bad CSS, and is the sort of thing nobody reports because it is
-   only slightly wrong.
-*/
-.focus-marker .assignment-body { padding: 0 1.1rem 1rem; border: 0; }
+.marker-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  border-right: 1px solid var(--line);
+}
 
-.focus-hint {
-  display: block; margin: 0;
-  padding: .6rem 1.1rem .8rem;
+.marker-tabs {
+  display: flex; gap: .2rem;
+  padding: .5rem .6rem 0;
+  border-bottom: 1px solid var(--line);
+  flex: 0 0 auto;
+}
+.marker-tab {
+  appearance: none; cursor: pointer;
+  background: transparent; border: 1px solid transparent; border-bottom: none;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  padding: .4rem .8rem; margin-bottom: -1px;
+  font: inherit; font-size: .875rem; font-weight: 600;
+  color: var(--ink-2);
+}
+.marker-tab:hover { background: var(--surface-2); }
+/* The selected tab joins the panel below it by covering the border — the
+   ordinary way a tab says "this is the sheet you are looking at". */
+.marker-tab.is-active {
+  background: var(--surface);
+  border-color: var(--line);
+  border-bottom: 1px solid var(--surface);
+  color: var(--ink);
+}
+.marker-tab:focus-visible { outline: 2px solid var(--brand-600); outline-offset: 2px; }
+
+/* The scrolling half of the panel. The save bar below is NOT in here, which is
+   the point: a marker on the Comments tab can still save the mark they typed a
+   moment ago without hunting for the tab it lives on. */
+.marker-panel-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: .9rem 1rem;
+}
+.marker-panel-body .comments { margin-top: 0; padding-top: 0; border-top: none; }
+
+.marker-save {
+  flex: 0 0 auto;
+  padding: .7rem 1rem .8rem;
   border-top: 1px solid var(--line);
   background: var(--surface-2);
+  display: grid; gap: .4rem;
+}
+.marker-save .row-actions { gap: .4rem; }
+
+/* ---------------------------------------------------------- the document -- */
+.marker-doc { min-width: 0; min-height: 0; display: flex; }
+
+.doc-pane {
+  flex: 1 1 auto;
+  display: flex; flex-direction: column;
+  min-height: 0; min-width: 0;
+  background: var(--surface-2);
+}
+
+/* The file switcher, only rendered when there is a choice to make. */
+.doc-tabs {
+  display: flex; gap: .25rem; flex-wrap: wrap;
+  padding: .45rem .6rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  flex: 0 0 auto;
+}
+.doc-tab {
+  appearance: none; cursor: pointer;
+  background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: .2rem .7rem;
+  font: inherit; font-size: .8125rem; color: var(--ink-2);
+  max-width: 16rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.doc-tab:hover { border-color: var(--muted); }
+.doc-tab.is-active {
+  background: var(--brand-600); border-color: var(--brand-600); color: #fff; font-weight: 600;
+}
+.doc-tab:focus-visible { outline: 2px solid var(--brand-600); outline-offset: 2px; }
+
+/* The frame the work is actually in. `flex: 1 1 auto` plus `min-height: 0`
+   again — an <object> with height:100% inside a flex child whose min-height is
+   auto renders at zero and the pane goes blank. */
+.doc-frame {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  border: 0;
+  background: var(--surface-2);
+}
+
+.doc-image { overflow: auto; display: block; padding: 1rem; }
+.doc-image a { display: block; }
+.doc-image img { display: block; max-width: 100%; margin: 0 auto; background: #fff; }
+
+.doc-loading, .doc-unviewable, .doc-empty {
+  display: flex; flex-direction: column; gap: .6rem;
+  align-items: center; justify-content: center; text-align: center;
+  padding: 2rem 1.5rem;
+}
+.doc-unviewable p, .doc-empty p { margin: 0; max-width: 28rem; }
+.doc-unviewable svg, .doc-empty svg { width: 28px; height: 28px; color: var(--muted); }
+.doc-empty { flex: 1 1 auto; min-height: 0; }
+
+/* A typed answer, under the files. For a TEXT assignment it is the whole
+   submission and this is the only thing in the pane. */
+.doc-text {
+  flex: 0 0 auto;
+  max-height: 40%;
+  overflow-y: auto;
+  padding: .8rem 1rem;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+}
+.doc-text .section-label { margin-top: 0; }
+
+/* Hidden on a desk, where both panes are on screen and a switch between them
+   would be a control that does nothing. */
+.marker-switch { display: none; }
+
+@media (max-width: 1000px) {
+  /*
+     ONE PANE AT A TIME BELOW THIS WIDTH. A split marking screen on a tablet is
+     two columns too narrow to use — the page unreadable and the mark box
+     wrapping every label. The switch above the split decides which one shows,
+     which is why it appears here and nowhere else.
+  */
+  /* On a narrow screen one pane shows at a time, so it can have the lot. */
+  .marker { height: calc(100vh - 5rem); }
+  .marker-switch {
+    display: flex; gap: .25rem;
+    padding: .5rem .6rem;
+    background: var(--surface);
+    border-bottom: 1px solid var(--line);
+    flex: 0 0 auto;
+  }
+  .marker-split { grid-template-columns: minmax(0, 1fr); }
+  .marker-split.is-showing-document .marker-panel { display: none; }
+  .marker-split.is-showing-panel .marker-doc { display: none; }
+  .marker-panel { border-right: none; }
 }
 
 @media (max-width: 700px) {
@@ -5578,3 +5800,189 @@ details > summary:hover { text-decoration: underline; }
 .chat-row:has(.chat-endorsed) .chat-bubble {
   border-left: 3px solid var(--ok);
 }
+
+/* ---------------------------------------------------------------------------
+   COMMENTS ON A PIECE OF WORK — FR-ASG-027.
+
+   A CONVERSATION, NOT A LOG. The two sides are distinguishable at a glance —
+   your own words sit against a tinted ground — because the first question
+   anybody asks of a thread is "which of these did I write". Beyond that it
+   stays deliberately quiet: this sits inside a marking screen and inside a
+   student's assignment card, and a loud treatment would compete with the mark,
+   which is the more important thing on both.
+   --------------------------------------------------------------------------- */
+.comments {
+  margin: 1.1rem 0;
+  padding-top: .9rem;
+  border-top: 1px solid var(--line);
+}
+.comments .section-label { display: flex; align-items: center; gap: .4rem; }
+.comments .section-label svg { width: 15px; height: 15px; }
+
+.commentlist { list-style: none; margin: .75rem 0; padding: 0; display: grid; gap: .6rem; }
+
+.comment {
+  padding: .6rem .75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+/* Your own words, set apart. Tint AND an edge, because a tint alone is
+   invisible to somebody who cannot distinguish it (NFR-ACC-003) — the author's
+   name is stated on every comment either way. */
+.comment.is-mine {
+  background: var(--surface-2);
+  border-color: color-mix(in srgb, var(--brand-600) 25%, var(--line));
+}
+
+.comment-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: .75rem; flex-wrap: wrap; margin-bottom: .3rem;
+}
+.comment-author { font-weight: 600; display: inline-flex; align-items: center; gap: .4rem; }
+.comment-author .pill { font-weight: 500; }
+
+/* Which file this is about. A student who handed in four should not have to
+   guess which one "the wrong format" refers to. */
+.comment-anchor {
+  margin: 0 0 .35rem;
+  display: inline-flex; align-items: center; gap: .3rem;
+  font-size: .78rem; color: var(--ink-2);
+  padding: .1rem .45rem;
+  border: 1px solid var(--line); border-radius: 999px;
+  background: var(--page);
+}
+.comment-anchor svg { width: 13px; height: 13px; }
+
+/* Wraps on the original line breaks: a teacher who writes three bullet points
+   means three lines, and reflowing them into a paragraph loses the list. */
+.comment-body { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+.comment-actions { display: flex; gap: .25rem; margin-top: .35rem; }
+.comment-edit { width: 100%; margin: .3rem 0; }
+
+.comment-compose { display: grid; gap: .45rem; }
+.comment-compose textarea { width: 100%; resize: vertical; min-height: 62px; }
+.comment-compose-foot {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: .75rem; flex-wrap: wrap;
+}
+
+@media (max-width: 720px) {
+  /* The send button goes full width rather than sitting beside a select that
+     has already wrapped underneath it. */
+  .comment-compose-foot { align-items: stretch; }
+  .comment-compose-foot .btn { width: 100%; justify-content: center; }
+  .comment-head { gap: .25rem; }
+}
+
+/* --------------------------------------------- is this filled in right? ----
+   The visible half of components/Field.tsx. The rules that decide WHEN any of
+   this appears are in that file and in the :user-invalid block further up; this
+   is only what it looks like once it does.
+
+   THE TICK IS QUIET, THE CROSS IS LOUD, and that asymmetry is the entire point
+   of the treatment. A form where every correct field wears a green badge is a
+   form where the one wrong field is harder to find — the reassurance drowns the
+   thing you actually need to see. So a correct field gets a small tick at the
+   end of its label and nothing else; a wrong one gets the cross, the red edge
+   and a sentence.
+   ---------------------------------------------------------------------------- */
+
+/* The label line: text on the left, the mark on the right, on one baseline.
+   `.field > span` above already gives this its type; this only arranges it. */
+.field-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: .5rem;
+}
+
+/* Said in a word rather than an asterisk. An asterisk means "required" only to
+   people who already know it does, and it is four pixels wide. */
+.field-required { font-weight: 400; color: var(--muted); }
+
+.field-mark {
+  display: inline-flex; align-items: center;
+  flex: 0 0 auto;
+}
+.field-mark svg {
+  width: 15px; height: 15px;
+  /* The cross is drawn as two strokes and the tick as one; a round join stops
+     the crossing point reading as a blot at this size. */
+  stroke-linecap: round; stroke-linejoin: round;
+}
+.field-mark.is-valid { color: var(--ok); }
+.field-mark.is-invalid { color: var(--error); }
+/* The cross is the louder of the two by weight as well as by colour, because
+   it is the one that needs finding in a long form. */
+.field-mark.is-invalid svg { stroke-width: 2.4; }
+
+/* What to do about it. Never colour alone (NFR-ACC-007): the sentence is the
+   third signal after the shape and the colour, and the only one that is
+   actionable. */
+.field-message {
+  display: block;
+  margin-top: .3rem;
+  font-size: .8125rem;
+  color: var(--error);
+  font-weight: 500;
+}
+
+/* The control's own edge. Stated here as well as in the :user-invalid block so
+   that a field driven by the component looks identical to one driven by the
+   browser — two mechanisms, one appearance. */
+.field-invalid input,
+.field-invalid select,
+.field-invalid textarea {
+  border-color: var(--error);
+}
+.field-valid input,
+.field-valid select,
+.field-valid textarea {
+  border-color: color-mix(in srgb, var(--ok) 45%, var(--line));
+}
+
+/* The written brief, wherever it is shown — the roster, and the marking
+   panel's Brief tab.
+
+   `pre-wrap` because a brief written as three numbered points IS three points:
+   reflowing it into a paragraph loses the structure the teacher typed, and a
+   marker reading it beside the work is the person who needs that structure
+   most. Bounded and scrolled in the panel, where the space is the student's
+   work rather than the task. */
+.brief-text {
+  margin: 0 0 .6rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--ink-2);
+}
+.marker-panel-body .brief-text {
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+/* The PDF pane: the frame takes the room, the escape hatch sits under it.
+   `border: 0` matters on an iframe, which draws one by default where <object>
+   did not. */
+.doc-pdf { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.doc-pdf .doc-frame { flex: 1 1 auto; min-height: 0; border: 0; width: 100%; }
+.doc-pdf-escape {
+  flex: 0 0 auto; margin: 0;
+  padding: .35rem .6rem;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+}
+.slip-frame { border: 0; }
+
+/* The mark's feedback on a student's own assignment card — the written note
+   and, where the teacher recorded one, their voice. Set apart from the
+   submission controls above it, because this is the answer coming back rather
+   than something the student still has to do. */
+.graded-feedback {
+  margin: .8rem 0;
+  padding: .7rem .85rem;
+  border: 1px solid color-mix(in srgb, var(--ok) 30%, var(--line));
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.graded-feedback .section-label { margin-top: 0; }
+.graded-feedback p { white-space: pre-wrap; overflow-wrap: anywhere; }

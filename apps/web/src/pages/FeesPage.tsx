@@ -13,6 +13,7 @@ import {
   type Submission,
 } from "./FeesSubmissions";
 import { HowItWorks } from "../components/HowItWorks";
+import { Field } from "../components/Field";
 
 /**
  * Fees — SRS §13.11, FR-PAY-020..032.
@@ -745,32 +746,26 @@ function AddCharge({
     <section className="card">
       <h2>Add a charge</h2>
       <div className="field-row">
-        <label className="field">
-          <span>What for</span>
-          <input
+        <Field label="What for"><input
             value={form.description}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
             placeholder="Tuition — Spring 2026"
           />
-        </label>
-        <label className="field">
-          <span>Amount</span>
-          <input
+        </Field>
+        <Field label="Amount"><input
             type="number"
             min="1"
             step="0.01"
             value={form.amount}
             onChange={(e) => setForm({ ...form, amount: e.target.value })}
           />
-        </label>
-        <label className="field">
-          <span>Due</span>
-          <input
+        </Field>
+        <Field label="Due"><input
             type="date"
             value={form.dueDate}
             onChange={(e) => setForm({ ...form, dueDate: e.target.value })}
           />
-        </label>
+        </Field>
       </div>
       <span className="row-actions">
         <button

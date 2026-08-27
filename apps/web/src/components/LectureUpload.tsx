@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { tokens } from "../api/client";
 import { Icon } from "../components/Icon";
+import { Field } from "./Field";
 
 /**
  * A recording from somebody's own device — FR-VID-002.
@@ -229,25 +230,21 @@ export function LectureUpload({
         )}
       </div>
 
-      <label className="field">
-        <span>Title students will see</span>
-        <input
+      <Field label="Title students will see"><input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           disabled={busy}
           placeholder="Colour theory — week 3"
         />
-      </label>
+      </Field>
 
-      <label className="field">
-        <span>Recorded on</span>
-        <input
+      <Field label="Recorded on"><input
           type="date"
           value={recordedOn}
           onChange={(e) => setRecordedOn(e.target.value)}
           disabled={busy}
         />
-      </label>
+      </Field>
 
       {/* Only offered when Drive is genuinely an option. When it is not, the
           fallback is the only path and a checkbox implying a choice would be

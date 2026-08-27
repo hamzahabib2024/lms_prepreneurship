@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, api } from "../api/client";
+import { Field } from "./Field";
 
 /**
  * Students at risk on attendance — SRS §13.6, FR-ATT-020/022.
@@ -142,14 +143,12 @@ function AtRiskRow({
 
       {open && (
         <div className="assignment-body">
-          <label className="field">
-            <span>What did you do?</span>
-            <input
+          <Field label="What did you do?"><input
               value={note}
               onChange={(e) => setNote(e.target.value)}
               placeholder="Spoke to her after class; she has been unwell."
             />
-          </label>
+          </Field>
           <p className="muted small">
             This records that somebody has acted. It does not clear the warning —
             that happens when their attendance recovers.

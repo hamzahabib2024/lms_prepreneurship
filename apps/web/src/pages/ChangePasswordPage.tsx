@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { ApiError, api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
+import { Field } from "../components/Field";
 
 /**
  * Set a new password — SRS FR-REG-040, SEC-AUT-013.
@@ -96,40 +97,48 @@ export function ChangePasswordPage({ forced }: { forced: boolean }) {
           />
         </label>
 
-        <label className="field">
-          <span>New password</span>
+        {/* The requirement is stated as a HINT before anything is typed, and
+            becomes the field's own error once it is typed and too short —
+            NFR-ACC-006 wants the rule associated with the box, not only a
+            complaint after the fact. Field associates both by id for us. */}
+        <Field
+          label="New password"
+          required
+          /* Both objections in one place and in the order somebody hits them:
+             a password too short is told so before being told it is also the
+             one they already have. Two warnings under one box, in two
+             different voices, is how a form reads as broken. */
+          error={
+            tooShort
+              ? "Use at least 8 characters."
+              : sameAsCurrent
+                ? "Choose something different from your current password."
+                : null
+          }
+          hint="At least 8 characters. Longer is better than complicated."
+        >
           <input
             type="password"
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
             autoComplete="new-password"
-            aria-describedby="pw-help"
             required
           />
-          {/* NFR-ACC-006 — guidance is associated with the field, and states
-              the requirement rather than only complaining after the fact. */}
-          <span id="pw-help" className={`small ${tooShort ? "warn" : "muted"}`}>
-            {tooShort
-              ? "Use at least 8 characters."
-              : "At least 8 characters. Longer is better than complicated."}
-          </span>
-          {sameAsCurrent && (
-            <span className="small warn">Choose something different from your current password.</span>
-          )}
-        </label>
+        </Field>
 
-        <label className="field">
-          <span>Confirm new password</span>
+        <Field
+          label="Confirm new password"
+          required
+          error={mismatch ? "The two passwords do not match." : null}
+        >
           <input
             type="password"
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
             autoComplete="new-password"
-            aria-invalid={mismatch}
             required
           />
-          {mismatch && <span className="small warn">The two passwords do not match.</span>}
-        </label>
+        </Field>
 
         <button className="btn btn-primary" type="submit" disabled={!canSubmit}>
           {busy ? "Saving…" : "Save password"}

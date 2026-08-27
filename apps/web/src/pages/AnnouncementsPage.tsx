@@ -4,6 +4,7 @@ import { Icon } from "../components/Icon";
 import { ApiError, api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { HowItWorks } from "../components/HowItWorks";
+import { Field } from "../components/Field";
 
 /**
  * Announcements — SRS §13.2, FR-COM-002/008.
@@ -257,9 +258,7 @@ function Composer({ onPosted }: { onPosted: () => void }) {
       <h2>Post an announcement</h2>
 
       <div className="field-row">
-        <label className="field">
-          <span>Audience</span>
-          <select
+        <Field label="Audience" hint={<>{AUDIENCE_NOTE[audience]}</>}><select
             value={audience}
             onChange={(e) => setAudience(e.target.value as typeof audience)}
           >
@@ -283,13 +282,10 @@ function Composer({ onPosted }: { onPosted: () => void }) {
             )}
           </select>
           {/* What each choice actually does, in the moment it is made. */}
-          <span className="muted small">{AUDIENCE_NOTE[audience]}</span>
-        </label>
+        </Field>
 
         {audience === "SECTION_SUBJECT" && (
-          <label className="field">
-            <span>Subject</span>
-            <select
+          <Field label="Subject"><select
               value={sectionSubjectId}
               onChange={(e) => setSectionSubjectId(e.target.value)}
             >
@@ -300,19 +296,15 @@ function Composer({ onPosted }: { onPosted: () => void }) {
                 </option>
               ))}
             </select>
-          </label>
+          </Field>
         )}
       </div>
 
-      <label className="field">
-        <span>Title</span>
-        <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} />
-      </label>
+      <Field label="Title" required><input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} />
+      </Field>
 
-      <label className="field">
-        <span>Message</span>
-        <textarea rows={4} value={body} onChange={(e) => setBody(e.target.value)} />
-      </label>
+      <Field label="Message" required><textarea rows={4} value={body} onChange={(e) => setBody(e.target.value)} />
+      </Field>
 
       {/*
         HOW MUCH IT MATTERS — three buttons rather than a checkbox called

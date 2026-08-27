@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { EmptyState } from "../components/Ui";
 import { ApiError, api } from "../api/client";
 import { HowItWorks } from "../components/HowItWorks";
+import { Field } from "../components/Field";
 
 /**
  * Bulk operations — SRS §13.10, FR-OPS-020..026.
@@ -134,8 +135,7 @@ export function BulkPage() {
       <section className="card">
         <div className="field-row">
           <label className="field">
-            <span>From</span>
-            <select value={fromId} onChange={(e) => setFromId(e.target.value)}>
+            <span>From</span><select value={fromId} onChange={(e) => setFromId(e.target.value)}>
               <option value="">Choose a batch</option>
               {sections.map((s) => (
                 <option key={s.id} value={s.id}>
@@ -143,10 +143,10 @@ export function BulkPage() {
                 </option>
               ))}
             </select>
+          
           </label>
           <label className="field">
-            <span>To</span>
-            <select value={toId} onChange={(e) => setToId(e.target.value)}>
+            <span>To</span><select value={toId} onChange={(e) => setToId(e.target.value)}>
               <option value="">Choose a batch</option>
               {sections
                 .filter((s) => s.id !== fromId)
@@ -159,17 +159,16 @@ export function BulkPage() {
                   </option>
                 ))}
             </select>
+          
           </label>
         </div>
 
-        <label className="field">
-          <span>Reason — recorded against every student</span>
-          <input
+        <Field label="Reason — recorded against every student" required><input
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             placeholder="Merging the evening batch into the morning one."
           />
-        </label>
+        </Field>
       </section>
 
       {roster && (

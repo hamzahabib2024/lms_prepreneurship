@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { ApiError, api } from "../api/client";
 import { QuestionComposer } from "../components/QuestionComposer";
 import { HowItWorks } from "../components/HowItWorks";
+import { Field } from "../components/Field";
 
 /**
  * Building a quiz — SRS §13.6, FR-QIZ-001..020.
@@ -157,11 +158,13 @@ function NewQuiz() {
 
       <section className="card">
         <div className="field-row">
-          <label className="field">
-            <span>Subject</span>
+          {/* The four fields `ready` gates on, marked so the ticks and the
+              button agree about what this form still needs. */}
+          <Field label="Subject" required>
             <select
               value={form.sectionSubjectId}
               onChange={(e) => setForm({ ...form, sectionSubjectId: e.target.value })}
+              required
             >
               <option value="">Choose…</option>
               {sections.map((s) => (
@@ -170,63 +173,76 @@ function NewQuiz() {
                 </option>
               ))}
             </select>
-          </label>
+          </Field>
 
-          <label className="field">
-            <span>Title</span>
+          <Field label="Title" required>
             <input
               value={form.title}
               onChange={(e) => setForm({ ...form, title: e.target.value })}
+              required
             />
-          </label>
+          </Field>
         </div>
 
         <div className="field-row">
-          <label className="field">
-            <span>Opens</span>
+          <Field label="Opens" required>
             <input
               type="datetime-local"
               value={form.opensAt}
               onChange={(e) => setForm({ ...form, opensAt: e.target.value })}
+              required
             />
-          </label>
-          <label className="field">
-            <span>Closes</span>
+          </Field>
+          <Field
+            label="Closes"
+            required
+            /* A quiz that closes before it opens is a quiz nobody can sit, and
+               two separately-valid dates hide it. */
+            validate={(v) =>
+              form.opensAt && v && v <= form.opensAt
+                ? "The quiz must close after it opens."
+                : null
+            }
+          >
             <input
               type="datetime-local"
               value={form.closesAt}
               onChange={(e) => setForm({ ...form, closesAt: e.target.value })}
+              required
             />
-          </label>
+          </Field>
         </div>
 
         <div className="field-row">
-          <label className="field">
-            <span>Time limit in minutes</span>
-            <input
+          <Field label="Time limit in minutes" hint={<>Leave empty for no limit.</>}><input
               type="number"
               min={1}
               value={form.timeLimitMinutes}
               onChange={(e) => setForm({ ...form, timeLimitMinutes: e.target.value })}
             />
-            <span className="muted small">Leave empty for no limit.</span>
-          </label>
+          </Field>
 
-          <label className="field">
-            <span>Attempts allowed</span>
-            <input
+          <Field label="Attempts allowed"><input
               type="number"
               min={1}
               max={10}
               value={form.maxAttempts}
               onChange={(e) => setForm({ ...form, maxAttempts: e.target.value })}
             />
-          </label>
+          </Field>
         </div>
 
         <div className="field-row">
-          <label className="field">
-            <span>Wrong answers</span>
+          {/* FR-QIZ-013 — students are told this before they start, so the
+              teacher should know that choosing it changes their paper. It is a
+              consequence, not a mistake, so it goes in the hint and never
+              wears a cross. */}
+          <Field
+            label="Wrong answers"
+            hint={
+              form.negativeMarking !== "NONE" ? "Students are told this before they begin." : undefined
+            }
+          >
             <select
               value={form.negativeMarking}
               onChange={(e) => setForm({ ...form, negativeMarking: e.target.value })}
@@ -235,16 +251,9 @@ function NewQuiz() {
               <option value="FIXED">Lose a fixed amount</option>
               <option value="PROPORTIONAL">Lose a proportion of the marks</option>
             </select>
-            {/* FR-QIZ-013 — students are told this before they start, so the
-                teacher should know that choosing it changes their paper. */}
-            {form.negativeMarking !== "NONE" && (
-              <span className="muted small">Students are told this before they begin.</span>
-            )}
-          </label>
+          </Field>
 
-          <label className="field">
-            <span>Show results</span>
-            <select
+          <Field label="Show results"><select
               value={form.resultReleasePolicy}
               onChange={(e) => setForm({ ...form, resultReleasePolicy: e.target.value })}
             >
@@ -253,7 +262,7 @@ function NewQuiz() {
               <option value="AFTER_GRADING">When marking is finished</option>
               <option value="MANUAL">Only when I release them</option>
             </select>
-          </label>
+          </Field>
         </div>
 
         {problems.length > 0 && (
@@ -428,9 +437,7 @@ function Paper({ quizId }: { quizId: string }) {
           <h2>Questions</h2>
 
           <div className="field-row">
-            <label className="field">
-              <span>Bank</span>
-              <select value={bankId} onChange={(e) => setBankId(e.target.value)}>
+            <Field label="Bank"><select value={bankId} onChange={(e) => setBankId(e.target.value)}>
                 <option value="">Choose a bank…</option>
                 {banks.map((b) => (
                   <option key={b.id} value={b.id}>
@@ -438,8 +445,10 @@ function Paper({ quizId }: { quizId: string }) {
                   </option>
                 ))}
               </select>
-            </label>
+            </Field>
 
+            {/* An input and a button in one box. Field clones a single
+                control, so this stays as it was. */}
             <label className="field">
               <span>Or start a new one</span>
               <input

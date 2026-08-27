@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { ApiError, api } from "../api/client";
 import { EDUCATION_LEVEL, EDUCATION_LEVEL_LABEL } from "@lms/shared";
 import { FeePanel, money, type Fee, type PaymentDetails } from "../components/FeePanel";
+import { Field as FormField } from "../components/Field";
 
 /**
  * The public application — SRS §13.2, FR-REG-001..010.
@@ -323,11 +324,12 @@ export function ApplyPage() {
           {step === 1 && (
             <>
               <h2>About you</h2>
-              <Field label="Your full name" value={f.fullName} onChange={set("fullName")} />
+              <Field label="Your full name" value={f.fullName} onChange={set("fullName")} required />
               <Field
                 label="Your father's or guardian's name"
                 value={f.fatherName}
                 onChange={set("fatherName")}
+                required
               />
               <div className="field-row">
                 <Field
@@ -335,6 +337,7 @@ export function ApplyPage() {
                   type="date"
                   value={f.dateOfBirth}
                   onChange={set("dateOfBirth")}
+                  required
                 />
                 <label className="field">
                   <span>Gender</span>
@@ -350,6 +353,14 @@ export function ApplyPage() {
                 value={f.nationalId}
                 onChange={set("nationalId")}
                 hint="Thirteen digits, with or without dashes."
+                required
+                /* The SAME rule the server applies (cnicSchema in
+                   @lms/shared), and the same sentence — an applicant told
+                   "13 digits" only on submit was made to wait for an answer
+                   the form already had. */
+                validate={(v) =>
+                  /^\d{13}$/.test(v.replace(/[\s-]/g, "")) ? null : "Enter the 13-digit CNIC number."
+                }
               />
               {/*
                 The LEVEL from a list, and the detail as free text beside it.
@@ -377,6 +388,7 @@ export function ApplyPage() {
                 value={f.qualification}
                 onChange={set("qualification")}
                 hint="For example: FSc Pre-Engineering, 2024 — or the madrasah and year."
+                required
               />
             </>
           )}
@@ -389,10 +401,25 @@ export function ApplyPage() {
                 value={f.phone}
                 onChange={set("phone")}
                 hint="We will use this on WhatsApp for class announcements."
+                required
+                /* phoneSchema accepts 03001234567 and +923001234567 alike, so
+                   this must too: a form stricter than the server refuses
+                   something that would have been accepted. */
+                validate={(v) => {
+                  const d = v.replace(/[\s()-]/g, "");
+                  const e164 = d.startsWith("+")
+                    ? d
+                    : d.startsWith("00")
+                      ? `+${d.slice(2)}`
+                      : d.startsWith("0")
+                        ? `+92${d.slice(1)}`
+                        : `+${d}`;
+                  return /^\+\d{10,15}$/.test(e164) ? null : "Enter a valid mobile number.";
+                }}
               />
-              <Field label="Email address" type="email" value={f.email} onChange={set("email")} />
-              <Field label="Address" value={f.address} onChange={set("address")} />
-              <Field label="City" value={f.city} onChange={set("city")} />
+              <Field label="Email address" type="email" value={f.email} onChange={set("email")} required />
+              <Field label="Address" value={f.address} onChange={set("address")} required />
+              <Field label="City" value={f.city} onChange={set("city")} required />
 
               <label className="field">
                 <span>How did you hear about us?</span>
@@ -526,25 +553,51 @@ export function ApplyPage() {
   );
 }
 
+/**
+ * The application form's own field, now a thin adapter over the shared one.
+ *
+ * KEPT RATHER THAN REPLACED AT THIRTEEN CALL SITES. The signature here — label,
+ * value, onChange — is what this form is written in, and rewriting every usage
+ * to pass a child element would be a large diff on the one form in the System
+ * that a stranger fills in unsupervised. Adapting instead upgraded all thirteen
+ * at once: they now carry the tick, the cross, the message and the ARIA without
+ * a single call site changing.
+ *
+ * `required` is opt-in per field and defaults to false, so a call that says
+ * nothing behaves exactly as it did — an untouched field shows nothing, and a
+ * filled one confirms.
+ */
 function Field({
   label,
   value,
   onChange,
   type = "text",
   hint,
+  required = false,
+  validate,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   type?: string;
   hint?: string;
+  required?: boolean;
+  validate?: (value: string) => string | null;
 }) {
   return (
-    <label className="field">
-      <span>{label}</span>
-      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} />
-      {hint && <span className="muted small">{hint}</span>}
-    </label>
+    <FormField
+      label={label}
+      required={required}
+      {...(hint === undefined ? {} : { hint })}
+      {...(validate === undefined ? {} : { validate })}
+    >
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        required={required}
+      />
+    </FormField>
   );
 }
 
