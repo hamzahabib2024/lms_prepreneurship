@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../core/formats.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../cubit/class_page_cubit.dart';
 import '../data/class_page_repository.dart';
@@ -166,7 +167,7 @@ class _ClassBody extends StatelessWidget {
                   session.title,
                   style: TextStyle(
                     color: dark ? AppColorsDark.ink : AppColors.ink,
-                    fontWeight: FontWeight.bold,
+                    fontWeight: FontWeight.w600,
                     fontSize: 22,
                   ),
                 ),
@@ -187,7 +188,7 @@ class _ClassBody extends StatelessWidget {
                         'LIVE',
                         style: TextStyle(
                           color: Colors.white,
-                          fontWeight: FontWeight.bold,
+                          fontWeight: FontWeight.w600,
                           fontSize: 12,
                         ),
                       ),
@@ -251,24 +252,11 @@ class _ClassBody extends StatelessWidget {
   }
 
   String _formatDateTime(DateTime dt) {
-    return '${_dayName(dt.weekday)}, ${dt.day} ${_monthName(dt.month)} ${dt.year}';
+    return Formats.shortDateTime(dt);
   }
 
   String _formatTime(DateTime dt) {
     return '${dt.hour}:${dt.minute.toString().padLeft(2, '0')}';
-  }
-
-  String _dayName(int day) {
-    const names = ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    return names[day];
-  }
-
-  String _monthName(int month) {
-    const names = [
-      '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-    ];
-    return names[month];
   }
 }
 
@@ -344,7 +332,7 @@ class _ExternalRedirectStage extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: dark ? AppColorsDark.surface : Colors.white,
+        color: dark ? AppColorsDark.surface : AppColors.surface,
         borderRadius: BorderRadius.circular(AppRadius.md),
         border: Border.all(
           color: dark ? AppColorsDark.line : AppColors.line,
@@ -363,7 +351,7 @@ class _ExternalRedirectStage extends StatelessWidget {
               'You are in the class',
               style: TextStyle(
                 color: dark ? AppColorsDark.ink : AppColors.ink,
-                fontWeight: FontWeight.bold,
+                fontWeight: FontWeight.w600,
                 fontSize: 18,
               ),
             ),
@@ -386,7 +374,7 @@ class _ExternalRedirectStage extends StatelessWidget {
               'Join the class',
               style: TextStyle(
                 color: dark ? AppColorsDark.ink : AppColors.ink,
-                fontWeight: FontWeight.bold,
+                fontWeight: FontWeight.w600,
                 fontSize: 18,
               ),
             ),
@@ -430,7 +418,7 @@ class _EmbeddedRouteStage extends StatelessWidget {
       width: double.infinity,
       height: 300,
       decoration: BoxDecoration(
-        color: dark ? AppColorsDark.surface : Colors.white,
+        color: dark ? AppColorsDark.surface : AppColors.surface,
         borderRadius: BorderRadius.circular(AppRadius.md),
         border: Border.all(
           color: dark ? AppColorsDark.line : AppColors.line,
@@ -450,7 +438,7 @@ class _EmbeddedRouteStage extends StatelessWidget {
               'Embedded class',
               style: TextStyle(
                 color: dark ? AppColorsDark.ink : AppColors.ink,
-                fontWeight: FontWeight.bold,
+                fontWeight: FontWeight.w600,
               ),
             ),
             const SizedBox(height: 8),
@@ -489,7 +477,7 @@ class _UnavailableStage extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: dark ? AppColorsDark.surface : Colors.white,
+        color: dark ? AppColorsDark.surface : AppColors.surface,
         borderRadius: BorderRadius.circular(AppRadius.md),
         border: Border.all(
           color: dark ? AppColorsDark.line : AppColors.line,
@@ -524,7 +512,7 @@ class _UnavailableStage extends StatelessWidget {
                 _formatCountdown(countdown!),
                 style: TextStyle(
                   color: dark ? AppColorsDark.brand600 : AppColors.brand600,
-                  fontWeight: FontWeight.bold,
+                  fontWeight: FontWeight.w600,
                   fontSize: 24,
                 ),
               ),

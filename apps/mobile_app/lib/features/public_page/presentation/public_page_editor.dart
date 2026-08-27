@@ -192,7 +192,7 @@ class _EditorSection extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: dark ? AppColorsDark.surface : Colors.white,
+        color: dark ? AppColorsDark.surface : AppColors.surface,
         borderRadius: BorderRadius.circular(AppRadius.sm),
         border: Border.all(color: dark ? AppColorsDark.line : AppColors.line),
       ),
@@ -203,7 +203,7 @@ class _EditorSection extends StatelessWidget {
             title,
             style: TextStyle(
               color: dark ? AppColorsDark.ink : AppColors.ink,
-              fontWeight: FontWeight.bold,
+              fontWeight: FontWeight.w600,
               fontSize: 15,
             ),
           ),
@@ -519,7 +519,7 @@ class _ReadonlyField extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: dark ? AppColorsDark.surface : Colors.white,
+        color: dark ? AppColorsDark.surface : AppColors.surface,
         borderRadius: BorderRadius.circular(AppRadius.sm),
         border: Border.all(color: dark ? AppColorsDark.line : AppColors.line),
       ),
@@ -568,7 +568,7 @@ class _SaveBar extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: dark ? AppColorsDark.surface : Colors.white,
+        color: dark ? AppColorsDark.surface : AppColors.surface,
         border: Border(
           top: BorderSide(color: dark ? AppColorsDark.line : AppColors.line),
         ),

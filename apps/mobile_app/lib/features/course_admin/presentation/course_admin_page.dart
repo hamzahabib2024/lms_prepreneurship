@@ -65,15 +65,15 @@ class _CourseAdminPageState extends State<CourseAdminPage> {
 
             return RefreshIndicator(
               onRefresh: () => _cubit.load(),
-              child: ListView(
-                padding: const EdgeInsets.all(16),
+              child:               ListView(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
                 children: [
                   // Courses panel
                   Text(
                     'Courses',
                     style: TextStyle(
                       color: dark ? AppColorsDark.ink : AppColors.ink,
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w600,
                       fontSize: 18,
                     ),
                   ),
@@ -117,7 +117,7 @@ class _CourseAdminPageState extends State<CourseAdminPage> {
                           'Subjects',
                           style: TextStyle(
                             color: dark ? AppColorsDark.ink : AppColors.ink,
-                            fontWeight: FontWeight.bold,
+                            fontWeight: FontWeight.w600,
                             fontSize: 18,
                           ),
                         ),
@@ -175,7 +175,7 @@ class _EmptyCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: dark ? AppColorsDark.surface : Colors.white,
+        color: dark ? AppColorsDark.surface : AppColors.surface,
         borderRadius: BorderRadius.circular(AppRadius.sm),
         border: Border.all(color: dark ? AppColorsDark.line : AppColors.line),
       ),
@@ -233,7 +233,7 @@ class _ProgrammeCard extends StatelessWidget {
                               programme.name,
                               style: TextStyle(
                                 color: dark ? AppColorsDark.ink : AppColors.ink,
-                                fontWeight: FontWeight.bold,
+                                fontWeight: FontWeight.w600,
                                 fontSize: 16,
                               ),
                             ),
@@ -454,7 +454,7 @@ class _SubjectCard extends StatelessWidget {
             subject.code.substring(0, 1),
             style: TextStyle(
               color: dark ? AppColorsDark.brand600 : AppColors.brand600,
-              fontWeight: FontWeight.bold,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ),

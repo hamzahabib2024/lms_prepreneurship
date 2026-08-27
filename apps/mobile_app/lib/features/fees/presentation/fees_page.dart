@@ -4,6 +4,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../core/formats.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../auth/data/models/auth_session.dart';
@@ -98,7 +99,7 @@ class _StudentFeesViewState extends State<_StudentFeesView> {
             return RefreshIndicator(
               onRefresh: () => _cubit.load(),
               child: ListView(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
                 children: [
                   if (state.summary != null)
                     _FeeSummaryPanel(summary: state.summary!, dark: dark),
@@ -107,7 +108,7 @@ class _StudentFeesViewState extends State<_StudentFeesView> {
                     'Payment History',
                     style: TextStyle(
                       color: dark ? AppColorsDark.ink : AppColors.ink,
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w600,
                       fontSize: 16,
                     ),
                   ),
@@ -117,7 +118,7 @@ class _StudentFeesViewState extends State<_StudentFeesView> {
                       width: double.infinity,
                       padding: const EdgeInsets.all(24),
                       decoration: BoxDecoration(
-                        color: dark ? AppColorsDark.surface : Colors.white,
+                        color: dark ? AppColorsDark.surface : AppColors.surface,
                         borderRadius: BorderRadius.circular(AppRadius.sm),
                         border: Border.all(
                           color: dark ? AppColorsDark.line : AppColors.line,
@@ -212,7 +213,7 @@ class _StaffFeesViewState extends State<_StaffFeesView> {
             return RefreshIndicator(
               onRefresh: () => _cubit.load(),
               child: ListView(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
                 children: [
                   if (state.stats != null)
                     _StatsBand(stats: state.stats!, dark: dark),
@@ -221,7 +222,7 @@ class _StaffFeesViewState extends State<_StaffFeesView> {
                     'Verification Queue',
                     style: TextStyle(
                       color: dark ? AppColorsDark.ink : AppColors.ink,
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w600,
                       fontSize: 16,
                     ),
                   ),
@@ -231,7 +232,7 @@ class _StaffFeesViewState extends State<_StaffFeesView> {
                       width: double.infinity,
                       padding: const EdgeInsets.all(24),
                       decoration: BoxDecoration(
-                        color: dark ? AppColorsDark.surface : Colors.white,
+                        color: dark ? AppColorsDark.surface : AppColors.surface,
                         borderRadius: BorderRadius.circular(AppRadius.sm),
                       ),
                       child: Text(
@@ -266,7 +267,7 @@ class _FeeSummaryPanel extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: dark ? AppColorsDark.surface : Colors.white,
+        color: dark ? AppColorsDark.surface : AppColors.surface,
         borderRadius: BorderRadius.circular(AppRadius.sm),
         border: Border.all(color: dark ? AppColorsDark.line : AppColors.line),
       ),
@@ -335,7 +336,7 @@ class _SummaryItem extends StatelessWidget {
             value,
             style: TextStyle(
               color: color ?? (dark ? AppColorsDark.ink : AppColors.ink),
-              fontWeight: FontWeight.bold,
+              fontWeight: FontWeight.w700,
               fontSize: 18,
             ),
           ),
@@ -461,7 +462,7 @@ class _SubmissionTile extends StatelessWidget {
   String _formatDate(String dateStr) {
     try {
       final dt = DateTime.parse(dateStr);
-      return '${dt.day}/${dt.month}/${dt.year}';
+      return Formats.shortDate(dt);
     } catch (_) {
       return dateStr;
     }
@@ -480,7 +481,7 @@ class _StatsBand extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: dark ? AppColorsDark.surface : Colors.white,
+        color: dark ? AppColorsDark.surface : AppColors.surface,
         borderRadius: BorderRadius.circular(AppRadius.sm),
         border: Border.all(color: dark ? AppColorsDark.line : AppColors.line),
       ),
@@ -514,7 +515,7 @@ class _StatsItem extends StatelessWidget {
             value,
             style: TextStyle(
               color: color ?? (dark ? AppColorsDark.ink : AppColors.ink),
-              fontWeight: FontWeight.bold,
+              fontWeight: FontWeight.w700,
               fontSize: 16,
             ),
           ),
@@ -576,7 +577,7 @@ class _VerificationRow extends StatelessWidget {
   String _formatDate(String dateStr) {
     try {
       final dt = DateTime.parse(dateStr);
-      return '${dt.day}/${dt.month}/${dt.year}';
+      return Formats.shortDate(dt);
     } catch (_) {
       return dateStr;
     }

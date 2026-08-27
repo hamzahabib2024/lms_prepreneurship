@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../core/formats.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/ui.dart';
 import '../../cubit/admin_cubit.dart';
@@ -563,7 +564,7 @@ class UserDetailPage extends StatelessWidget {
   static String _formatDate(String iso) {
     try {
       final dt = DateTime.parse(iso);
-      return '${dt.day}/${dt.month}/${dt.year} ${dt.hour}:${dt.minute.toString().padLeft(2, '0')}';
+      return '${Formats.shortDate(dt)} ${dt.hour}:${dt.minute.toString().padLeft(2, '0')}';
     } catch (_) {
       return iso;
     }

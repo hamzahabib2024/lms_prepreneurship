@@ -4,6 +4,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../core/formats.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../cubit/fees_cubit.dart';
 import '../data/fees_repository.dart';
@@ -133,7 +134,7 @@ class _StatsBar extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       margin: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: dark ? AppColorsDark.surface : Colors.white,
+        color: dark ? AppColorsDark.surface : AppColors.surface,
         borderRadius: BorderRadius.circular(AppRadius.sm),
         border: Border.all(color: dark ? AppColorsDark.line : AppColors.line),
       ),
@@ -166,7 +167,7 @@ class _StatItem extends StatelessWidget {
             value,
             style: TextStyle(
               color: color ?? (dark ? AppColorsDark.ink : AppColors.ink),
-              fontWeight: FontWeight.bold,
+              fontWeight: FontWeight.w700,
               fontSize: 18,
             ),
           ),
@@ -260,7 +261,7 @@ class _FilterChip extends StatelessWidget {
           decoration: BoxDecoration(
             color: selected
                 ? (dark ? AppColorsDark.brand600 : AppColors.brand600)
-                : (dark ? AppColorsDark.surface : Colors.white),
+                : (dark ? AppColorsDark.surface : AppColors.surface),
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
               color: selected
@@ -314,7 +315,7 @@ class _VerificationTile extends StatelessWidget {
           backgroundColor: statusColor,
           child: Text(
             row.studentName.isNotEmpty ? row.studentName[0].toUpperCase() : '?',
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
           ),
         ),
         title: Text(
@@ -430,7 +431,7 @@ class _ReviewSheetState extends State<_ReviewSheet> {
               'Review Payment',
               style: TextStyle(
                 color: dark ? AppColorsDark.ink : AppColors.ink,
-                fontWeight: FontWeight.bold,
+                fontWeight: FontWeight.w600,
                 fontSize: 18,
               ),
             ),
@@ -514,7 +515,7 @@ class _ReviewSheetState extends State<_ReviewSheet> {
                 keyboardType: TextInputType.number,
                 decoration: InputDecoration(
                   filled: true,
-                  fillColor: dark ? AppColorsDark.surface : Colors.white,
+                  fillColor: dark ? AppColorsDark.surface : AppColors.surface,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(AppRadius.sm),
                   ),
@@ -536,7 +537,7 @@ class _ReviewSheetState extends State<_ReviewSheet> {
                 decoration: InputDecoration(
                   hintText: 'Enter reason for rejection...',
                   filled: true,
-                  fillColor: dark ? AppColorsDark.surface : Colors.white,
+                  fillColor: dark ? AppColorsDark.surface : AppColors.surface,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(AppRadius.sm),
                   ),
@@ -590,7 +591,7 @@ class _ReviewSheetState extends State<_ReviewSheet> {
   String _formatDate(String dateStr) {
     try {
       final dt = DateTime.parse(dateStr);
-      return '${dt.day}/${dt.month}/${dt.year}';
+      return Formats.shortDate(dt);
     } catch (_) {
       return dateStr;
     }

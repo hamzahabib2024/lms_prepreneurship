@@ -4,6 +4,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../core/formats.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../cubit/marking_cubit.dart';
 import '../data/marking_repository.dart';
@@ -123,7 +124,7 @@ class _SectionPicker extends StatelessWidget {
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        color: dark ? AppColorsDark.surface : Colors.white,
+        color: dark ? AppColorsDark.surface : AppColors.surface,
         borderRadius: BorderRadius.circular(AppRadius.sm),
         border: Border.all(
           color: dark ? AppColorsDark.line : AppColors.line,
@@ -455,7 +456,7 @@ class _QueueBadge extends StatelessWidget {
 String _formatDate(String dateStr) {
   try {
     final dt = DateTime.parse(dateStr);
-    return '${dt.day}/${dt.month}/${dt.year} ${dt.hour}:${dt.minute.toString().padLeft(2, '0')}';
+    return '${Formats.shortDate(dt)} ${dt.hour}:${dt.minute.toString().padLeft(2, '0')}';
   } catch (_) {
     return dateStr;
   }
