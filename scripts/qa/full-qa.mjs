@@ -33,21 +33,93 @@ function ok(name, condition, detail = "") {
   return !!condition;
 }
 
-async function call(role, method, path, body, isForm = false) {
+/**
+ * SURVIVES THE SYSTEM DEFENDING ITSELF.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Two things bite a suite this size, and both look like product failures in the
+ * output when they are not:
+ *
+ *   · 429. The API allows 300 requests a minute and this suite makes more than
+ *     that, so whichever section lands after the trip fails in a heap. One wait
+ *     clears the window.
+ *
+ *   · 401. Access tokens last fifteen minutes. A run that waits out a 429 —
+ *     or simply runs on a slow machine — can outlive its own token, and every
+ *     remaining check then fails with "your session is no longer valid".
+ *     Found the hard way: pacing every request to stay under the limit pushed
+ *     the run past fifteen minutes and traded one heap of red for another.
+ *
+ * So it waits once on a 429 and signs in again on a 401. Neither hides a real
+ * failure: a genuine 401 (a student reaching a teacher's route) is a different
+ * request that will fail again immediately with the fresh token.
+ *
+ * `retryOn429: false` is for the checks that are ABOUT the rate limit and must
+ * see the refusal — see the forgotten-password section.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+async function call(role, method, path, body, isForm = false, retryOn429 = true) {
   const headers = {};
   if (tok[role]) headers["Authorization"] = `Bearer ${tok[role]}`;
   if (body && !isForm) headers["Content-Type"] = "application/json";
+
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const res = await fetch(`${API}${path}`, {
+        method,
+        headers,
+        ...(body ? { body: isForm ? body : JSON.stringify(body) } : {}),
+        signal: AbortSignal.timeout(30_000),
+      });
+
+      // One wait clears the sixty-second window. It should almost never fire:
+      // the pacing below keeps the suite under the limit in the first place,
+      // and this is only here for a machine slow enough to bunch requests.
+      if (res.status === 429 && retryOn429 && attempt < 1) {
+        await new Promise((r) => setTimeout(r, 31_000));
+        continue;
+      }
+
+      // An expired token, not a permission failure. Sign in again and repeat
+      // the request once; a real 401 fails the same way with a fresh token.
+      if (res.status === 401 && role && attempt < 2) {
+        const fresh = await signIn(role);
+        if (fresh) {
+          headers["Authorization"] = `Bearer ${fresh}`;
+          continue;
+        }
+      }
+
+      const j = await res.json().catch(() => null);
+      return { status: res.status, data: j?.data, error: j?.error, raw: j };
+    } catch (e) {
+      return { status: 0, error: { message: String(e?.message ?? e) } };
+    }
+  }
+}
+
+/**
+ * Sign one role in and remember the token.
+ *
+ * Extracted so the 401 recovery above and the first login below cannot drift
+ * apart — two places building the same request is how one of them ends up
+ * sending a different device label or forgetting a field.
+ */
+async function signIn(role) {
+  const [email, password] = WHO[role] ?? [];
+  if (!email) return null;
   try {
-    const res = await fetch(`${API}${path}`, {
-      method,
-      headers,
-      ...(body ? { body: isForm ? body : JSON.stringify(body) } : {}),
+    const res = await fetch(`${API}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password, deviceLabel: "qa" }),
       signal: AbortSignal.timeout(30_000),
     });
     const j = await res.json().catch(() => null);
-    return { status: res.status, data: j?.data, error: j?.error, raw: j };
-  } catch (e) {
-    return { status: 0, error: { message: String(e?.message ?? e) } };
+    if (j?.data?.accessToken) tok[role] = j.data.accessToken;
+    return tok[role] ?? null;
+  } catch {
+    return null;
   }
 }
 
@@ -658,15 +730,39 @@ sec("19. forgotten passwords");
        /may have/i.test(badToken.error?.message ?? ""),
      (badToken.error?.message ?? "").slice(0, 70));
 
-  // Neither route may be reachable while signed in as somebody else, and
-  // neither may need a token to reach — they are for people who cannot sign in.
+  /*
+   * Reachable with no token at all — it is for people who cannot sign in.
+   *
+   * Asked about an address NOBODY has, on purpose. The limit is three an hour
+   * per address, so re-using the student's here would spend a third of a real
+   * person's budget on every QA run and make the suite flaky against itself.
+   * A 404 proves the route answered, which is the whole point of this check.
+   */
   const noAuth = await fetch(`${API}/auth/password/forgot`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: WHO.student[0] }),
+    body: JSON.stringify({ email: `unknown-${stamp}@nowhere.invalid` }),
   });
-  ok("it works with no token at all", noAuth.status === 200 || noAuth.status === 429,
-     `got ${noAuth.status}`);
+  ok("it is reachable with no token at all", noAuth.status === 404, `got ${noAuth.status}`);
+
+  /*
+   * THE LIMIT COUNTS THE MAILBOX, NOT THE COMPUTER.
+   *
+   * Behind nginx a whole Institute shares one IP, so an IP-keyed limit of
+   * three would be three FOR THE SCHOOL — five students forgetting their
+   * passwords on results day and the sixth is refused for reasons invisible to
+   * her. This asserts the two are counted apart.
+   */
+  const first = `limit-a-${stamp}@nowhere.invalid`;
+  const second = `limit-b-${stamp}@nowhere.invalid`;
+  let refused = 0;
+  for (let i = 0; i < 4; i++) {
+    const r = await call(null, "POST", "/auth/password/forgot", { email: first }, false, false);
+    if (r.status === 429) refused++;
+  }
+  ok("one address is limited", refused >= 1, `${refused} of 4 refused`);
+  const other = await call(null, "POST", "/auth/password/forgot", { email: second }, false, false);
+  ok("a DIFFERENT address is not locked out by it", other.status !== 429, `got ${other.status}`);
 }
 
 // ═══════════════════════ 20. who signs a certificate ══════════════════════
