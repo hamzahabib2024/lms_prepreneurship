@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { SkeletonList } from "../components/Ui";
 import { ApiError, api } from "../api/client";
 import { HowItWorks } from "../components/HowItWorks";
+import { Field } from "../components/Field";
 
 /**
  * The messages the System sends — SRS §13.13, FR-NOT-020..026.
@@ -212,15 +213,11 @@ function TemplateCard({
         </span>
       </div>
 
-      <label className="field">
-        <span>Title</span>
-        <input value={title} onChange={(e) => setTitle(e.target.value)} />
-      </label>
+      <Field label="Title" required><input value={title} onChange={(e) => setTitle(e.target.value)} />
+      </Field>
 
-      <label className="field">
-        <span>Message</span>
-        <textarea rows={3} value={body} onChange={(e) => setBody(e.target.value)} />
-      </label>
+      <Field label="Message"><textarea rows={3} value={body} onChange={(e) => setBody(e.target.value)} />
+      </Field>
 
       <p className="muted small">
         You can use:{" "}

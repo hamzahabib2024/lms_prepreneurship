@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ApiError, api } from "../api/client";
 import { Icon } from "./Icon";
+import { Field } from "./Field";
 
 /**
  * Making a batch — the four questions an administrator can actually answer.
@@ -115,48 +116,36 @@ export function BatchForm({
       )}
 
       {/* ---------------------------------------------------------- 1 name */}
-      <label className="field">
-        <span>What is this batch called?</span>
-        <input
+      <Field label="What is this batch called?" required hint={<>The batch letter, or whatever staff and students call it —
+          &ldquo;A&rdquo;, &ldquo;Batch B&rdquo;, &ldquo;Morning A (Female)&rdquo;,
+          &ldquo;Batch 2&rdquo;. A short code is generated for you.</>}><input
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Morning A (Female)"
           autoFocus
         />
-        <span className="muted small">
-          The batch letter, or whatever staff and students call it —
-          &ldquo;A&rdquo;, &ldquo;Batch B&rdquo;, &ldquo;Morning A (Female)&rdquo;,
-          &ldquo;Batch 2&rdquo;. A short code is generated for you.
-        </span>
-      </label>
+      </Field>
 
       <div className="form-row">
         {/* ------------------------------------------------------ 2 seats */}
-        <label className="field">
-          <span>How many seats?</span>
-          <input
+        <Field label="How many seats?" required hint={<>Admissions warn once this is full. It can be raised later.</>}><input
             type="number"
             min={1}
             max={500}
             value={capacity}
             onChange={(e) => setCapacity(e.target.value)}
           />
-          <span className="muted small">
-            Admissions warn once this is full. It can be raised later.
-          </span>
-        </label>
+        </Field>
 
         {/* ------------------------------------------------------ 3 shift */}
-        <label className="field">
-          <span>When does it run?</span>
-          <select value={shift} onChange={(e) => setShift(e.target.value as typeof shift)}>
+        <Field label="When does it run?" required><select value={shift} onChange={(e) => setShift(e.target.value as typeof shift)}>
             {SHIFTS.map(([v, label]) => (
               <option key={v} value={v}>
                 {label}
               </option>
             ))}
           </select>
-        </label>
+        </Field>
       </div>
 
       {/* ------------------------------------------------------ 4 audience */}

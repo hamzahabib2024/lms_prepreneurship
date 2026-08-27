@@ -12,6 +12,7 @@ import { Icon } from "../components/Icon";
 import { ApiError, api } from "../api/client";
 import { HowItWorks } from "../components/HowItWorks";
 import { SignatoriesPanel, signatureUrl, type Signatory } from "../components/SignatoriesPanel";
+import { Field } from "../components/Field";
 
 /**
  * The certificate register — SRS §13.7, FR-CRT-002/006/012.
@@ -214,8 +215,7 @@ function Register({ reloadKey }: { reloadKey: number }) {
           </label>
 
           <label className="field">
-            <span>Status</span>
-            <select
+            <span>Status</span><select
               value={status}
               onChange={(e) => {
                 setStatus(e.target.value);
@@ -227,11 +227,10 @@ function Register({ reloadKey }: { reloadKey: number }) {
               <option value="REVOKED">Revoked</option>
               <option value="ARCHIVED">Archived</option>
             </select>
+          
           </label>
 
-          <label className="field">
-            <span>Certificate</span>
-            <select
+          <Field label="Certificate"><select
               value={kind}
               onChange={(e) => {
                 setKind(e.target.value);
@@ -245,7 +244,7 @@ function Register({ reloadKey }: { reloadKey: number }) {
                 </option>
               ))}
             </select>
-          </label>
+          </Field>
         </div>
       </section>
 
@@ -457,15 +456,13 @@ function RevokeDialog({
           the link or the QR code — will be told plainly that the Institute has withdrawn it.
         </p>
 
-        <label className="field">
-          <span>Why is it being withdrawn?</span>
-          <textarea
+        <Field label="Why is it being withdrawn?" required><textarea
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             rows={3}
             placeholder="Issued against the wrong student record; replaced by CERT-2026-000112."
           />
-        </label>
+        </Field>
         <p className={tooShort && reason.length > 0 ? "warn small" : "muted small"}>
           At least ten characters. This is kept on the record, not published.
         </p>
@@ -646,9 +643,7 @@ function ManualPanel({ onIssued }: { onIssued: () => void }) {
           }}
         >
           <div className="field-row">
-            <label className="field">
-              <span>Name on the certificate</span>
-              <input
+            <Field label="Name on the certificate" required><input
                 value={name}
                 onChange={(e) => {
                   setName(e.target.value);
@@ -661,17 +656,15 @@ function ManualPanel({ onIssued }: { onIssued: () => void }) {
                 placeholder="Ayesha Khan"
                 autoComplete="off"
               />
-            </label>
+            </Field>
 
-            <label className="field">
-              <span>What it is for</span>
-              <input
+            <Field label="What it is for" required><input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Weekend Workshop in Product Design"
                 autoComplete="off"
               />
-            </label>
+            </Field>
           </div>
 
           {/* The link to a real student, offered while they type the name and
@@ -719,80 +712,66 @@ function ManualPanel({ onIssued }: { onIssued: () => void }) {
           )}
 
           <div className="field-row">
-            <label className="field">
-              <span>Kind of certificate</span>
-              <select value={kind} onChange={(e) => setKind(e.target.value as CertificateKind)}>
+            <Field label="Kind of certificate" required><select value={kind} onChange={(e) => setKind(e.target.value as CertificateKind)}>
                 {CERTIFICATE_KIND.map((k) => (
                   <option key={k} value={k}>
                     {CERTIFICATE_KIND_COPY[k].label}
                   </option>
                 ))}
               </select>
-            </label>
+            </Field>
 
-            <label className="field">
-              <span>Issue date</span>
-              <input
+            <Field label="Issue date"><input
                 type="date"
                 value={issueDate}
                 onChange={(e) => setIssueDate(e.target.value)}
               />
-            </label>
+            </Field>
           </div>
 
           <details className="cert-more" open={more} onToggle={(e) => setMore(e.currentTarget.open)}>
             <summary>Instructor, duration and dates</summary>
 
             <div className="field-row">
-              <label className="field">
-                <span>Instructor name</span>
-                <input
+              <Field label="Instructor name"><input
                   value={instructorName}
                   onChange={(e) => setInstructorName(e.target.value)}
                   placeholder="Left blank, no instructor line is printed"
                   autoComplete="off"
                 />
-              </label>
-              <label className="field">
-                <span>Instructor title</span>
-                <input
+              </Field>
+              <Field label="Instructor title"><input
                   value={instructorTitle}
                   onChange={(e) => setInstructorTitle(e.target.value)}
                   placeholder="Course Instructor"
                   autoComplete="off"
                 />
-              </label>
+              </Field>
             </div>
 
             <div className="field-row">
-              <label className="field">
-                <span>Duration</span>
-                <input
+              <Field label="Duration"><input
                   value={durationText}
                   onChange={(e) => setDurationText(e.target.value)}
                   placeholder="12 weeks · 60 contact hours"
                   autoComplete="off"
                 />
-              </label>
-              <label className="field">
-                <span>Completed on</span>
-                <input
+              </Field>
+              <Field label="Completed on"><input
                   type="date"
                   value={completionDate}
                   onChange={(e) => setCompletionDate(e.target.value)}
                 />
-              </label>
+              </Field>
             </div>
 
-            <label className="field">
-              <span>Note for the record</span>
-              <input
+            <Field label="Note for the record"><input
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 placeholder="Why this was issued by hand. Kept in the audit log, never printed."
                 autoComplete="off"
               />
-            </label>
+            </Field>
           </details>
 
           {errors && (
@@ -938,9 +917,7 @@ function EarnedPanel({ onIssued }: { onIssued: () => void }) {
 
       <section className="card">
         <div className="field-row">
-          <label className="field">
-            <span>Batch</span>
-            <select value={sectionId} onChange={(e) => setSectionId(e.target.value)}>
+          <Field label="Batch"><select value={sectionId} onChange={(e) => setSectionId(e.target.value)}>
               <option value="">Choose a batch…</option>
               {sections.map((s) => (
                 <option key={s.id} value={s.id}>
@@ -948,11 +925,9 @@ function EarnedPanel({ onIssued }: { onIssued: () => void }) {
                 </option>
               ))}
             </select>
-          </label>
+          </Field>
 
-          <label className="field">
-            <span>Subject</span>
-            <select
+          <Field label="Subject"><select
               value={offeringId}
               onChange={(e) => setOfferingId(e.target.value)}
               disabled={offerings.length === 0}
@@ -966,7 +941,7 @@ function EarnedPanel({ onIssued }: { onIssued: () => void }) {
                 </option>
               ))}
             </select>
-          </label>
+          </Field>
         </div>
       </section>
 
@@ -1123,9 +1098,7 @@ function ProgrammePanel({ sectionId, onIssued }: { sectionId: string; onIssued: 
       </p>
 
       <div className="field-row">
-        <label className="field">
-          <span>Student</span>
-          <select value={studentId} onChange={(e) => setStudentId(e.target.value)}>
+        <Field label="Student"><select value={studentId} onChange={(e) => setStudentId(e.target.value)}>
             <option value="">Choose a student…</option>
             {roster.map((r) => (
               <option key={r.id} value={r.id}>
@@ -1133,10 +1106,8 @@ function ProgrammePanel({ sectionId, onIssued }: { sectionId: string; onIssued: 
               </option>
             ))}
           </select>
-        </label>
-        <label className="field">
-          <span>Programme</span>
-          <select value={programmeId} onChange={(e) => setProgrammeId(e.target.value)}>
+        </Field>
+        <Field label="Programme"><select value={programmeId} onChange={(e) => setProgrammeId(e.target.value)}>
             <option value="">Choose a programme…</option>
             {programmes.map((p) => (
               <option key={p.id} value={p.id}>
@@ -1144,7 +1115,7 @@ function ProgrammePanel({ sectionId, onIssued }: { sectionId: string; onIssued: 
               </option>
             ))}
           </select>
-        </label>
+        </Field>
       </div>
 
       {error && <p className="warn">{error}</p>}
@@ -1399,15 +1370,13 @@ function IssueWholeBatch({
         </button>
       </div>
 
-      <label className="field">
-        <span>Why, if you are issuing regardless (optional)</span>
-        <input
+      <Field label="Why, if you are issuing regardless (optional)"><input
           type="text"
           value={reason}
           placeholder="End of term — assessed by viva."
           onChange={(e) => setReason(e.target.value)}
         />
-      </label>
+      </Field>
       <p className="muted small">
         Anybody who already holds one is left alone. Nothing is issued twice.
       </p>

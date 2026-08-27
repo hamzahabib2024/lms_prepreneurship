@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, api } from "../api/client";
+import { Field } from "./Field";
 
 /**
  * FILES THAT COME WITH THE BRIEF — FR-ASG.
@@ -155,13 +156,11 @@ export function BriefAttachments({
 
       {canManage && (
         <>
-          <label className="field">
-            <span>Attach a file</span>
-            <input ref={inputRef} type="file" disabled={busy} onChange={(e) => {
+          <Field label="Attach a file"><input ref={inputRef} type="file" disabled={busy} onChange={(e) => {
               const file = e.target.files?.[0];
               if (file) void upload(file);
             }} />
-          </label>
+          </Field>
           <p className="muted small">
             Checked against the Institute's rules for uploads, the same as a student's — a file
             whose contents do not match its name is refused. Attaching the same file twice keeps

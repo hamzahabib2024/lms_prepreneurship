@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { ApiError, api } from "../api/client";
 import { Icon } from "../components/Icon";
 import { SkeletonCards } from "../components/Ui";
+import { Field } from "../components/Field";
 import { money, shortDate, type FeeSummary } from "./FeesSubmissions";
 
 /**
@@ -277,6 +278,10 @@ export function PaymentSubmitPage() {
       <section className="card">
         <h2>What you paid</h2>
 
+        {/* NOT the Field component: this is a composite control — a currency
+            prefix and an input inside one bordered box — and Field clones a
+            single element. The :user-invalid rules in the stylesheet give it
+            the same red edge without the tick. */}
         <label className="field">
           <span>Amount you are submitting</span>
           <div className="amount-input">
@@ -308,19 +313,20 @@ export function PaymentSubmitPage() {
         )}
 
         <div className="field-row">
-          <label className="field">
-            <span>How you paid</span>
-            <select value={method} onChange={(e) => setMethod(e.target.value)}>
+          <Field label="How you paid"><select value={method} onChange={(e) => setMethod(e.target.value)}>
               {context.methods.map((m) => (
                 <option key={m.value} value={m.value}>
                   {m.label}
                 </option>
               ))}
             </select>
-          </label>
+          </Field>
 
-          <label className="field">
-            <span>Date you paid</span>
+          {/* The amount box above keeps its bespoke currency control and is
+              covered by the :user-invalid rules in the stylesheet; these two
+              have the standard shape, so they take the component and get the
+              tick, the cross and the message with it. */}
+          <Field label="Date you paid" required>
             <input
               type="date"
               value={paidOn}
@@ -328,33 +334,32 @@ export function PaymentSubmitPage() {
               onChange={(e) => setPaidOn(e.target.value)}
               required
             />
-          </label>
+          </Field>
         </div>
 
-        <label className="field">
-          <span>Transaction number</span>
+        {/* OPTIONAL, and the component knows the difference: left blank it
+            shows nothing at all, because leaving a box empty is not an
+            achievement worth a green tick. Filled in, it confirms. */}
+        <Field
+          label="Transaction number"
+          hint="The reference on your EasyPaisa, JazzCash or bank receipt. Leave it blank if your slip does not show one — it helps us find your payment faster."
+        >
           <input
             value={reference}
             onChange={(e) => setReference(e.target.value)}
             maxLength={100}
             placeholder="e.g. TID 4417829903"
           />
-          <span className="muted small">
-            The reference on your EasyPaisa, JazzCash or bank receipt. Leave it blank if your slip
-            does not show one — it helps us find your payment faster.
-          </span>
-        </label>
+        </Field>
 
-        <label className="field">
-          <span>Anything we should know (optional)</span>
-          <textarea
+        <Field label="Anything we should know (optional)"><textarea
             value={note}
             onChange={(e) => setNote(e.target.value)}
             maxLength={1000}
             rows={2}
             placeholder="For example: paid by my father from his account."
           />
-        </label>
+        </Field>
       </section>
 
       <ProofUpload proof={proof} onChange={setProof} />

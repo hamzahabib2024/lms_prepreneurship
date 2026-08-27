@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, api } from "../api/client";
+import { Field } from "./Field";
 
 /**
  * WHO SIGNS THE INSTITUTE'S CERTIFICATES — FR-CRT.
@@ -117,22 +118,18 @@ export function SignatoriesPanel() {
 
       {adding && (
         <div className="form-row">
-          <label className="field">
-            <span>Their name</span>
-            <input
+          <Field label="Their name" required><input
               value={draft.name}
               placeholder="Dr Ayesha Rahman"
               onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
             />
-          </label>
-          <label className="field">
-            <span>What they are</span>
-            <input
+          </Field>
+          <Field label="What they are" required><input
               value={draft.designation}
               placeholder="Principal"
               onChange={(e) => setDraft((d) => ({ ...d, designation: e.target.value }))}
             />
-          </label>
+          </Field>
           <div className="field">
             <span>&nbsp;</span>
             <button

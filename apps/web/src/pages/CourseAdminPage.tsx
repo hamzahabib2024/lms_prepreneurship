@@ -8,6 +8,7 @@ import { Icon } from "../components/Icon";
 import { money, whenDue, type Fee } from "../components/FeePanel";
 import { CourseHierarchy } from "../components/CourseHierarchy";
 import { HowItWorks } from "../components/HowItWorks";
+import { Field } from "../components/Field";
 
 /**
  * Courses — creating them, illustrating them, and pricing them (FR-CRS-004,
@@ -963,27 +964,19 @@ function FeeStructureForm({
           <span className="fee-step-num">1</span> What does the course cost?
         </h4>
         <div className="form-row">
-          <label className="field">
-            <span>Name of this fee</span>
-            <input
+          <Field label="Name of this fee" required hint={<>For the office. Something you will recognise next year.</>}><input
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Spring 2026 fee"
             />
-            <span className="muted small">
-              For the office. Something you will recognise next year.
-            </span>
-          </label>
-          <label className="field">
-            <span>Total fee</span>
-            <input
+          </Field>
+          <Field label="Total fee" required hint={<>The whole cost, in {currency}.</>}><input
               inputMode="decimal"
               value={total}
               onChange={(e) => setTotal(e.target.value)}
               placeholder="90000"
             />
-            <span className="muted small">The whole cost, in {currency}.</span>
-          </label>
+          </Field>
         </div>
       </div>
 
@@ -1153,14 +1146,12 @@ function FeeStructureForm({
         )}
       </div>
 
-      <label className="field">
-        <span>Anything the applicant should know</span>
-        <textarea
+      <Field label="Anything the applicant should know"><textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           placeholder="Refund policy, what the fee includes, when late payment is charged."
         />
-      </label>
+      </Field>
 
       {/*
         WHAT THE APPLICANT WILL ACTUALLY SEE. The form is a table of numbers;

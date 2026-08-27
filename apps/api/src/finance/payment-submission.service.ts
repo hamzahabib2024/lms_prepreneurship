@@ -89,6 +89,11 @@ export class PaymentSubmissionService {
         id: true,
         registrationNo: true,
         currentRollNo: true,
+        // WHO PAYS. A student whose institute is billed must not be shown a
+        // balance, a Submit Payment button, or anything else that asks them
+        // for money they do not owe.
+        feePayer: true,
+        partnerInstitute: { select: { name: true } },
         user: { select: { fullName: true, email: true } },
         currentSection: {
           select: {
@@ -123,6 +128,20 @@ export class PaymentSubmissionService {
       summary,
       bank,
       methods: Object.entries(PAYMENT_METHOD_LABELS).map(([value, label]) => ({ value, label })),
+      /*
+       * WHO SETTLES THIS STUDENT'S FEE.
+       *
+       * `PARTNER` means their institute is invoiced and NO FeeCharge was ever
+       * raised against them — so every figure in `summary` above is zero by
+       * construction rather than by a filter. The screen uses this to say who
+       * is paying instead of showing an empty statement, and to withhold the
+       * Submit Payment button: offering somebody a way to pay a bill that is
+       * not theirs is how we end up holding money we have to give back.
+       */
+      billing: {
+        payer: student.feePayer,
+        partnerName: student.partnerInstitute?.name ?? null,
+      },
     };
   }
 
@@ -150,6 +169,7 @@ export class PaymentSubmissionService {
         id: true,
         registrationNo: true,
         currentRollNo: true,
+        feePayer: true,
         user: { select: { id: true, fullName: true, email: true } },
         currentSection: {
           select: {
@@ -160,6 +180,22 @@ export class PaymentSubmissionService {
       },
     });
     if (!student) throw new AppError("RESOURCE_NOT_FOUND");
+
+    /*
+     * A STUDENT WHOSE INSTITUTE PAYS CANNOT SUBMIT A PAYMENT.
+     *
+     * The screen does not offer the button, and that is a courtesy rather than
+     * a control — this route is reachable by anybody who can type a URL. The
+     * money would otherwise arrive against a student who owes nothing, sit in
+     * a queue nobody expected, and have to be refunded by hand.
+     */
+    if (student.feePayer === "PARTNER") {
+      throw new AppError("RESOURCE_CONFLICT", {
+        message:
+          "Your fees are paid by your institute, so there is nothing for you to pay here. " +
+          "If you think that is wrong, speak to the office.",
+      });
+    }
 
     /*
      * A CEILING ON UNREVIEWED CLAIMS.

@@ -61,6 +61,8 @@ export class ActorService {
           student: true,
           teacher: true,
         },
+        // partnerInstituteId is a plain column on the user and comes down with
+        // it; no include is needed for the id itself.
       });
       if (!user) return null;
 
@@ -115,6 +117,18 @@ export class ActorService {
         subPermissions: [...new Set(subPermissions)],
         studentId: user.student?.id,
         teacherId: user.teacher?.id,
+        /*
+         * THE PARTNER'S ENTIRE REACH, resolved here with everything else so it
+         * is invalidated by the same cache and the same purge.
+         *
+         * Carried for whoever has the column set, not only for somebody
+         * holding `partner_admin`. The predicates ask about the ROLE before
+         * they use this, so an ordinary member of staff who somehow acquired
+         * the column gains nothing — while a partner whose role was removed
+         * this morning stops reaching anything the moment the cache turns
+         * over, because the role is gone from `roles` above.
+         */
+        partnerInstituteId: user.partnerInstituteId ?? undefined,
         sectionSubjectIds,
         sectionIds,
       } satisfies Omit<Actor, "correlationId">;

@@ -5,6 +5,7 @@ import { useAuth } from "../auth/AuthContext";
 import { EmptyState, Skeleton, SkeletonTable, askPermanent } from "../components/Ui";
 import { HowItWorks } from "../components/HowItWorks";
 import { ClassRoom } from "../components/ClassRoom";
+import { Field } from "../components/Field";
 
 interface Section {
   id: string;
@@ -364,9 +365,7 @@ Only possible while it has not been ` +
           <form className="inline-form" onSubmit={(e) => void createSection(e)}>
             <h3>New batch</h3>
             <div className="form-row">
-              <label className="field">
-                <span>Intake</span>
-                <select
+              <Field label="Intake" required><select
                   required
                   value={blank.batchId}
                   onChange={(e) => setBlank((b) => ({ ...b, batchId: e.target.value }))}
@@ -378,30 +377,26 @@ Only possible while it has not been ` +
                     </option>
                   ))}
                 </select>
-              </label>
-              <label className="field">
-                <span>Code</span>
-                <input
+              
+              </Field>
+              <Field label="Code" required hint={<>Letters, digits and hyphens. Must be unique.</>}><input
                   required
                   placeholder="SP26-GD-MOR-A"
                   value={blank.code}
                   onChange={(e) => setBlank((b) => ({ ...b, code: e.target.value.toUpperCase() }))}
                 />
-                <span className="muted small">Letters, digits and hyphens. Must be unique.</span>
-              </label>
-              <label className="field">
-                <span>Name</span>
-                <input
+              
+              </Field>
+              <Field label="Name" required><input
                   required
                   minLength={3}
                   placeholder="Graphic Designing — Morning A"
                   value={blank.name}
                   onChange={(e) => setBlank((b) => ({ ...b, name: e.target.value }))}
                 />
-              </label>
-              <label className="field">
-                <span>Capacity</span>
-                <input
+              
+              </Field>
+              <Field label="Capacity" required><input
                   type="number"
                   required
                   min={1}
@@ -409,10 +404,9 @@ Only possible while it has not been ` +
                   value={blank.capacity}
                   onChange={(e) => setBlank((b) => ({ ...b, capacity: e.target.value }))}
                 />
-              </label>
-              <label className="field">
-                <span>Shift</span>
-                <select
+              
+              </Field>
+              <Field label="Shift" required><select
                   value={blank.shift}
                   onChange={(e) => setBlank((b) => ({ ...b, shift: e.target.value }))}
                 >
@@ -422,10 +416,9 @@ Only possible while it has not been ` +
                     </option>
                   ))}
                 </select>
-              </label>
-              <label className="field">
-                <span>Admits</span>
-                <select
+              
+              </Field>
+              <Field label="Admits" hint={<>Cannot be relaxed once students are admitted.</>}><select
                   value={blank.genderRestriction}
                   onChange={(e) =>
                     setBlank((b) => ({ ...b, genderRestriction: e.target.value }))
@@ -437,16 +430,8 @@ Only possible while it has not been ` +
                     </option>
                   ))}
                 </select>
-                {/* FR-CRS-009 — absolute once students are admitted, and there
-                    is no override anywhere in the System. Said before the
-                    choice is made, not after. */}
-                <span className="warn small">
-                  Cannot be relaxed once students are admitted.
-                </span>
-              </label>
-              <label className="field">
-                <span>Delivery</span>
-                <select
+              </Field>
+              <Field label="Delivery"><select
                   value={blank.deliveryMode}
                   onChange={(e) => setBlank((b) => ({ ...b, deliveryMode: e.target.value }))}
                 >
@@ -456,7 +441,8 @@ Only possible while it has not been ` +
                     </option>
                   ))}
                 </select>
-              </label>
+              
+              </Field>
             </div>
             <button className="btn btn-primary" disabled={busy}>
               {busy ? "Working…" : "Create batch"}
@@ -766,9 +752,7 @@ Only possible while it has not been ` +
 
                             {mayEdit && (
                               <div className="form-row" style={{ marginTop: ".8rem" }}>
-                                <label className="field">
-                                  <span>Add a subject</span>
-                                  <select
+                                <Field label="Add a subject"><select
                                     value={newOffering.subjectId}
                                     onChange={(e) =>
                                       setNewOffering((n) => ({ ...n, subjectId: e.target.value }))
@@ -781,10 +765,9 @@ Only possible while it has not been ` +
                                       </option>
                                     ))}
                                   </select>
-                                </label>
-                                <label className="field">
-                                  <span>Required</span>
-                                  <select
+                                
+                                </Field>
+                                <Field label="Required"><select
                                     value={newOffering.isCompulsory ? "yes" : "no"}
                                     onChange={(e) =>
                                       setNewOffering((n) => ({
@@ -796,7 +779,8 @@ Only possible while it has not been ` +
                                     <option value="yes">Compulsory</option>
                                     <option value="no">Elective</option>
                                   </select>
-                                </label>
+                                
+                                </Field>
                                 <div className="field">
                                   <span>&nbsp;</span>
                                   <button

@@ -61,6 +61,16 @@ const PATHS: Record<string, string> = {
   search: "M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14ZM20 20l-4-4",
   /* A bare tick. `check` is the register's boxed one and reads as a checkbox. */
   tick: "m5 13 4 4L19 7",
+  /*
+   * The tick's opposite, for a field that is wrong.
+   *
+   * A BARE CROSS, matching `tick` rather than `alert`. The pair has to be
+   * readable as a pair at 14px, because between them they carry the ENTIRE
+   * meaning of a validation state for the ~8% of men who cannot separate the
+   * red from the green (NFR-ACC-007). A triangle beside a tick does not read
+   * as its opposite; a cross does.
+   */
+  cross: "M6 6l12 12M18 6 6 18",
   panel: "M4 4h16a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1ZM9 4v16",
   key: "M14.5 10.5a4 4 0 1 0-4.9 3.9L4 20v0h3v-2h2v-2h1.6a4 4 0 0 0 3.9-5.5ZM16.5 7.5h.01",
   sun: "M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10ZM12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4",

@@ -13,6 +13,17 @@ const ROLE_POLICY: Record<Role, { maxFailed: number; lockoutMinutes: number; min
   admin: { maxFailed: 5, lockoutMinutes: 15, minLength: 12 },
   teacher: { maxFailed: 5, lockoutMinutes: 15, minLength: 10 },
   student: { maxFailed: 8, lockoutMinutes: 10, minLength: 8 },
+  /*
+   * TREATED AS STAFF, NOT AS A STUDENT, because of what the account reaches:
+   * the personal records of a whole cohort of other people's children. That is
+   * a heavier loss than any one student's own account, so the password floor
+   * and the lockout match an Admin rather than the lightest policy here.
+   *
+   * The account also sits OUTSIDE this Institute, where we control neither the
+   * device nor who else uses it — which is the argument for the stricter of
+   * the two, not the more convenient.
+   */
+  partner_admin: { maxFailed: 5, lockoutMinutes: 15, minLength: 12 },
 };
 
 const DEFAULT_POLICY = ROLE_POLICY.student;
@@ -507,6 +518,15 @@ export class AuthService {
       admin: 3,
       teacher: 3,
       student: 2,
+      /*
+       * Partner staff share an account far more than our own people do — a
+       * partner's coordinator, their exam office and whoever is covering that
+       * week all sign in as the same institute. Two would lock one of them out
+       * on an ordinary Monday; three matches an Admin, which is the closest
+       * comparable, and the limit still exists so a leaked password cannot be
+       * used by a dozen people at once.
+       */
+      partner_admin: 3,
     };
     const limit = Math.min(...roles.map((r) => limits[r] ?? 2), 3);
 

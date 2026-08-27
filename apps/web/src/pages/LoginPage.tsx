@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { useState, type FormEvent } from "react";
 import { ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
+import { Field } from "../components/Field";
 
 /**
  * Sign in — SRS §13.11, Figure 9-2.
@@ -33,6 +34,11 @@ export function LoginPage() {
 
   const lockedOut = error?.code === "AUTH_ACCOUNT_LOCKED";
   const suspended = error?.code === "AUTH_ACCOUNT_SUSPENDED";
+  /*
+   * When a new password would actually help. A suspended account is excluded
+   * on purpose — see the note where this is used.
+   */
+  const canReset = Boolean(error) && !suspended;
 
   return (
     <div className="auth-shell">
@@ -98,13 +104,45 @@ export function LoginPage() {
           <div className={`alert ${lockedOut || suspended ? "alert-warn" : "alert-error"}`} role="alert">
             <strong>{lockedOut ? "Account locked" : suspended ? "Account suspended" : "Could not sign in"}</strong>
             <p>{error.message}</p>
+            {/*
+              THE WAY OUT, OFFERED ONLY ONCE SOMEBODY NEEDS IT.
+
+              It used to sit under the sign-in button at all times, which is a
+              line every person who knows their password reads past — and a
+              standing invitation to type somebody else's address into a form
+              that sends mail.
+
+              It appears on a wrong password and on a locked account, because
+              those are the two states a new password actually solves. NOT on a
+              suspended account: resetting the password of an account the
+              Institute has suspended changes nothing, and offering it sends
+              somebody round a loop instead of to the office.
+            */}
+            {canReset && (
+              <p className="small">
+                <Link to="/forgot-password">
+                  {lockedOut
+                    ? "Set a new password instead of waiting"
+                    : "I have forgotten my password"}
+                </Link>
+              </p>
+            )}
             {/* NFR-ERR-003 — a reference the user can quote to support. */}
             {error.reference && <p className="muted small">Reference: {error.reference}</p>}
           </div>
         )}
 
-        <label className="field">
-          <span>Email address</span>
+        {/*
+          THE TWO BOXES THAT USED TO BE RED ON ARRIVAL.
+
+          Both carried `required` and no placeholder, which is exactly the
+          combination the old `:not(:placeholder-shown)` rule mis-read — so the
+          first thing anybody saw on opening this System was two error-coloured
+          boxes accusing them of a mistake they had not yet had a chance to
+          make. They are now silent until the person has actually left the
+          field.
+        */}
+        <Field label="Email address" required>
           <input
             type="email"
             value={email}
@@ -113,10 +151,9 @@ export function LoginPage() {
             required
             autoFocus
           />
-        </label>
+        </Field>
 
-        <label className="field">
-          <span>Password</span>
+        <Field label="Password" required>
           <input
             type="password"
             value={password}
@@ -124,7 +161,7 @@ export function LoginPage() {
             autoComplete="current-password"
             required
           />
-        </label>
+        </Field>
 
           <button
             className="btn btn-primary"
@@ -135,12 +172,6 @@ export function LoginPage() {
             {busy ? "Signing in…" : "Sign in"}
           </button>
 
-          {/* Under the button, not beside the password box. Somebody who knows
-              their password never reads this line; somebody who does not has
-              already failed once and is looking for a way out. */}
-          <p className="muted small">
-            <Link to="/forgot-password">I have forgotten my password</Link>
-          </p>
 
           <p className="muted small dev-note">
             Development accounts: <code>admin@institute.local</code> ·{" "}

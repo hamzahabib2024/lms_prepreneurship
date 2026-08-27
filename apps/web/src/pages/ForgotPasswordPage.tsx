@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { ApiError, api } from "../api/client";
+import { Field } from "../components/Field";
 
 /**
  * "I HAVE FORGOTTEN MY PASSWORD" — FR-AUT.
@@ -12,11 +13,11 @@ import { ApiError, api } from "../api/client";
  * who pressed it by accident on a shared computer should get the chance to
  * stop.
  *
- * IT NEVER SAYS WHETHER THE ADDRESS IS REGISTERED, and neither does the server.
- * The reader gets the same sentence either way. That reads as slightly unhelpful
- * and it is the correct behaviour: a page that says "no such account" is a
- * membership test anybody can run against a list of email addresses, and at an
- * institute that list is the student roster.
+ * IT SAYS WHEN THE ADDRESS IS NOT OURS. The Institute chose that, knowing the
+ * trade-off: it means somebody can test whether an address is on the roster,
+ * and it means a person who mistypes their own address is told so instead of
+ * waiting for mail that is never coming. The rate limit and the security log
+ * are what stand against the first; see the service.
  *
  * WHAT THE EMAIL CARRIES IS A LINK, NOT A PASSWORD. That is worth saying on the
  * screen, because the office's own habit is to read a temporary password down
@@ -49,12 +50,19 @@ export function ForgotPasswordPage() {
        */
       setError(
         e instanceof ApiError && e.status === 429
-          ? "That has been asked for several times already. Wait an hour before trying again, " +
-            "and check the spam folder in the meantime."
+          ? "A link has already been sent to that address a few times in the last hour. " +
+            "Check the inbox and the spam folder — the most recent one is the one that " +
+            "works. If none arrived, ask the office to reset it for you rather than waiting."
           : e instanceof ApiError
             ? e.message
             : "That could not be sent. Try again in a moment.",
       );
+      /*
+       * Back to the address box, not to the confirmation. Every failure here is
+       * something about the ADDRESS — a typo, an account that is not ours, too
+       * many attempts — so the reader is returned to the one field they can do
+       * anything about, with what they typed still in it.
+       */
       setConfirming(false);
     } finally {
       setBusy(false);
@@ -81,6 +89,13 @@ export function ForgotPasswordPage() {
                 <strong>Check your email</strong>
                 <p>{sent}</p>
               </div>
+              {/* Whose mailbox, in as many words. It is the only proof of
+                  identity in this whole flow — the link goes there and nowhere
+                  else — and saying so is what tells the reader why nobody else
+                  can use it. */}
+              <p className="small">
+                Sent to <strong>{email.trim()}</strong>.
+              </p>
               <p className="muted small">
                 It may take a minute to arrive, and it may land in the spam folder. The link
                 works once and stops working after 30 minutes — ask again from here if it
@@ -97,8 +112,9 @@ export function ForgotPasswordPage() {
               <div className="alert alert-warn" role="alert">
                 <strong>Send the link to {email.trim()}?</strong>
                 <p>
-                  If that address belongs to an account, an email arrives with a link for
-                  choosing a new password. Using it signs that account out everywhere.
+                  We will check that address belongs to an account and, if it does, email a
+                  link for choosing a new password. Using it signs that account out
+                  everywhere.
                 </p>
               </div>
               <div className="row-actions">
@@ -128,8 +144,11 @@ export function ForgotPasswordPage() {
                 </div>
               )}
 
-              <label className="field">
-                <span>Your email address</span>
+              <Field
+                label="Your email address"
+                required
+                hint="The address the Institute has for you. If you are not sure which it is, ask the office."
+              >
                 <input
                   type="email"
                   value={email}
@@ -138,11 +157,7 @@ export function ForgotPasswordPage() {
                   required
                   autoFocus
                 />
-                <span className="muted small">
-                  The address the Institute has for you. If you are not sure which it is, ask
-                  the office.
-                </span>
-              </label>
+              </Field>
 
               <button
                 className="btn btn-primary"

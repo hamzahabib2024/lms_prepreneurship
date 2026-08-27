@@ -3,6 +3,7 @@ import { Skeleton } from "../components/Ui";
 import { ApiError, api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { HowItWorks } from "../components/HowItWorks";
+import { Field } from "../components/Field";
 
 /**
  * Rubrics — SRS §13.6, FR-ASG-012..018.
@@ -306,25 +307,21 @@ function RubricEditor({
         </div>
       )}
 
-      <label className="field">
-        <span>Name</span>
-        <input
+      <Field label="Name" required><input
           value={name}
           disabled={readOnly}
           onChange={(e) => setName(e.target.value)}
           placeholder="Argumentative essay"
         />
-      </label>
+      </Field>
 
-      <label className="field">
-        <span>What it is for</span>
-        <input
+      <Field label="What it is for"><input
           value={description}
           disabled={readOnly}
           onChange={(e) => setDescription(e.target.value)}
           placeholder="Optional."
         />
-      </label>
+      </Field>
 
       {canShare && (
         <label className="inline-field">
@@ -349,18 +346,14 @@ function RubricEditor({
         {rows.map((row, index) => (
           <li key={index} className="question">
             <div className="field-row">
-              <label className="field">
-                <span>Criterion</span>
-                <input
+              <Field label="Criterion"><input
                   value={row.name}
                   disabled={readOnly}
                   onChange={(e) => setRow(index, { name: e.target.value })}
                   placeholder="Argument"
                 />
-              </label>
-              <label className="field">
-                <span>Marks</span>
-                <input
+              </Field>
+              <Field label="Marks"><input
                   type="number"
                   min="0"
                   step="0.5"
@@ -368,18 +361,16 @@ function RubricEditor({
                   disabled={readOnly}
                   onChange={(e) => setRow(index, { maxMarks: e.target.value })}
                 />
-              </label>
+              </Field>
             </div>
 
-            <label className="field">
-              <span>What earns them</span>
-              <input
+            <Field label="What earns them"><input
                 value={row.description}
                 disabled={readOnly}
                 onChange={(e) => setRow(index, { description: e.target.value })}
                 placeholder="Is the claim supported throughout? Optional, but the student reads it."
               />
-            </label>
+            </Field>
 
             <div className="row-actions">
               <label className="inline-field">

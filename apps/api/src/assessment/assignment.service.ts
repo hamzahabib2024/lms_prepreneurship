@@ -398,9 +398,36 @@ export class AssignmentService {
         gradesReleased: true,
         dueAt: true,
         latePolicy: true,
+        /*
+         * THE BRIEF ITSELF — FR-TCH-019.
+         *
+         * It was missing, and its absence was the wrong way round: a teacher
+         * marking thirty submissions could see the title and the total marks
+         * and never the task the work is being judged against. Somebody
+         * moderating a colleague's marking, or returning to their own set a
+         * fortnight later, was marking from memory.
+         */
+        instructions: true,
+        opensAt: true,
+        hardCloseAt: true,
+        /*
+         * WHETHER there is a spoken brief, never WHERE it lives (ARC-041).
+         * A boolean and a length is all the screen needs to offer a play
+         * button; the audio itself comes from the guarded route, which
+         * re-checks scope. The same shape `listForStudent` already returns.
+         */
+        briefAudioKey: true,
+        briefAudioSeconds: true,
       },
     });
     if (!assignment) throw new AppError("RESOURCE_NOT_FOUND");
+
+    /* How many files came with the brief. A count, so the panel knows whether
+       to offer the section; the names come from the attachment routes, which
+       re-check scope. */
+    const attachmentCount = await this.prisma.scoped.assignmentAttachment.count({
+      where: { assignmentId: assignment.id },
+    });
 
     const [enrolled, submissions] = await Promise.all([
       this.prisma.scoped.enrolment.findMany({
@@ -411,7 +438,31 @@ export class AssignmentService {
       }),
       this.prisma.scoped.assignmentSubmission.findMany({
         where: { assignmentId, isLatest: true },
-        include: { grade: true, files: { select: { id: true, originalFilename: true } } },
+        include: {
+          grade: true,
+          /*
+           * CONTENT TYPE AND SIZE COME WITH THE ROSTER — FR-ASG-025.
+           *
+           * The marking workspace renders the submitted file BESIDE the mark
+           * box, and it has to decide per file whether that is even possible:
+           * a PDF goes in the browser's viewer, an image in an <img>, and a
+           * .psd gets an honest "cannot be previewed, download it" panel
+           * rather than a blank half-screen. Deciding from the filename's
+           * extension would be guessing at exactly the thing the System
+           * already knows, and it is the uploader who chose the extension.
+           *
+           * Size is here for the same screen: a marker about to open a 9 MB
+           * scan on a slow connection should be told before it starts.
+           */
+          files: {
+            select: {
+              id: true,
+              originalFilename: true,
+              contentType: true,
+              sizeBytes: true,
+            },
+          },
+        },
       }),
     ]);
 
@@ -433,15 +484,26 @@ export class AssignmentService {
         minutesLate: sub?.minutesLate ?? 0,
         version: sub?.version ?? 0,
         textResponse: sub?.textResponse ?? null,
-        files: (sub?.files ?? []).map((f: { id: string; originalFilename: string }) => ({
-          id: f.id,
-          filename: f.originalFilename,
-        })),
+        files: (sub?.files ?? []).map(
+          (f: { id: string; originalFilename: string; contentType: string; sizeBytes: bigint }) => ({
+            id: f.id,
+            filename: f.originalFilename,
+            contentType: f.contentType,
+            // BigInt does not survive JSON. Every other size in this API is a
+            // number by the time it leaves, and one that serialises as a
+            // string breaks the arithmetic on the other side silently.
+            sizeBytes: Number(f.sizeBytes),
+          }),
+        ),
         graded: !!g,
         rawMarks: g ? Number(g.rawMarks) : null,
         penaltyApplied: g ? Number(g.penaltyApplied) : null,
         finalMarks: g ? Number(g.finalMarks) : null,
         feedback: g?.feedback ?? null,
+        /* WHETHER there is a recording, never where it lives (ARC-041). On
+           the SUBMISSION, so a teacher can record before marking. */
+        hasFeedbackAudio: sub?.feedbackAudioKey != null,
+        feedbackAudioSeconds: sub?.feedbackAudioSeconds ?? null,
         // §4.5 keeps internal notes from students, and this endpoint is now
         // teacher-and-above only, so they belong here: a second marker needs
         // to see what the first one recorded.
@@ -464,6 +526,21 @@ export class AssignmentService {
         gradesReleased: assignment.gradesReleased,
         dueAt: assignment.dueAt,
         latePolicy: assignment.latePolicy,
+
+        // The task itself, so a marker can read what was set beside the work.
+        instructions: assignment.instructions,
+        opensAt: assignment.opensAt,
+        hardCloseAt: assignment.hardCloseAt,
+        /* Whether it is still open, computed here so the roster and the empty
+           state cannot disagree about it — a teacher told "nobody has
+           submitted" wants to know next whether anybody still can. */
+        isOpen:
+          new Date() >= assignment.opensAt &&
+          (!assignment.hardCloseAt || new Date() <= assignment.hardCloseAt),
+        // A boolean and a length. Never the key (ARC-041).
+        hasBriefAudio: assignment.briefAudioKey !== null,
+        briefAudioSeconds: assignment.briefAudioSeconds,
+        attachmentCount,
       },
       summary: {
         enrolled: rows.length,
@@ -836,6 +913,27 @@ export class AssignmentService {
       ]),
     );
 
+    /*
+     * HOW MANY COMMENTS ARE ON EACH SUBMISSION — FR-ASG-027.
+     *
+     * Grouped in one query, like the attachment counts above and for the same
+     * reason. The card only needs to know whether there is a conversation to
+     * open; the words themselves come from the comments route when it is.
+     */
+    const commentCounts = await this.prisma.asSystem((db) =>
+      db.submissionComment.groupBy({
+        by: ["submissionId"],
+        where: {
+          submissionId: { in: submissions.map((sub: (typeof submissions)[number]) => sub.id) },
+          deletedAt: null,
+        },
+        _count: { _all: true },
+      }),
+    );
+    const commentsFor = new Map(
+      commentCounts.map((c: (typeof commentCounts)[number]) => [c.submissionId, c._count._all]),
+    );
+
     const now = new Date();
 
     return assignments.map((a: (typeof assignments)[number]) => {
@@ -884,6 +982,31 @@ export class AssignmentService {
         wasLate: submission?.isLate ?? false,
         fileCount: submission?.files.length ?? 0,
 
+        /*
+         * WHAT THE TEACHER SAID — FR-ASG-027.
+         *
+         * The id is what lets the card open the thread, and it is the
+         * student's OWN submission by construction: `submissions` was read
+         * through the scoped client filtered to this studentId, so there is no
+         * id here that belongs to anybody else.
+         *
+         * NOT GATED ON RELEASE, unlike the mark below. That is the point of
+         * the feature: "this is the wrong export, send me a PDF" is worthless
+         * if it arrives with the grades a week later.
+         */
+        submissionId: submission?.id ?? null,
+        commentCount: submission ? (commentsFor.get(submission.id) ?? 0) : 0,
+
+        /*
+         * SPOKEN FEEDBACK, AND NOT GATED ON RELEASE — beside the comment count
+         * rather than inside the grade above, because it is governed by the
+         * same rule the comments are: it is a remark about the work, not the
+         * mark. A teacher saying "send me a PDF" is no use to a student a week
+         * after the grades go out.
+         */
+        hasFeedbackAudio: submission?.feedbackAudioKey != null,
+        feedbackAudioSeconds: submission?.feedbackAudioSeconds ?? null,
+
         // BR-ASG-09 — a mark does not exist for the student until released.
         //
         // releasedAt is checked HERE, explicitly. The AssignmentGrade scope
@@ -898,6 +1021,7 @@ export class AssignmentService {
                 status: "RELEASED" as const,
                 finalMarks: Number(grade.finalMarks),
                 penaltyApplied: Number(grade.penaltyApplied),
+                feedback: grade.feedback,
               }
             : submission
               ? { status: "AWAITING_GRADE" as const }

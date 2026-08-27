@@ -104,6 +104,26 @@ const isTeacher = (a: Actor) => a.roles.includes("teacher");
 const isStudent = (a: Actor) => a.roles.includes("student");
 
 /**
+ * Staff of an institute that sends us students.
+ *
+ * THE ROLE AND THE COLUMN ARE BOTH REQUIRED. Holding the role without a
+ * partner attached reaches nothing; holding the column without the role is not
+ * a partner at all. Demanding both means neither half alone is a grant.
+ */
+const isPartner = (a: Actor) => a.roles.includes("partner_admin") && !!a.partnerInstituteId;
+
+/**
+ * The students one partner sent us, as a Student-shaped predicate.
+ *
+ * Written once and reused by every model that hangs off a student, so there is
+ * ONE definition of "whose student is this" rather than six that can drift.
+ */
+const partnerStudents = (a: Actor): WhereFragment => ({
+  partnerInstituteId: a.partnerInstituteId,
+  deletedAt: null,
+});
+
+/**
  * Models with NO policy, and why.
  *
  * Kept as an explicit list because "absent" and "deliberately unscoped" look
@@ -273,6 +293,12 @@ const MODEL_POLICIES: Record<string, PolicyFn> = {
       };
     }
     if (isStudent(a)) return a.studentId ? { id: a.studentId } : DENY_ALL;
+    /*
+     * A PARTNER SEES THE STUDENTS THEIR OWN INSTITUTE SENT US and nobody
+     * else — not the record, not the name, not the COUNT. Every list, search
+     * and aggregate they can reach is filtered by this one line.
+     */
+    if (isPartner(a)) return partnerStudents(a);
     return DENY_ALL;
   },
 
@@ -388,6 +414,7 @@ const MODEL_POLICIES: Record<string, PolicyFn> = {
   },
 
   Enrolment: (a) => {
+    if (isPartner(a)) return { student: partnerStudents(a) };
     if (isAdmin(a)) return null;
     if (isTeacher(a)) return { sectionSubjectId: { in: [...a.sectionSubjectIds] } };
     if (isStudent(a)) return a.studentId ? { studentId: a.studentId } : DENY_ALL;
@@ -602,6 +629,63 @@ const MODEL_POLICIES: Record<string, PolicyFn> = {
     return DENY_ALL;
   },
 
+  /**
+   * A comment follows the work it is about.
+   *
+   * NO POLICY OF ITS OWN, deliberately: whoever may read the submission may
+   * read what was said about it, and the predicate simply restates the
+   * AssignmentSubmission one through the relation. Writing a second, subtly
+   * different rule here is how a student ends up able to read feedback on a
+   * classmate's work that the submission policy would have refused.
+   *
+   * Withdrawn comments are filtered by the SERVICE, not here — an author has
+   * to be able to see their own deleted row in order to be told it is gone.
+   */
+  SubmissionComment: (a) => {
+    if (isAdmin(a)) return null;
+    if (isTeacher(a)) {
+      return { submission: { assignment: { sectionSubjectId: { in: [...a.sectionSubjectIds] } } } };
+    }
+    if (isStudent(a)) {
+      return a.studentId ? { submission: { studentId: a.studentId } } : DENY_ALL;
+    }
+    return DENY_ALL;
+  },
+
+  /**
+   * THE PARTNER RECORD ITSELF — and the reason a partner sees exactly one.
+   *
+   * A customer list is a competitor list. Asking this table for "all partners"
+   * as a partner returns their own row and nothing else, so the existence of
+   * any other institute we work with is never disclosed — not by a list, not
+   * by a count, not by a 404 that differs from a 403.
+   */
+  PartnerInstitute: (a) => {
+    if (isAdmin(a)) return null;
+    if (isPartner(a)) return { id: a.partnerInstituteId };
+    return DENY_ALL;
+  },
+
+  /** What one partner owes us. Theirs only, on the same single value. */
+  PartnerInvoice: (a) => {
+    if (isAdmin(a)) return null;
+    if (isPartner(a)) return { partnerInstituteId: a.partnerInstituteId };
+    return DENY_ALL;
+  },
+
+  /**
+   * A line on an invoice. Reached THROUGH the invoice rather than through the
+   * student, deliberately: the line's `studentId` is nullable — a purged
+   * student leaves the line behind with its snapshot — and a predicate hung on
+   * a null column matches nothing, which would quietly empty an invoice the
+   * partner is being asked to pay.
+   */
+  PartnerInvoiceLine: (a) => {
+    if (isAdmin(a)) return null;
+    if (isPartner(a)) return { invoice: { partnerInstituteId: a.partnerInstituteId } };
+    return DENY_ALL;
+  },
+
   SubmissionFile: (a) => {
     if (isAdmin(a)) return null;
     if (isTeacher(a)) {
@@ -636,6 +720,18 @@ const MODEL_POLICIES: Record<string, PolicyFn> = {
         ? { submission: { studentId: a.studentId }, releasedAt: { not: null } }
         : DENY_ALL;
     }
+    /*
+     * RELEASED MARKS ONLY, and this is not optional politeness.
+     *
+     * BR-ASG-09 holds a mark from the student until the cohort is released
+     * together. A partner reading an unreleased mark would learn their
+     * student's result before the student does — breaking the release-together
+     * rule from OUTSIDE the Institute, where nobody would think to look for
+     * it. The same `releasedAt` clause the student's own branch carries.
+     */
+    if (isPartner(a)) {
+      return { submission: { student: partnerStudents(a) }, releasedAt: { not: null } };
+    }
     return DENY_ALL;
   },
 
@@ -664,6 +760,8 @@ const MODEL_POLICIES: Record<string, PolicyFn> = {
     if (isAdmin(a)) return null;
     if (isTeacher(a)) return { quiz: { sectionSubjectId: { in: [...a.sectionSubjectIds] } } };
     if (isStudent(a)) return a.studentId ? { studentId: a.studentId } : DENY_ALL;
+    /* Released results only, for the same reason as AssignmentGrade above. */
+    if (isPartner(a)) return { student: partnerStudents(a), releasedAt: { not: null } };
     return DENY_ALL;
   },
 
@@ -693,6 +791,7 @@ const MODEL_POLICIES: Record<string, PolicyFn> = {
       return { sectionSubject: { id: { in: [...a.sectionSubjectIds] } } };
     }
     if (isStudent(a)) return a.studentId ? { studentId: a.studentId } : DENY_ALL;
+    if (isPartner(a)) return { student: partnerStudents(a) };
     return DENY_ALL;
   },
 
@@ -708,6 +807,7 @@ const MODEL_POLICIES: Record<string, PolicyFn> = {
     if (isAdmin(a)) return null;
     if (isTeacher(a)) return { sectionSubjectId: { in: [...a.sectionSubjectIds] } };
     if (isStudent(a)) return a.studentId ? { studentId: a.studentId } : DENY_ALL;
+    if (isPartner(a)) return { student: partnerStudents(a) };
     return DENY_ALL;
   },
 
@@ -724,6 +824,7 @@ const MODEL_POLICIES: Record<string, PolicyFn> = {
     if (isAdmin(a)) return null;
     if (isTeacher(a)) return { sectionSubjectId: { in: [...a.sectionSubjectIds] } };
     if (isStudent(a)) return a.studentId ? { studentId: a.studentId } : DENY_ALL;
+    if (isPartner(a)) return { student: partnerStudents(a) };
     return DENY_ALL;
   },
 
@@ -842,6 +943,7 @@ const MODEL_POLICIES: Record<string, PolicyFn> = {
       return { liveSession: { sectionSubjectId: { in: [...a.sectionSubjectIds] } } };
     }
     if (isStudent(a)) return a.studentId ? { studentId: a.studentId } : DENY_ALL;
+    if (isPartner(a)) return { student: partnerStudents(a) };
     return DENY_ALL;
   },
 

@@ -4,6 +4,7 @@ import { ApiError, api } from "../api/client";
 import { EditorPage, EditorSection } from "../components/EditorPage";
 import { Icon } from "../components/Icon";
 import { Skeleton } from "../components/Ui";
+import { Field } from "../components/Field";
 
 /**
  * One batch — a section of a course, with everything it needs to run.
@@ -214,9 +215,7 @@ export function BatchEditPage() {
             No courses exist yet. <Link to="/courses-admin/course/new">Create one first</Link>.
           </p>
         ) : (
-          <label className="field">
-            <span>Course</span>
-            <select value={programmeId} onChange={(e) => setProgrammeId(e.target.value)}>
+          <Field label="Course" required><select value={programmeId} onChange={(e) => setProgrammeId(e.target.value)}>
               <option value="">Choose a course…</option>
               {courses.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -225,7 +224,7 @@ export function BatchEditPage() {
                 </option>
               ))}
             </select>
-          </label>
+          </Field>
         )}
       </EditorSection>
 
@@ -234,43 +233,33 @@ export function BatchEditPage() {
         title="Who is in it"
         hint="The name, the size, and who may be admitted."
       >
-        <label className="field">
-          <span>What is this batch called?</span>
-          <input
+        <Field label="What is this batch called?" required hint={<>The batch letter, or whatever staff and students call it — &ldquo;A&rdquo;,
+            &ldquo;Morning A (Female)&rdquo;, &ldquo;Batch 2&rdquo;. A short code is generated for
+            you.</>}><input
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Batch A"
           />
-          <span className="muted small">
-            The batch letter, or whatever staff and students call it — &ldquo;A&rdquo;,
-            &ldquo;Morning A (Female)&rdquo;, &ldquo;Batch 2&rdquo;. A short code is generated for
-            you.
-          </span>
-        </label>
+        </Field>
 
         <div className="form-row">
-          <label className="field">
-            <span>How many seats?</span>
-            <input
+          <Field label="How many seats?" required hint={<>Admissions warn once it is full. Can be raised later.</>}><input
               type="number"
               min={1}
               max={500}
               value={capacity}
               onChange={(e) => setCapacity(e.target.value)}
             />
-            <span className="muted small">Admissions warn once it is full. Can be raised later.</span>
-          </label>
+          </Field>
 
-          <label className="field">
-            <span>When does it run?</span>
-            <select value={shift} onChange={(e) => setShift(e.target.value as typeof shift)}>
+          <Field label="When does it run?"><select value={shift} onChange={(e) => setShift(e.target.value as typeof shift)}>
               {SHIFTS.map(([v, label]) => (
                 <option key={v} value={v}>
                   {label}
                 </option>
               ))}
             </select>
-          </label>
+          </Field>
         </div>
 
         <fieldset className="field batch-audience">
@@ -371,9 +360,8 @@ export function BatchEditPage() {
           </p>
         ) : (
           <>
-            <label className="field">
-              <span>Teacher</span>
-              <select value={teacherId} onChange={(e) => setTeacherId(e.target.value)}>
+            <Field label="Teacher" hint={<>What each teacher already carries is shown, so a batch is not handed to somebody
+                already at capacity.</>}><select value={teacherId} onChange={(e) => setTeacherId(e.target.value)}>
                 <option value="">Nobody yet</option>
                 {teachers.map((t) => (
                   <option key={t.teacherId} value={t.teacherId}>
@@ -386,11 +374,7 @@ export function BatchEditPage() {
               {/* The workload is on the option itself, because "who is free"
                   is the actual question and a bare list of names cannot
                   answer it. */}
-              <span className="muted small">
-                What each teacher already carries is shown, so a batch is not handed to somebody
-                already at capacity.
-              </span>
-            </label>
+            </Field>
             {!teacherId && (
               <p className="warn small">
                 Without a teacher, nobody can mark this batch&rsquo;s register or its coursework.
@@ -407,24 +391,18 @@ export function BatchEditPage() {
         hint="FR-REG-044 — these are given to a student the moment they are admitted."
       >
         <div className="form-row">
-          <label className="field">
-            <span>WhatsApp channel</span>
-            <input
+          <Field label="WhatsApp channel" hint={<>Announcements from the Institute, one way.</>}><input
               value={channelUrl}
               onChange={(e) => setChannelUrl(e.target.value)}
               placeholder="https://whatsapp.com/channel/…"
             />
-            <span className="muted small">Announcements from the Institute, one way.</span>
-          </label>
-          <label className="field">
-            <span>WhatsApp group</span>
-            <input
+          </Field>
+          <Field label="WhatsApp group" hint={<>Where the class talks to each other.</>}><input
               value={groupUrl}
               onChange={(e) => setGroupUrl(e.target.value)}
               placeholder="https://chat.whatsapp.com/…"
             />
-            <span className="muted small">Where the class talks to each other.</span>
-          </label>
+          </Field>
         </div>
         <p className="muted small">
           Optional, and both are shown on the approval screen and sent to the student. Leave them

@@ -3,6 +3,7 @@ import { ApiError, api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { EmptyState, SkeletonTable, askPermanent } from "../components/Ui";
 import { HowItWorks } from "../components/HowItWorks";
+import { Field } from "../components/Field";
 
 interface Programme {
   id: string;
@@ -384,9 +385,7 @@ Only possible while it holds no batches. ` +
           <form className="inline-form" onSubmit={(e) => void createSession(e)}>
             <h3>Add a term</h3>
             <div className="form-row">
-              <label className="field">
-                <span>Programme</span>
-                <select
+              <Field label="Programme" required><select
                   required
                   value={newSession.programmeId}
                   onChange={(e) => setNewSession((s) => ({ ...s, programmeId: e.target.value }))}
@@ -398,10 +397,8 @@ Only possible while it holds no batches. ` +
                     </option>
                   ))}
                 </select>
-              </label>
-              <label className="field">
-                <span>Code</span>
-                <input
+              </Field>
+              <Field label="Code" required hint={<>Used in registration numbers — permanent.</>}><input
                   required
                   maxLength={10}
                   placeholder="SP26"
@@ -411,36 +408,29 @@ Only possible while it holds no batches. ` +
                   }
                 />
                 {/* Said here because it cannot be changed afterwards. */}
-                <span className="muted small">Used in registration numbers — permanent.</span>
-              </label>
-              <label className="field">
-                <span>Name</span>
-                <input
+              </Field>
+              <Field label="Name" required><input
                   required
                   minLength={3}
                   placeholder="Spring 2026"
                   value={newSession.name}
                   onChange={(e) => setNewSession((s) => ({ ...s, name: e.target.value }))}
                 />
-              </label>
-              <label className="field">
-                <span>Starts</span>
-                <input
+              </Field>
+              <Field label="Starts" required><input
                   type="date"
                   required
                   value={newSession.startDate}
                   onChange={(e) => setNewSession((s) => ({ ...s, startDate: e.target.value }))}
                 />
-              </label>
-              <label className="field">
-                <span>Ends</span>
-                <input
+              </Field>
+              <Field label="Ends" required><input
                   type="date"
                   required
                   value={newSession.endDate}
                   onChange={(e) => setNewSession((s) => ({ ...s, endDate: e.target.value }))}
                 />
-              </label>
+              </Field>
             </div>
             <button className="btn btn-primary" disabled={busy}>
               {busy ? "Working…" : "Create term"}
@@ -577,9 +567,7 @@ Only possible while it holds no batches. ` +
           <form className="inline-form" onSubmit={(e) => void createBatch(e)}>
             <h3>Add an intake</h3>
             <div className="form-row">
-              <label className="field">
-                <span>Term</span>
-                <select
+              <Field label="Term"><select
                   required
                   value={newBatch.academicSessionId}
                   onChange={(e) =>
@@ -593,27 +581,23 @@ Only possible while it holds no batches. ` +
                     </option>
                   ))}
                 </select>
-              </label>
-              <label className="field">
-                <span>Name</span>
-                <input
+              </Field>
+              <Field label="Name"><input
                   required
                   minLength={3}
                   placeholder="Morning intake"
                   value={newBatch.name}
                   onChange={(e) => setNewBatch((b) => ({ ...b, name: e.target.value }))}
                 />
-              </label>
-              <label className="field">
-                <span>Delivery pattern</span>
-                <input
+              </Field>
+              <Field label="Delivery pattern"><input
                   required
                   minLength={2}
                   placeholder="Weekday"
                   value={newBatch.deliveryPattern}
                   onChange={(e) => setNewBatch((b) => ({ ...b, deliveryPattern: e.target.value }))}
                 />
-              </label>
+              </Field>
             </div>
             <button className="btn btn-primary" disabled={busy}>
               {busy ? "Working…" : "Create intake"}

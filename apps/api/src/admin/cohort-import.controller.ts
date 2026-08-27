@@ -10,9 +10,17 @@ import { Public, RequirePermission } from "../rbac/permissions.guard";
 // the size limit belongs to the import rules, which say what to do about it
 // ("split the file by section or batch") rather than "String must contain at
 // most N character(s)".
+/**
+ * The partner is OPTIONAL and is chosen once for the whole file.
+ *
+ * Not a CSV column, deliberately: a partner id typed on every line is a
+ * partner id mistyped on some of them, and the consequence of one wrong row is
+ * a student billed to the wrong institute.
+ */
 const previewSchema = z.object({
   csv: z.string(),
   sectionId: z.string().uuid(),
+  partnerInstituteId: z.string().uuid().optional(),
 });
 
 const commitSchema = z.object({
@@ -32,6 +40,7 @@ const commitSchema = z.object({
     }),
   }),
   note: z.string().trim().min(10).max(500),
+  partnerInstituteId: z.string().uuid().optional(),
 });
 
 /**
@@ -75,7 +84,7 @@ export class CohortImportController {
   @HttpCode(200)
   preview(@Body() body: unknown) {
     const input = previewSchema.parse(body);
-    return this.imports.preview(input.csv, input.sectionId);
+    return this.imports.preview(input.csv, input.sectionId, input.partnerInstituteId);
   }
 
   /** FR-OPS-025 — load them. */
@@ -91,6 +100,7 @@ export class CohortImportController {
         capacityOverride: input.capacityOverride,
         consentCollectedOffline: input.consentCollectedOffline,
         note: input.note,
+        ...(input.partnerInstituteId ? { partnerInstituteId: input.partnerInstituteId } : {}),
       },
       req.ip,
     );

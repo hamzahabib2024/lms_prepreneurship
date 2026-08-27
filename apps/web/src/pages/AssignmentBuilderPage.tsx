@@ -4,6 +4,7 @@ import { ApiError, api } from "../api/client";
 import { VoiceRecorder, type Recording } from "../components/VoiceRecorder";
 import { HowItWorks } from "../components/HowItWorks";
 import { formatSize } from "../components/BriefAttachments";
+import { Field } from "../components/Field";
 
 /**
  * Setting an assignment — SRS §13.6, FR-ASG-001..014.
@@ -275,11 +276,14 @@ export function AssignmentBuilderPage() {
       <section className="card">
         <h2>The work</h2>
         <div className="field-row">
-          <label className="field">
-            <span>Subject</span>
+          {/* The five fields `ready` above gates on are the five marked
+              required here, so the ticks agree with the button rather than
+              telling a different story about the same form. */}
+          <Field label="Subject" required>
             <select
               value={form.sectionSubjectId}
               onChange={(e) => set({ sectionSubjectId: e.target.value })}
+              required
             >
               <option value="">Choose…</option>
               {sections.map((s) => (
@@ -288,31 +292,40 @@ export function AssignmentBuilderPage() {
                 </option>
               ))}
             </select>
-          </label>
-          <label className="field">
-            <span>Marks</span>
+          </Field>
+          <Field label="Marks" required>
             <input
               type="number"
               min={1}
               value={form.marksAvailable}
               onChange={(e) => set({ marksAvailable: e.target.value })}
+              required
             />
-          </label>
+          </Field>
         </div>
 
-        <label className="field">
-          <span>Title</span>
-          <input value={form.title} onChange={(e) => set({ title: e.target.value })} />
-        </label>
+        <Field
+          label="Title"
+          required
+          validate={(v) => (v.trim().length >= 3 ? null : "Give it a title of at least three characters.")}
+        >
+          <input value={form.title} onChange={(e) => set({ title: e.target.value })} required />
+        </Field>
 
-        <label className="field">
-          <span>What do they have to do?</span>
+        <Field
+          label="What do they have to do?"
+          required
+          validate={(v) =>
+            v.trim().length >= 10 ? null : "Say what the task is — at least a sentence."
+          }
+        >
           <textarea
             rows={4}
             value={form.instructions}
             onChange={(e) => set({ instructions: e.target.value })}
+            required
           />
-        </label>
+        </Field>
 
         {/*
           A SPOKEN BRIEF — FR-ASG.
@@ -387,51 +400,55 @@ export function AssignmentBuilderPage() {
       <section className="card">
         <h2>When</h2>
         <div className="field-row">
-          <label className="field">
-            <span>Opens</span>
+          <Field label="Opens" required>
             <input
               type="datetime-local"
               value={form.opensAt}
               onChange={(e) => set({ opensAt: e.target.value })}
+              required
             />
-          </label>
-          <label className="field">
-            <span>Due</span>
+          </Field>
+          <Field
+            label="Due"
+            required
+            /* Checked against Opens rather than in isolation: a deadline before
+               the assignment appears is the mistake this form can actually
+               make, and it is invisible in two separate valid-looking dates. */
+            validate={(v) =>
+              form.opensAt && v && v <= form.opensAt
+                ? "The deadline must be after the assignment opens."
+                : null
+            }
+          >
             <input
               type="datetime-local"
               value={form.dueAt}
               onChange={(e) => set({ dueAt: e.target.value })}
+              required
             />
-          </label>
+          </Field>
         </div>
 
-        <label className="field">
-          <span>Absolutely closed after</span>
-          <input
+        <Field label="Absolutely closed after" hint={<>Nothing can be submitted after this, whatever the late policy says. Leave it
+            empty and late work never stops arriving.</>}><input
             type="datetime-local"
             value={form.hardCloseAt}
             onChange={(e) => set({ hardCloseAt: e.target.value })}
           />
           {/* FR-ASG-002/020 — the hard close is the one that cannot be argued
               with, and leaving it empty means work can arrive for ever. */}
-          <span className="muted small">
-            Nothing can be submitted after this, whatever the late policy says. Leave it
-            empty and late work never stops arriving.
-          </span>
-        </label>
+        </Field>
       </section>
 
       <section className="card">
         <h2>If it is late</h2>
-        <label className="field">
-          <span>What happens</span>
-          <select value={form.latePolicy} onChange={(e) => set({ latePolicy: e.target.value })}>
+        <Field label="What happens"><select value={form.latePolicy} onChange={(e) => set({ latePolicy: e.target.value })}>
             <option value="FLAG_ONLY">Accept it, marked late, no deduction</option>
             <option value="NOT_ACCEPTED">Do not accept it at all</option>
             <option value="FIXED_DEDUCTION">Take off a fixed number of marks</option>
             <option value="PER_DAY_PERCENT">Take off a percentage for each day</option>
           </select>
-        </label>
+        </Field>
 
         {(form.latePolicy === "FIXED_DEDUCTION" || form.latePolicy === "PER_DAY_PERCENT") && (
           <div className="field-row">
@@ -444,9 +461,8 @@ export function AssignmentBuilderPage() {
                 onChange={(e) => set({ latePenaltyValue: e.target.value })}
               />
             </label>
-            <label className="field">
-              <span>Never below (percent of the total)</span>
-              <input
+            <Field label="Never below (percent of the total)" hint={<>A floor stops a late submission reaching zero, which would make handing it
+                in at all pointless.</>}><input
                 type="number"
                 min={0}
                 max={100}
@@ -455,11 +471,7 @@ export function AssignmentBuilderPage() {
               />
               {/* BR-ASG-03 — without a floor a late submission can reach zero,
                   which makes handing it in pointless and is rarely intended. */}
-              <span className="muted small">
-                A floor stops a late submission reaching zero, which would make handing it
-                in at all pointless.
-              </span>
-            </label>
+            </Field>
           </div>
         )}
 
@@ -473,9 +485,7 @@ export function AssignmentBuilderPage() {
 
       <section className="card">
         <h2>What they hand in</h2>
-        <label className="field">
-          <span>Form</span>
-          <select
+        <Field label="Form"><select
             value={form.submissionType}
             onChange={(e) => set({ submissionType: e.target.value })}
           >
@@ -483,7 +493,7 @@ export function AssignmentBuilderPage() {
             <option value="TEXT">Typed into the page</option>
             <option value="BOTH">Either, or both</option>
           </select>
-        </label>
+        </Field>
 
         {form.submissionType !== "TEXT" && (
           <>
@@ -505,35 +515,28 @@ export function AssignmentBuilderPage() {
             )}
 
             <div className="field-row">
-              <label className="field">
-                <span>Largest file, in MB</span>
-                <input
+              <Field label="Largest file, in MB" hint={<>The Institute allows up to 10.</>}><input
                   type="number"
                   min={1}
                   max={10}
                   value={form.maxFileSizeMb}
                   onChange={(e) => set({ maxFileSizeMb: e.target.value })}
                 />
-                <span className="muted small">The Institute allows up to 10.</span>
-              </label>
-              <label className="field">
-                <span>How many files</span>
-                <input
+              </Field>
+              <Field label="How many files"><input
                   type="number"
                   min={1}
                   max={5}
                   value={form.maxFileCount}
                   onChange={(e) => set({ maxFileCount: e.target.value })}
                 />
-              </label>
+              </Field>
             </div>
           </>
         )}
 
         <div className="field-row">
-          <label className="field">
-            <span>Can they submit again?</span>
-            <select
+          <Field label="Can they submit again?"><select
               value={form.resubmissionPolicy}
               onChange={(e) => set({ resubmissionPolicy: e.target.value })}
             >
@@ -541,7 +544,7 @@ export function AssignmentBuilderPage() {
               <option value="UNLIMITED_UNTIL_DUE">Yes, until the deadline</option>
               <option value="LIMITED">Yes, a limited number of times</option>
             </select>
-          </label>
+          </Field>
 
           {/*
             THE OPTION ABOVE WAS UNUSABLE WITHOUT THIS.
@@ -551,17 +554,14 @@ export function AssignmentBuilderPage() {
             all and behaved as "unlimited" while claiming otherwise.
           */}
           {form.resubmissionPolicy === "LIMITED" && (
-            <label className="field">
-              <span>How many times?</span>
-              <input
+            <Field label="How many times?" hint={<>Counting the first one.</>}><input
                 type="number"
                 min={1}
                 max={20}
                 value={form.maxAttempts}
                 onChange={(e) => set({ maxAttempts: e.target.value })}
               />
-              <span className="muted small">Counting the first one.</span>
-            </label>
+            </Field>
           )}
         </div>
 
@@ -572,28 +572,23 @@ export function AssignmentBuilderPage() {
           for leaving it to the last minute. Accepted by the API since the
           beginning; never offered.
         */}
-        <label className="field">
-          <span>Grace period after the deadline</span>
-          <input
+        <Field label="Grace period after the deadline" hint={<>Minutes. Anything submitted within this is on time — not late, and no penalty. Zero
+            means the deadline is the deadline.</>}><input
             type="number"
             min={0}
             max={10080}
             value={form.graceMinutes}
             onChange={(e) => set({ graceMinutes: e.target.value })}
           />
-          <span className="muted small">
-            Minutes. Anything submitted within this is on time — not late, and no penalty. Zero
-            means the deadline is the deadline.
-          </span>
-        </label>
+        </Field>
 
         {/*
           THE MARKING GUIDE, and the reason Rubrics existed with nothing to
           point at. Optional, because most work is marked out of a number.
         */}
-        <label className="field">
-          <span>Marking guide</span>
-          <select value={form.rubricId} onChange={(e) => set({ rubricId: e.target.value })}>
+        <Field label="Marking guide" hint={<>{rubrics.length === 0
+              ? "You have not written any yet. Marking guides are made on the Marking guides screen."
+              : "Marking then shows each criterion with its own marks, and adds them up for you."}</>}><select value={form.rubricId} onChange={(e) => set({ rubricId: e.target.value })}>
             <option value="">None — mark it out of {form.marksAvailable || "the total"}</option>
             {rubrics.map((r) => (
               <option key={r.id} value={r.id}>
@@ -603,12 +598,7 @@ export function AssignmentBuilderPage() {
               </option>
             ))}
           </select>
-          <span className="muted small">
-            {rubrics.length === 0
-              ? "You have not written any yet. Marking guides are made on the Marking guides screen."
-              : "Marking then shows each criterion with its own marks, and adds them up for you."}
-          </span>
-        </label>
+        </Field>
       </section>
 
       {problems.length > 0 && (

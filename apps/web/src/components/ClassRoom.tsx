@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ApiError, api } from "../api/client";
 import { Icon } from "./Icon";
+import { Field } from "./Field";
 
 /**
  * THE CLASS'S MEETING ROOM — FR-LIV.
@@ -141,15 +142,13 @@ function RoomEditor({
 
   return (
     <div className="class-room-editor">
-      <label className="field">
-        <span>The meeting link</span>
-        <input
+      <Field label="The meeting link"><input
           type="url"
           value={url}
           placeholder="https://meet.google.com/abc-defg-hij"
           onChange={(e) => setUrl(e.target.value)}
         />
-      </label>
+      </Field>
       {/* Said before it is refused rather than after. A teacher who pastes what
           their browser shows them — which often omits the scheme — should not
           have to learn the rule from an error. */}
@@ -158,15 +157,13 @@ function RoomEditor({
         works. Clearing the box removes the link.
       </p>
 
-      <label className="field">
-        <span>Anything they should know (optional)</span>
-        <input
+      <Field label="Anything they should know (optional)"><input
           type="text"
           value={note}
           placeholder="Join five minutes early — the passcode is in the notice."
           onChange={(e) => setNote(e.target.value)}
         />
-      </label>
+      </Field>
 
       {error && (
         <div className="alert alert-error" role="alert">

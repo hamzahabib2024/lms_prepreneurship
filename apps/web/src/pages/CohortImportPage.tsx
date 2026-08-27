@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ApiError, api } from "../api/client";
 import { HowItWorks } from "../components/HowItWorks";
+import { Field } from "../components/Field";
 
 /**
  * Importing a cohort — SRS §13.10, FR-OPS-024..026.
@@ -194,9 +195,7 @@ export function CohortImportPage() {
       {!result && (
         <section className="card">
           <div className="field-row">
-            <label className="field">
-              <span>Into which batch</span>
-              <select
+            <Field label="Into which batch" required><select
                 value={sectionId}
                 onChange={(e) => {
                   setSectionId(e.target.value);
@@ -211,7 +210,7 @@ export function CohortImportPage() {
                   </option>
                 ))}
               </select>
-            </label>
+            </Field>
           </div>
 
           {/* The restriction is shown BEFORE the file is chosen, so a file of
@@ -227,9 +226,7 @@ export function CohortImportPage() {
             </p>
           )}
 
-          <label className="field">
-            <span>The file</span>
-            <input
+          <Field label="The file" required><input
               ref={fileInput}
               type="file"
               accept=".csv,text/csv"
@@ -242,7 +239,7 @@ export function CohortImportPage() {
                 void file.text().then((t) => changeCsv(t, file.name));
               }}
             />
-          </label>
+          </Field>
 
           <details>
             <summary className="small">or paste it</summary>
@@ -332,17 +329,20 @@ export function CohortImportPage() {
             </span>
           </label>
 
-          <label className="field">
-            <span>Why this cohort is being imported</span>
+          <Field
+            label="Why this cohort is being imported"
+            error={
+              note.trim().length > 0 && note.trim().length < 10
+                ? "A sentence, so this makes sense to somebody later."
+                : null
+            }
+          >
             <input
               value={note}
               onChange={(e) => setNote(e.target.value)}
               placeholder="e.g. Spring 2026 intake, admitted on paper before this System"
             />
-            {note.trim().length > 0 && note.trim().length < 10 && (
-              <span className="warn small">A sentence, so this makes sense to somebody later.</span>
-            )}
-          </label>
+          </Field>
 
           <button
             className="btn btn-primary"

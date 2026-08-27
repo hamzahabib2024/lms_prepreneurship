@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ApiError, api } from "../api/client";
+import { Field } from "../components/Field";
 
 /**
  * SETTING THE NEW PASSWORD, from the emailed link — FR-AUT.
@@ -95,9 +96,7 @@ export function ResetPasswordPage() {
                 </div>
               )}
 
-              <label className="field">
-                <span>New password</span>
-                <input
+              <Field label="New password"><input
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -105,10 +104,17 @@ export function ResetPasswordPage() {
                   required
                   autoFocus
                 />
-              </label>
+              </Field>
 
-              <label className="field">
-                <span>Type it again</span>
+              {/* The mismatch is handed to the field rather than drawn beside
+                  it: the component already owns the cross, the red edge and the
+                  announced message, and a second bespoke warning next to them
+                  would say the same thing twice in two different voices. */}
+              <Field
+                label="Type it again"
+                required
+                error={mismatch ? "The two do not match." : null}
+              >
                 <input
                   type="password"
                   value={again}
@@ -116,9 +122,7 @@ export function ResetPasswordPage() {
                   autoComplete="new-password"
                   required
                 />
-                {/* Never colour alone — the words carry it (NFR-ACC-003). */}
-                {mismatch && <span className="warn small">The two do not match.</span>}
-              </label>
+              </Field>
 
               <button
                 className="btn btn-primary"

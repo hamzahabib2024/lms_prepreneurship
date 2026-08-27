@@ -101,6 +101,32 @@ const ACKNOWLEDGED: Record<string, string> = {
     "Every submission reached here is already restricted to the caller by the " +
     "AssignmentSubmission policy, so its files are theirs by construction. " +
     "Only id and filename are projected.",
+  "partner/partner.service.ts::PartnerInvoice.lines":
+    "SAFE BY THE TRAVERSAL, and a nested `where` here would be WRONG rather " +
+    "than merely redundant. A line's only parent is the invoice, and that " +
+    "invoice has already been scoped: a partner reaching this method can only " +
+    "have loaded their own, and an administrator loads any. Restating the " +
+    "policy would mean writing `invoice: { partnerInstituteId: actor... }` — " +
+    "which is undefined for an administrator, so the filter would silently " +
+    "empty every invoice the office opened. The rows are projected to the " +
+    "snapshot columns the invoice prints; no ledger, no payment history and " +
+    "no live student record leaves this query.",
+  "assessment/submission-comment.service.ts::SubmissionComment.file":
+    "To-one, so Prisma accepts no where. SubmissionFile is state-filtered on " +
+    "`submissionId` — an unsubmitted draft upload — and this traversal cannot " +
+    "reach one: `create` refuses a fileId that is not already attached to THIS " +
+    "submission, so every anchored file has a submissionId by construction and " +
+    "is the same submission the parent comment was scoped by. Only " +
+    "originalFilename is projected, to label the comment with the file it is " +
+    "about; nothing else about the file, and none of its bytes, leaves this " +
+    "query.",
+  "assessment/submission-comment.service.ts::AssignmentSubmission.assignment":
+    "To-one parent. Assignment is state-filtered on publicationStatus, and a " +
+    "DRAFT one is unreachable here for a plain reason: a submission cannot " +
+    "exist against an assignment that was never published, so an assignment " +
+    "with one of this caller's submissions hanging off it has been published " +
+    "by definition. Read only to route the notification — id, title and " +
+    "sectionSubjectId — and none of it is returned to the caller.",
   "finance/payment-submission.service.ts::PaymentSubmission.documents":
     "SAFE BY THE TRAVERSAL ITSELF, and this is the one include where that is " +
     "literally the policy. RegistrationDocument's student predicate is " +

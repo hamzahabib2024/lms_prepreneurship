@@ -32,16 +32,27 @@ import { EmailChannel } from "../notification/channel/email.channel";
  * plainly to go and look in their email, and every session ends the moment the
  * password changes.
  *
- * IT NEVER SAYS WHETHER AN ADDRESS IS REGISTERED. Both the request and its
- * refusals return the same sentence whether or not there is an account. An
- * endpoint that says "no such user" is a free membership test for anybody with
- * a list of email addresses — and at an institute that list is the student
- * roster.
+ * IT SAYS WHEN AN ADDRESS IS NOT OURS, and that is a decision the Institute
+ * made deliberately after being shown the trade-off.
  *
- * TIMING IS NOT A SIDE CHANNEL EITHER, within reason. The unknown-address path
- * does the same hashing work as the known one, so the two do not differ by the
- * cost of an Argon2 hash. Perfect equality is not achievable over a network and
- * is not the bar; not being trivially distinguishable is.
+ * The alternative — one sentence for every outcome — hides whether an address
+ * is registered, which stops somebody testing a list of addresses against the
+ * student roster. It also means a person who mistypes their own address is
+ * told their link is on its way and then waits for mail that will never come,
+ * and the office is left explaining a form that lies to people.
+ *
+ * The Institute weighed those and chose to be told. What remains against a
+ * scan, and is now doing real work rather than being a second line of
+ * defence:
+ *
+ *   · five requests an hour per address (the route's throttle), which makes
+ *     grinding through a list slow enough to be useless;
+ *   · every lookup for an unknown address is written to the security log, so
+ *     a scan is visible afterwards rather than silent.
+ *
+ * A SUSPENDED ACCOUNT IS STILL NOT DISTINGUISHED from an absent one. Whether
+ * the Institute has suspended somebody is its business and the office's to
+ * explain, not an unauthenticated endpoint's.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
@@ -49,10 +60,10 @@ import { EmailChannel } from "../notification/channel/email.channel";
 const TOKEN_BYTES = 32;
 const VALID_MINUTES = 30;
 
-/** The same sentence for every outcome. See the note above. */
-const ALWAYS =
-  "If that email address belongs to an account, a link for setting a new password " +
-  "has been sent to it. It is valid for 30 minutes.";
+/** What a person is told when the link really is on its way. */
+const SENT =
+  "A link for setting a new password has been sent. It is valid for 30 minutes, " +
+  "and only somebody who can open that mailbox can use it.";
 
 @Injectable()
 export class PasswordResetService {
@@ -86,11 +97,18 @@ export class PasswordResetService {
      * suspended is the office's job, not an unauthenticated endpoint's.
      */
     if (!user || user.status !== "ACTIVE") {
-      // The same work as the real path, so the two cannot be told apart by how
-      // long they take.
-      createHash("sha256").update(randomBytes(TOKEN_BYTES)).digest("hex");
+      /*
+       * WRITTEN DOWN BEFORE IT IS REFUSED. This is the line that makes a scan
+       * visible: somebody working through a list of addresses leaves one of
+       * these per attempt, with the address and the address they used it from.
+       */
       await this.recordAttempt(null, address, ip, user ? "not_active" : "no_account");
-      return { message: ALWAYS };
+      throw new AppError("RESOURCE_NOT_FOUND", {
+        message:
+          "There is no account with that email address. Check it for a typo — it must be " +
+          "the address the Institute has for you. If you are not sure which that is, ask " +
+          "the office.",
+      });
     }
 
     const token = randomBytes(TOKEN_BYTES).toString("base64url");
@@ -134,7 +152,7 @@ export class PasswordResetService {
     await this.recordAttempt(user.id, address, ip, `sent:${outcome.status}`);
     this.logger.log(`password reset requested for ${user.id} — email ${outcome.status}`);
 
-    return { message: ALWAYS };
+    return { message: SENT };
   }
 
   /**

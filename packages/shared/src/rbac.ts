@@ -18,7 +18,22 @@
 
 // ---------------------------------------------------------------- roles ----
 
-export const ROLES = ["super_admin", "admin", "teacher", "student"] as const;
+/**
+ * `partner_admin` IS DELIBERATELY A ROLE OF ITS OWN.
+ *
+ * An institute that sends us students needs to watch how they are doing. The
+ * tempting shortcut is an Admin with a narrower scope — and it is the wrong
+ * answer, because `admin` holds FULL on very nearly every resource in the
+ * matrix below. One mistake in one scope predicate would then hand an outside
+ * organisation the whole Institute: every student, every fee, every audit
+ * entry.
+ *
+ * A NEW ROLE STARTS WITH NOTHING. `resolvePermission` begins at scope NONE and
+ * a role absent from a resource's policy contributes nothing at all, so this
+ * role reaches only what is written down for it — a short list, all of it
+ * `read`. The blast radius of a mistake is one resource rather than the System.
+ */
+export const ROLES = ["super_admin", "admin", "teacher", "student", "partner_admin"] as const;
 export type Role = (typeof ROLES)[number];
 
 /**
@@ -63,7 +78,16 @@ const FULL: readonly Action[] = ["create", "read", "update", "delete", "approve"
  *  OWN       records about, or authored by, the actor
  *  NONE      denied under all conditions
  */
-export const SCOPES = ["ALL", "SECTION", "ASSIGNED", "ENROLLED", "OWN", "NONE"] as const;
+/**
+ * PARTNER — the students one outside institute sent us, and nothing else.
+ *
+ * Resolved from `User.partnerInstituteId`, which is set only on partner staff.
+ * A partner_admin whose column is null reaches NOTHING: the predicate returns
+ * DENY_ALL rather than falling through to something broader, because the
+ * failure direction that matters here is "sees nothing" and never "sees
+ * everybody".
+ */
+export const SCOPES = ["ALL", "SECTION", "ASSIGNED", "ENROLLED", "OWN", "PARTNER", "NONE"] as const;
 export type Scope = (typeof SCOPES)[number];
 
 // ------------------------------------------------------------- resources ---
@@ -110,6 +134,28 @@ export const RESOURCES = [
    * ledger.
    */
   "payment_submission",
+  /**
+   * THE SENDING INSTITUTE ITSELF — its name, its contacts, its billing mode,
+   * and which of our students belong to it.
+   *
+   * Creating one is a Super Admin act because it opens a door: from the moment
+   * a partner exists, somebody outside this Institute can be given an account
+   * that reads student records. That is the kind of change §4.5 reserves for
+   * the person who also holds the restore key.
+   *
+   * A partner reads their OWN entry and no other. They must not learn that any
+   * other partner exists — a customer list is a competitor list.
+   */
+  "partner_institute",
+  /**
+   * WHAT A PARTNER OWES US, when they are the payer.
+   *
+   * Held apart from `payment` deliberately. `payment` is a STUDENT's money and
+   * §4.5 puts the whole resource behind step-up; an invoice is a business
+   * document addressed to an organisation, and the partner it belongs to has
+   * to be able to read it without holding any grant over a student's ledger.
+   */
+  "partner_invoice",
   /** A course's PUBLISHED PRICE — what an applicant is quoted before they pay.
    *  Separate from `payment`, which is money that has actually moved. Setting
    *  the price and recording a receipt are different authorities: the first is
@@ -165,6 +211,22 @@ export const RESOURCES = [
   "rubric",
   "submission",
   "submission_roster",
+  /**
+   * WHAT THE TEACHER SAID ABOUT THE WORK, and what the student said back.
+   *
+   * Deliberately not `grade`. A mark is a judgement the Institute stands
+   * behind, released to a whole cohort at once and revisable only with a
+   * recorded reason; a comment is a conversation about a piece of work, and
+   * tying the two together is what stopped a teacher saying "this is the wrong
+   * file type, send a PDF" without first inventing a score. Nothing under this
+   * resource carries marks or affects one.
+   *
+   * A STUDENT MAY CREATE, and that is the point of it: feedback nobody can
+   * answer becomes a message to the teacher's personal number, which is where
+   * the System stops being the record. What a teacher wants kept private is
+   * `internal_note`, which has no student key and never will.
+   */
+  "submission_comment",
   "grade",
   "internal_note",
   "quiz",
@@ -297,6 +359,9 @@ export const PERMISSION_MATRIX: Record<Resource, ResourcePolicy> = {
     admin: { actions: FULL, scope: "ALL" },
     teacher: { actions: ["read"], scope: "SECTION" },
     student: { actions: ["read", "update"], scope: "OWN" },
+    /* Their own institute's students, read-only. `export` because the reason
+       they log in is usually to put the results into their own records. */
+    partner_admin: { actions: ["read", "export"], scope: "PARTNER" },
   },
   /**
    * FR-USR-003 — the institute-wide directory of every account.
@@ -383,6 +448,32 @@ export const PERMISSION_MATRIX: Record<Resource, ResourcePolicy> = {
    * `approve` is the office verifying one, and carries step-up for the same
    * reason `payment` does: it is the act that puts money in the ledger.
    */
+  /**
+   * The partner record. See the note beside the resource name.
+   *
+   * A PARTNER READS THEIRS AND NOTHING ELSE — the PARTNER scope resolves to
+   * their own row, so "list the partners" returns exactly one to them and the
+   * existence of any other is not disclosed.
+   */
+  partner_institute: {
+    super_admin: { actions: FULL, scope: "ALL" },
+    /* An Admin runs admissions and imports the cohorts, so they read and
+       update; CREATING a partner opens the door and stays with Super Admin. */
+    admin: { actions: ["read", "update"], scope: "ALL" },
+    partner_admin: { actions: ["read"], scope: "PARTNER" },
+  },
+  /**
+   * The invoice. The office raises and issues it; the partner reads their own.
+   *
+   * NO `create` FOR A PARTNER, and no `update`. They may look at what they owe
+   * and, through the payment routes, tell us they have paid it — which is a
+   * `payment_submission`, not a change to the invoice itself.
+   */
+  partner_invoice: {
+    super_admin: { actions: FULL, scope: "ALL", requiresStepUp: true },
+    admin: { actions: FULL, scope: "ALL", requiresStepUp: true },
+    partner_admin: { actions: ["read", "export"], scope: "PARTNER" },
+  },
   payment_submission: {
     super_admin: { actions: FULL, scope: "ALL", requiresStepUp: true },
     admin: { actions: FULL, scope: "ALL", requiresStepUp: true },
@@ -625,11 +716,35 @@ export const PERMISSION_MATRIX: Record<Resource, ResourcePolicy> = {
     admin: { actions: ["read", "export"], scope: "ALL" },
     teacher: { actions: ["read", "export"], scope: "ASSIGNED" },
   },
+  /**
+   * TALKING ABOUT THE WORK — see the note beside the resource name.
+   *
+   * A TEACHER WRITES ON WHAT THEY ARE ASSIGNED TO MARK; a student writes on
+   * their OWN. `delete` is withdrawing something you wrote yourself, and the
+   * service refuses anybody else's — a teacher cannot erase a student's reply,
+   * and neither can erase the other's account of what was said.
+   *
+   * NO STEP-UP and no `approve`: this is a conversation, not a decision.
+   * Administrators read but do not write, because a comment on a piece of work
+   * should come from the person who marked it.
+   */
+  submission_comment: {
+    super_admin: { actions: ["read"], scope: "ALL" },
+    admin: { actions: ["read"], scope: "ALL" },
+    teacher: { actions: ["create", "read", "update", "delete"], scope: "ASSIGNED" },
+    student: { actions: ["create", "read", "update", "delete"], scope: "OWN" },
+  },
   grade: {
     super_admin: { actions: ["read", "update"], scope: "ALL" },
     admin: { actions: ["read", "update"], scope: "ALL" },
     teacher: { actions: ["create", "read", "update"], scope: "ASSIGNED" },
     student: { actions: ["read"], scope: "OWN" },
+    /* READ, never update — a partner does not mark. And RELEASED marks only,
+       which this grant cannot express: BR-ASG-09 is enforced by an explicit
+       `releasedAt` check in the query, because the scope predicate does not
+       filter nested includes. A partner seeing a mark before the student it
+       belongs to would break the release-together rule from the outside. */
+    partner_admin: { actions: ["read", "export"], scope: "PARTNER" },
   },
   // §4.7: internal grading notes are never visible to a student. There is no
   // `student` key and there must never be one.
@@ -691,6 +806,8 @@ export const PERMISSION_MATRIX: Record<Resource, ResourcePolicy> = {
     // also satisfied the bulk-marking endpoint — a student could mark the
     // whole class present. Self check-in is now its own resource.
     student: { actions: ["read"], scope: "OWN" },
+    /* Whether their people are turning up — the reason a partner rings us. */
+    partner_admin: { actions: ["read", "export"], scope: "PARTNER" },
   },
   attendance_register: {
     super_admin: { actions: FULL, scope: "ALL" },
@@ -723,6 +840,10 @@ export const PERMISSION_MATRIX: Record<Resource, ResourcePolicy> = {
     admin: { actions: ["read", "export", "configure"], scope: "ALL" },
     teacher: { actions: ["read", "export", "configure"], scope: "ASSIGNED" },
     student: { actions: ["read"], scope: "OWN" },
+    /* Read and export, never `configure` — the threshold that decides whether
+       somebody has completed a subject is the Institute's rule, not a
+       customer's. */
+    partner_admin: { actions: ["read", "export"], scope: "PARTNER" },
   },
   /**
    * FR-PRG-011/012 — the whole cohort, worst-first.
@@ -743,6 +864,7 @@ export const PERMISSION_MATRIX: Record<Resource, ResourcePolicy> = {
     admin: { actions: ["create", "read", "update"], scope: "ALL" },
     teacher: { actions: ["create", "read", "update"], scope: "ASSIGNED" },
     student: { actions: ["read"], scope: "OWN" },
+    partner_admin: { actions: ["read", "export"], scope: "PARTNER" },
   },
   progress_cohort: {
     super_admin: { actions: ["read", "export"], scope: "ALL" },
@@ -758,6 +880,9 @@ export const PERMISSION_MATRIX: Record<Resource, ResourcePolicy> = {
     },
     teacher: { actions: ["read"], scope: "ASSIGNED" },
     student: { actions: ["read", "export"], scope: "OWN" },
+    /* The document their student was issued. No `approve`: awarding a
+       certificate in this Institute's name is this Institute's decision. */
+    partner_admin: { actions: ["read"], scope: "PARTNER" },
   },
 
   // ----------------------------------------------- §4.5.10 communication --
@@ -879,7 +1004,23 @@ export const PERMISSION_MATRIX: Record<Resource, ResourcePolicy> = {
     super_admin: { actions: ["read", "export"], scope: "ALL" },
   },
   backup: {
-    super_admin: { actions: ["create", "read", "configure"], scope: "ALL" },
+    /*
+     * `export` IS TAKING A COPY OFF THE SERVER, and it is the heaviest of
+     * these four verbs even though it writes nothing.
+     *
+     * An archive is every CNIC, address, telephone number, bank slip and mark
+     * the Institute holds, in one file, on somebody's laptop. Creating one
+     * changes nothing; carrying one out of the building is the act that can
+     * never be undone. So it sits with `restore` in requiring step-up, and it
+     * stays with the Super Admin — the same person who already holds the
+     * restore key — rather than widening the most sensitive resource in the
+     * System to make a download more convenient.
+     */
+    super_admin: {
+      actions: ["create", "read", "configure", "export"],
+      scope: "ALL",
+      requiresStepUp: true,
+    },
   },
   restore: {
     super_admin: { actions: ["create"], scope: "ALL", requiresStepUp: true },
@@ -926,12 +1067,24 @@ export interface PermissionDecision {
     | "step_up_required";
 }
 
-/** Widest first — used to resolve the union across multiple roles (FR-RBAC-006). */
+/**
+ * Widest first — used to resolve the union across multiple roles (FR-RBAC-006).
+ *
+ * PARTNER SITS JUST ABOVE OWN, and the placement is a safety choice rather
+ * than a statement about how many rows each reaches. This ranking only ever
+ * matters for somebody holding TWO roles at once, and the pairing to think
+ * about is a partner's own member of staff who is also enrolled here as a
+ * student. Ranking PARTNER low means such a person's student-scoped grants can
+ * never be widened by their partner role beyond the cohort their institute
+ * sent us — and if the two ever genuinely conflict, the narrower answer is the
+ * one nobody has to apologise for.
+ */
 const SCOPE_BREADTH: Record<Scope, number> = {
   ALL: 5,
   SECTION: 4,
   ASSIGNED: 3,
   ENROLLED: 2,
+  PARTNER: 2,
   OWN: 1,
   NONE: 0,
 };
