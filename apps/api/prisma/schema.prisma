@@ -107,6 +107,37 @@ enum PaymentMethod {
 /// it. The two were one concept before this, which meant the only way a
 /// payment could exist was for an administrator to type it in, and a student
 /// who paid their second instalment had nowhere to say so.
+/// WHO SETTLES THE BILL for a partner's students.
+///
+/// The distinction is not cosmetic: it decides whether a FeeCharge is ever
+/// raised against the student at all. See the note on Student.feePayer.
+enum PartnerBillingMode {
+  /// The sending institute is invoiced. Their students owe us nothing.
+  PARTNER_PAYS
+  /// The institute sends us students and we collect from them as we do our
+  /// own. Indistinguishable from a direct admission, financially.
+  STUDENT_PAYS
+}
+
+/// SNAPSHOTTED ON THE STUDENT — see Student.feePayer.
+enum FeePayer {
+  STUDENT
+  PARTNER
+}
+
+/// Where a partner's invoice stands.
+enum PartnerInvoiceStatus {
+  /// Being assembled. Lines may still be added; nothing has been sent.
+  DRAFT
+  /// Sent to the partner. From here it is a claim on somebody.
+  ISSUED
+  PART_PAID
+  PAID
+  /// Withdrawn. Kept, never deleted — an invoice somebody has seen is a
+  /// document they may ask about a year later.
+  CANCELLED
+}
+
 enum PaymentSubmissionStatus {
   PENDING
   VERIFIED
@@ -263,21 +294,30 @@ model User {
   sessions               UserSession[]
   passwordResets         PasswordResetToken[]
   studentNotes           StudentNote[]
+  submissionComments     SubmissionComment[]
+
+  /// Set ONLY on a partner_admin: which institute this person acts for.
+  ///
+  /// Their entire reach derives from this one column — see the PARTNER scope
+  /// in scope.extension.ts — so a partner_admin with it null reaches NOTHING,
+  /// which is the correct failure direction.
+  partnerInstituteId     String?           @map("partner_institute_id") @db.Uuid
+  partnerInstitute       PartnerInstitute? @relation("PartnerStaff", fields: [partnerInstituteId], references: [id], onDelete: Restrict)
   announcements          Announcement[]
   notifications          Notification[]
   notificationPreference NotificationPreference?
   student                Student?
   teacher                Teacher?
 
-  discussionPosts DiscussionPost[]
+  discussionPosts       DiscussionPost[]
+  completionDecisions   SubjectCompletion[]
+  endorsedPosts         DiscussionPost[]       @relation("PostEndorsements")
+  resolvedPosts         DiscussionPost[]       @relation("PostResolutions")
+  assignmentAttachments AssignmentAttachment[]
 
   @@index([status])
   @@index([deletedAt])
   @@map("users")
-  completionDecisions SubjectCompletion[]
-  endorsedPosts DiscussionPost[] @relation("PostEndorsements")
-  resolvedPosts DiscussionPost[] @relation("PostResolutions")
-  assignmentAttachments AssignmentAttachment[]
 }
 
 model Role {
@@ -687,6 +727,28 @@ model Student {
   guardianPhone String?  @map("guardian_phone") @db.VarChar(20)
   admissionDate DateTime @map("admission_date") @db.Date
 
+  /// The institute that sent this student to us, when one did.
+  ///
+  /// ON THE STUDENT AND NOT ON THE SECTION, deliberately. A partner's students
+  /// routinely sit in a class beside our own — a mixed cohort is the normal
+  /// case — so a section cannot answer "whose student is this".
+  partnerInstituteId String? @map("partner_institute_id") @db.Uuid
+
+  /// WHO PAYS FOR THIS STUDENT — snapshotted here, never read live from the
+  /// partner.
+  ///
+  /// A partner that switches to STUDENT_PAYS next term must not silently
+  /// rewrite who owed what last term (BR-DAT-02, the same rule the payment
+  /// submission snapshots follow). Reading the mode from the partner at query
+  /// time would do exactly that, retrospectively, for every student they ever
+  /// sent.
+  ///
+  /// PARTNER here means NO FeeCharge is ever raised against this student:
+  /// their outstandingBalance stays 0 by construction rather than by a filter
+  /// somebody has to remember, so `debtors()` cannot chase them and their own
+  /// Fees page has nothing to show but who is paying.
+  feePayer FeePayer @default(STUDENT) @map("fee_payer")
+
   outstandingBalance Decimal @default(0) @map("outstanding_balance") @db.Decimal(12, 2)
 
   createdAt DateTime  @default(now()) @map("created_at")
@@ -700,6 +762,8 @@ model Student {
   /// What they have SAID they paid. Kept apart from `payments`, which is what
   /// the Institute has verified it holds.
   paymentSubmissions PaymentSubmission[]
+  partnerInstitute   PartnerInstitute?    @relation(fields: [partnerInstituteId], references: [id], onDelete: Restrict)
+  partnerInvoiceLines PartnerInvoiceLine[]
   attendance         AttendanceRecord[]
   watchProgress      WatchProgress[]
   submissionFiles    SubmissionFile[]
@@ -713,13 +777,13 @@ model Student {
   registrations      RegistrationRequest[]
   feeCharges         FeeCharge[]
   notes              StudentNote[]
+  subjectCompletions SubjectCompletion[]
 
   // FR-REG-057: roll numbers are unique within a section and reusable after
   // withdrawal. Enforced as a partial unique index in raw SQL (live rows only).
   @@index([currentSectionId, currentRollNo])
   @@index([registrationNoPrevious])
   @@map("students")
-  subjectCompletions SubjectCompletion[]
 }
 
 /// A staff note about a student — FR-REG-046, §4.5 `internal_note`.
@@ -965,13 +1029,13 @@ model SectionSubject {
   attendanceWarnings AttendanceWarning[]
   studentNotes       StudentNote[]
 
-  discussionPosts DiscussionPost[]
+  discussionPosts    DiscussionPost[]
+  subjectCompletions SubjectCompletion[]
 
   @@unique([sectionId, subjectId])
   @@index([sectionId])
   @@index([subjectId])
   @@map("section_subjects")
-  subjectCompletions SubjectCompletion[]
 }
 
 /// BR-ACC-04: THE SOLE SOURCE OF `ASSIGNED` SCOPE.
@@ -1283,13 +1347,13 @@ model Certificate {
   /// the rule that was actually applied rather than today's configuration.
   criteriaApplied     Json?    @map("criteria_applied")
 
-  status   CertificateStatus @default(ISSUED)
-  issuedAt DateTime          @default(now()) @map("issued_at")
-  issuedBy String            @map("issued_by") @db.Uuid
+  status         CertificateStatus @default(ISSUED)
+  issuedAt       DateTime          @default(now()) @map("issued_at")
+  issuedBy       String            @map("issued_by") @db.Uuid
   /// FR-CRT-002 vs the manual route. An earned certificate was recomputed and
   /// met the criteria; a manual one was an administrator's decision. Both are
   /// legitimate and they are not the same claim, so the row says which.
-  issuedManually Boolean @default(false) @map("issued_manually")
+  issuedManually Boolean           @default(false) @map("issued_manually")
 
   /// BR-DAT-02 — revoked, never deleted. A certificate that vanished would
   /// leave an employer holding a document the System denies exists.
@@ -1970,7 +2034,7 @@ model Assignment {
   /// The minimum retainable mark, as a percentage of marksAvailable.
   latePenaltyFloor Decimal?   @map("late_penalty_floor") @db.Decimal(6, 2)
 
-  submissionType   SubmissionType @default(FILE) @map("submission_type")
+  submissionType    SubmissionType @default(FILE) @map("submission_type")
   /// Bounded by the institute-wide policy (Appendix H); a teacher may narrow
   /// it but never widen it (FR-ASG-006).
   /// A SPOKEN BRIEF, where the teacher recorded one — FR-ASG.
@@ -1984,19 +2048,19 @@ model Assignment {
   /// Reached only through an authenticated route — a brief belongs to the
   /// students enrolled in that class. There is no public endpoint, which is
   /// what separates this from MediaAsset.
-  briefAudioKey     String? @map("brief_audio_key") @db.VarChar(500)
+  briefAudioKey     String?        @map("brief_audio_key") @db.VarChar(500)
   /// Reported by the recorder and clamped: measuring an Opus stream needs
   /// ffmpeg, which this System does not ship. A display hint only -- nothing
   /// is decided by it, so an unverifiable value is acceptable here in a way it
   /// would not be on a lecture, where watch progress depends on the duration.
-  briefAudioSeconds Int?    @map("brief_audio_seconds") @db.SmallInt
+  briefAudioSeconds Int?           @map("brief_audio_seconds") @db.SmallInt
   /// webm on Chrome and Firefox, m4a on Safari — kept so playback answers
   /// with the true type rather than guessing from a generated filename.
-  briefAudioType    String? @map("brief_audio_type") @db.VarChar(100)
+  briefAudioType    String?        @map("brief_audio_type") @db.VarChar(100)
 
-  allowedFileTypes Json           @map("allowed_file_types")
-  maxFileSizeMb    Int            @default(10) @map("max_file_size_mb") @db.SmallInt
-  maxFileCount     Int            @default(5) @map("max_file_count") @db.SmallInt
+  allowedFileTypes Json @map("allowed_file_types")
+  maxFileSizeMb    Int  @default(10) @map("max_file_size_mb") @db.SmallInt
+  maxFileCount     Int  @default(5) @map("max_file_count") @db.SmallInt
 
   resubmissionPolicy ResubmissionPolicy @default(NONE) @map("resubmission_policy")
   maxAttempts        Int?               @map("max_attempts") @db.SmallInt
@@ -2017,11 +2081,11 @@ model Assignment {
   submissions AssignmentSubmission[]
   extensions  AssignmentExtension[]
   files       SubmissionFile[]
+  attachments AssignmentAttachment[]
 
   @@index([sectionSubjectId, publicationStatus])
   @@index([dueAt])
   @@map("assignments")
-  attachments AssignmentAttachment[]
 }
 
 /// FR-ASG-022 / BR-ASG-07 — every version is retained; the latest is graded.
@@ -2040,13 +2104,38 @@ model AssignmentSubmission {
 
   textResponse String? @map("text_response") @db.Text
 
+  /// FR-ASG-027 — the marker's own voice on THIS student's work.
+  ///
+  /// ON THE SUBMISSION AND NOT ON THE GRADE, and that placement is the whole
+  /// usefulness of the feature. It lived on AssignmentGrade first, which meant
+  /// a teacher had to award a mark before they could say anything out loud —
+  /// so the commonest thing a marker actually wants to record ("this is the
+  /// wrong export, send me a PDF") was the one thing they could not, because
+  /// there was no mark to attach it to yet.
+  ///
+  /// IT IS THEREFORE IMMEDIATE, like the written comment thread beside it, and
+  /// NOT held back until grades are released. That is a deliberate change of
+  /// position: a spoken note is a conversation about the work, not the mark,
+  /// and it is governed by the same rule as SubmissionComment — which a
+  /// student already sees the moment it is written. The MARK stays released
+  /// together (BR-ASG-09); this is not the mark.
+  ///
+  /// ENTIRELY OPTIONAL, and it never replaces the written feedback: a
+  /// recording is unusable to a deaf student, unsearchable, and unreadable on
+  /// a metered connection.
+  feedbackAudioKey     String?   @map("feedback_audio_key") @db.VarChar(500)
+  feedbackAudioType    String?   @map("feedback_audio_type") @db.VarChar(100)
+  feedbackAudioSeconds Int?      @map("feedback_audio_seconds") @db.SmallInt
+  feedbackAudioAt      DateTime? @map("feedback_audio_at")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  assignment Assignment       @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
-  student    Student          @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  assignment Assignment          @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+  student    Student             @relation(fields: [studentId], references: [id], onDelete: Restrict)
   files      SubmissionFile[]
   grade      AssignmentGrade?
+  comments   SubmissionComment[]
 
   @@unique([assignmentId, studentId, version])
   @@index([assignmentId, isLatest])
@@ -2088,12 +2177,72 @@ model SubmissionFile {
   student    Student               @relation(fields: [studentId], references: [id], onDelete: Restrict)
   assignment Assignment            @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
 
+  comments SubmissionComment[]
+
   @@index([submissionId])
   @@index([contentHash])
   /// Finds a student's not-yet-attached uploads for one assignment, which is
   /// both the attach path and the orphan sweep.
   @@index([studentId, assignmentId, submissionId])
   @@map("submission_files")
+}
+
+/// WHAT THE TEACHER SAID ABOUT THE WORK — FR-ASG-027.
+///
+/// SEPARATE FROM THE GRADE, AND THAT IS THE WHOLE POINT. `AssignmentGrade`
+/// already carries `feedback`, but it is welded to a mark: a teacher could not
+/// say "your second file is the wrong export — send a PDF and I will mark it"
+/// without first inventing a score, and the student would not see it until the
+/// cohort's grades were released days later. So the most useful thing a marker
+/// can do — tell somebody what is wrong while there is still time — was the
+/// one thing the System had no way to express.
+///
+/// ANCHORED TO A FILE WHEN THERE IS ONE. `fileId` null means the comment is
+/// about the submission as a whole; set, it is about that file, and the screen
+/// shows it beside the file rather than in a general pile. A student who hands
+/// in four files and is told "this is the wrong format" should not have to
+/// guess which of the four.
+///
+/// THE STUDENT MAY REPLY, and that is deliberate. Feedback nobody can answer
+/// becomes an email to the teacher's personal address, which is where the
+/// System stops being the record. Both sides are visible to both sides —
+/// anything a teacher wants kept private belongs in `AssignmentGrade.internalNotes`,
+/// which BR-ASG-08 keeps from a student in every response, export and report.
+///
+/// NOTHING IS DELETED OUTRIGHT. `deletedAt` withdraws a comment from view and
+/// keeps it on the record, for the same reason a rejected fee claim is kept: a
+/// student who was told something and later disputes it is entitled to find it.
+model SubmissionComment {
+  id String @id @default(uuid()) @db.Uuid
+
+  submissionId String  @map("submission_id") @db.Uuid
+  /// NULL = about the whole submission. Set = about this one file.
+  fileId       String? @map("file_id") @db.Uuid
+
+  authorUserId String @map("author_user_id") @db.Uuid
+  /// The role held AT THE TIME, snapshotted like an audit entry's. A teacher
+  /// who later becomes an administrator must not turn last term's feedback
+  /// into an administrator's ruling.
+  authorRole   String @map("author_role") @db.VarChar(20)
+
+  body String @db.Text
+
+  /// Stamped when the text is changed, so a student can see that what they are
+  /// reading is not what was first written.
+  editedAt  DateTime? @map("edited_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  submission AssignmentSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  file       SubmissionFile?      @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  author     User                 @relation(fields: [authorUserId], references: [id], onDelete: Restrict)
+
+  /// The thread, in the order it was written.
+  @@index([submissionId, createdAt])
+  @@index([fileId])
+  @@map("submission_comments")
 }
 
 model AssignmentGrade {
@@ -2108,6 +2257,7 @@ model AssignmentGrade {
 
   rubricScores  Json?   @map("rubric_scores")
   feedback      String? @db.Text
+
   /// BR-ASG-08 — NEVER visible to a student, in any response, export or report.
   internalNotes String? @map("internal_notes") @db.Text
 
@@ -2521,12 +2671,12 @@ model MediaAsset {
   createdAt DateTime  @default(now()) @map("created_at")
   deletedAt DateTime? @map("deleted_at")
 
-  programmes Programme[]
-  subjects   Subject[]
+  programmes  Programme[]
+  subjects    Subject[]
+  signatories Signatory[] @relation("SignatoryImage")
 
   @@index([kind])
   @@map("media_assets")
-  signatories Signatory[] @relation("SignatoryImage")
 }
 
 /// A FILE THE BRIEF NEEDS — FR-ASG.
@@ -2544,14 +2694,14 @@ model AssignmentAttachment {
   id           String @id @default(uuid()) @db.Uuid
   assignmentId String @map("assignment_id") @db.Uuid
 
-  storageKey String @map("storage_key") @db.VarChar(500)
+  storageKey       String @map("storage_key") @db.VarChar(500)
   /// The teacher's name for it, shown to students. Never used as a path — the
   /// stored name is generated (SEC-FIL-005).
   originalFilename String @map("original_filename") @db.VarChar(255)
   /// Determined by CONTENT, not by the extension (SEC-FIL-003).
-  contentType String @map("content_type") @db.VarChar(100)
-  sizeBytes   BigInt @map("size_bytes")
-  contentHash String @map("content_hash") @db.VarChar(64)
+  contentType      String @map("content_type") @db.VarChar(100)
+  sizeBytes        BigInt @map("size_bytes")
+  contentHash      String @map("content_hash") @db.VarChar(64)
 
   uploadedBy String   @map("uploaded_by") @db.Uuid
   createdAt  DateTime @default(now()) @map("created_at")
@@ -2586,7 +2736,7 @@ model SubjectCompletion {
   /// Required when the decision disagrees with the arithmetic — a database
   /// CHECK enforces it, because the moment to ask why is while the person
   /// still knows.
-  note     String? @db.Text
+  note     String?            @db.Text
 
   /// The arithmetic as it stood when the decision was made. Null where the
   /// subject has nothing recorded yet: 0 would be a lie about a course that
@@ -2753,4 +2903,135 @@ model ProgrammeSubject {
   @@index([programmeId, sortOrder])
   @@index([subjectId])
   @@map("programme_subjects")
+}
+
+/// AN INSTITUTE THAT SENDS US STUDENTS — the System's first multi-party boundary.
+///
+/// Everything before this assumed one institute: one settings row, one name on
+/// the certificate, one set of books. A partner is the first party that is NOT
+/// us and yet must be let in, and that is why the boundary is expressed as a
+/// scope rather than as a filter somebody remembers to apply.
+///
+/// THEIR STUDENTS ARE FULLY OUR STUDENTS. We enrol, teach, mark and certify
+/// them; the partner watches. Nothing about a Student changes because it
+/// carries a partnerInstituteId — the same enrolments, the same grades, the
+/// same certificate. Only two things follow from it: who may look, and who
+/// pays.
+model PartnerInstitute {
+  id String @id @default(uuid()) @db.Uuid
+
+  name String @unique @db.VarChar(200)
+  /// Short, human, and used on an invoice number. "BHF" reads better than a
+  /// uuid on a document somebody has to quote back to us.
+  code String @unique @db.VarChar(20)
+
+  contactName  String? @map("contact_name") @db.VarChar(200)
+  contactEmail String? @map("contact_email") @db.VarChar(320)
+  contactPhone String? @map("contact_phone") @db.VarChar(20)
+  city         String? @db.VarChar(100)
+  address      String? @db.VarChar(500)
+
+  /// The DEFAULT for students imported under this partner. Each student
+  /// snapshots their own payer at admission, so changing this never rewrites
+  /// what an existing student owes.
+  billingMode PartnerBillingMode @default(PARTNER_PAYS) @map("billing_mode")
+
+  /// Withdrawn without being deleted. A partner whose students have
+  /// certificates in the world is a partner whose name has to keep resolving.
+  isActive Boolean @default(true) @map("is_active")
+
+  notes String? @db.Text
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  students Student[]
+  staff    User[]           @relation("PartnerStaff")
+  invoices PartnerInvoice[]
+
+  @@index([isActive])
+  @@map("partner_institutes")
+}
+
+/// WHAT A PARTNER OWES US FOR A PERIOD.
+///
+/// THE REASON THIS EXISTS RATHER THAN A FLAG ON FeeCharge. The obvious design
+/// is to raise the charge against the student as usual and mark it as somebody
+/// else's to pay. That poisons `students.outstanding_balance`, which is
+/// materialised and which every debtor list, fee screen and payment button in
+/// the System already trusts: the student would owe money on paper, appear on
+/// the chase list, see a bill on their own Fees page and be offered a Submit
+/// Payment button for it. Each of those is a special case that has to be
+/// remembered for ever, and the first one forgotten is a student being chased
+/// for their institute's bill.
+///
+/// So a PARTNER_PAYS student is charged NOTHING, and the money lives here.
+model PartnerInvoice {
+  id String @id @default(uuid()) @db.Uuid
+
+  partnerInstituteId String @map("partner_institute_id") @db.Uuid
+
+  /// Quoted by the partner when they pay. Allocated from the same atomic
+  /// series as a receipt number, so two clerks issuing at once cannot be
+  /// handed one number twice.
+  number String @unique @db.VarChar(50)
+
+  /// What the invoice is FOR, in the Institute's own words — "Spring 2026,
+  /// Graphic Designing". A date range alone tells the reader nothing they can
+  /// check against their own records.
+  periodLabel String @map("period_label") @db.VarChar(120)
+
+  status PartnerInvoiceStatus @default(DRAFT)
+
+  currency    String  @default("PKR") @db.Char(3)
+  /// The sum of the lines, materialised on issue so a paid invoice cannot be
+  /// re-totalled by a later edit to a line.
+  totalAmount Decimal @map("total_amount") @db.Decimal(12, 2)
+  /// Verified receipts against this invoice. Never the claimed figure.
+  paidAmount  Decimal @default(0) @map("paid_amount") @db.Decimal(12, 2)
+
+  issuedAt DateTime? @map("issued_at")
+  dueDate  DateTime? @map("due_date") @db.Date
+  notes    String?   @db.Text
+
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  partnerInstitute PartnerInstitute     @relation(fields: [partnerInstituteId], references: [id], onDelete: Restrict)
+  lines            PartnerInvoiceLine[]
+
+  @@index([partnerInstituteId, status])
+  @@map("partner_invoices")
+}
+
+/// One student's tuition on a partner's invoice.
+///
+/// SNAPSHOTS THE STUDENT (BR-DAT-02). An invoice states what was true when it
+/// was issued; a student who later transfers, is renamed or leaves must not
+/// rewrite a document the partner has already been sent. `studentId` is kept
+/// as well, so the office can still navigate from the line to the record — but
+/// it is the snapshot that prints.
+model PartnerInvoiceLine {
+  id String @id @default(uuid()) @db.Uuid
+
+  invoiceId String  @map("invoice_id") @db.Uuid
+  studentId String? @map("student_id") @db.Uuid
+
+  studentNameAtIssue      String  @map("student_name_at_issue") @db.VarChar(200)
+  registrationNoAtIssue   String  @map("registration_no_at_issue") @db.VarChar(50)
+  programmeAtIssue        String? @map("programme_at_issue") @db.VarChar(200)
+
+  description String  @db.VarChar(200)
+  amount      Decimal @db.Decimal(12, 2)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  invoice PartnerInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  student Student?       @relation(fields: [studentId], references: [id], onDelete: SetNull)
+
+  @@index([invoiceId])
+  @@index([studentId])
+  @@map("partner_invoice_lines")
 }
