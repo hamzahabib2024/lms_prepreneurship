@@ -70,7 +70,7 @@ class _CompletionPageState extends State<CompletionPage> {
                     '${roster.sectionSubject.subject} — ${roster.sectionSubject.section}',
                     style: TextStyle(
                       color: dark ? AppColorsDark.ink : AppColors.ink,
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w600,
                       fontSize: 18,
                     ),
                   ),
@@ -85,7 +85,7 @@ class _CompletionPageState extends State<CompletionPage> {
                     'Students',
                     style: TextStyle(
                       color: dark ? AppColorsDark.ink : AppColors.ink,
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w600,
                       fontSize: 16,
                     ),
                   ),
@@ -124,7 +124,7 @@ class _SummaryBar extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: dark ? AppColorsDark.surface : Colors.white,
+        color: dark ? AppColorsDark.surface : AppColors.surface,
         borderRadius: BorderRadius.circular(AppRadius.sm),
         border: Border.all(color: dark ? AppColorsDark.line : AppColors.line),
       ),
@@ -158,7 +158,7 @@ class _SummaryItem extends StatelessWidget {
             value,
             style: TextStyle(
               color: color ?? (dark ? AppColorsDark.ink : AppColors.ink),
-              fontWeight: FontWeight.bold,
+              fontWeight: FontWeight.w600,
               fontSize: 18,
             ),
           ),

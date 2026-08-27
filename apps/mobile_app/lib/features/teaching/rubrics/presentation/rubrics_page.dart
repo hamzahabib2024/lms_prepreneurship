@@ -258,7 +258,7 @@ class _CreateRubricSheetState extends State<CreateRubricSheet> {
               'Create Rubric',
               style: TextStyle(
                 color: dark ? AppColorsDark.ink : AppColors.ink,
-                fontWeight: FontWeight.bold,
+                fontWeight: FontWeight.w600,
                 fontSize: 18,
               ),
             ),
@@ -271,7 +271,7 @@ class _CreateRubricSheetState extends State<CreateRubricSheet> {
                   color: dark ? AppColorsDark.muted : AppColors.muted,
                 ),
                 filled: true,
-                fillColor: dark ? AppColorsDark.surface : Colors.white,
+                fillColor: dark ? AppColorsDark.surface : AppColors.surface,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(AppRadius.sm),
                 ),
@@ -289,7 +289,7 @@ class _CreateRubricSheetState extends State<CreateRubricSheet> {
                   color: dark ? AppColorsDark.muted : AppColors.muted,
                 ),
                 filled: true,
-                fillColor: dark ? AppColorsDark.surface : Colors.white,
+                fillColor: dark ? AppColorsDark.surface : AppColors.surface,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(AppRadius.sm),
                 ),
@@ -662,7 +662,7 @@ class _RubricDetailPageState extends State<RubricDetailPage> {
                     rubric.title,
                     style: TextStyle(
                       color: dark ? AppColorsDark.ink : AppColors.ink,
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w600,
                       fontSize: 20,
                     ),
                   ),

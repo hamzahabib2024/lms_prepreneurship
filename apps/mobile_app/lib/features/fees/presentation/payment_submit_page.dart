@@ -4,6 +4,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../core/formats.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../cubit/fees_cubit.dart';
 import '../data/fees_repository.dart';
@@ -221,7 +222,7 @@ class _PaymentSubmitPageState extends State<PaymentSubmitPage> {
       hintText: hint,
       hintStyle: TextStyle(color: dark ? AppColorsDark.muted : AppColors.muted),
       filled: true,
-      fillColor: dark ? AppColorsDark.surface : Colors.white,
+      fillColor: dark ? AppColorsDark.surface : AppColors.surface,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(AppRadius.sm),
         borderSide: BorderSide(color: dark ? AppColorsDark.line : AppColors.line),
@@ -236,7 +237,7 @@ class _PaymentSubmitPageState extends State<PaymentSubmitPage> {
   String _formatDate(String dateStr) {
     try {
       final dt = DateTime.parse(dateStr);
-      return '${dt.day}/${dt.month}/${dt.year}';
+      return Formats.shortDate(dt);
     } catch (_) {
       return dateStr;
     }
@@ -256,7 +257,7 @@ class _SectionTitle extends StatelessWidget {
       title,
       style: TextStyle(
         color: dark ? AppColorsDark.ink : AppColors.ink,
-        fontWeight: FontWeight.bold,
+        fontWeight: FontWeight.w600,
         fontSize: 16,
       ),
     );

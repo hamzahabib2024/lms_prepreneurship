@@ -12,7 +12,7 @@ InputDecoration _decoration(BuildContext context, String? hint, {bool hasError =
   final brand = dark ? AppColorsDark.brand600 : AppColors.brand600;
   final error = dark ? AppColorsDark.error : AppColors.error;
   final line = dark ? AppColorsDark.line : AppColors.line;
-  final fill = dark ? AppColorsDark.surface2 : Colors.white;
+  final fill = dark ? AppColorsDark.surface2 : AppColors.surface;
 
   return InputDecoration(
     hintText: hint,
@@ -159,7 +159,7 @@ class AdmissionSelectField extends StatelessWidget {
           icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 22),
           iconEnabledColor: muted,
           style: TextStyle(fontSize: 15, color: ink),
-          dropdownColor: dark ? AppColorsDark.surface2 : Colors.white,
+          dropdownColor: dark ? AppColorsDark.surface2 : AppColors.surface,
           menuMaxHeight: 340,
           decoration: _decoration(context, null),
           items: [

@@ -55,8 +55,8 @@ class _CohortImportPageState extends State<CohortImportPage> {
           }
         },
         builder: (context, state) {
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
+          return           SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -144,7 +144,7 @@ class _HowItWorksBanner extends StatelessWidget {
             'How it works',
             style: TextStyle(
               color: dark ? AppColorsDark.brand600 : AppColors.brand600,
-              fontWeight: FontWeight.bold,
+              fontWeight: FontWeight.w600,
               fontSize: 14,
             ),
           ),
@@ -228,7 +228,7 @@ class _StepIndicator extends StatelessWidget {
                 style: TextStyle(
                   color: color,
                   fontSize: 11,
-                  fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+                  fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
                 ),
               ),
             ],
@@ -263,7 +263,7 @@ class _SectionPicker extends StatelessWidget {
           'Section',
           style: TextStyle(
             color: dark ? AppColorsDark.ink : AppColors.ink,
-            fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.w600,
             fontSize: 14,
           ),
         ),
@@ -339,7 +339,7 @@ class _FileUpload extends StatelessWidget {
           'CSV File',
           style: TextStyle(
             color: dark ? AppColorsDark.ink : AppColors.ink,
-            fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.w600,
             fontSize: 14,
           ),
         ),
@@ -360,7 +360,7 @@ class _FileUpload extends StatelessWidget {
             width: double.infinity,
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: dark ? AppColorsDark.surface : Colors.white,
+              color: dark ? AppColorsDark.surface : AppColors.surface,
               borderRadius: BorderRadius.circular(AppRadius.sm),
               border: Border.all(
                 color: dark ? AppColorsDark.line : AppColors.line,
@@ -590,7 +590,7 @@ class _PreviewSummary extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: dark ? AppColorsDark.surface : Colors.white,
+        color: dark ? AppColorsDark.surface : AppColors.surface,
         borderRadius: BorderRadius.circular(AppRadius.sm),
         border: Border.all(color: dark ? AppColorsDark.line : AppColors.line),
       ),
@@ -681,7 +681,7 @@ class _WarningBanner extends StatelessWidget {
             title,
             style: TextStyle(
               color: color,
-              fontWeight: FontWeight.bold,
+              fontWeight: FontWeight.w600,
               fontSize: 12,
             ),
           ),
@@ -722,7 +722,7 @@ class _ReturningBanner extends StatelessWidget {
             'Returning students (${returning.length})',
             style: const TextStyle(
               color: AppColors.brand600,
-              fontWeight: FontWeight.bold,
+              fontWeight: FontWeight.w600,
               fontSize: 12,
             ),
           ),
@@ -766,7 +766,7 @@ class _BlockedBanner extends StatelessWidget {
             'Gender blocked (${blocked.length})',
             style: const TextStyle(
               color: AppColors.error,
-              fontWeight: FontWeight.bold,
+              fontWeight: FontWeight.w600,
               fontSize: 12,
             ),
           ),
@@ -817,7 +817,7 @@ class _RowProblemsBanner extends StatelessWidget {
             'Row problems (${problems.length})',
             style: const TextStyle(
               color: AppColors.error,
-              fontWeight: FontWeight.bold,
+              fontWeight: FontWeight.w600,
               fontSize: 12,
             ),
           ),
@@ -913,7 +913,7 @@ class _CommitFormState extends State<_CommitForm> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: dark ? AppColorsDark.surface : Colors.white,
+        color: dark ? AppColorsDark.surface : AppColors.surface,
         borderRadius: BorderRadius.circular(AppRadius.sm),
         border: Border.all(color: dark ? AppColorsDark.line : AppColors.line),
       ),
@@ -924,7 +924,7 @@ class _CommitFormState extends State<_CommitForm> {
             'Confirm import',
             style: TextStyle(
               color: dark ? AppColorsDark.ink : AppColors.ink,
-              fontWeight: FontWeight.bold,
+              fontWeight: FontWeight.w600,
               fontSize: 14,
             ),
           ),
@@ -1020,7 +1020,7 @@ class _ResultPanel extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: dark ? AppColorsDark.surface : Colors.white,
+            color: dark ? AppColorsDark.surface : AppColors.surface,
             borderRadius: BorderRadius.circular(AppRadius.sm),
             border: Border.all(color: dark ? AppColorsDark.line : AppColors.line),
           ),
@@ -1031,7 +1031,7 @@ class _ResultPanel extends StatelessWidget {
                 result.sectionName,
                 style: TextStyle(
                   color: dark ? AppColorsDark.ink : AppColors.ink,
-                  fontWeight: FontWeight.bold,
+                  fontWeight: FontWeight.w600,
                   fontSize: 16,
                 ),
               ),
@@ -1128,7 +1128,7 @@ class _ResultSection extends StatelessWidget {
             title,
             style: TextStyle(
               color: color,
-              fontWeight: FontWeight.bold,
+              fontWeight: FontWeight.w600,
               fontSize: 13,
             ),
           ),
@@ -1246,7 +1246,7 @@ class _EmailSummary extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: dark ? AppColorsDark.surface : Colors.white,
+        color: dark ? AppColorsDark.surface : AppColors.surface,
         borderRadius: BorderRadius.circular(AppRadius.sm),
         border: Border.all(color: dark ? AppColorsDark.line : AppColors.line),
       ),

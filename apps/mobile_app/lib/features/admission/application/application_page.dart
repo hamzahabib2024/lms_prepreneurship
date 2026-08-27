@@ -655,7 +655,7 @@ class _StepPayment extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: draft.consentAccepted
                       ? (dark ? AppColorsDark.brand600 : AppColors.brand600)
-                      : (dark ? AppColorsDark.surface2 : Colors.white),
+                      : (dark ? AppColorsDark.surface2 : AppColors.surface),
                   borderRadius: BorderRadius.circular(6),
                   border: Border.all(
                     color: draft.consentAccepted

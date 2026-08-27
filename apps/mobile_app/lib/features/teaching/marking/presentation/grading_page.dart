@@ -182,7 +182,7 @@ class _SummaryBar extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       margin: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: dark ? AppColorsDark.surface : Colors.white,
+        color: dark ? AppColorsDark.surface : AppColors.surface,
         borderRadius: BorderRadius.circular(AppRadius.sm),
         border: Border.all(
           color: dark ? AppColorsDark.line : AppColors.line,
@@ -267,7 +267,7 @@ class _SummaryItem extends StatelessWidget {
           value,
           style: TextStyle(
             color: color,
-            fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.w600,
             fontSize: 18,
           ),
         ),
@@ -398,7 +398,7 @@ class _SectionHeader extends StatelessWidget {
               '$count',
               style: TextStyle(
                 color: color,
-                fontWeight: FontWeight.bold,
+                fontWeight: FontWeight.w600,
                 fontSize: 12,
               ),
             ),
@@ -590,7 +590,7 @@ class _StudentDetailState extends State<_StudentDetail> {
                       s.name,
                       style: TextStyle(
                         color: widget.dark ? AppColorsDark.ink : AppColors.ink,
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.w600,
                         fontSize: 18,
                       ),
                     ),
