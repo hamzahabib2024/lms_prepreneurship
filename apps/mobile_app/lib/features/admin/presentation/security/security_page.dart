@@ -70,6 +70,7 @@ class _SecurityView extends StatelessWidget {
           return RefreshIndicator(
             onRefresh: () async {
               await context.read<AdminCubit>().loadSecurityOverview();
+              if (!context.mounted) return;
               await context.read<AdminCubit>().loadSecurityEvents();
             },
             child: ListView(
