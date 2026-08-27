@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { ApiError, api } from "../api/client";
+import { Field } from "../components/Field";
 
 /**
  * "I HAVE FORGOTTEN MY PASSWORD" — FR-AUT.
@@ -49,8 +50,9 @@ export function ForgotPasswordPage() {
        */
       setError(
         e instanceof ApiError && e.status === 429
-          ? "That has been asked for several times already. Wait an hour before trying again, " +
-            "and check the spam folder in the meantime."
+          ? "A link has already been sent to that address a few times in the last hour. " +
+            "Check the inbox and the spam folder — the most recent one is the one that " +
+            "works. If none arrived, ask the office to reset it for you rather than waiting."
           : e instanceof ApiError
             ? e.message
             : "That could not be sent. Try again in a moment.",
@@ -142,8 +144,11 @@ export function ForgotPasswordPage() {
                 </div>
               )}
 
-              <label className="field">
-                <span>Your email address</span>
+              <Field
+                label="Your email address"
+                required
+                hint="The address the Institute has for you. If you are not sure which it is, ask the office."
+              >
                 <input
                   type="email"
                   value={email}
@@ -152,11 +157,7 @@ export function ForgotPasswordPage() {
                   required
                   autoFocus
                 />
-                <span className="muted small">
-                  The address the Institute has for you. If you are not sure which it is, ask
-                  the office.
-                </span>
-              </label>
+              </Field>
 
               <button
                 className="btn btn-primary"
