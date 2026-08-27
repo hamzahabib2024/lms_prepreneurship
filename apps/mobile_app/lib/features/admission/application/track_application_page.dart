@@ -102,7 +102,7 @@ class _TrackApplicationPageState extends State<TrackApplicationPage> {
                 color: dark ? AppColorsDark.muted : AppColors.muted,
               ),
               filled: true,
-              fillColor: dark ? AppColorsDark.surface2 : Colors.white,
+              fillColor: dark ? AppColorsDark.surface2 : AppColors.surface,
               contentPadding:
                   const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
               enabledBorder: OutlineInputBorder(

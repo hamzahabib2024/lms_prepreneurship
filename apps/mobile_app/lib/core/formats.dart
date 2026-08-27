@@ -36,6 +36,18 @@ abstract final class Formats {
     return '${d.day} ${months[d.month - 1]} ${d.year}';
   }
 
+  /// "18 Aug 2026, 2:30 PM".
+  static String shortDateTime(DateTime d) {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    final hour = d.hour;
+    final h12 = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
+    final ampm = hour < 12 ? 'AM' : 'PM';
+    return '${d.day} ${months[d.month - 1]} ${d.year}, $h12:${d.minute.toString().padLeft(2, '0')} $ampm';
+  }
+
   static String daysAgo(DateTime d) {
     final days = DateTime.now().difference(d).inDays;
     if (days <= 0) return 'today';

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../core/formats.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/ui.dart';
@@ -328,16 +329,7 @@ class DashboardWidgetBody extends StatelessWidget {
   }
 
   String _formatDateTime(DateTime dt) {
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-    ];
-    final d = dt.toLocal();
-    final hour = d.hour;
-    final h12 = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
-    final ampm = hour < 12 ? 'AM' : 'PM';
-    final dow = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][d.weekday - 1];
-    return '$dow ${d.day} ${months[d.month - 1]}, $h12:${d.minute.toString().padLeft(2, '0')} $ampm';
+    return Formats.shortDateTime(dt);
   }
 }
 

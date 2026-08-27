@@ -190,7 +190,7 @@ class _MarkingBodyState extends State<_MarkingBody> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(
-            color: dark ? AppColorsDark.surface : Colors.white,
+            color: dark ? AppColorsDark.surface : AppColors.surface,
             border: Border(
               bottom: BorderSide(
                 color: dark ? AppColorsDark.line : AppColors.line,
@@ -275,7 +275,7 @@ class _MarkingBodyState extends State<_MarkingBody> {
                   width: double.infinity,
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: dark ? AppColorsDark.surface : Colors.white,
+                    color: dark ? AppColorsDark.surface : AppColors.surface,
                     borderRadius: BorderRadius.circular(AppRadius.sm),
                     border: Border.all(
                       color: dark ? AppColorsDark.line : AppColors.line,
@@ -326,7 +326,7 @@ class _MarkingBodyState extends State<_MarkingBody> {
                       '/ ${current.marksAvailable}',
                       style: TextStyle(
                         color: dark ? AppColorsDark.ink : AppColors.ink,
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.w600,
                         fontSize: 16,
                       ),
                     ),
@@ -359,7 +359,7 @@ class _MarkingBodyState extends State<_MarkingBody> {
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: dark ? AppColorsDark.surface : Colors.white,
+            color: dark ? AppColorsDark.surface : AppColors.surface,
             border: Border(
               top: BorderSide(
                 color: dark ? AppColorsDark.line : AppColors.line,
@@ -453,7 +453,7 @@ class _StudentHeader extends StatelessWidget {
                 student.studentName,
                 style: TextStyle(
                   color: dark ? AppColorsDark.ink : AppColors.ink,
-                  fontWeight: FontWeight.bold,
+                  fontWeight: FontWeight.w600,
                   fontSize: 16,
                 ),
               ),

@@ -287,7 +287,7 @@ class _FieldLabel extends StatelessWidget {
     return Text(
       text,
       style: TextStyle(
-        fontSize: 13.5,
+        fontSize: 12.5,
         fontWeight: FontWeight.w600,
         color: dark ? AppColorsDark.ink2 : AppColors.ink2,
       ),

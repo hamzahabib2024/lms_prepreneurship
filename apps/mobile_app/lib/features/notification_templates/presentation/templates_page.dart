@@ -63,8 +63,8 @@ class _TemplatesPageState extends State<TemplatesPage> {
 
             return RefreshIndicator(
               onRefresh: () => _cubit.load(),
-              child: ListView(
-                padding: const EdgeInsets.all(16),
+              child:               ListView(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
                 children: [
                   // Header
                   Text(
@@ -212,7 +212,7 @@ class _TemplateCardState extends State<_TemplateCard> {
 
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
-      color: dark ? AppColorsDark.surface : Colors.white,
+      color: dark ? AppColorsDark.surface : AppColors.surface,
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
@@ -229,7 +229,7 @@ class _TemplateCardState extends State<_TemplateCard> {
                         t.label,
                         style: TextStyle(
                           color: dark ? AppColorsDark.ink : AppColors.ink,
-                          fontWeight: FontWeight.bold,
+                          fontWeight: FontWeight.w600,
                           fontSize: 15,
                         ),
                       ),
@@ -373,7 +373,7 @@ class _TemplateCardState extends State<_TemplateCard> {
                     _previewTitle(),
                     style: TextStyle(
                       color: dark ? AppColorsDark.ink : AppColors.ink,
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w600,
                       fontSize: 13,
                     ),
                   ),
