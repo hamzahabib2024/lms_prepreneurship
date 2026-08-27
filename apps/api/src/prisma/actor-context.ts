@@ -17,6 +17,16 @@ export interface Actor {
   studentId?: string;
   /** Set when the user holds the teacher role. */
   teacherId?: string;
+  /**
+   * Set when the user holds `partner_admin`: the institute they act for.
+   *
+   * THEIR ENTIRE REACH IS THIS ONE VALUE. Every PARTNER predicate in
+   * scope.extension.ts resolves from it, and a partner_admin without it
+   * reaches nothing at all — which is the direction this has to fail in. Like
+   * every other field here it comes from the session and never from anything
+   * the client sent.
+   */
+  partnerInstituteId?: string;
 
   /**
    * SectionSubject ids the actor may reach.
