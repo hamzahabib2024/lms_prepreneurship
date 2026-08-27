@@ -13,11 +13,13 @@ import { MaintenanceController } from "./maintenance.controller";
 import { BulkService } from "./bulk.service";
 import { BulkController } from "./bulk.controller";
 import { BackupService } from "./backup.service";
+import { ArchiveService } from "./archive.service";
 import { BackupController } from "./backup.controller";
 import { CohortImportService } from "./cohort-import.service";
 import { CohortImportController } from "./cohort-import.controller";
 import { AcademicModule } from "../academic/academic.module";
 import { AdmissionModule } from "../admission/admission.module";
+import { ContentModule } from "../content/content.module";
 
 /**
  * §4.5.1 — the accounts of the people who run the Institute.
@@ -33,9 +35,14 @@ import { AdmissionModule } from "../admission/admission.module";
   // registration and roll numbers through the SAME service the ordinary
   // approval uses, so a returning student keeps their number and two
   // operators cannot claim one roll number.
-  imports: [AcademicModule, AdmissionModule],
+  // ContentModule for the StorageRegistry: the records archive is the only
+  // thing in this module that touches stored FILES, and it is the whole point
+  // of it — a backup of rows that references slips nobody has any more is the
+  // gap this closes.
+  imports: [AcademicModule, AdmissionModule, ContentModule],
   controllers: [UserAdminController, AuditViewerController, SecurityLogController, ImpersonationController, PersonalDataController, MaintenanceController, BulkController, BackupController, CohortImportController],
-  providers: [UserAdminService, AuditViewerService, SecurityLogService, ImpersonationService, PersonalDataService, BulkService, BackupService, CohortImportService],
+  providers: [UserAdminService, AuditViewerService, SecurityLogService, ImpersonationService, PersonalDataService, BulkService, BackupService,
+    ArchiveService, CohortImportService],
   exports: [UserAdminService],
 })
 export class AdminModule {}

@@ -1,10 +1,19 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { createHash } from "node:crypto";
 import { gzipSync, gunzipSync } from "node:zlib";
-import { mkdirSync, readFileSync, readdirSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { Prisma } from "@prisma/client";
 import { AppError } from "@lms/shared";
+import { getActor } from "../prisma/actor-context";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { SettingsService } from "../settings/settings.service";
@@ -106,6 +115,149 @@ export class BackupService {
         "This is a DATA backup. It does not contain the schema — restoring it needs a database " +
         "with the migrations and constraints already applied.",
     };
+  }
+
+  /**
+   * FR-OPS-034 — hand a backup to the operator, off this machine.
+   *
+   * THE GAP THIS CLOSES, AND IT IS THE WHOLE POINT OF THE ROUTE. Archives are
+   * written to BACKUP_DIR, which is a directory on the SAME MACHINE as the
+   * database they protect. A disk failure, a stolen laptop or a wiped VM takes
+   * the database and every backup of it in one move — so until a copy exists
+   * somewhere else, the System has a backup procedure and no backup.
+   *
+   * TAKING A COPY IS AUDITED AS A PRIVILEGED ACT (SEC-LOG-009), and not as
+   * bookkeeping. The file contains every CNIC, address and bank slip the
+   * Institute holds; "who has a copy of our student records" has to be
+   * answerable from the log rather than from memory. It is also what
+   * `lastTakenOffServer` reads to tell the office how long it has been.
+   */
+  async download(id: string, ip?: string) {
+    const actor = getActor();
+    if (!actor) throw new AppError("AUTH_TOKEN_INVALID");
+
+    const manifestPath = join(this.directory, `${id}.manifest.json`);
+    const payloadPath = join(this.directory, `${id}.ndjson.gz`);
+    if (!existsSync(manifestPath) || !existsSync(payloadPath)) {
+      throw new AppError("RESOURCE_NOT_FOUND", { message: "That backup no longer exists." });
+    }
+
+    /*
+     * VERIFIED BEFORE IT IS HANDED OVER. Sending an archive that cannot be
+     * read back is worse than sending nothing: it is a copy somebody will
+     * trust for a year and discover is broken on the day they need it.
+     */
+    const verification = await this.verify(id);
+    if (!verification.ok) {
+      throw new AppError("RESOURCE_CONFLICT", {
+        message:
+          `This backup did not verify — ${verification.message} It has not been sent. ` +
+          "Take a fresh one and download that instead.",
+      });
+    }
+
+    const body = readFileSync(payloadPath);
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as Manifest;
+
+    await this.audit.record({
+      action: "backup.download",
+      entityType: "Backup",
+      entityId: id,
+      after: {
+        by: actor.userId,
+        totalRows: manifest.totalRows,
+        checksum: manifest.checksum,
+        sizeBytes: body.length,
+      },
+      ...(ip ? { ipAddress: ip } : {}),
+    });
+
+    return { filename: `${id}.ndjson.gz`, body, manifest };
+  }
+
+  /**
+   * WHEN A COPY WAS LAST TAKEN OFF THIS MACHINE — read from the audit log.
+   *
+   * FROM THE LOG RATHER THAN FROM A COLUMN, deliberately. The question is
+   * "did a human actually carry a copy away", and the only honest record of
+   * that is the entry written when the download completed. A flag set when
+   * somebody OPENED the page would answer a different and useless question,
+   * and a column somebody can update is a column that can drift from the act.
+   */
+  async lastTakenOffServer() {
+    const entry = await this.prisma.asSystem((db) =>
+      db.auditLog.findFirst({
+        where: { action: { in: ["backup.download", "archive.download"] } },
+        orderBy: { occurredAt: "desc" },
+        select: { occurredAt: true, action: true },
+      }),
+    );
+
+    if (!entry) {
+      return {
+        takenAt: null,
+        days: null,
+        severity: "warn" as const,
+        message:
+          "No copy of the records has ever been taken off this server. If this machine is lost, " +
+          "everything on it is lost with it.",
+      };
+    }
+
+    const days = Math.floor((Date.now() - entry.occurredAt.getTime()) / 86_400_000);
+    /*
+     * ESCALATES BY PROMINENCE, NEVER BY BLOCKING. Nothing here stops anybody
+     * working: a System that refuses to teach a class because nobody took a
+     * backup has chosen the wrong thing to protect.
+     */
+    const severity = days >= 60 ? "warn" : days >= 30 ? "due" : "ok";
+
+    return {
+      takenAt: entry.occurredAt,
+      days,
+      severity,
+      message:
+        days === 0
+          ? "A copy was taken off this server today."
+          : `Last copy taken off this server ${days} day${days === 1 ? "" : "s"} ago.`,
+    };
+  }
+
+  /**
+   * Writes an UPLOADED payload into the backup directory so the existing
+   * restore can load it, and returns its id.
+   *
+   * WHY THIS RATHER THAN A SECOND RESTORE. `restore` already owns the
+   * dangerous half — maintenance mode, the REPLACE ALL DATA phrase, the
+   * ordering out of backup-plan.ts, the audit entry. Teaching it to read from
+   * a buffer as well as from disk would fork the most destructive operation in
+   * the System into two paths that have to be kept in step for ever. Staging
+   * the upload as an ordinary archive means there is still exactly one restore.
+   *
+   * The staged file is left in place deliberately: an operator who has just
+   * rebuilt a server has one verified copy of everything on that machine, and
+   * deleting it the moment it was used would be a strange kindness.
+   */
+  async stageForRestore(rows: Buffer, manifest?: Buffer): Promise<string> {
+    const id = `uploaded-${new Date().toISOString().replace(/[:.]/g, "-")}`;
+    writeFileSync(join(this.directory, `${id}.ndjson.gz`), rows);
+
+    if (manifest) {
+      writeFileSync(join(this.directory, `${id}.manifest.json`), manifest);
+    } else {
+      /*
+       * An archive without its manifest can still be loaded, but it cannot be
+       * VERIFIED — and verify is what stands between "we restored it" and "we
+       * restored something". Refusing is the honest answer.
+       */
+      throw new AppError("VALIDATION_FAILED", {
+        message:
+          "This archive has no system/manifest.json, so its contents cannot be checked before " +
+          "being loaded. Use a copy that has one.",
+      });
+    }
+
+    return id;
   }
 
   /** FR-OPS-032 — what there is. */

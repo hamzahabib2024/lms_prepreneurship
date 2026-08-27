@@ -227,6 +227,20 @@ export class LocalStorageProvider implements StorageProvider {
   }
 
   /**
+   * Restore's counterpart to `put` — see the note on the interface.
+   *
+   * `safePath` still applies, so a crafted ref inside an uploaded archive
+   * cannot write outside the storage root. An archive is a file somebody hands
+   * us, and a path traversal in one would be a way to overwrite anything the
+   * process can reach.
+   */
+  async putAt(storageRef: string, body: Buffer): Promise<void> {
+    const full = this.safePath(storageRef);
+    await mkdir(dirname(full), { recursive: true });
+    await writeFile(full, body);
+  }
+
+  /**
    * ALWAYS, and that is the point of it.
    *
    * The System's own disk has no quota rule to trip over and no sharing model

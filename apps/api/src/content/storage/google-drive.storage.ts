@@ -592,6 +592,18 @@ export class GoogleDriveStorageProvider implements StorageProvider {
    * and it is the sort of error that reads as a bug in the upload rather than
    * a missing flag.
    */
+  /**
+   * Refused for the same reason `put` is: the Institute's documents live in
+   * the System's own storage by design, so a restore never writes one here.
+   */
+  async putAt(): Promise<void> {
+    throw new AppError("VALIDATION_FAILED", {
+      message:
+        "Documents are not stored in Drive, so a restore does not write them there. " +
+        "Check DOCUMENT_STORAGE.",
+    });
+  }
+
   async putStream(input: UploadInput): Promise<StoredObjectRef> {
     if (!this.isConfigured) this.refuse();
 

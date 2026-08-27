@@ -123,6 +123,21 @@ export interface StorageProvider {
 
   /** Used for documents the System itself stores (slips, submissions, notes). */
   put(key: string, body: Buffer, contentType: string): Promise<StoredObjectRef>;
+
+  /**
+   * Writes an object AT AN EXACT REF, overwriting whatever is there.
+   *
+   * THE ONE CALLER IS RESTORE, and it needs the opposite of `put`. `put` takes
+   * a PREFIX and appends a System-generated name (SEC-FIL-005, so an uploader
+   * never chooses where their file lands) — which is right for an upload and
+   * useless for putting a file back: a restored row points at one exact
+   * storageKey, and bytes written anywhere else leave the database referring
+   * to something that is not there.
+   *
+   * It is therefore deliberately NOT reachable from any upload path. Nothing
+   * outside archive.service.ts should ever call it.
+   */
+  putAt(storageRef: string, body: Buffer): Promise<void>;
   get(storageRef: string): Promise<Buffer>;
   delete(storageRef: string): Promise<void>;
 
