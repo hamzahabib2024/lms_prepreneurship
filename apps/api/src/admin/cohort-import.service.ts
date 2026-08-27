@@ -94,9 +94,10 @@ export class CohortImportService {
    * the pairing: a file of male students against a women's section is a valid
    * file and a valid section that must not be put together.
    */
-  async preview(csv: string, sectionId: string) {
+  async preview(csv: string, sectionId: string, partnerInstituteId?: string) {
     const plan = planImport(csv);
     const section = await this.loadSection(sectionId);
+    const partner = await this.loadPartner(partnerInstituteId);
 
     const wrongGender = plan.rows.filter(
       (r) => section.genderRestriction !== "MIXED" && section.genderRestriction !== r.gender,
@@ -140,6 +141,32 @@ export class CohortImportService {
         capacity: section.capacity,
         enrolledCount: section.enrolledCount,
       },
+      /*
+       * WHAT IS ABOUT TO HAPPEN TO THE MONEY, IN WORDS.
+       *
+       * Somebody importing two hundred students must not discover the billing
+       * consequence afterwards. PARTNER_PAYS means no charge is ever raised
+       * against any of these students — their institute is invoiced instead —
+       * and that is not a detail to be inferred from a dropdown two screens
+       * back. The sentence is built here rather than on the screen so the
+       * preview and the commit cannot describe the same import differently.
+       */
+      billing: partner
+        ? {
+            partnerInstituteId: partner.id,
+            partnerName: partner.name,
+            mode: partner.billingMode,
+            summary:
+              partner.billingMode === "PARTNER_PAYS"
+                ? `Fees billed to ${partner.name} — no charges will be raised against these students.`
+                : `${partner.name}'s students pay us directly, exactly like our own.`,
+          }
+        : {
+            partnerInstituteId: null,
+            partnerName: null,
+            mode: "STUDENT_PAYS" as const,
+            summary: "Our own students — they pay us directly.",
+          },
       fileProblem: plan.fileProblem,
       unknownColumns: plan.unknownColumns,
       rowProblems: plan.rowProblems,
@@ -177,7 +204,14 @@ export class CohortImportService {
   async commit(
     csv: string,
     sectionId: string,
-    options: { capacityOverride: boolean; consentCollectedOffline: boolean; note: string },
+    options: {
+      capacityOverride: boolean;
+      consentCollectedOffline: boolean;
+      note: string;
+      /* Chosen ONCE for the whole import rather than per row: a partner id
+         typed on every line is a partner id mistyped on some of them. */
+      partnerInstituteId?: string;
+    },
     ip?: string,
   ): Promise<ImportResult> {
     const actor = getActor();
@@ -192,6 +226,7 @@ export class CohortImportService {
     }
 
     const section = await this.loadSection(sectionId);
+    const partner = await this.loadPartner(options.partnerInstituteId);
     const outcomes: RowOutcome[] = [];
 
     // Rows the file itself rejected are reported here too, so the operator gets
@@ -212,7 +247,7 @@ export class CohortImportService {
     }
 
     for (const row of plan.rows) {
-      outcomes.push(await this.loadOne(row, section, options, actor.userId, ip));
+      outcomes.push(await this.loadOne(row, section, options, actor.userId, ip, partner));
     }
 
     /*
@@ -309,6 +344,42 @@ export class CohortImportService {
 
   // ---------------------------------------------------------------- private
 
+  /**
+   * The partner this import belongs to, if any.
+   *
+   * Refuses an inactive one rather than importing under it: a partner we have
+   * stopped working with should not quietly acquire thirty more students, and
+   * discovering that at invoicing time is expensive.
+   */
+  private async loadPartner(partnerInstituteId?: string) {
+    if (!partnerInstituteId) return null;
+
+    const partner = await this.prisma.asSystem((db) =>
+      db.partnerInstitute.findFirst({
+        where: { id: partnerInstituteId, deletedAt: null },
+        select: { id: true, name: true, billingMode: true, isActive: true },
+      }),
+    );
+    if (!partner) {
+      throw new AppError("VALIDATION_FAILED", {
+        message: "That partner institute could not be found.",
+        details: [
+          { field: "partnerInstituteId", code: "NOT_FOUND", message: "Choose a partner from the list." },
+        ],
+      });
+    }
+    if (!partner.isActive) {
+      throw new AppError("RESOURCE_CONFLICT", {
+        message: `${partner.name} is marked inactive, so students cannot be imported under it.`,
+      });
+    }
+    return {
+      id: partner.id,
+      name: partner.name,
+      billingMode: partner.billingMode as "PARTNER_PAYS" | "STUDENT_PAYS",
+    };
+  }
+
   private async loadSection(sectionId: string) {
     const section = await this.prisma.asSystem((db) =>
       db.section.findUnique({
@@ -336,6 +407,7 @@ export class CohortImportService {
     options: { capacityOverride: boolean; consentCollectedOffline: boolean; note: string },
     actorUserId: string,
     ip?: string,
+    partner?: { id: string; name: string; billingMode: "PARTNER_PAYS" | "STUDENT_PAYS" } | null,
   ): Promise<RowOutcome> {
     const base = { line: row.line, fullName: row.fullName, email: row.email };
 
@@ -445,6 +517,26 @@ export class CohortImportService {
                 dateOfBirth: row.dateOfBirth,
                 gender: row.gender,
                 admissionDate: new Date(),
+                /*
+                 * WHO SENT THEM, AND WHO PAYS — SNAPSHOTTED HERE, AT ADMISSION.
+                 *
+                 * `feePayer` is copied from the partner's mode NOW and never
+                 * read from the partner again. A partner that switches to
+                 * STUDENT_PAYS next term must not retrospectively rewrite what
+                 * this student owed (BR-DAT-02), and reading the mode live at
+                 * query time would do exactly that for every student they ever
+                 * sent us.
+                 *
+                 * PARTNER here means no FeeCharge is ever raised against them,
+                 * which is what keeps outstandingBalance at 0 by construction
+                 * and keeps them off the debtors list.
+                 */
+                ...(partner
+                  ? {
+                      partnerInstituteId: partner.id,
+                      feePayer: partner.billingMode === "PARTNER_PAYS" ? "PARTNER" : "STUDENT",
+                    }
+                  : {}),
               },
               select: { id: true },
             });

@@ -21,6 +21,7 @@ import { QuizModule } from "./quiz/quiz.module";
 import { ReportingModule } from "./reporting/reporting.module";
 import { SettingsModule } from "./settings/settings.module";
 import { PublicPageModule } from "./public-page/public-page.module";
+import { PartnerModule } from "./partner/partner.module";
 import { MaintenanceGuard } from "./admin/maintenance.guard";
 import { FinanceModule } from "./finance/finance.module";
 import { DiscussionModule } from "./discussion/discussion.module";
@@ -89,6 +90,9 @@ import { PermissionsGuard } from "./rbac/permissions.guard";
     // developer deploys. Last, because it reads settings and announcements and
     // owns nothing itself.
     PublicPageModule,
+    // Institutes that send us students. Owns nothing but itself — everything it
+    // reads belongs to another module and is confined by the PARTNER scope.
+    PartnerModule,
   ],
   controllers: [HealthController],
   providers: [
