@@ -226,8 +226,10 @@ do now.
 > So the steps below are now the last thing standing between the Institute and
 > lecture playback — not the beginning of two days' work.
 >
-> **Meet in section 3 and WhatsApp in section 4 are still stubs.** Email in
-> section 1 is finished and live.
+> **Meet in section 3 is still a stub.** Email in section 1 and WhatsApp in
+> section 4 are both finished: the WhatsApp adapter sends real template
+> messages through the Meta Cloud API, and all that is missing is the three
+> settings section 4 collects.
 
 ## Step 1 — Create a project
 
@@ -770,60 +772,219 @@ docker compose exec api sh -c 'echo $GOOGLE_IMPERSONATE_SUBJECT $LIVE_PROVIDER'
 # 4. WhatsApp
 
 The slowest of the four, and the only one needing a business relationship with a
-third party. Leave it until last.
+third party. Two things make it much less work than it looks:
 
-## Step 1 — Meta Business account
+**The System only SENDS.** There is no webhook, no callback URL, no inbound
+message handling, nothing to expose to the internet. Most guides on the web walk
+you through webhook verification because they are describing a chatbot. Skip all
+of it — if a screen asks for a callback URL, you are in the wrong place.
 
-**<https://business.facebook.com>** — create one for Prepreneurship if it does
-not exist.
+**Three settings and it is live.** The adapter, the retry wording, the delivery
+log, the error explanations and the Integrations screen are all built already:
+
+```ini
+WHATSAPP_ACCESS_TOKEN=
+WHATSAPP_PHONE_NUMBER_ID=
+WHATSAPP_TEMPLATE_NAME=
+```
+
+The third one is the part everybody misses, and section 4.5 is about nothing
+else.
+
+> **If the Institute already runs Facebook or Instagram ads, step 1 is done.**
+> The Business Portfolio the ads run under is the same object WhatsApp attaches
+> to. You are joining an existing account, not creating one.
+
+## Step 1 — Find the Business Portfolio you already have
+
+**<https://business.facebook.com>** → the account switcher at the top left.
+
+If Prepreneurship is listed, use it — do not create a second one. Two portfolios
+for one institute is how the ads team and the LMS end up on different accounts
+with the phone number stranded on the wrong one.
+
+Note whether it says **Verified** under Business settings → Business info.
+Unverified works for testing; it caps how many people you can message a day and
+must be finished before real use. Verification wants a utility bill or a
+registration certificate in the Institute's name and takes a few days, so if it
+is not done, start it NOW and carry on with the rest while it processes.
 
 ## Step 2 — Create an app
 
-**<https://developers.facebook.com>** → **My Apps → Create App** → type
-**Business** → add the **WhatsApp** product.
+**<https://developers.facebook.com>** → **My Apps → Create app**.
 
-## Step 3 — Register a phone number
+- Use case: **Other**, then app type **Business**.
+- **Business portfolio: the one from step 1.** This dropdown is the whole reason
+  step 1 came first.
 
-> **The number must not already be in use by the normal WhatsApp or WhatsApp
-> Business app.** This catches most people. Use a dedicated line — a spare SIM
-> is fine.
+On the app dashboard, find **WhatsApp** and press **Set up**. That creates a
+**WhatsApp Business Account (WABA)** under the portfolio.
 
-Note the **Phone number ID** shown beside it. That is an id, not the number.
+## Step 3 — The phone number
 
-## Step 4 — Get a permanent token
+WhatsApp → **API setup**. Meta gives you a **test number** immediately, and it is
+genuinely useful — it sends real messages, free, to a handful of numbers you
+nominate. Use it for the whole of steps 4 to 7 and add the Institute's real
+number later.
 
-**Business Settings → System Users → Add**, give it access to the app, then
-**Generate token** with `whatsapp_business_messaging`.
+> **The real number must not be signed in to the ordinary WhatsApp or WhatsApp
+> Business app anywhere.** This catches most people. Registering it here takes it
+> off those apps permanently. Use a dedicated SIM — never somebody's personal
+> number, and never the number on the website that people already message.
 
-> Do **not** use the temporary token on the dashboard. It works perfectly and
-> expires in 24 hours — so messaging fails overnight and looks exactly like an
-> outage the next morning.
+Copy the **Phone number ID** shown beside the number. It is a long number like
+`123456789012345` and it is **not** the phone number. That value is
+`WHATSAPP_PHONE_NUMBER_ID`.
 
-## Step 5 — Put both in `.env`
+## Step 4 — A permanent token
+
+The token on the API setup page works perfectly and **expires in 24 hours**. Use
+it to test if you like, but if you put it in `.env` the messaging stops
+overnight and looks exactly like an outage the next morning.
+
+For the real one: **business.facebook.com → Business settings → Users → System
+users → Add**.
+
+1. Create a system user, role **Admin**.
+2. **Add assets** → your app → toggle **Manage**.
+3. **Generate new token** → pick the app → expiry **Never** → scope
+   **`whatsapp_business_messaging`**.
+
+That one scope is all the System uses, because all it does is send. Meta's own
+guides also tick `whatsapp_business_management`, which grants the power to
+create and delete templates through the API — this System never does, and a
+token that can rewrite the Institute's approved templates is a token worth
+being careful with. Leave it off unless something else needs it.
+
+Copy it the moment it appears. Meta will not show it again. It starts `EAA…` and
+is a few hundred characters. That value is `WHATSAPP_ACCESS_TOKEN`.
+
+## Step 5 — The template, which is not optional
+
+**This is the step that decides whether anything ever arrives.**
+
+Meta opens a **24-hour customer service window** when a person messages your
+number. Inside it you may send free text. Outside it you may send **nothing but a
+pre-approved template**.
+
+Every message this System sends is outside that window. A student never messages
+the Institute first — they are told their attendance is slipping, that a fee is
+due, that a mark has been released. So free text would be refused for every
+recipient the Institute has.
+
+It fails in the most expensive way imaginable: the token works, the number is
+right, and your own test message succeeds — because *you* messaged the number
+while setting it up, so you are inside the window. Then every real student gets
+nothing.
+
+### One template, two parameters — not one per message
+
+The adapter sends **a single template** and passes the notification's title and
+body into it. You do **not** submit a template per message type, and you do not
+need to match the wording under **Message wording** in the LMS sidebar. One
+approved template carries every notification the System sends.
+
+**WhatsApp Manager → Message templates → Create template**
+
+| Field | Value |
+|---|---|
+| Category | **Utility** |
+| Name | `lms_notification` (lower case, underscores — this becomes `WHATSAPP_TEMPLATE_NAME`) |
+| Language | **English** — and note exactly which one you pick |
+
+Leave the header and buttons empty. In **Body**, put exactly this:
+
+```
+*{{1}}*
+
+{{2}}
+```
+
+Meta demands sample values before it will submit. Give it something real:
+
+- Sample for `{{1}}`: `Fee payment verified`
+- Sample for `{{2}}`: `Your payment of Rs 25,000 has been verified. Receipt FEE-2026-000001.`
+
+Submit. Approval is usually minutes for a Utility template, occasionally a day.
+
+> **`en` and `en_US` are different templates to Meta.** Whichever you chose must
+> match `WHATSAPP_TEMPLATE_LANGUAGE` exactly. The wrong one is refused with an
+> error about the template not existing, which sends people hunting for a
+> spelling mistake in the name for an hour. If you picked plain **English**, the
+> code is `en`.
+
+## Step 6 — Put the three values in `.env`
 
 ```ini
 WHATSAPP_ACCESS_TOKEN=EAAG...
 WHATSAPP_PHONE_NUMBER_ID=123456789012345
+WHATSAPP_TEMPLATE_NAME=lms_notification
+WHATSAPP_TEMPLATE_LANGUAGE=en
 ```
 
-## Step 6 — Submit message templates
+`WHATSAPP_API_VERSION` is pinned at `v21.0` and should be left alone — an
+upgrade of Meta's Graph API ought to be a decision somebody makes, not something
+that happens to you.
 
-Meta requires **pre-approved templates** for anything sent outside 24 hours of
-the student writing to you — which is essentially every message this System
-sends.
+Restart the API. Under Docker, `.env` is read when a container is **created**:
+`npm run docker:up`, not `restart`.
 
-Open **Message wording** in the sidebar. Submit templates to Meta matching that
-wording. Approval usually takes a day or two.
+## Step 7 — Prove it actually sends
+
+Two things are true of a recipient before WhatsApp is even attempted, and both
+are easy to miss:
+
+1. The user has a **phone number in E.164 form** — `+923001234567`, with the
+   country code and no spaces. A bare `0300…` is suppressed rather than guessed
+   at, because a national number sent as-is is delivered to somebody in another
+   country or to nobody.
+2. The user's **"this number is on WhatsApp"** flag is set. It defaults to true
+   for students admitted through the application form, which asks; it defaults to
+   **false** for staff accounts created by an administrator.
+
+While you are on the test number, add your own phone to the allow-list:
+**API setup → To → Manage phone number list**. A test number can only message
+numbers you have nominated, and anything else comes back as error `131030`.
+
+Then trigger a real notification — announce something to a section you are in,
+or verify a fee payment — and check **Integrations → Delivery log**.
 
 ### ✅ You are done when
-Templates are approved and the Integrations screen says **live**.
 
-### While you wait
-Nothing is sent, and the System says so rather than pretending. Students still
-receive every notification in their in-app inbox, which is the record. Staff can
-read the exact wording that would have gone out under **Integrations →
-Simulated outbox** — which is also the easiest way to proofread every message
-before a single one is real.
+The Integrations screen says WhatsApp is **LIVE**, and a delivery shows **SENT**
+with a message id from Meta rather than SUPPRESSED or FAILED.
+
+## When it does not work
+
+The adapter turns Meta's error codes into sentences, so read the delivery log
+before anything else. The common ones:
+
+| What the log says | What it means |
+|---|---|
+| *"No approved WhatsApp template is configured"* | `WHATSAPP_TEMPLATE_NAME` is empty. Step 5. |
+| *"The access token is invalid or has expired"* (code 190) | You used the 24-hour token, or the system user token was revoked. Step 4. |
+| *"Usually the template name or its language does not match"* (code 100) | Almost always `en` vs `en_US`. Step 5. |
+| *"That number is not on the allow-list"* (code 131030) | You are on the test number and the recipient is not nominated. Step 7. |
+| *"Outside the 24-hour reply window"* (code 131047) | Meta did not treat this as a template message. The usual cause is a template that exists but is still **Pending** rather than **Approved** — check its status in WhatsApp Manager. |
+| *"That number cannot receive WhatsApp messages"* (code 131026) | Not a WhatsApp account, or the number is wrong. |
+| **SUPPRESSED — "No WhatsApp number on record"** | The recipient has no phone, or the number is not marked as a WhatsApp number. Step 7. |
+
+## What it costs
+
+Meta charges per 24-hour **conversation**, not per message, and Utility
+conversations in Pakistan are cheap — a few rupees. A student who gets four
+notifications in one day is one conversation. Set a spend limit under **Business
+settings → Payments** before going live on the real number; the LMS has no way
+to know your balance and Meta simply stops delivering when it runs out.
+
+## Until it is connected
+
+Nothing is sent, and the System says so rather than pretending. Every WhatsApp
+delivery is recorded **SUPPRESSED**, which is the truth. Students still receive
+every notification in their in-app inbox, which is the record, and staff can read
+the exact wording that would have gone out under **Integrations → Simulated
+outbox** — which is also the easiest way to proofread every message the Institute
+sends before a single one is real.
 
 ---
 
