@@ -14,6 +14,7 @@ import {
 import type { Request } from "express";
 import { AuthService } from "./auth.service";
 import { PasswordResetService } from "./password-reset.service";
+import { PasswordResetLimited } from "./password-reset.throttle";
 import { zodBody } from "../common/zod-validation.pipe";
 import { Public, RequirePermission } from "../rbac/permissions.guard";
 import { getActor } from "../prisma/actor-context";
@@ -78,12 +79,24 @@ export class AuthController {
    * account" is a free membership test, and at an institute the membership
    * list is the student roster.
    *
-   * THROTTLED HARD. Five an hour from one address is more than any genuine
-   * person needs and far less than is useful for mailbounce-bombing somebody
-   * or for grinding through a list of addresses.
+   * THROTTLED BY THE ADDRESS BEING ASKED ABOUT, not by the computer asking.
+   * Three an hour for any one mailbox is more than a genuine person needs and
+   * stops somebody using this form to pester a stranger — while a hall of
+   * students on one wifi are not competing for a single budget, which is what
+   * an IP-keyed limit does behind nginx.
+   *
+   * `reset-ip` sits on top as a loose per-computer backstop, so nobody walks a
+   * list of addresses three at a time. See password-reset.throttle.ts.
+   *
+   * @PasswordResetLimited IS WHAT APPLIES BOTH OF THEM, and it is required.
+   * Naming a throttler in the module does not confine it to a route — it
+   * applies to every route — so the two are declared with a `skipIf` that
+   * skips everything except the handler carrying this marker. Remove it and
+   * this form falls back to 300 a minute; put it on another route and that
+   * route gets a three-an-hour limit keyed by a field it does not have.
    */
   @Public()
-  @Throttle({ default: { limit: 5, ttl: 3_600_000 } })
+  @PasswordResetLimited()
   @Post("password/forgot")
   @HttpCode(200)
   forgotPassword(@Body(zodBody(forgotSchema)) dto: z.infer<typeof forgotSchema>, @Req() req: Request) {

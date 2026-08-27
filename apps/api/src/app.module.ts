@@ -2,6 +2,7 @@ import { MiddlewareConsumer, Module, NestModule } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from "@nestjs/core";
 import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
+import { exceptPasswordReset, trackByEmailAddress } from "./auth/password-reset.throttle";
 import { join } from "node:path";
 
 import { PrismaModule } from "./prisma/prisma.module";
@@ -62,6 +63,40 @@ import { PermissionsGuard } from "./rbac/permissions.guard";
         name: "default",
         ttl: 60_000,
         limit: Number(process.env["THROTTLE_LIMIT_PER_MINUTE"] ?? 300),
+      },
+      /*
+       * THE FORGOTTEN-PASSWORD FORM, COUNTED BY MAILBOX.
+       *
+       * `getTracker` is set HERE rather than by subclassing the guard, because
+       * a guard's tracker applies to every throttler it handles — which keyed
+       * the IP backstop below by email as well, and refused a second person on
+       * the same wifi. See password-reset.throttle.ts.
+       */
+      {
+        name: "reset-address",
+        ttl: 3_600_000,
+        limit: Number(process.env["RESET_LIMIT_PER_ADDRESS_PER_HOUR"] ?? 3),
+        getTracker: trackByEmailAddress,
+        // WITHOUT THIS, three an hour applies to the ENTIRE application. The
+        // guard runs every throttler in this array against every request; the
+        // dashboard died on the second request of the hour. See
+        // password-reset.throttle.ts.
+        skipIf: exceptPasswordReset,
+      },
+      /*
+       * AND THE BACKSTOP UNDER IT, counted by computer in the ordinary way.
+       * Without this somebody could walk a list of addresses three at a time,
+       * which is the enumeration the Institute accepted the risk of rather
+       * than invited. Thirty an hour is far above what a real office produces
+       * and far below what is useful for a scan.
+       */
+      {
+        name: "reset-ip",
+        ttl: 3_600_000,
+        limit: Number(process.env["RESET_LIMIT_PER_IP_PER_HOUR"] ?? 30),
+        // Same reason as above: a backstop for one form, not a ceiling on the
+        // System.
+        skipIf: exceptPasswordReset,
       },
     ]),
 
