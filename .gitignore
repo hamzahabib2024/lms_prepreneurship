@@ -71,3 +71,16 @@ backups/
 # Word's lock files. They appear beside any .docx somebody has open and
 # vanish when they close it, so they are never something to commit.
 ~$*
+
+# A sample paper kept at the root to be fed to the upload forms while
+# demonstrating the System. Once uploaded, the bytes live in the storage
+# provider and are catalogued in the database, so this copy is a leftover of
+# the upload rather than a source file.
+#
+# NAMED RATHER THAN MATCHED BY EXTENSION, on purpose. The project's own
+# documents live at this root too — the Requirements Specification and the
+# five guides are all tracked here — so a rule like /*.pdf or /*.docx would
+# silently swallow the next one somebody adds. Ignoring a stray file is worth
+# one line; ignoring a category that the repository legitimately uses is a
+# trap set for whoever writes the next guide.
+/Paper@GANs.pdf
