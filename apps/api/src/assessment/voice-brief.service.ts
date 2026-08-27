@@ -42,7 +42,13 @@ import { getActor } from "../prisma/actor-context";
  * mean a teacher narrowing an assignment to `pdf` silently disabled their own
  * microphone.
  */
-const AUDIO_SIGNATURES: Array<{ type: string; ext: string; test: (b: Buffer) => boolean }> = [
+/**
+ * Exported so spoken FEEDBACK is sniffed by the same table as the spoken
+ * BRIEF. Two lists of accepted audio formats is two lists to keep in step,
+ * and the one that drifts is the one that rejects a teacher's recording on a
+ * browser the other would have accepted.
+ */
+export const AUDIO_SIGNATURES: Array<{ type: string; ext: string; test: (b: Buffer) => boolean }> = [
   {
     type: "audio/webm",
     ext: "webm",
