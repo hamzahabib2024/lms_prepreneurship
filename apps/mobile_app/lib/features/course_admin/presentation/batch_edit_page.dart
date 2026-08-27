@@ -377,7 +377,7 @@ class _SectionHeader extends StatelessWidget {
       title,
       style: TextStyle(
         color: dark ? AppColorsDark.ink : AppColors.ink,
-        fontWeight: FontWeight.bold,
+        fontWeight: FontWeight.w600,
         fontSize: 16,
       ),
     );
