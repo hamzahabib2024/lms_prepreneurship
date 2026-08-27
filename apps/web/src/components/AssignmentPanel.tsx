@@ -3,6 +3,8 @@ import { ApiError, api } from "../api/client";
 import { VoiceRecorder, VoiceNote, clock, type Recording } from "./VoiceRecorder";
 import { Icon } from "./Icon";
 import { BriefAttachments } from "./BriefAttachments";
+import { SubmissionComments } from "./SubmissionComments";
+import { Field } from "./Field";
 
 /**
  * Assignments for one subject — SRS §13.5, FR-ASG-011/013/014.
@@ -44,8 +46,19 @@ interface StudentAssignment {
   version: number;
   wasLate: boolean;
   fileCount: number;
+  /** Their own submission, so the comment thread has something to open. */
+  submissionId: string | null;
+  commentCount: number;
+  /** Spoken feedback from the teacher. Arrives without waiting for the mark. */
+  hasFeedbackAudio: boolean;
+  feedbackAudioSeconds: number | null;
   grade:
-    | { status: "RELEASED"; finalMarks: number; penaltyApplied: number }
+    | {
+        status: "RELEASED";
+        finalMarks: number;
+        penaltyApplied: number;
+        feedback: string | null;
+      }
     | { status: "AWAITING_GRADE" }
     | { status: "NOT_SUBMITTED" };
 }
@@ -158,6 +171,50 @@ function AssignmentRow({
           */}
           {(a.attachmentCount ?? 0) > 0 && <BriefAttachments assignmentId={a.id} />}
           <SubmitPanel assignment={a} onChanged={onChanged} />
+          {/*
+            WHAT THE TEACHER SAID ABOUT IT — FR-ASG-027.
+            Only once there is a submission to talk about, and BELOW the submit
+            panel because the thread is about work already handed in. It is not
+            gated on the grade being released: "this is the wrong file type" is
+            worth nothing if it arrives with the marks a week later.
+          */}
+          {/*
+            THE MARK, AND WHAT THE TEACHER SAID ABOUT IT.
+
+            Only in the RELEASED branch, which is where the server puts it:
+            an unreleased grade tells a student nothing at all, and "there is a
+            recording waiting for you" would itself be part of the mark.
+          */}
+          {/*
+            WHAT THE TEACHER SAID.
+
+            The written feedback comes with the mark and waits for release; the
+            RECORDING does not, for the same reason the comment thread does not
+            — it is a remark about the work rather than the mark itself, and
+            "send me a PDF" is no use a week after the grades go out.
+          */}
+          {((a.grade.status === "RELEASED" && a.grade.feedback) || a.hasFeedbackAudio) && (
+            <div className="graded-feedback">
+              <h4 className="section-label">Your feedback</h4>
+              {a.grade.status === "RELEASED" && a.grade.feedback && (
+                <p className="small">{a.grade.feedback}</p>
+              )}
+              {a.hasFeedbackAudio && a.submissionId && (
+                <FeedbackAudio
+                  submissionId={a.submissionId}
+                  seconds={a.feedbackAudioSeconds}
+                />
+              )}
+            </div>
+          )}
+
+          {a.submissionId && (
+            <SubmissionComments
+              submissionId={a.submissionId}
+              audience="student"
+              onChanged={onChanged}
+            />
+          )}
         </div>
       )}
     </li>
@@ -183,6 +240,13 @@ function Status({ a }: { a: StudentAssignment }) {
       <span className="small">
         ✓ Submitted{a.wasLate ? " (late)" : ""}
         {a.grade.status === "AWAITING_GRADE" ? " · being marked" : ""}
+        {/* A student should not have to open every assignment to discover
+            their teacher wrote something on one of them. */}
+        {a.commentCount > 0 && (
+          <span className="pill">
+            {a.commentCount} comment{a.commentCount === 1 ? "" : "s"}
+          </span>
+        )}
       </span>
     );
   }
@@ -311,22 +375,18 @@ function SubmitPanel({
   return (
     <div className="submit-panel">
       {a.submissionType !== "FILE" && (
-        <label className="field">
-          <span>Your response</span>
-          <textarea
+        <Field label="Your response"><textarea
             rows={4}
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder="Type your answer here."
           />
-        </label>
+        </Field>
       )}
 
       {a.submissionType !== "TEXT" && (
         <>
-          <label className="field">
-            <span>Attach a file</span>
-            <input
+          <Field label="Attach a file"><input
               ref={inputRef}
               type="file"
               accept={accept}
@@ -336,7 +396,7 @@ function SubmitPanel({
                 if (file) void upload(file);
               }}
             />
-          </label>
+          </Field>
           {/* Stated up front. A student should not discover the rules by
               having an upload refused. */}
           <p className="muted small">
@@ -455,7 +515,73 @@ function latePolicyText(policy: string): string {
  * ON DEMAND, not on render. A class list showing eight assignments should not
  * pull eight audio files nobody has asked to hear.
  */
-function BriefAudio({ assignmentId, seconds }: { assignmentId: string; seconds?: number | null }) {
+/**
+ * The teacher's spoken feedback on THIS student's work, played on demand.
+ *
+ * Fetched rather than linked, like every other file in this System: the route
+ * needs a bearer token, and a URL a student could forward would be one that
+ * outlives their enrolment. The server refuses it entirely until the grade is
+ * released, so there is no moment at which this can leak a mark early.
+ */
+function FeedbackAudio({
+  submissionId,
+  seconds,
+}: {
+  submissionId: string;
+  seconds?: number | null;
+}) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
+
+  if (url) return <VoiceNote src={url} seconds={seconds} label="What your teacher said" />;
+
+  return (
+    <div className="voice-note">
+      <span className="voice-note-mark" aria-hidden="true">
+        <Icon name="megaphone" />
+      </span>
+      <div className="voice-note-body">
+        <strong className="small">Your teacher recorded feedback for you</strong>
+        {failed && <span className="muted small">It could not be loaded. Try again.</span>}
+      </div>
+      <button
+        type="button"
+        className="btn btn-sm"
+        disabled={busy}
+        onClick={() => {
+          setBusy(true);
+          setFailed(false);
+          api
+            .download(`/submissions/${submissionId}/feedback-audio`)
+            .then((blob) => setUrl(URL.createObjectURL(blob)))
+            .catch(() => setFailed(true))
+            .finally(() => setBusy(false));
+        }}
+      >
+        {busy ? "Loading…" : "Listen"}
+      </button>
+    </div>
+  );
+}
+
+/**
+ * The teacher's spoken brief, played on demand.
+ *
+ * EXPORTED so the marking screen can use it too. A marker needs the brief as
+ * much as the student does — more, arguably, since they are judging work
+ * against it — and a second copy of the fetch-and-revoke lifecycle is a second
+ * place to leak an object URL.
+ */
+export function BriefAudio({
+  assignmentId,
+  seconds,
+}: {
+  assignmentId: string;
+  seconds?: number | null;
+}) {
   const [url, setUrl] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);

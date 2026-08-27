@@ -6,19 +6,23 @@ import {
   Header,
   HttpCode,
   Param,
+  Patch,
   Post,
+  Req,
   Res,
   UploadedFile,
   UseInterceptors,
 } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
-import type { Response } from "express";
+import type { Request, Response } from "express";
 import { z } from "zod";
 import { AppError } from "@lms/shared";
 import { AssignmentService } from "./assignment.service";
 import { SubmissionFileService } from "./submission-file.service";
 import { VoiceBriefService, MAX_BRIEF_BYTES } from "./voice-brief.service";
+import { VoiceFeedbackService, MAX_FEEDBACK_BYTES } from "./voice-feedback.service";
 import { AttachmentService } from "./attachment.service";
+import { SubmissionCommentService } from "./submission-comment.service";
 import { zodBody } from "../common/zod-validation.pipe";
 import { RequirePermission } from "../rbac/permissions.guard";
 
@@ -31,6 +35,26 @@ import { RequirePermission } from "../rbac/permissions.guard";
  * limit does the real work.
  */
 const UPLOAD_HARD_LIMIT_BYTES = 12 * 1024 * 1024;
+
+/**
+ * A comment on a piece of work.
+ *
+ * TEN THOUSAND CHARACTERS, the same ceiling as grade feedback, because it is
+ * the same kind of writing. The FLOOR is one non-blank character and the
+ * database restates it as a CHECK: an empty comment reaches the other person
+ * as a blank speech bubble and a notification about nothing.
+ */
+const commentSchema = z.object({
+  body: z
+    .string()
+    .trim()
+    .min(1, "Write something before posting.")
+    .max(10000, "That is longer than a comment can be. Attach a file instead."),
+  /** Anchors it to one file. Omitted, it is about the submission as a whole. */
+  fileId: z.string().uuid().optional(),
+});
+
+const commentEditSchema = commentSchema.pick({ body: true });
 
 const createSchema = z
   .object({
@@ -85,7 +109,9 @@ export class AssessmentController {
     private readonly assignments: AssignmentService,
     private readonly files: SubmissionFileService,
     private readonly voiceBrief: VoiceBriefService,
+    private readonly voiceFeedback: VoiceFeedbackService,
     private readonly attachments: AttachmentService,
+    private readonly comments: SubmissionCommentService,
   ) {}
 
   @RequirePermission("assignment", "create")
@@ -328,6 +354,115 @@ export class AssessmentController {
   @Post("submissions/:id/grade")
   grade(@Param("id") id: string, @Body(zodBody(gradeSchema)) dto: z.infer<typeof gradeSchema>) {
     return this.assignments.grade(id, dto);
+  }
+
+  // ────────────────────────────────── spoken feedback on one submission ──
+
+  /**
+   * FR-ASG-027 — the marker's own voice on this student's work.
+   *
+   * `grade:update`, not `assignment:update`: this is feedback on ONE
+   * submission, given by whoever is entitled to mark it, and it has nothing to
+   * do with editing the assignment everybody was set.
+   */
+  @RequirePermission("grade", "update")
+  @Post("submissions/:id/feedback-audio")
+  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: MAX_FEEDBACK_BYTES, files: 1 } }))
+  setFeedbackAudio(
+    @Param("id") id: string,
+    @Body("seconds") seconds?: string,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    return this.voiceFeedback.set(
+      id,
+      file ? { buffer: file.buffer, size: file.size } : undefined,
+      seconds === undefined ? undefined : Number(seconds),
+    );
+  }
+
+  /**
+   * Played, not downloaded — the same reasoning as the spoken brief: the bytes
+   * are proven by signature to be an audio container before they are stored,
+   * so there is nothing executable to render inline, and feedback that
+   * downloads instead of playing is feedback nobody listens to.
+   *
+   * `grade:read`, which a STUDENT holds at OWN scope. Whether they may hear it
+   * YET is a second question, and the service answers it: an unreleased grade
+   * is withheld from its own student, because hearing "well done, eight out of
+   * ten" before the cohort is released would defeat releasing together.
+   */
+  @RequirePermission("grade", "read")
+  @Get("submissions/:id/feedback-audio")
+  @Header("X-Content-Type-Options", "nosniff")
+  @Header("Cache-Control", "private, max-age=0, no-store")
+  async feedbackAudio(@Param("id") id: string, @Res() res: Response): Promise<void> {
+    const audio = await this.voiceFeedback.read(id);
+    res.setHeader("Content-Type", audio.contentType);
+    res.setHeader("Content-Length", String(audio.body.byteLength));
+    res.setHeader("Content-Disposition", "inline");
+    res.end(audio.body);
+  }
+
+  @RequirePermission("grade", "update")
+  @Delete("submissions/:id/feedback-audio")
+  clearFeedbackAudio(@Param("id") id: string) {
+    return this.voiceFeedback.clear(id);
+  }
+
+  // ─────────────────────────────────── talking about the work (FR-ASG-027) ──
+
+  /**
+   * The comment thread on one submission.
+   *
+   * BOTH AUDIENCES REACH THIS ONE ROUTE. The scope predicate is what makes
+   * that safe: a student asking about somebody else's submission finds
+   * nothing rather than being told they may not (ARC-051). Two routes would
+   * be two chances for the teacher's copy and the student's copy to drift
+   * into saying different things about the same conversation.
+   */
+  @RequirePermission("submission_comment", "read")
+  @Get("submissions/:id/comments")
+  listComments(@Param("id") id: string) {
+    return this.comments.forSubmission(id);
+  }
+
+  /**
+   * Saying something about it.
+   *
+   * NOT `grade`. A teacher may tell a student their export is the wrong format
+   * without inventing a mark first, and a student may answer — which is the
+   * whole reason this is a separate resource. Nothing here touches marks.
+   */
+  @RequirePermission("submission_comment", "create")
+  @Post("submissions/:id/comments")
+  addComment(
+    @Param("id") id: string,
+    @Body(zodBody(commentSchema)) dto: z.infer<typeof commentSchema>,
+    @Req() req: Request,
+  ) {
+    return this.comments.create(
+      id,
+      { body: dto.body, ...(dto.fileId ? { fileId: dto.fileId } : {}) },
+      req.ip,
+    );
+  }
+
+  /** Editing YOUR OWN, and the thread says it was edited. */
+  @RequirePermission("submission_comment", "update")
+  @Patch("submission-comments/:commentId")
+  editComment(
+    @Param("commentId") commentId: string,
+    @Body(zodBody(commentEditSchema)) dto: z.infer<typeof commentEditSchema>,
+    @Req() req: Request,
+  ) {
+    return this.comments.update(commentId, dto.body, req.ip);
+  }
+
+  /** Withdrawing YOUR OWN. Marked, never removed. */
+  @RequirePermission("submission_comment", "delete")
+  @Delete("submission-comments/:commentId")
+  removeComment(@Param("commentId") commentId: string, @Req() req: Request) {
+    return this.comments.remove(commentId, req.ip);
   }
 
   /** FR-ASG-028 — release the cohort together, so nobody sees a mark first. */

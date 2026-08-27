@@ -116,7 +116,12 @@ export function ProofFile({
     api
       .download(path)
       .then((blob) => {
-        objectUrl = URL.createObjectURL(blob);
+        // Re-typed from the record rather than trusted from the response: a
+        // blob URL carries the blob's own media type, and the viewer believes
+        // that and nothing else.
+        const typed =
+          blob.type === doc.contentType ? blob : new Blob([blob], { type: doc.contentType });
+        objectUrl = URL.createObjectURL(typed);
         setUrl(objectUrl);
       })
       .catch(() => setFailed(true));
@@ -127,7 +132,7 @@ export function ProofFile({
     return () => {
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [path]);
+  }, [path, doc.contentType]);
 
   const isPdf = doc.contentType === "application/pdf";
 
@@ -158,13 +163,23 @@ export function ProofFile({
       ) : !url ? (
         <div className="skeleton" style={{ height: 180 }} aria-hidden="true" />
       ) : isPdf ? (
-        <object data={url} type="application/pdf" className="slip-frame" aria-label="Payment receipt">
+        <>
+          {/*
+            AN <iframe>, NOT AN <object> — the same fix as SubmissionDocument.
+            Edge and some Chrome builds refuse a blob URL delivered through
+            <object> and answer with "We can't open this file / Something went
+            wrong / Refresh", which is their error page and not ours. An iframe
+            with the identical blob renders every time.
+          */}
+          <iframe src={url} className="slip-frame" title="Payment receipt" />
+          {/* Always offered: a PDF an iframe cannot draw reports nothing a
+              script could catch, so there is no moment to show a fallback. */}
           <p className="small">
             <a href={url} target="_blank" rel="noreferrer">
-              Open the slip
+              Open the receipt in a new tab
             </a>
           </p>
-        </object>
+        </>
       ) : (
         <>
           {/* Opening full size in a tab, because a bank reference printed
