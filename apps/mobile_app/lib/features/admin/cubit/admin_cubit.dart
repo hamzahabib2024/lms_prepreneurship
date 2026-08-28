@@ -195,6 +195,24 @@ class AdminCubit extends Cubit<AdminState> {
     }
   }
 
+  Future<void> restoreSetting({required String key}) async {
+    if (state.busy) return;
+    emit(state.copyWith(busy: true, actionError: null));
+    try {
+      await repository.deleteSetting(key: key);
+      if (isClosed) return;
+      emit(state.copyWith(busy: false, actionSuccess: 'Setting restored to default'));
+      await loadSettings();
+    } on ApiException catch (error) {
+      if (isClosed) return;
+      emit(state.copyWith(busy: false, actionError: error));
+    }
+  }
+
+  void setSettingsSearch(String query) {
+    emit(state.copyWith(settingsSearch: query));
+  }
+
   // ------------------------------------------------------------ backups ---
 
   Future<void> loadBackups() async {
@@ -444,6 +462,7 @@ class AdminState extends Equatable {
     this.settingGroups = const [],
     this.loadingSettings = false,
     this.settingsError,
+    this.settingsSearch = '',
     this.backups = const [],
     this.loadingBackups = false,
     this.backupsError,
@@ -484,6 +503,7 @@ class AdminState extends Equatable {
   final List<SettingGroup> settingGroups;
   final bool loadingSettings;
   final ApiException? settingsError;
+  final String settingsSearch;
 
   final List<BackupItem> backups;
   final bool loadingBackups;
@@ -532,6 +552,7 @@ class AdminState extends Equatable {
     List<SettingGroup>? settingGroups,
     bool? loadingSettings,
     ApiException? settingsError,
+    String? settingsSearch,
     List<BackupItem>? backups,
     bool? loadingBackups,
     ApiException? backupsError,
@@ -574,6 +595,7 @@ class AdminState extends Equatable {
       settingGroups: settingGroups ?? this.settingGroups,
       loadingSettings: loadingSettings ?? this.loadingSettings,
       settingsError: settingsError,
+      settingsSearch: settingsSearch ?? this.settingsSearch,
       backups: backups ?? this.backups,
       loadingBackups: loadingBackups ?? this.loadingBackups,
       backupsError: backupsError,
@@ -600,7 +622,7 @@ class AdminState extends Equatable {
         users, loadingUsers, usersError, currentPage, totalPages, totalItems,
         roleFilter, statusFilter, searchQuery, selectedUser,
         busy, actionError, actionSuccess, staffCreationResult, passwordResetResult,
-        settingGroups, loadingSettings, settingsError,
+        settingGroups, loadingSettings, settingsError, settingsSearch,
         backups, loadingBackups, backupsError,
         auditEntries, loadingAudit, auditError, auditPage, auditTotalPages,
         securityOverview, securityEvents, loadingSecurity, loadingSecurityEvents,
