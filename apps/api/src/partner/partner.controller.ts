@@ -38,6 +38,15 @@ const createSchema = z.object({
   notes: z.string().trim().max(2000).optional(),
 });
 
+const invoiceSchema = z.object({
+  /* What the invoice is FOR, in the Institute's own words — "Spring 2026,
+     Graphic Designing". A date range alone tells the reader nothing they can
+     check against their own records. */
+  periodLabel: z.string().trim().min(3, "Say what period this invoice covers.").max(120),
+  dueDate: z.string().trim().optional(),
+  notes: z.string().trim().max(2000).optional(),
+});
+
 const updateSchema = createSchema
   .omit({ name: true, code: true })
   .partial()
@@ -77,6 +86,33 @@ export class PartnerController {
     @Req() req: Request,
   ) {
     return this.partners.update(id, dto, req.ip);
+  }
+
+  /**
+   * WHAT WOULD BE BILLED — names, amounts and the total, before anything is
+   * created. Read-only, and safe to press.
+   */
+  @RequirePermission("partner_invoice", "read")
+  @Get("partners/:id/billing-preview")
+  billingPreview(@Param("id") id: string) {
+    return this.partners.billingPreview(id);
+  }
+
+  /**
+   * Raise the invoice.
+   *
+   * `partner_invoice:create` is Super Admin and Admin, BOTH BEHIND STEP-UP
+   * (§4.5) — this creates a claim for money against another organisation, and
+   * the matrix already says re-authentication is the price of that.
+   */
+  @RequirePermission("partner_invoice", "create")
+  @Post("partners/:id/invoices")
+  createInvoice(
+    @Param("id") id: string,
+    @Body(zodBody(invoiceSchema)) dto: z.infer<typeof invoiceSchema>,
+    @Req() req: Request,
+  ) {
+    return this.partners.createInvoice(id, dto, req.ip);
   }
 
   // ------------------------------------------------------------- portal ----

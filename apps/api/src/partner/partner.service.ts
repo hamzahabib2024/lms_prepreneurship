@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { AppError } from "@lms/shared";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
+import { RegistrationNumberService } from "../admission/registration-number.service";
 import { getActor } from "../prisma/actor-context";
 
 /**
@@ -32,6 +33,7 @@ export class PartnerService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly numbers: RegistrationNumberService,
   ) {}
 
   // ============================================================= office =====
@@ -483,4 +485,288 @@ export class PartnerService {
       })),
     };
   }
+
+  // ============================================================ billing =====
+
+  /**
+   * WHAT WOULD BE BILLED, AND WHAT WOULD NOT — before anything is created.
+   *
+   * ───────────────────────────────────────────────────────────────────────────
+   * THE SAME TWO-STEP THE COHORT IMPORT USES, for the same reason: this raises
+   * a real claim for real money against a real organisation, and the mistakes
+   * are invisible afterwards. Somebody billing for a term wants to see the
+   * names and the total BEFORE the invoice exists, not discover an extra
+   * student on it when the partner queries the amount.
+   *
+   * A STUDENT IS BILLED ONCE. `alreadyBilled` is not a nicety — running this
+   * twice for the same term is the obvious mistake, and without it the partner
+   * receives two invoices for the same forty students and somebody has to
+   * explain which one to ignore. A student already carrying a line on any
+   * invoice that has not been CANCELLED is excluded, and is SAID to be
+   * excluded with the invoice number they are on, so the exclusion can be
+   * checked rather than merely trusted.
+   *
+   * THE STUDENTS WHO CANNOT BE PRICED ARE LISTED SEPARATELY, and this is the
+   * part that would otherwise be lost. A student whose programme has no
+   * published fee structure cannot be given an amount, and the wrong answer is
+   * to bill them zero — an invoice quietly short by one student's fee is worse
+   * than one that refuses to be created. They are named, so the fee structure
+   * can be published and the invoice raised properly.
+   * ───────────────────────────────────────────────────────────────────────────
+   */
+  async billingPreview(partnerInstituteId: string) {
+    const partner = await this.prisma.scoped.partnerInstitute.findFirst({
+      where: { id: partnerInstituteId, deletedAt: null },
+      select: { id: true, name: true, billingMode: true, isActive: true },
+    });
+    if (!partner) throw new AppError("RESOURCE_NOT_FOUND");
+
+    /*
+     * A STUDENT_PAYS PARTNER HAS NOTHING TO BILL, and this refuses rather than
+     * returning an empty list. An empty list reads as "nobody is due yet",
+     * which invites somebody to wait for students to appear on it; the truth
+     * is that this institute's students pay us directly and no invoice to the
+     * institute will ever be right.
+     */
+    if (partner.billingMode !== "PARTNER_PAYS") {
+      throw new AppError("VALIDATION_FAILED", {
+        message:
+          `${partner.name} has its students pay us directly, so there is nothing to invoice ` +
+          `the institute for. Change how they are billed first if that is wrong.`,
+      });
+    }
+
+    const students = await this.prisma.asSystem((db) =>
+      db.student.findMany({
+        where: {
+          partnerInstituteId: partner.id,
+          deletedAt: null,
+          /* The payer SNAPSHOTTED on the student, never read live from the
+             partner (BR-DAT-02). Somebody admitted while the institute paid is
+             still the institute's to pay for, whatever the mode says today. */
+          feePayer: "PARTNER",
+        },
+        orderBy: { registrationNo: "asc" },
+        select: {
+          id: true,
+          registrationNo: true,
+          user: { select: { fullName: true } },
+          currentSection: {
+            select: {
+              batch: {
+                select: {
+                  academicSession: {
+                    select: { id: true, programme: { select: { id: true, name: true } } },
+                  },
+                },
+              },
+            },
+          },
+          partnerInvoiceLines: {
+            where: { invoice: { status: { not: "CANCELLED" } } },
+            select: { invoice: { select: { number: true } } },
+            take: 1,
+          },
+        },
+      }),
+    );
+
+    const billable: Array<{
+      studentId: string;
+      name: string;
+      registrationNo: string;
+      programme: string | null;
+      amount: number;
+    }> = [];
+    const alreadyBilled: Array<{ name: string; registrationNo: string; onInvoice: string }> = [];
+    const unpriced: Array<{ name: string; registrationNo: string; why: string }> = [];
+
+    for (const s of students) {
+      const existing = s.partnerInvoiceLines[0];
+      if (existing) {
+        alreadyBilled.push({
+          name: s.user.fullName,
+          registrationNo: s.registrationNo,
+          onInvoice: existing.invoice.number,
+        });
+        continue;
+      }
+
+      const session = s.currentSection?.batch.academicSession;
+      if (!session) {
+        unpriced.push({
+          name: s.user.fullName,
+          registrationNo: s.registrationNo,
+          why: "They are not in a batch, so there is no course to price.",
+        });
+        continue;
+      }
+
+      const amount = await this.feeFor(session.programme.id, session.id);
+      if (amount === null) {
+        unpriced.push({
+          name: s.user.fullName,
+          registrationNo: s.registrationNo,
+          why: `${session.programme.name} has no published fee structure.`,
+        });
+        continue;
+      }
+
+      billable.push({
+        studentId: s.id,
+        name: s.user.fullName,
+        registrationNo: s.registrationNo,
+        programme: session.programme.name,
+        amount,
+      });
+    }
+
+    return {
+      partner: { id: partner.id, name: partner.name },
+      billable,
+      alreadyBilled,
+      unpriced,
+      total: billable.reduce((sum, b) => sum + b.amount, 0),
+      currency: "PKR",
+    };
+  }
+
+  /**
+   * The price of one course, for one session.
+   *
+   * A SESSION'S OWN STRUCTURE BEATS THE PROGRAMME'S STANDING ONE, which is
+   * exactly the rule the model documents: a null `academicSessionId` means the
+   * standing structure used by any session without one of its own. Taking them
+   * in that order is what lets a partner cohort sitting in a term with its own
+   * pricing be billed at that price rather than at last year's.
+   *
+   * RETURNS NULL RATHER THAN ZERO when nothing is published. Zero is a
+   * legitimate fee; "we do not know the fee" is not a number at all, and
+   * conflating the two is how an invoice comes out silently short.
+   */
+  private async feeFor(programmeId: string, academicSessionId: string): Promise<number | null> {
+    const structure = await this.prisma.asSystem((db) =>
+      db.feeStructure.findFirst({
+        where: {
+          programmeId,
+          status: "PUBLISHED",
+          deletedAt: null,
+          supersededAt: null,
+          OR: [{ academicSessionId }, { academicSessionId: null }],
+        },
+        // The session's own first: a non-null id sorts before null descending.
+        orderBy: { academicSessionId: "desc" },
+        select: { totalAmount: true },
+      }),
+    );
+    return structure ? Number(structure.totalAmount) : null;
+  }
+
+  /**
+   * Raise the invoice.
+   *
+   * RE-PRICED INSIDE THE TRANSACTION rather than trusting the figures the
+   * preview showed. The screen may have been open for an hour, and a fee
+   * structure published in the meantime would make the preview's total a
+   * number nobody can reproduce from the data afterwards. The preview
+   * persuades; this decides.
+   *
+   * THE NUMBER COMES FROM THE SAME ATOMIC SERIES a receipt number does, so two
+   * clerks raising invoices at the same moment cannot be handed one number
+   * twice — the counter is incremented by the database, not by us reading it
+   * and adding one.
+   */
+  async createInvoice(
+    partnerInstituteId: string,
+    input: { periodLabel: string; dueDate?: string; notes?: string },
+    ip?: string,
+  ) {
+    const actor = getActor();
+    if (!actor) throw new AppError("AUTH_TOKEN_INVALID");
+
+    const preview = await this.billingPreview(partnerInstituteId);
+    if (preview.billable.length === 0) {
+      throw new AppError("VALIDATION_FAILED", {
+        message:
+          preview.alreadyBilled.length > 0
+            ? "Every one of these students is already on an invoice. Nothing would be added."
+            : "There is nobody to invoice for this institute yet.",
+      });
+    }
+
+    const created = await this.prisma.asSystem((db) =>
+      db.$transaction(async (tx) => {
+        const year = new Date().getFullYear();
+        const sequence = await this.numbers.allocateSequence(tx, `PARTINV|${year}`);
+        const number = `INV-${year}-${String(sequence).padStart(4, "0")}`;
+        const total = preview.billable.reduce((sum, b) => sum + b.amount, 0);
+
+        return tx.partnerInvoice.create({
+          data: {
+            partnerInstituteId,
+            number,
+            periodLabel: input.periodLabel.trim(),
+            /*
+             * ISSUED, NOT DRAFT. A draft is invisible to the partner — both
+             * read endpoints filter it out — so an invoice created as a draft
+             * is one the office believes it has sent and the partner cannot
+             * see. There is no screen for promoting a draft to issued, so
+             * creating one would be creating a document with no way out of it.
+             */
+            status: "ISSUED",
+            currency: preview.currency,
+            totalAmount: total,
+            paidAmount: 0,
+            issuedAt: new Date(),
+            ...(input.dueDate ? { dueDate: new Date(input.dueDate) } : {}),
+            ...(input.notes?.trim() ? { notes: input.notes.trim() } : {}),
+            createdBy: actor.userId,
+            lines: {
+              create: preview.billable.map((b) => ({
+                studentId: b.studentId,
+                /*
+                 * SNAPSHOTTED, all three (BR-DAT-02). A student who later
+                 * transfers course, or whose name is corrected, must not
+                 * silently change what a sent invoice says — the partner is
+                 * holding a copy of the original, and a document that rewrites
+                 * itself is one nobody can reconcile against their own books.
+                 */
+                studentNameAtIssue: b.name,
+                registrationNoAtIssue: b.registrationNo,
+                programmeAtIssue: b.programme,
+                description: b.programme ? `Tuition — ${b.programme}` : "Tuition",
+                amount: b.amount,
+              })),
+            },
+          },
+          select: { id: true, number: true, totalAmount: true },
+        });
+      }),
+    );
+
+    await this.audit.record({
+      action: "partner.invoice.create",
+      entityType: "PartnerInvoice",
+      entityId: created.id,
+      after: {
+        partnerInstituteId,
+        number: created.number,
+        total: Number(created.totalAmount),
+        students: preview.billable.length,
+        by: actor.userId,
+      },
+      ...(ip ? { ipAddress: ip } : {}),
+    });
+
+    return {
+      id: created.id,
+      number: created.number,
+      total: Number(created.totalAmount),
+      studentCount: preview.billable.length,
+      message: `Invoice ${created.number} raised for ${preview.billable.length} student${
+        preview.billable.length === 1 ? "" : "s"
+      }.`,
+    };
+  }
+
 }
