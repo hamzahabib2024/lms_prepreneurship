@@ -1,6 +1,10 @@
+import 'package:dio/dio.dart';
+
 import '../../../core/formats.dart';
 import '../../../core/network/api_client.dart';
+import '../../courses/data/models/lesson_resource.dart';
 import 'models/section.dart';
+import 'models/storage_entry.dart';
 import 'models/structure.dart';
 import 'models/subject.dart';
 import 'models/timetable.dart';
@@ -239,6 +243,68 @@ class AcademicRepository {
 
   Future<void> setLessonPublication(String id, String status) {
     return api.post<void>('/lessons/$id/publication', {'status': status});
+  }
+
+  /// FR-CRS-035 — lesson resources (handouts, slides, worksheets).
+  Future<List<LessonResource>> listLessonResources(String lessonId) async {
+    final data = await api.get<List<dynamic>>('/lessons/$lessonId/resources');
+    return data.whereType<Map<String, dynamic>>().map(LessonResource.fromJson).toList();
+  }
+
+  /// Upload a handout file to a lesson.
+  Future<void> uploadLessonResource({
+    required String lessonId,
+    required String title,
+    required String filePath,
+    required String fileName,
+  }) async {
+    final form = FormData.fromMap({
+      'file': await MultipartFile.fromFile(filePath, filename: fileName),
+      'title': title,
+    });
+    await api.uploadForm<void>('/lessons/$lessonId/resources', form);
+  }
+
+  /// FR-VID-003 — attach a recorded lecture from storage to a lesson.
+  Future<void> attachLecture({
+    required String sectionSubjectId,
+    required String lessonId,
+    required String title,
+    required String storageRef,
+    int? durationSeconds,
+  }) {
+    return api.post<void>('/recorded-lectures', {
+      'sectionSubjectId': sectionSubjectId,
+      'lessonId': lessonId,
+      'title': title,
+      'storageRef': storageRef,
+      'recordedOn': DateTime.now().toIso8601String(),
+      if (durationSeconds != null) 'durationSeconds': durationSeconds,
+    });
+  }
+
+  /// Browse configured storage for available files.
+  Future<List<StorageEntry>> browseStorage() async {
+    final data = await api.get<Map<String, dynamic>>('/storage/browse');
+    final entries = (data['entries'] as List<dynamic>? ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .map(StorageEntry.fromJson)
+        .toList();
+    return entries.where((e) => !e.isFolder).toList();
+  }
+
+  /// Toggle publication of a lesson resource.
+  Future<String> setLessonResourcePublication(String id, String status) async {
+    final result = await api.post<Map<String, dynamic>>(
+      '/lesson-resources/$id/publication',
+      {'status': status},
+    );
+    return result['message'] as String? ?? '';
+  }
+
+  /// Remove a lesson resource.
+  Future<void> deleteLessonResource(String id) {
+    return api.delete<void>('/lesson-resources/$id');
   }
 
   // ------------------------------------------------------------- timetable ----

@@ -1,3 +1,4 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/network/api_client.dart';
@@ -6,7 +7,9 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/ui.dart';
 import '../../admission/widgets/form_controls.dart';
 import '../../auth/data/models/auth_session.dart';
+import '../../courses/data/models/lesson_resource.dart';
 import '../data/academic_repository.dart';
+import '../data/models/storage_entry.dart';
 import '../data/models/subject.dart';
 
 /// Course content — SRS §13.6, FR-CRS-027..032.
@@ -187,6 +190,7 @@ class _ContentPageState extends State<ContentPage> {
                       mayEdit: _mayEdit,
                       repository: _repository,
                       reload: () => _loadTree(_subjectId),
+                      sectionSubjectId: _subjectId,
                     ),
                   ),
             ] else if (chosen && modules == null && !_loading)
@@ -207,12 +211,14 @@ class _ModuleCard extends StatefulWidget {
     required this.mayEdit,
     required this.repository,
     required this.reload,
+    required this.sectionSubjectId,
   });
 
   final Module module;
   final bool mayEdit;
   final AcademicRepository repository;
   final Future<void> Function() reload;
+  final String sectionSubjectId;
 
   @override
   State<_ModuleCard> createState() => _ModuleCardState();
@@ -331,6 +337,7 @@ class _ModuleCardState extends State<_ModuleCard> {
               mayEdit: widget.mayEdit,
               repository: widget.repository,
               reload: widget.reload,
+              sectionSubjectId: widget.sectionSubjectId,
             ),
           if (widget.mayEdit)
             Padding(
@@ -367,24 +374,50 @@ class _ModuleCardState extends State<_ModuleCard> {
   }
 }
 
-class _LessonRow extends StatelessWidget {
+class _LessonRow extends StatefulWidget {
   const _LessonRow({
     required this.lesson,
     required this.mayEdit,
     required this.repository,
     required this.reload,
+    required this.sectionSubjectId,
   });
 
   final Lesson lesson;
   final bool mayEdit;
   final AcademicRepository repository;
   final Future<void> Function() reload;
+  final String sectionSubjectId;
+
+  @override
+  State<_LessonRow> createState() => _LessonRowState();
+}
+
+class _LessonRowState extends State<_LessonRow> {
+  List<LessonResource>? _resources;
+  bool _attaching = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.mayEdit) _loadResources();
+  }
+
+  Future<void> _loadResources() async {
+    try {
+      final resources = await widget.repository.listLessonResources(widget.lesson.id);
+      if (!mounted) return;
+      setState(() => _resources = resources);
+    } on ApiException {
+      // Silently fail — resources are non-critical.
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
     final muted = dark ? AppColorsDark.muted : AppColors.muted;
-    final l = lesson;
+    final l = widget.lesson;
     final published = l.publicationStatus == 'PUBLISHED';
 
     return Container(
@@ -415,14 +448,14 @@ class _LessonRow extends StatelessWidget {
                 text: published ? 'Published' : 'Draft',
                 kind: published ? PillKind.ok : PillKind.neutral,
               ),
-              if (mayEdit) ...[
+              if (widget.mayEdit) ...[
                 const SizedBox(width: 6),
                 IconButton(
                   onPressed: () {
-                    repository
+                    widget.repository
                         .setLessonPublication(
                             l.id, published ? 'UNPUBLISHED' : 'PUBLISHED')
-                        .then<void>((_) => reload())
+                        .then<void>((_) => widget.reload())
                         .catchError((Object _) {});
                   },
                   icon: Icon(
@@ -455,9 +488,6 @@ class _LessonRow extends StatelessWidget {
                               style: TextStyle(fontSize: 12.5, color: muted),
                             ),
                           ),
-                          // ARC-045 — a missing file is stated here rather
-                          // than discovered by a student meeting a broken
-                          // player.
                           if (v.availabilityStatus != 'AVAILABLE')
                             const Text(
                               'file missing',
@@ -477,6 +507,297 @@ class _LessonRow extends StatelessWidget {
                 ],
               ),
             ),
+          // Lesson resources (handouts)
+          if (widget.mayEdit && _resources != null && _resources!.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            for (final r in _resources!)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 3),
+                child: Row(
+                  children: [
+                    const Icon(Icons.attach_file, size: 14),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            r.title,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 12.5, color: muted),
+                          ),
+                          Text(
+                            '${r.originalFilename} · ${r.sizeLabel}',
+                            style: TextStyle(fontSize: 11, color: muted),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Pill(
+                      text: r.publicationStatus == 'PUBLISHED' ? 'Live' : 'Draft',
+                      kind: r.publicationStatus == 'PUBLISHED' ? PillKind.ok : PillKind.neutral,
+                    ),
+                    IconButton(
+                      onPressed: () async {
+                        final newStatus = r.publicationStatus == 'PUBLISHED' ? 'DRAFT' : 'PUBLISHED';
+                        await widget.repository.setLessonResourcePublication(r.id, newStatus);
+                        _loadResources();
+                      },
+                      icon: Icon(
+                        r.publicationStatus == 'PUBLISHED'
+                            ? Icons.visibility_off_outlined
+                            : Icons.visibility_outlined,
+                        size: 16,
+                      ),
+                      visualDensity: VisualDensity.compact,
+                      tooltip: r.publicationStatus == 'PUBLISHED' ? 'Hide' : 'Publish',
+                    ),
+                    IconButton(
+                      onPressed: () async {
+                        await widget.repository.deleteLessonResource(r.id);
+                        _loadResources();
+                      },
+                      icon: const Icon(Icons.delete_outline, size: 16),
+                      visualDensity: VisualDensity.compact,
+                      tooltip: 'Remove',
+                    ),
+                  ],
+                ),
+              ),
+          ],
+          // Attach handout
+          if (widget.mayEdit)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: _AttachHandoutButton(
+                lessonId: l.id,
+                repository: widget.repository,
+                onAttached: _loadResources,
+              ),
+            ),
+          // Attach recording
+          if (widget.mayEdit)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: _attaching
+                  ? _AttachRecordingForm(
+                      lessonId: l.id,
+                      sectionSubjectId: widget.sectionSubjectId,
+                      repository: widget.repository,
+                      onDone: () {
+                        setState(() => _attaching = false);
+                        widget.reload();
+                      },
+                    )
+                  : TextButton.icon(
+                      onPressed: () => setState(() => _attaching = true),
+                      icon: const Icon(Icons.videocam_outlined, size: 16),
+                      label: const Text('Attach a recording'),
+                      style: TextButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        alignment: Alignment.centerLeft,
+                        padding: EdgeInsets.zero,
+                      ),
+                    ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Button to attach a handout file to a lesson.
+class _AttachHandoutButton extends StatelessWidget {
+  const _AttachHandoutButton({
+    required this.lessonId,
+    required this.repository,
+    required this.onAttached,
+  });
+
+  final String lessonId;
+  final AcademicRepository repository;
+  final VoidCallback onAttached;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextButton.icon(
+      onPressed: () async {
+        final files = await FilePicker.pickFiles();
+        if (files.isEmpty) return;
+        final file = files.first;
+        if (file.path == null) return;
+        final name = file.name.replaceAll(RegExp(r'\.[^.]+$'), '');
+        try {
+          await repository.uploadLessonResource(
+            lessonId: lessonId,
+            title: name,
+            filePath: file.path!,
+            fileName: file.name,
+          );
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Attached as a draft. Publish it when ready.')),
+            );
+          }
+          onAttached();
+        } on ApiException catch (error) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(error.message)),
+            );
+          }
+        }
+      },
+      icon: const Icon(Icons.attach_file, size: 16),
+      label: const Text('Attach a handout'),
+      style: TextButton.styleFrom(
+        visualDensity: VisualDensity.compact,
+        alignment: Alignment.centerLeft,
+        padding: EdgeInsets.zero,
+      ),
+    );
+  }
+}
+
+/// Form to attach a recorded lecture from storage.
+class _AttachRecordingForm extends StatefulWidget {
+  const _AttachRecordingForm({
+    required this.lessonId,
+    required this.sectionSubjectId,
+    required this.repository,
+    required this.onDone,
+  });
+
+  final String lessonId;
+  final String sectionSubjectId;
+  final AcademicRepository repository;
+  final VoidCallback onDone;
+
+  @override
+  State<_AttachRecordingForm> createState() => _AttachRecordingFormState();
+}
+
+class _AttachRecordingFormState extends State<_AttachRecordingForm> {
+  List<StorageEntry> _entries = const [];
+  StorageEntry? _chosen;
+  String _title = '';
+  bool _busy = false;
+  ApiException? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStorage();
+  }
+
+  Future<void> _loadStorage() async {
+    try {
+      final entries = await widget.repository.browseStorage();
+      if (!mounted) return;
+      setState(() => _entries = entries);
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() => _error = error);
+    }
+  }
+
+  Future<void> _attach() async {
+    if (_chosen == null) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await widget.repository.attachLecture(
+        sectionSubjectId: widget.sectionSubjectId,
+        lessonId: widget.lessonId,
+        title: _title.trim().isNotEmpty ? _title.trim() : _chosen!.name,
+        storageRef: _chosen!.storageRef,
+        durationSeconds: _chosen!.durationSeconds,
+      );
+      widget.onDone();
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() => _error = error);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final muted = dark ? AppColorsDark.muted : AppColors.muted;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (_error != null) ...[
+            AppAlert(
+              title: 'That did not work',
+              message: _error!.message,
+              reference: _error!.reference,
+            ),
+            const SizedBox(height: 8),
+          ],
+          if (_entries.isEmpty && !_busy)
+            Text(
+              'No files found in the configured folder. Upload the recording there first.',
+              style: TextStyle(fontSize: 12.5, color: muted),
+            )
+          else ...[
+            AdmissionSelectField(
+              label: 'File',
+              value: _chosen?.storageRef ?? '',
+              hint: 'Choose a file…',
+              options: [
+                for (final e in _entries) (e.storageRef, e.name),
+              ],
+              onChanged: (v) {
+                setState(() {
+                  _chosen = _entries.firstWhere((e) => e.storageRef == v);
+                  _title = _chosen!.name;
+                });
+              },
+            ),
+            const SizedBox(height: 8),
+            AdmissionFormField(
+              label: 'Title students will see',
+              value: _title,
+              hint: _chosen?.name ?? 'Recording title',
+              onChanged: (v) => setState(() => _title = v),
+            ),
+          ],
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton(
+                  onPressed: _busy || _chosen == null ? null : _attach,
+                  child: _busy
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Attach'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: widget.onDone,
+                  child: const Text('Cancel'),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
