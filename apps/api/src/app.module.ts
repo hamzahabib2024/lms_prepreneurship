@@ -2,6 +2,7 @@ import { MiddlewareConsumer, Module, NestModule } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from "@nestjs/core";
 import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
+import { ScheduleModule } from "@nestjs/schedule";
 import { exceptPasswordReset, trackByEmailAddress } from "./auth/password-reset.throttle";
 import { join } from "node:path";
 
@@ -99,6 +100,20 @@ import { PermissionsGuard } from "./rbac/permissions.guard";
         skipIf: exceptPasswordReset,
       },
     ]),
+
+    /*
+     * THE SCHEDULER, WHICH WAS NEVER TURNED ON.
+     *
+     * @Cron does nothing at all without this: the decorator registers a job
+     * with a discovery service that is not running, no error is raised, and
+     * the method simply never fires. The hourly lecture sweep has been written
+     * and dormant since it was added — which is exactly the kind of fault that
+     * survives review, because the code that "does not work" looks perfect.
+     *
+     * Registering it starts that sweep as well as the mail queue. Both are
+     * cheap when there is nothing to do: an indexed query returning no rows.
+     */
+    ScheduleModule.forRoot(),
 
     PrismaModule,
     AuthModule,

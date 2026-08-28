@@ -238,6 +238,33 @@ export const CATALOGUE: SettingDefinition[] = [
       "The institute-wide ceiling (Appendix H). A teacher may narrow this for one assignment, never widen it. Files are checked by CONTENT, so renaming an extension does not get past it. The audio formats are what a browser records a spoken answer in — webm on Chrome and Firefox, m4a on Safari and iPhone — and removing either one breaks voice answers for that half of the cohort.",
   },
 
+  // ---------------------------------------------------------------- email --
+  {
+    key: "email.requireApproval",
+    type: "boolean",
+    default: true,
+    group: "Email",
+    description:
+      "Hold outgoing account email until somebody releases it. New sign-in details and " +
+      "course-enrolment notes are written to Administration → Outgoing email instead of " +
+      "being sent, and go out when an administrator approves them. Turn it off to send " +
+      "immediately, as the System did before.",
+  },
+
+  {
+    key: "email.dailyLimit",
+    type: "number",
+    default: 500,
+    min: 0,
+    max: 100000,
+    group: "Email",
+    description:
+      "How many messages the sending account is allowed in 24 hours, used to show how much " +
+      "is left. A free Google account is 500; paid Google Workspace is 2,000. This does not " +
+      "impose the limit — the mail provider does — it only lets the System warn you before " +
+      "you reach it.",
+  },
+
   // ----------------------------------------------------------- maintenance --
   //
   // Operational state rather than policy, but it lives here for the same

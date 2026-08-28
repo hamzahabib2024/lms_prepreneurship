@@ -222,6 +222,80 @@ export class CredentialsMailer {
    * The recipient shape the channel expects describes a USER, and here there
    * genuinely is one — but only the address and the name are used to send.
    */
+  /**
+   * A TICKET TO CHOOSE A PASSWORD — what a queued credentials email becomes.
+   *
+   * ───────────────────────────────────────────────────────────────────────────
+   * WHY IT IS NOT THE ORIGINAL PASSWORD. Because that is gone. A temporary
+   * password is hashed the moment it is made and nobody, a Super Admin
+   * included, can read one back — so a message held over until the mail
+   * account recovers cannot possibly carry it. The alternatives were to store
+   * the password in the queue, which quietly undoes that rule, or to mint a
+   * new one, which would silently break the password the operator has already
+   * read off the import screen and possibly relayed by hand.
+   *
+   * A ticket does neither, and is better than both:
+   *
+   *   · THE ORIGINAL STILL WORKS. Nothing anybody wrote down is invalidated.
+   *     This is an additional way in, not a replacement.
+   *   · IT IS NOT A CREDENTIAL. One use, thirty minutes. A password sitting in
+   *     an inbox is neither of those things.
+   *   · THE CLOCK STARTS NOW. Minted at the moment of sending, so a message
+   *     that waited twenty hours for an allowance to return still arrives with
+   *     its full validity rather than expired on delivery.
+   *
+   * It voids any earlier live ticket for the same person, exactly as asking
+   * for a reset does: two live links for one account is one more than anybody
+   * needs and one more that can be stolen.
+   * ───────────────────────────────────────────────────────────────────────────
+   */
+  async sendSetPasswordLink(input: {
+    to: string;
+    fullName: string;
+    registrationNo?: string | null;
+    /**
+     * A ticket already minted and stored by the caller.
+     *
+     * COMPOSING A MESSAGE AND ISSUING A CREDENTIAL ARE TWO JOBS, and this
+     * class does the first. Handing it a database so it could do the second
+     * would put a token-minting transaction inside the thing whose entire
+     * responsibility is wording — and it showed immediately, as ten existing
+     * tests that construct this class with a channel and a config and have no
+     * business knowing about Prisma.
+     */
+    token: string;
+  }): Promise<{ sent: boolean; detail: string }> {
+    const institute = this.instituteName();
+    const base = this.signInUrl().replace(/\/login$/, "");
+    const link = `${base}/reset-password?token=${encodeURIComponent(input.token)}`;
+
+    const body = [
+      `${input.fullName}, your account at ${institute} is ready.`,
+      "",
+      ...(input.registrationNo
+        ? [`  Your registration number is ${input.registrationNo}.`, ""]
+        : []),
+      "Choose your password here:",
+      "",
+      `  ${link}`,
+      "",
+      "That link works once and lasts thirty minutes. If it has expired by the",
+      "time you use it, go to the sign-in page and choose 'Forgot password' —",
+      "it will send you another.",
+      "",
+      "IF THE OFFICE ALREADY GAVE YOU A TEMPORARY PASSWORD, that still works.",
+      "Use either. You will be asked to choose your own password on the way in.",
+      "",
+      "If you were not expecting this, please tell the office and do not use the link.",
+    ].join("\n");
+
+    return this.send(input.to, input.fullName, {
+      kind: "account.set-password",
+      title: `Choose your password for ${institute}`,
+      body,
+    });
+  }
+
   private async send(
     to: string,
     fullName: string,

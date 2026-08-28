@@ -270,6 +270,8 @@ export const RESOURCES = [
   // communication — §4.5.10
   "announcement",
   "notification_config",
+  /** Outgoing account mail held for a person to release — §4.5.10. */
+  "email_queue",
   "own_notification_preference",
   "whatsapp_link",
   "discussion_post",
@@ -895,6 +897,28 @@ export const PERMISSION_MATRIX: Record<Resource, ResourcePolicy> = {
   notification_config: {
     super_admin: { actions: ["configure"], scope: "ALL" },
     admin: { actions: ["configure"], scope: "ALL" },
+  },
+  /**
+   * MESSAGES WAITING TO GO OUT, AND THE DECISION TO SEND THEM.
+   *
+   * The office, not a teacher: releasing one of these sends a person their way
+   * into the System, and the queue itself lists every address the Institute is
+   * about to write to. Neither is a teacher's business.
+   *
+   * NO STEP-UP, deliberately. This is a thing an administrator will do several
+   * times a day — a cohort is imported, twelve messages appear, they are looked
+   * at and released. A password prompt on every one of those trains somebody to
+   * type their password without reading what they are approving, which is worse
+   * for security than the prompt is good for it. The dangerous act here is
+   * approving without looking, and re-authentication does nothing about that.
+   *
+   * `delete` is discarding a message rather than erasing a record: the row is
+   * kept and marked, because "why did that student never get their details" is
+   * asked weeks later.
+   */
+  email_queue: {
+    super_admin: { actions: ["read", "update", "delete"], scope: "ALL" },
+    admin: { actions: ["read", "update", "delete"], scope: "ALL" },
   },
   own_notification_preference: {
     super_admin: { actions: ["read", "update"], scope: "OWN" },

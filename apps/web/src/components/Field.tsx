@@ -1,5 +1,6 @@
 import {
   cloneElement,
+  useCallback,
   useEffect,
   useId,
   useRef,
@@ -78,7 +79,9 @@ export function Field({
   /** One input, select or textarea. Cloned, never rebuilt. */
   children: ReactElement<{
     id?: string;
+    type?: string;
     value?: string | number | readonly string[];
+    onChange?: (e: React.ChangeEvent<HTMLElement>) => void;
     onBlur?: (e: React.FocusEvent<HTMLElement>) => void;
     "aria-invalid"?: boolean;
     "aria-describedby"?: string;
@@ -167,9 +170,57 @@ export function Field({
    */
   const control = useRef<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | null>(null);
 
+  /*
+   * THE CHILD'S OWN REF IS KEPT, not replaced — and it was being replaced.
+   *
+   * `cloneElement` with a `ref` in the config OVERRIDES whatever the child
+   * already had, silently. Three file inputs in this application hold a ref so
+   * they can clear the picker afterwards (`input.current.value = ""`), and
+   * wrapping them in a Field pointed that ref at nothing. The calls are all
+   * written `if (input.current)`, so nothing threw: "Start again" on the
+   * cohort import simply stopped clearing the chosen filename, and there was
+   * no error anywhere to say why.
+   *
+   * A callback ref feeds both. React 18 keeps the child's ref on the element
+   * rather than in props, which is where this reads it from.
+   */
+  const childRef = (children as unknown as { ref?: React.Ref<HTMLElement> }).ref;
+  const setRef = useCallback(
+    (node: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | null) => {
+      control.current = node;
+      if (typeof childRef === "function") childRef(node);
+      else if (childRef && typeof childRef === "object") {
+        (childRef as React.MutableRefObject<unknown>).current = node;
+      }
+    },
+    [childRef],
+  );
+
+  /*
+   * A FILE INPUT HAS NO `value`, AND THAT MADE THIS COMPONENT LIE.
+   *
+   * THE DEFECT, because it reached somebody: the cohort import's file field is
+   * `required`, so choosing a CSV and pressing "Check the file" painted a red
+   * cross on it reading "This is needed before you can continue." The file was
+   * there, the import worked, and the screen said it had not been given one.
+   * Somebody reasonably concluded the System would not accept their file.
+   *
+   * The cause is that a file input is UNCONTROLLED — React does not allow a
+   * `value` on one, and the browser will not let script set it — so reading
+   * `props.value` gets `undefined` for a field that is full, every time. The
+   * only honest source is the element's own `files` list.
+   *
+   * SO IT IS ASKED, not inferred. `fileCount` is bumped from the injected
+   * onChange below, which is what makes this re-render when somebody picks a
+   * file. Relying on the parent to re-render instead would work on this screen
+   * and break silently on the next one, where nothing else is watching.
+   */
+  const isFile = children.props.type === "file";
+  const [fileCount, setFileCount] = useState(0);
+
   const raw = children.props.value;
   const value = raw === undefined || raw === null ? "" : String(raw);
-  const filled = value.trim() !== "";
+  const filled = isFile ? fileCount > 0 : value.trim() !== "";
   const show = touched || submitted;
 
   let state: FieldState = "neutral";
@@ -219,7 +270,26 @@ export function Field({
       setTouched(true);
       children.props.onBlur?.(e);
     },
-    ref: control,
+    /*
+     * ONLY FOR A FILE INPUT. Every other kind is controlled, so its value
+     * arrives as a prop and wrapping onChange would be one more thing between
+     * a keystroke and the form that owns it.
+     *
+     * PICKING A FILE ALSO COUNTS AS TOUCHING IT — a file input is often never
+     * blurred, because the picker takes the focus and hands it back. Without
+     * this, a correctly chosen file would show no tick at all.
+     */
+    ...(isFile
+      ? {
+          onChange: (e: React.ChangeEvent<HTMLElement>) => {
+            const input = e.target as HTMLInputElement;
+            setFileCount(input.files?.length ?? 0);
+            setTouched(true);
+            children.props.onChange?.(e);
+          },
+        }
+      : {}),
+    ref: setRef,
   } as Record<string, unknown>);
 
   return (

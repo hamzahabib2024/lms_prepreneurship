@@ -242,3 +242,65 @@ describe("a partner with no institute attached reaches nothing", () => {
     expect(predicate("Student", notAPartner)).toEqual(DENIES_EVERYTHING);
   });
 });
+
+/* ========================================================================== *
+ *  BILLING THE INSTITUTE — the surface added with the portal.
+ *
+ *  A partner may READ what they are billed. Everything that DECIDES what they
+ *  are billed belongs to us, and this is where that line is asserted: raising
+ *  an invoice is creating a claim for money, and a customer who can raise
+ *  their own invoice can raise one for nothing.
+ * ========================================================================== */
+
+describe("a partner may read an invoice and never write one", () => {
+  it("cannot create, update or delete an invoice", () => {
+    for (const action of ["create", "update", "delete"] as const) {
+      expect({ action, allowed: may("partner_admin", "partner_invoice", action) }).toEqual({
+        action,
+        allowed: false,
+      });
+    }
+  });
+
+  /*
+   * THE PREVIEW IS AS SENSITIVE AS THE INVOICE, and it is guarded by the same
+   * resource for that reason. It lists every partner student with what each is
+   * worth — commercial information about another organisation — so it must
+   * never be reachable by a role that is not trusted with the invoice itself.
+   */
+  it("guards the billing preview with the invoice resource, not the student one", () => {
+    // Only the office holds `create`, which is what the raise route asks for.
+    expect(may("super_admin", "partner_invoice", "create")).toBe(true);
+    expect(may("admin", "partner_invoice", "create")).toBe(true);
+    expect(may("teacher", "partner_invoice", "read")).toBe(false);
+    expect(may("student", "partner_invoice", "read")).toBe(false);
+  });
+
+  /*
+   * AND THE OFFICE'S OWN ACCESS IS BEHIND RE-AUTHENTICATION. §4.5 puts every
+   * partner_invoice action for staff behind step-up, reads included. Asserted
+   * because it is the kind of flag that gets relaxed to make a screen quicker
+   * and is never put back.
+   */
+  it("keeps the office behind step-up, for reading as well as raising", () => {
+    for (const role of ["super_admin", "admin"] as const) {
+      const decision = resolvePermission(
+        { roles: [role], subPermissions: [], steppedUp: false },
+        "partner_invoice",
+        "read",
+      );
+      expect({ role, allowed: decision.allowed }).toEqual({ role, allowed: false });
+    }
+  });
+
+  /* A partner reading their own is NOT behind step-up — they have no second
+     factor to offer, and demanding one would lock them out of their own bill. */
+  it("does not demand step-up of the partner reading their own invoice", () => {
+    const decision = resolvePermission(
+      { roles: ["partner_admin"], subPermissions: [], steppedUp: false },
+      "partner_invoice",
+      "read",
+    );
+    expect(decision.allowed).toBe(true);
+  });
+});

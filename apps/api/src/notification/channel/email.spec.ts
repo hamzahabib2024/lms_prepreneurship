@@ -1,7 +1,18 @@
 import { ConfigService } from "@nestjs/config";
 import { EmailChannel } from "./email.channel";
+import { EmailLogService } from "../email-log.service";
 import { SimulatedOutbox } from "../../integration/simulated-outbox";
 import type { OutboundMessage, Recipient } from "./notification.channel";
+
+/**
+ * The send log, stubbed.
+ *
+ * Every outgoing message is written down so that "where did the day's sending
+ * allowance go" has an answer. Nothing in this file is about that, and the
+ * real one wants a database — so it is a no-op here, and the calls it swallows
+ * are asserted where they belong, in email-log.spec.ts.
+ */
+const noLog = { record: () => undefined } as unknown as EmailLogService;
 
 const configWith = (values: Record<string, string> = {}): ConfigService =>
   ({ get: (key: string, fallback?: string) => values[key] ?? fallback }) as unknown as ConfigService;
@@ -35,27 +46,27 @@ describe("whether email is usable at all", () => {
   it("needs the host, the user AND the password", () => {
     // Two of three is a misconfiguration that would otherwise fail at the
     // first send — and the first send is a real message to a real student.
-    expect(new EmailChannel(configWith(FULL), new SimulatedOutbox()).isConfigured()).toBe(true);
+    expect(new EmailChannel(configWith(FULL), new SimulatedOutbox(), noLog).isConfigured()).toBe(true);
     for (const missing of ["SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD"]) {
       const partial = { ...FULL, [missing]: "" };
-      expect(new EmailChannel(configWith(partial), new SimulatedOutbox()).isConfigured()).toBe(false);
+      expect(new EmailChannel(configWith(partial), new SimulatedOutbox(), noLog).isConfigured()).toBe(false);
     }
   });
 
   it("treats whitespace as unset", () => {
-    const c = new EmailChannel(configWith({ ...FULL, SMTP_HOST: "   " }), new SimulatedOutbox());
+    const c = new EmailChannel(configWith({ ...FULL, SMTP_HOST: "   " }), new SimulatedOutbox(), noLog);
     expect(c.isConfigured()).toBe(false);
   });
 
   it("is unconfigured when nothing is set", () => {
-    expect(new EmailChannel(configWith(), new SimulatedOutbox()).isConfigured()).toBe(false);
+    expect(new EmailChannel(configWith(), new SimulatedOutbox(), noLog).isConfigured()).toBe(false);
   });
 
   it("MAIL_DRIVER=log wins over having working credentials", () => {
     // The case this exists for: real SMTP settings in .env and a database full
     // of real-looking students, one announcement away from mailing thirty
     // people by accident.
-    const c = new EmailChannel(configWith({ ...FULL, MAIL_DRIVER: "log" }), new SimulatedOutbox());
+    const c = new EmailChannel(configWith({ ...FULL, MAIL_DRIVER: "log" }), new SimulatedOutbox(), noLog);
     expect(c.isConfigured()).toBe(false);
   });
 
@@ -65,6 +76,7 @@ describe("whether email is usable at all", () => {
     const logged = new EmailChannel(
       configWith({ ...FULL, MAIL_DRIVER: "log" }),
       new SimulatedOutbox(),
+      noLog,
     );
     const outcome = await logged.send(recipient(), message());
     expect(outcome.detail).toContain("MAIL_DRIVER");
@@ -73,14 +85,14 @@ describe("whether email is usable at all", () => {
 
   it("sends once MAIL_DRIVER is anything else", () => {
     for (const driver of ["smtp", "", "SMTP"]) {
-      const c = new EmailChannel(configWith({ ...FULL, MAIL_DRIVER: driver }), new SimulatedOutbox());
+      const c = new EmailChannel(configWith({ ...FULL, MAIL_DRIVER: driver }), new SimulatedOutbox(), noLog);
       expect(c.isConfigured()).toBe(true);
     }
   });
 });
 
 describe("who it can reach", () => {
-  const channel = new EmailChannel(configWith(FULL), new SimulatedOutbox());
+  const channel = new EmailChannel(configWith(FULL), new SimulatedOutbox(), noLog);
 
   it("reaches somebody with an address", () => {
     expect(channel.canReach(recipient())).toBe(true);
@@ -98,7 +110,7 @@ describe("when it is not configured", () => {
     // The property that matters. A channel reporting SENT with no mail server
     // makes the delivery log a record of messages nobody received.
     const outbox = new SimulatedOutbox();
-    const channel = new EmailChannel(configWith(), outbox);
+    const channel = new EmailChannel(configWith(), outbox, noLog);
     const outcome = await channel.send(recipient(), message());
 
     expect(outcome.status).toBe("SUPPRESSED");
@@ -106,14 +118,14 @@ describe("when it is not configured", () => {
   });
 
   it("names the settings that would fix it", async () => {
-    const channel = new EmailChannel(configWith(), new SimulatedOutbox());
+    const channel = new EmailChannel(configWith(), new SimulatedOutbox(), noLog);
     const outcome = await channel.send(recipient(), message());
     expect(outcome.detail).toContain("SMTP_HOST");
   });
 
   it("keeps the wording, so it can be proofread before there is a mailbox", async () => {
     const outbox = new SimulatedOutbox();
-    const channel = new EmailChannel(configWith(), outbox);
+    const channel = new EmailChannel(configWith(), outbox, noLog);
     await channel.send(recipient(), message({ title: "Fees due" }));
 
     const held = outbox.recent();
@@ -127,7 +139,7 @@ describe("when it is not configured", () => {
     // A person with no address is not a message waiting to be sent, and
     // putting them in the outbox would overstate what configuring email buys.
     const outbox = new SimulatedOutbox();
-    const channel = new EmailChannel(configWith(), outbox);
+    const channel = new EmailChannel(configWith(), outbox, noLog);
     const outcome = await channel.send(recipient({ email: "" }), message());
 
     expect(outcome.status).toBe("SUPPRESSED");
@@ -139,7 +151,7 @@ describe("when it is not configured", () => {
 describe("what a recipient actually reads", () => {
   /** The private formatter, reached the way the send path reaches it. */
   const render = (cfg: Record<string, string>, msg?: Partial<OutboundMessage>) => {
-    const channel = new EmailChannel(configWith(cfg), new SimulatedOutbox()) as unknown as {
+    const channel = new EmailChannel(configWith(cfg), new SimulatedOutbox(), noLog) as unknown as {
       plainText: (r: Recipient, m: OutboundMessage) => string;
     };
     return channel.plainText(recipient(), message(msg));
@@ -180,7 +192,7 @@ describe("what a recipient actually reads", () => {
 
 describe("the from address", () => {
   const fromOf = (cfg: Record<string, string>) =>
-    (new EmailChannel(configWith(cfg), new SimulatedOutbox()) as unknown as { from: string }).from;
+    (new EmailChannel(configWith(cfg), new SimulatedOutbox(), noLog) as unknown as { from: string }).from;
 
   it("uses an explicit MAIL_FROM when given", () => {
     expect(fromOf({ ...FULL, MAIL_FROM: '"Prepreneurship" <no-reply@prep.pk>' })).toBe(

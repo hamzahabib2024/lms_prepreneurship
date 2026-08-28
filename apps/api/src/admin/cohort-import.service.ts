@@ -7,6 +7,7 @@ import { RegistrationNumberService } from "../admission/registration-number.serv
 import { getActor } from "../prisma/actor-context";
 import { AppError } from "@lms/shared";
 import { CredentialsMailer } from "../notification/credentials-mailer";
+import { PendingEmailService } from "../notification/pending-email.service";
 import {
   countAgainstSection,
   describePlan,
@@ -35,7 +36,36 @@ export interface RowOutcome {
    * a send was attempted and did not succeed, and the operator must relay it
    * by hand from the list on screen.
    */
+  // (see emailProblem below for WHY a send failed)
   emailSent?: boolean;
+  /**
+   * WHY it did not go, in the mail server's own words.
+   *
+   * "Not emailed" on its own is a dead end: the operator cannot tell a wrong
+   * address from a mail account that has hit its daily limit, and those need
+   * completely different responses — retype the address, or wait and send
+   * again. The reason was being thrown away at the point it was known.
+   */
+  emailProblem?: string;
+  /**
+   * Whether it will be tried again on its own.
+   *
+   * The difference between "this will arrive later" and "this will never
+   * arrive and you must relay it yourself" is the whole of what the operator
+   * needs from this row, and the two demand opposite responses.
+   */
+  emailQueued?: boolean;
+  /**
+   * Written to the queue for somebody to release, rather than sent.
+   *
+   * A THIRD ANSWER, not a shade of failure. Nothing went wrong and nothing is
+   * owed to the mail server — the Institute has asked to see these before they
+   * leave. Reported as a failure it would send an operator relaying passwords
+   * that are about to be released by the colleague sitting next to them.
+   */
+  emailHeld?: boolean;
+  /** Set for every row that has an account, so a queued message can find it. */
+  userId?: string;
 }
 
 export interface ImportResult {
@@ -48,6 +78,8 @@ export interface ImportResult {
   /** How many students were sent their own password, and how many were not. */
   emailed: number;
   notEmailed: number;
+  /** Written to the queue for an administrator to release. */
+  held: number;
   message: string;
 }
 
@@ -85,6 +117,7 @@ export class CohortImportService {
     // FR-OPS-026 — a hundred students whose passwords never leave the
     // operator's screen are a hundred accounts nobody signs in to.
     private readonly credentials: CredentialsMailer,
+    private readonly pendingEmail: PendingEmailService,
   ) {}
 
   /**
@@ -268,8 +301,53 @@ export class CohortImportService {
      * result for the operator to read out, and each row now says whether it
      * also arrived by email.
      */
-    for (const outcome of outcomes) {
-      if (!outcome.email) continue;
+    /*
+     * A FEW AT A TIME, AND WAITED FOR.
+     *
+     * ─────────────────────────────────────────────────────────────────────────
+     * THIS WAS SEQUENTIAL, AND THEN IT WAS FIRE-AND-FORGET, AND BOTH WERE
+     * WRONG. Sequential cost about three seconds a message, so twelve students
+     * meant thirty-seven seconds of a disabled button and somebody reasonably
+     * concluding the screen had frozen. Handing the remainder to a detached
+     * promise fixed the waiting and introduced something worse: work that only
+     * exists in memory. A restart — a deployment, a crash, a watch-mode reload
+     * on a development machine — takes those messages with it, and nothing
+     * anywhere records that they were lost. The operator had been told they
+     * were "still sending".
+     *
+     * THE ANSWER IS TO MAKE THE SENDING FAST ENOUGH TO WAIT FOR. Five at a
+     * time over a pooled transport does twelve in about nine seconds instead
+     * of thirty-seven, because the TLS handshake is most of the cost and the
+     * pool stops paying it per message. Nine seconds is a thing to wait for.
+     * Thirty-seven is not.
+     *
+     * FIVE, NOT ALL OF THEM. The original reasoning was sound and is kept:
+     * firing three hundred at once is how a Gmail account earns a temporary
+     * block, which looks exactly like the integration being broken. This is a
+     * small pool, not a flood.
+     *
+     * THE BUDGET REMAINS, for the genuinely large file. At five a time a
+     * twenty-second budget covers about thirty students, so an ordinary cohort
+     * finishes inside it and is reported exactly. Beyond that the rest are
+     * reported as NOT SENT rather than as pending — because this no longer
+     * promises to deliver them later, and a promise nothing can keep is worse
+     * than an honest failure. The passwords are on screen and in the
+     * downloadable file, which is what makes that safe to say.
+     * ─────────────────────────────────────────────────────────────────────────
+     */
+    const MAIL_BUDGET_MS = 20_000;
+    const MAIL_CONCURRENCY = 5;
+    const mailStartedAt = Date.now();
+
+    /** One student's message, whichever of the two they are owed. */
+    const deliver = async (outcome: (typeof outcomes)[number]): Promise<void> => {
+      /*
+       * A ROW WITH NO ACCOUNT HAS NOTHING TO SEND TO. A skipped row never got
+       * one, and queueing against a userId that does not exist would be a
+       * foreign key violation at the tail of a successful import.
+       */
+      if (!outcome.email || !outcome.userId) return;
+      const userId = outcome.userId;
 
       if (outcome.temporaryPassword) {
         const posted = await this.credentials.sendNewAccount({
@@ -279,7 +357,23 @@ export class CohortImportService {
           registrationNo: outcome.registrationNo ?? null,
         });
         outcome.emailSent = posted.sent;
-        continue;
+        if (!posted.sent) {
+          outcome.emailProblem = posted.detail;
+          /*
+           * KEPT, IF IT IS WORTH KEEPING. A daily limit empties on its own, so
+           * the message is queued and goes out when it does; a wrong address
+           * never will, and is reported for a person to fix.
+           */
+          outcome.emailQueued = await this.pendingEmail.queue({
+            kind: "CREDENTIALS",
+            userId,
+            toAddress: outcome.email,
+            fullName: outcome.fullName,
+            ...(outcome.registrationNo ? { context: { registrationNo: outcome.registrationNo } } : {}),
+            detail: posted.detail,
+          });
+        }
+        return;
       }
 
       /*
@@ -300,7 +394,109 @@ export class CohortImportService {
           sectionName: section.name,
         });
         outcome.emailSent = posted.sent;
+        if (!posted.sent) {
+          outcome.emailProblem = posted.detail;
+          outcome.emailQueued = await this.pendingEmail.queue({
+            kind: "COURSE_ADDED",
+            userId,
+            toAddress: outcome.email,
+            fullName: outcome.fullName,
+            context: {
+              sectionName: section.name,
+              ...(outcome.registrationNo ? { registrationNo: outcome.registrationNo } : {}),
+            },
+            detail: posted.detail,
+          });
+        }
       }
+    };
+
+    const owedMail = outcomes.filter(
+      (o) => o.email && (o.temporaryPassword || o.status === "REJOINED"),
+    );
+
+    /*
+     * THE INSTITUTE MAY WANT TO SEE THESE FIRST.
+     *
+     * With email.requireApproval on, nothing is sent from here at all: each
+     * message is written to the queue and an administrator releases it from
+     * Administration → Outgoing email. Checked ONCE for the whole import
+     * rather than per row, so a setting changed mid-import cannot send half a
+     * cohort and hold the other half.
+     *
+     * NO ALLOWANCE IS SPENT. The mail server is never asked, which is the
+     * other reason holding is useful when a daily limit is tight: the office
+     * can decide what is worth sending today.
+     */
+    if (await this.pendingEmail.approvalRequired()) {
+      let held = 0;
+      for (const outcome of owedMail) {
+        if (!outcome.email || !outcome.userId) continue;
+        const ok = await this.pendingEmail.hold({
+          kind: outcome.temporaryPassword ? "CREDENTIALS" : "COURSE_ADDED",
+          userId: outcome.userId,
+          toAddress: outcome.email,
+          fullName: outcome.fullName,
+          subject: outcome.temporaryPassword
+            ? "Their sign-in details"
+            : `Enrolled in ${section.name}`,
+          context: {
+            sectionName: section.name,
+            ...(outcome.registrationNo ? { registrationNo: outcome.registrationNo } : {}),
+          },
+        });
+        outcome.emailSent = false;
+        outcome.emailHeld = ok;
+        if (ok) held += 1;
+      }
+      if (held > 0) {
+        this.logger.log(`Cohort import into ${section.name}: ${held} messages held for approval.`);
+      }
+    } else {
+
+    let abandoned = 0;
+    const queue = [...owedMail];
+    const workers = Array.from({ length: Math.min(MAIL_CONCURRENCY, queue.length) }, async () => {
+      for (;;) {
+        const outcome = queue.shift();
+        if (!outcome) return;
+
+        if (Date.now() - mailStartedAt > MAIL_BUDGET_MS) {
+          /*
+           * OUT OF TIME. Said as a failure, not as a maybe: nothing is going
+           * to pick this up afterwards, and the operator needs to know to read
+           * this one out rather than wait for a message that is not coming.
+           */
+          outcome.emailSent = false;
+          outcome.emailProblem =
+            "There was not time to send this one during the import. Read the password out, or " +
+            "reset the account to have it sent again.";
+          abandoned += 1;
+          continue;
+        }
+
+        // NOTHING HERE CAN FAIL THE IMPORT. Every student in this list already
+        // has an account and a registration number; a refused message leaves
+        // the row saying so and the password still on screen.
+        await deliver(outcome).catch((err: unknown) => {
+          outcome.emailSent = false;
+          outcome.emailProblem = err instanceof Error ? err.message : "The mailer raised an error.";
+          this.logger.warn(
+            `Cohort import: could not email ${outcome.email} — ` +
+              (err instanceof Error ? err.message : "unknown error"),
+          );
+        });
+      }
+    });
+    await Promise.all(workers);
+
+    if (abandoned > 0) {
+      this.logger.warn(
+        `Cohort import into ${section.name}: ${abandoned} credential emails were not attempted ` +
+          `within ${MAIL_BUDGET_MS}ms and are reported as not sent. The operator has the ` +
+          "passwords on screen.",
+      );
+    }
     }
 
     outcomes.sort((a, b) => a.line - b.line);
@@ -308,7 +504,11 @@ export class CohortImportService {
     const rejoined = outcomes.filter((o) => o.status === "REJOINED").length;
     const skipped = outcomes.filter((o) => o.status === "SKIPPED").length;
     const emailed = outcomes.filter((o) => o.emailSent === true).length;
-    const notEmailed = outcomes.filter((o) => o.emailSent === false).length;
+    /* HELD IS NOT FAILED. A message waiting for a colleague to release it must
+       not be counted with the ones that could not be delivered. */
+    const held = outcomes.filter((o) => o.emailHeld === true).length;
+    const notEmailed = outcomes.filter((o) => o.emailSent === false && !o.emailHeld).length;
+
 
     // One entry for the import itself, in addition to the per-student ones.
     // Without it, three hundred separate creations have no single thing an
@@ -338,7 +538,8 @@ export class CohortImportService {
       outcomes,
       emailed,
       notEmailed,
-      message: importResultMessage({ loaded, rejoined, skipped, emailed, notEmailed }),
+      held,
+      message: importResultMessage({ loaded, rejoined, skipped, emailed, notEmailed, held }),
     };
   }
 
@@ -472,8 +673,12 @@ export class CohortImportService {
           const rollNo = await this.numbers.allocateRollNumber(tx, section.id);
 
           let studentId: string;
+          /* Carried out of both branches so a message that could not be sent
+             can be queued against the account it belongs to. */
+          let accountUserId: string;
           if (returning) {
             studentId = returning.id;
+            accountUserId = existing!.id;
             await tx.student.update({
               where: { id: studentId },
               data: { currentSectionId: section.id, currentRollNo: rollNo },
@@ -507,6 +712,7 @@ export class CohortImportService {
               },
               select: { id: true },
             });
+            accountUserId = user.id;
             const created = await tx.student.create({
               data: {
                 userId: user.id,
@@ -585,6 +791,7 @@ export class CohortImportService {
             status: (returning ? "REJOINED" : "LOADED") as "LOADED" | "REJOINED",
             registrationNo,
             rollNo,
+            userId: accountUserId,
             // Only for a new account. A returning student's existing password
             // is untouched, and saying otherwise would have the Institute hand
             // out a password that does not work.

@@ -2,6 +2,7 @@ import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { createTransport, type Transporter } from "nodemailer";
 import { SimulatedOutbox } from "../../integration/simulated-outbox";
+import { EmailLogService } from "../email-log.service";
 import type {
   DeliveryOutcome,
   NotificationChannelAdapter,
@@ -39,6 +40,13 @@ export class EmailChannel implements NotificationChannelAdapter {
   constructor(
     private readonly config: ConfigService,
     private readonly outbox: SimulatedOutbox,
+    /*
+     * WRITTEN DOWN HERE, at the one point every outgoing message passes
+     * through. Recording at each caller instead would be six places to
+     * remember and one to forget, and the one forgotten is the one that
+     * quietly spends the day's allowance.
+     */
+    private readonly log: EmailLogService,
   ) {}
 
   private get host(): string {
@@ -107,6 +115,40 @@ export class EmailChannel implements NotificationChannelAdapter {
         // that silently sends credentials in the clear.
         secure: port === 465,
         auth: { user: this.user, pass: this.pass },
+        /*
+         * TIMEOUTS, BECAUSE NODEMAILER'S DEFAULTS ARE MEANT FOR A BATCH JOB.
+         *
+         * Out of the box it waits two minutes to connect and TEN MINUTES on a
+         * silent socket. That is a reasonable default for something running
+         * unattended overnight and completely wrong for a request somebody is
+         * sitting in front of: one stalled send would hold a cohort import
+         * open past every proxy and browser timeout in the chain, and the
+         * screen would simply stop.
+         *
+         * These are generous against the measured cost — a Gmail handshake
+         * here is about 1.4 seconds and a full send about 3 — while bounding
+         * the failure at seconds instead of minutes.
+         */
+        connectionTimeout: 10_000,
+        greetingTimeout: 10_000,
+        socketTimeout: 20_000,
+        /*
+         * POOLED, which is what makes a cohort import bearable.
+         *
+         * Without a pool nodemailer opens a fresh connection per message, and
+         * the TLS handshake is most of the cost — about 1.4 seconds of the 3
+         * a message takes here. Twelve students sent one after another is
+         * thirty-seven seconds; the same twelve over five pooled connections
+         * is about nine, measured.
+         *
+         * FIVE, not fifty. The reason the import used to send one at a time
+         * was a real one — firing hundreds at once is how a Gmail account
+         * earns a temporary block that looks exactly like the integration
+         * being broken. Five concurrent connections is ordinary client
+         * behaviour and nowhere near that line.
+         */
+        pool: true,
+        maxConnections: 5,
       });
     }
     return this.transport;
@@ -114,6 +156,20 @@ export class EmailChannel implements NotificationChannelAdapter {
 
   async send(recipient: Recipient, message: OutboundMessage): Promise<DeliveryOutcome> {
     if (!this.canReach(recipient)) {
+      /*
+       * RECORDED, THOUGH NOTHING WAS SENT. "Why did they not get it" is asked
+       * about these more than about anything else, and "there is no address on
+       * their record" is the answer — which exists nowhere unless it is
+       * written down at the moment it is decided. It costs no allowance and is
+       * counted separately for that reason.
+       */
+      this.log.record({
+        toAddress: recipient.email ?? "(none on record)",
+        kind: message.kind,
+        subject: message.title,
+        status: "SUPPRESSED",
+        detail: "No email address on record for this user.",
+      });
       return { status: "SUPPRESSED", detail: "No email address on record for this user." };
     }
 
@@ -132,6 +188,13 @@ export class EmailChannel implements NotificationChannelAdapter {
         (this.config.get<string>("MAIL_DRIVER", "") ?? "").trim().toLowerCase() === "log"
           ? "MAIL_DRIVER is set to log, so nothing is sent even though SMTP may be configured."
           : "Email is not configured (SMTP_HOST, SMTP_USER, SMTP_PASSWORD).";
+      this.log.record({
+        toAddress: recipient.email,
+        kind: message.kind,
+        subject: message.title,
+        status: "SUPPRESSED",
+        detail: held,
+      });
       return {
         status: "SUPPRESSED",
         detail: `${held} The message is in the recipient's inbox, and its wording is in the simulator outbox.`,
@@ -158,6 +221,14 @@ export class EmailChannel implements NotificationChannelAdapter {
             }
           : {}),
       });
+      // THE ONE THAT ACTUALLY SPENDS THE ALLOWANCE, which is why recording
+      // only failures answered the wrong question entirely.
+      this.log.record({
+        toAddress: recipient.email,
+        kind: message.kind,
+        subject: message.title,
+        status: "SENT",
+      });
       // The provider's id, so a delivery can be traced in the mail logs later.
       return { status: "SENT", detail: `Accepted by the mail server (${info.messageId}).` };
     } catch (err) {
@@ -167,7 +238,18 @@ export class EmailChannel implements NotificationChannelAdapter {
       this.logger.warn(
         JSON.stringify({ event: "email.failed", kind: message.kind, recipientId: recipient.userId }),
       );
-      return { status: "FAILED", detail: `The mail server refused it: ${reason}`.slice(0, 300) };
+      const detail = `The mail server refused it: ${reason}`.slice(0, 300);
+      this.log.record({
+        toAddress: recipient.email,
+        kind: message.kind,
+        subject: message.title,
+        status: "FAILED",
+        // KEPT IN FULL, unlike everything else here: this is the mail server's
+        // own diagnosis, and it is the difference between a full mailbox and a
+        // wrong address. Reading it is how somebody knows whether to wait.
+        detail,
+      });
+      return { status: "FAILED", detail };
     }
   }
 

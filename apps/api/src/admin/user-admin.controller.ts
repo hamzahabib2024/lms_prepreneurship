@@ -5,14 +5,50 @@ import { UserAdminService } from "./user-admin.service";
 import { zodBody } from "../common/zod-validation.pipe";
 import { RequirePermission } from "../rbac/permissions.guard";
 
-const createStaffSchema = z.object({
-  email: z.string().trim().toLowerCase().email(),
-  fullName: z.string().trim().min(2).max(200),
-  phone: z.string().trim().max(20).optional(),
-  role: z.enum(["teacher", "admin"]),
-  subPermissions: z.array(z.enum(SUB_PERMISSIONS)).optional(),
-  employeeCode: z.string().trim().max(30).optional(),
-});
+const createStaffSchema = z
+  .object({
+    email: z.string().trim().toLowerCase().email(),
+    fullName: z.string().trim().min(2).max(200),
+    phone: z.string().trim().max(20).optional(),
+    role: z.enum(["teacher", "admin", "partner_admin"]),
+    subPermissions: z.array(z.enum(SUB_PERMISSIONS)).optional(),
+    employeeCode: z.string().trim().max(30).optional(),
+    /*
+     * WHICH OUTSIDE INSTITUTE THIS PERSON ACTS FOR — and the single most
+     * dangerous field on this form, which is why the refinement below is not
+     * optional politeness.
+     *
+     * A partner_admin's ENTIRE reach is this one column. The PARTNER scope
+     * predicates resolve to DENY_ALL when it is null, so an account created
+     * without it is not a security hole — it is an account that can see
+     * nothing at all, signs in to an empty portal, and produces a support
+     * call nobody can explain. Refusing at the edge is kinder than shipping a
+     * useless account.
+     */
+    partnerInstituteId: z.string().uuid().optional(),
+  })
+  .superRefine((v, ctx) => {
+    if (v.role === "partner_admin" && !v.partnerInstituteId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["partnerInstituteId"],
+        message: "Choose which institute this person represents.",
+      });
+    }
+    /*
+     * AND THE OTHER WAY ROUND. A teacher carrying a partner id would be a
+     * member of our own staff whose queries are silently narrowed to one
+     * outside institute's students — they would open the marking queue and
+     * find most of their class missing, with nothing on screen to say why.
+     */
+    if (v.role !== "partner_admin" && v.partnerInstituteId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["partnerInstituteId"],
+        message: "Only a partner account belongs to an outside institute.",
+      });
+    }
+  });
 
 const statusSchema = z.object({
   status: z.enum(["ACTIVE", "SUSPENDED"]),

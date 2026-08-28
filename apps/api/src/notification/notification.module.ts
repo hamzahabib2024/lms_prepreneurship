@@ -8,6 +8,9 @@ import { LoggedWhatsAppChannel } from "./channel/logged.channel";
 import { WhatsAppChannel } from "./channel/whatsapp.channel";
 import { EmailChannel } from "./channel/email.channel";
 import { CredentialsMailer } from "./credentials-mailer";
+import { PendingEmailService } from "./pending-email.service";
+import { EmailQueueController } from "./email-queue.controller";
+import { EmailLogService } from "./email-log.service";
 
 /**
  * Global, because notifications are raised from everywhere — admission,
@@ -19,7 +22,7 @@ import { CredentialsMailer } from "./credentials-mailer";
  */
 @Global()
 @Module({
-  controllers: [NotificationController],
+  controllers: [NotificationController, EmailQueueController],
   providers: [
     AnnouncementService,
     NotificationService,
@@ -28,7 +31,9 @@ import { CredentialsMailer } from "./credentials-mailer";
     LoggedWhatsAppChannel,
     WhatsAppChannel,
     EmailChannel,
+    EmailLogService,
     CredentialsMailer,
+    PendingEmailService,
   ],
   // ChannelRegistry is exported so the integrations screen can ask the adapter
   // itself whether it is configured, rather than re-deriving that from the
@@ -51,6 +56,9 @@ import { CredentialsMailer } from "./credentials-mailer";
     // Each used to decide for itself whether the password ever left the
     // administrator's screen, and three of them decided it did not.
     CredentialsMailer,
+    // The queue, so a caller can ask what is still waiting to go out.
+    PendingEmailService,
+    EmailLogService,
   ],
 })
 export class NotificationModule {}

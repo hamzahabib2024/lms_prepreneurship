@@ -179,6 +179,42 @@ const STATE_FILTERED = [
 ] as const;
 
 const DELIBERATELY_UNSCOPED = [
+  /*
+   * MESSAGES THE MAIL SERVER WOULD NOT TAKE YET.
+   *
+   * NEVER REACHED THROUGH THE SCOPED CLIENT AT ALL — not by a controller, not
+   * by a route, not by any actor. It is written by the mailer when a send is
+   * refused and read by a scheduled sweep that runs as the System with no
+   * actor in context, so there is nobody to scope it BY: a cron job is not a
+   * user and cannot be given a scope.
+   *
+   * AND THERE IS NOTHING IN IT WORTH SCOPING. A row is an address, a name and
+   * which of two messages is owed — deliberately not the message itself, which
+   * is rebuilt at send time precisely so no temporary password is ever stored.
+   * The one thing that would make this sensitive is the one thing it refuses
+   * to hold.
+   *
+   * If it is ever exposed on a route — an operator asking what is still
+   * waiting to go out — that endpoint must be permission-guarded like any
+   * other, and this entry revisited rather than assumed to still apply.
+   */
+  "PendingEmail",
+  /*
+   * EVERY MESSAGE THE SYSTEM TRIED TO SEND.
+   *
+   * Never reached through the scoped client: it is written by the email
+   * adapter and read by one office-only screen answering "where did the day's
+   * sending allowance go". There is no actor to scope it by — the adapter runs
+   * inside whatever request happened to trigger a message, and the question it
+   * answers is about the Institute's mail account rather than about any
+   * person.
+   *
+   * AND IT DELIBERATELY HOLDS NO MESSAGE. An address, a category and a subject
+   * line; never a body, because those carry temporary passwords, marks and
+   * balances. The endpoint that exposes it is guarded by email_queue:read,
+   * which is Admin and Super Admin only.
+   */
+  "EmailLog",
   "Programme",
   "Subject",
   "AcademicSession",

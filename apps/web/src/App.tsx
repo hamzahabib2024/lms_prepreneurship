@@ -37,6 +37,9 @@ import { PaymentVerificationPage } from "./pages/PaymentVerificationPage";
 import { SecurityPage } from "./pages/SecurityPage";
 import { BulkPage } from "./pages/BulkPage";
 import { CohortImportPage } from "./pages/CohortImportPage";
+import { PartnersPage } from "./pages/PartnersPage";
+import { EmailQueuePage } from "./pages/EmailQueuePage";
+import { PartnerPortalPage } from "./pages/PartnerPortalPage";
 import { ReceiptPage } from "./pages/ReceiptPage";
 import { TemplatesPage } from "./pages/TemplatesPage";
 import { FeesPage } from "./pages/FeesPage";
@@ -466,7 +469,23 @@ export function App() {
         className={`main page-${location.pathname.split("/")[1] || "dashboard"}`}
       >
         <Routes>
-          <Route path="/" element={<DashboardPage />} />
+          {/*
+            A PARTNER HAS NO DASHBOARD, so / is not one for them.
+
+            The dashboard is assembled from the work of this Institute — the
+            marking queue, admissions, today's classes, the money — and every
+            one of those calls is refused for a partner_admin. Rendering it for
+            them would produce a screen of error panels at the address they
+            land on immediately after signing in, which reads as a broken
+            System rather than as a page that was never meant for them.
+
+            Their portal is the whole of what they came for, so it is what /
+            means when they are the one asking.
+          */}
+          <Route
+            path="/"
+            element={hasRole("partner_admin") ? <Navigate to="/partner" replace /> : <DashboardPage />}
+          />
           {/*
             SIGNING IN LEFT YOU ON A NOT-FOUND PAGE.
 
@@ -622,6 +641,37 @@ export function App() {
             element={
               hasRole("super_admin", "admin") ? <CohortImportPage /> : <Navigate to="/" replace />
             }
+          />
+          {/* Recording an outside institute and giving its staff an account.
+              Office only — the page itself offers Super Admin actions that
+              the server refuses to anybody else. */}
+          {/* Releasing a message sends somebody their way into the System,
+              and the queue lists every address the Institute is about to
+              write to. Neither is a teacher's business. */}
+          <Route
+            path="/email-queue"
+            element={
+              hasRole("super_admin", "admin") ? <EmailQueuePage /> : <Navigate to="/" replace />
+            }
+          />
+          <Route
+            path="/partners"
+            element={
+              hasRole("super_admin", "admin") ? <PartnersPage /> : <Navigate to="/" replace />
+            }
+          />
+          {/*
+            THE PARTNER'S OWN PORTAL, and the only page they have.
+
+            Everyone else is sent to the dashboard, which is the ordinary
+            pattern here. A partner arriving at any other address is sent to
+            THIS page rather than to the dashboard — see the catch-all below —
+            because the dashboard is built from a member of this Institute's
+            work and has nothing on it for somebody outside.
+          */}
+          <Route
+            path="/partner"
+            element={hasRole("partner_admin") ? <PartnerPortalPage /> : <Navigate to="/" replace />}
           />
           {/* A receipt is a document with an address, so it can be opened,
               printed and reopened. A STUDENT reaches their own: they hold
@@ -799,7 +849,13 @@ export function App() {
               hasRole("super_admin", "admin", "teacher") ? <ReportsPage /> : <Navigate to="/" replace />
             }
           />
-          <Route path="*" element={<NotFound />} />
+          {/* A partner who follows an old link or types an address reaches
+              the one page they have, rather than a not-found that offers them
+              nothing to do next. */}
+          <Route
+            path="*"
+            element={hasRole("partner_admin") ? <Navigate to="/partner" replace /> : <NotFound />}
+          />
         </Routes>
           </main>
         </div>

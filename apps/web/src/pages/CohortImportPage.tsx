@@ -74,6 +74,12 @@ interface Outcome {
    * by hand.
    */
   emailSent?: boolean;
+  /** Why it did not go, in the mail server's own words. */
+  emailProblem?: string;
+  /** Whether it will be tried again on its own. */
+  emailQueued?: boolean;
+  /** Held for an administrator to release. Not a failure. */
+  emailHeld?: boolean;
 }
 
 interface Result {
@@ -85,12 +91,76 @@ interface Result {
   /** How many students were sent their own password, and how many were not. */
   emailed: number;
   notEmailed: number;
+  /** Written to the queue for an administrator to release. */
+  held: number;
   message: string;
+}
+
+interface PartnerOption {
+  id: string;
+  name: string;
+  isActive: boolean;
+  billingMode: "PARTNER_PAYS" | "STUDENT_PAYS";
+  billingLabel: string;
+}
+
+/**
+ * Did every failure come from the mail account being used up for the day?
+ *
+ * Worth separating because it is the one mail failure that is TEMPORARY and
+ * has nothing to do with the file: no address is wrong, no setting is wrong,
+ * and the same import will work tomorrow. Told instead to "check whether email
+ * is configured", somebody spends an afternoon inspecting settings that are
+ * correct.
+ */
+function queuedCount(result: Result): number {
+  return result.outcomes.filter((o) => o.emailQueued).length;
+}
+
+function mailLimitHit(result: Result): boolean {
+  return result.outcomes.some(
+    (o) => o.emailSent === false && /daily .*limit|5\.4\.5|quota/i.test(o.emailProblem ?? ""),
+  );
+}
+
+/**
+ * The mail server's answer, shortened to the part a person can act on.
+ *
+ * An SMTP rejection arrives as several lines of repeated codes and a support
+ * URL — "550-5.4.5 Daily user sending limit exceeded. For more information on
+ * Gmail 550-5.4.5 sending limits go to 550 5.4.5 https://…". Printed whole
+ * beside a student's name it buries the one useful clause in punctuation.
+ */
+function tidyMailProblem(detail: string): string {
+  if (/daily .*limit|5\.4\.5|quota/i.test(detail)) {
+    return "The sending account has reached its daily limit — try again tomorrow.";
+  }
+  if (/550|no such user|does not exist|recipient/i.test(detail)) {
+    return "The mail server would not accept that address. Check it is spelled correctly.";
+  }
+  if (/timeout|ETIMEDOUT|ECONNREFUSED|ENOTFOUND/i.test(detail)) {
+    return "The mail server could not be reached.";
+  }
+  // Anything unrecognised is shown as it came, trimmed — a message nobody
+  // anticipated is exactly the one worth passing on verbatim.
+  const firstLine = detail.split("\n")[0] ?? detail;
+  return firstLine.length > 160 ? `${firstLine.slice(0, 157)}…` : firstLine;
 }
 
 export function CohortImportPage() {
   const [sections, setSections] = useState<Section[]>([]);
   const [sectionId, setSectionId] = useState("");
+  /*
+   * WHOSE STUDENTS THESE ARE — our own, or an outside institute's.
+   *
+   * CHOSEN ONCE FOR THE WHOLE FILE, never as a CSV column. A partner id typed
+   * on every line is a partner id mistyped on some of them, and the failure is
+   * silent: the wrong institute gains the right to read those students'
+   * results. The empty string means the Institute's own intake, which is the
+   * common case and therefore the default.
+   */
+  const [partners, setPartners] = useState<PartnerOption[]>([]);
+  const [partnerInstituteId, setPartnerInstituteId] = useState("");
   const [csv, setCsv] = useState("");
   const [fileName, setFileName] = useState("");
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -107,6 +177,16 @@ export function CohortImportPage() {
       .get<Section[]>("/sections")
       .then(setSections)
       .catch((e) => setError(e instanceof ApiError ? e.message : "Could not load batches."));
+
+    /*
+     * FAILS QUIETLY, on purpose. Most imports are of our own students and the
+     * partner picker is an extra the screen can do without — an institute
+     * list that would not load must not stop somebody importing a cohort.
+     */
+    api
+      .get<PartnerOption[]>("/partners")
+      .then((rows) => setPartners(rows.filter((p) => p.isActive)))
+      .catch(() => setPartners([]));
   }, []);
 
   // Any change to the file or the destination invalidates the preview. Leaving
@@ -136,6 +216,7 @@ export function CohortImportPage() {
   };
 
   const section = sections.find((s) => s.id === sectionId);
+  const chosenPartner = partners.find((p) => p.id === partnerInstituteId);
   const canPreview = csv.trim().length > 0 && sectionId !== "" && !busy;
   const canCommit =
     preview !== null &&
@@ -213,6 +294,59 @@ export function CohortImportPage() {
             </Field>
           </div>
 
+          {/*
+            WHOSE STUDENTS, asked BEFORE the file and offered only when there
+            is at least one institute on file — a dropdown with a single
+            "Our own students" entry is a question nobody needs asked.
+          */}
+          {partners.length > 0 && (
+            <div className="field-row">
+              <Field
+                label="Whose students are these?"
+                hint="Choose the institute before the file, never as a column in it."
+              >
+                <select
+                  value={partnerInstituteId}
+                  onChange={(e) => {
+                    setPartnerInstituteId(e.target.value);
+                    setPreview(null);
+                    setResult(null);
+                  }}
+                >
+                  <option value="">Our own students</option>
+                  {partners.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+          )}
+
+          {/*
+            AND WHAT THAT MEANS FOR THE MONEY, said here rather than left to
+            the preview alone. Somebody importing two hundred students should
+            not discover the billing consequence after pressing the button —
+            and under PARTNER_PAYS the consequence is that no charge is ever
+            raised against any of them, which is invisible until the ledger is
+            empty at the end of term.
+          */}
+          {chosenPartner && (
+            <div className={chosenPartner.billingMode === "PARTNER_PAYS" ? "alert alert-warn" : "alert"}>
+              <p className="small">
+                <strong>{chosenPartner.name}</strong> —{" "}
+                {chosenPartner.billingMode === "PARTNER_PAYS"
+                  ? "we invoice the institute. No fee charge will be raised against these students: they will owe nothing, appear on no debtors list, and be offered no payment button."
+                  : "their students pay us directly, exactly like our own. Charges and instalments will be raised as usual."}
+              </p>
+              <p className="muted small">
+                Their coordinator will be able to see these students&rsquo; released results,
+                attendance and certificates.
+              </p>
+            </div>
+          )}
+
           {/* The restriction is shown BEFORE the file is chosen, so a file of
               male students is never prepared against a women's section. */}
           {section && (
@@ -271,7 +405,11 @@ export function CohortImportPage() {
               onClick={() =>
                 void run<Preview>(
                   "/admin/cohort-import/preview",
-                  { csv, sectionId },
+                  {
+                    csv,
+                    sectionId,
+                    ...(partnerInstituteId ? { partnerInstituteId } : {}),
+                  },
                   setPreview,
                 )
               }
@@ -356,6 +494,7 @@ export function CohortImportPage() {
                   capacityOverride,
                   consentCollectedOffline: true,
                   note: note.trim(),
+                  ...(partnerInstituteId ? { partnerInstituteId } : {}),
                 },
                 setResult,
               )
@@ -549,7 +688,25 @@ function ResultPanel({ result, onAgain }: { result: Result; onAgain: () => void 
               do here at all. The System emails each student their own password
               now; this list used to be the only copy in existence, and every
               one of three hundred was relayed by hand. */}
-          {result.notEmailed === 0 ? (
+          {result.held > 0 ? (
+            /*
+              HELD IS NOT A FAILURE AND MUST NOT LOOK LIKE ONE. Nothing has
+              gone wrong: the Institute asked to see these first. But somebody
+              does have to go and release them, and a message that did not say
+              where would leave a cohort waiting on a screen nobody knew about.
+            */
+            <div className="alert">
+              <strong>
+                {result.held} {result.held === 1 ? "message is" : "messages are"} waiting to be
+                released — nothing has been sent yet.
+              </strong>
+              <p className="small">
+                Open <a href="/email-queue">Outgoing email</a> to look at them and send them. The
+                temporary passwords below work whether or not a message is ever sent, so you can
+                read them out now if somebody needs to get in today.
+              </p>
+            </div>
+          ) : result.notEmailed === 0 ? (
             <p>
               Every one of these was <strong>emailed to the student</strong> at their own
               address. This list is your copy, for anybody who says it never arrived.
@@ -559,10 +716,37 @@ function ResultPanel({ result, onAgain }: { result: Result; onAgain: () => void 
               <strong>
                 {result.notEmailed} of these could NOT be emailed — pass those on yourself.
               </strong>
-              <p className="small">
-                They are marked below and in the downloaded file. Check Integrations to see
-                whether email is configured.
-              </p>
+              {/*
+                THE MAIL ACCOUNT'S DAILY LIMIT IS ITS OWN CASE, because it is
+                the one failure that is temporary, affects every message
+                equally, and has nothing to do with the addresses in the file.
+                Told to check whether "email is configured", somebody goes and
+                inspects settings that are perfectly correct. The answer is to
+                wait, or to send from an account that has not been used up.
+              */}
+              {mailLimitHit(result) ? (
+                <p className="small">
+                  The sending account has <strong>reached its daily limit</strong>. Nothing is
+                  wrong with the addresses or the settings — a Google account will not accept
+                  more messages until the limit resets, roughly twenty-four hours after they were
+                  sent.{" "}
+                  {queuedCount(result) > 0 && (
+                    <>
+                      <strong>
+                        {queuedCount(result)} of these will be sent automatically
+                      </strong>{" "}
+                      once it does: each student gets a link to choose their own password, and
+                      the temporary passwords below go on working either way. Read them out if
+                      anybody needs to get in before then.
+                    </>
+                  )}
+                </p>
+              ) : (
+                <p className="small">
+                  They are marked below with the reason, and in the downloaded file. Check
+                  Integrations to see whether email is configured.
+                </p>
+              )}
             </div>
           )}
 
@@ -600,10 +784,34 @@ function ResultPanel({ result, onAgain }: { result: Result; onAgain: () => void 
                 </span>
                 <code>{o.temporaryPassword}</code>{" "}
                 {/* A word, not a colour alone (NFR-ACC-007). */}
+                {/* A word, not a colour alone (NFR-ACC-007). Two states and
+                    no "pending": every message is now waited for, so by the
+                    time this renders each one has either gone or failed. */}
                 {o.emailSent ? (
                   <span className="pill pill-ok">emailed</span>
                 ) : (
                   <span className="pill pill-warn">not emailed</span>
+                )}
+                {/* The reason, where the row is. Somebody relaying passwords by
+                    hand needs to know whether to retype an address or simply
+                    wait, and that answer belongs beside the row it concerns. */}
+                {o.emailSent === false && (
+                  <>
+                    <br />
+                    {/* QUEUED IS NOT A FAILURE, and must not read as one. The
+                        operator's response to "will arrive later" is to do
+                        nothing; to "will never arrive" it is to pick up the
+                        telephone. */}
+                    {o.emailQueued ? (
+                      <span className="muted small">
+                        Waiting for the mail account — it will be sent on its own.
+                      </span>
+                    ) : (
+                      o.emailProblem && (
+                        <span className="muted small">{tidyMailProblem(o.emailProblem)}</span>
+                      )
+                    )}
+                  </>
                 )}
               </li>
             ))}

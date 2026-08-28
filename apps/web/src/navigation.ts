@@ -48,6 +48,17 @@ const OFFICE = ["super_admin", "admin"] as const;
 export const DESTINATIONS: readonly Destination[] = [
   // ------------------------------------------------------------ everyday --
   { to: "/", label: "Dashboard", icon: "dashboard", group: null, also: ["home", "overview"] },
+  /*
+   * THE PARTNER PORTAL, and it is the only destination a partner_admin has.
+   *
+   * They are not staff and not a student: somebody at another institute who
+   * sent us a group of students and may see how those students are getting on.
+   * Every other entry in this list is whitelisted to roles they do not hold,
+   * so their sidebar is this one line — which is correct. A partner with a
+   * sidebar full of destinations that all refuse them would be worse than one
+   * with a single destination that works.
+   */
+  { to: "/partner", label: "My students", icon: "users", group: null, roles: ["partner_admin"], also: ["results", "progress", "institute", "portal", "invoices"] },
   { to: "/timetable", label: "Timetable", icon: "calendar", group: null, also: ["schedule", "classes"] },
   { to: "/announcements", label: "Announcements", icon: "megaphone", group: null, also: ["notices"] },
   /*
@@ -99,6 +110,9 @@ export const DESTINATIONS: readonly Destination[] = [
   { to: "/users", label: "People", icon: "users", group: "Students", roles: OFFICE, also: ["directory", "staff", "accounts"] },
   { to: "/certificates", label: "Certificates", icon: "award", group: "Students", roles: OFFICE, also: ["register", "issue", "revoke", "verification", "award"] },
   { to: "/import", label: "Import", icon: "upload", group: "Students", roles: OFFICE, also: ["cohort", "csv"] },
+  /* Beside Import on purpose: an institute is recorded here and its students
+     arrive through that screen, and the two are done in that order. */
+  { to: "/partners", label: "Partner institutes", icon: "link", group: "Students", roles: OFFICE, also: ["partner", "other institute", "external", "sending institute", "collaboration", "invoice"] },
   { to: "/bulk", label: "Bulk changes", icon: "shuffle", group: "Students", roles: OFFICE },
 
   // ----------------------------------------------------------- institute --
@@ -167,6 +181,9 @@ export const DESTINATIONS: readonly Destination[] = [
   // ------------------------------------------------------ administration --
   { to: "/settings", label: "Settings", icon: "settings", group: "Administration", roles: OFFICE, also: ["policy", "configuration"] },
   { to: "/messages", label: "Messages", icon: "bell", group: "Administration", roles: OFFICE, also: ["templates", "notifications", "email"] },
+  /* Held mail, beside Messages because they are the same subject from two
+     ends: what the System says, and whether it has said it yet. */
+  { to: "/email-queue", label: "Outgoing email", icon: "megaphone", group: "Administration", roles: OFFICE, also: ["queue", "outbox", "pending", "approve", "release", "unsent", "mail", "email"] },
   { to: "/audit", label: "Audit", icon: "clipboard", group: "Administration", roles: OFFICE, also: ["log", "history"] },
   /* Super Admin ALONE (§4.5). Unlike the audit log there is no Admin tier:
      this log names who has been attacked and from where, and is as useful for

@@ -315,6 +315,9 @@ model User {
   resolvedPosts         DiscussionPost[]       @relation("PostResolutions")
   assignmentAttachments AssignmentAttachment[]
 
+  /// Messages owed to this person that the mail server would not take yet.
+  pendingEmails         PendingEmail[]
+
   @@index([status])
   @@index([deletedAt])
   @@map("users")
@@ -3034,4 +3037,147 @@ model PartnerInvoiceLine {
   @@index([invoiceId])
   @@index([studentId])
   @@map("partner_invoice_lines")
+}
+
+/// WHY A MESSAGE THAT COULD NOT BE SENT IS KEPT.
+///
+/// A mail account has a daily allowance. Google's is the one that matters
+/// here: a free account stops accepting messages after roughly five hundred
+/// recipients in a rolling twenty-four hours, and answers every further
+/// attempt with "550-5.4.5 Daily user sending limit exceeded". That is not a
+/// fault in the address, the settings or the message — it is a queue that is
+/// full, and it empties on its own.
+///
+/// Before this table those messages were simply lost. The import said "not
+/// emailed", the operator was expected to read out a dozen passwords by hand,
+/// and the message that would have worked an hour later was never attempted
+/// again.
+///
+/// IT STORES THE INTENT, NEVER THE MESSAGE. The credentials email carries a
+/// temporary password, and this System's whole position on those is that they
+/// are hashed the moment they are made and nobody — including a Super Admin —
+/// can look one up. Keeping a copy here to send later would quietly undo that.
+/// So a row says WHO is owed WHAT KIND of message, and the body is built again
+/// at the moment it is sent. See PendingEmailKind.
+model PendingEmail {
+  id String @id @default(uuid()) @db.Uuid
+
+  kind   PendingEmailKind
+  status PendingEmailStatus @default(PENDING)
+
+  /// Who it is for. Kept so the message can be rebuilt from the account rather
+  /// than from a stored copy of itself.
+  userId String @map("user_id") @db.Uuid
+
+  /// Snapshotted, so a queued message still goes somewhere if the address is
+  /// changed while it waits — and so the queue can be read without joining.
+  toAddress String @map("to_address") @db.VarChar(320)
+  fullName  String @map("full_name") @db.VarChar(200)
+
+  /// The few facts the message needs that are not on the account: which
+  /// section a rejoining student was added to, for instance. Never a secret.
+  context Json?
+
+  /// Set when a person released it. Kept because "who let this go out" is the
+  /// question asked after a message reaches somebody it should not have.
+  approvedBy String?   @map("approved_by") @db.Uuid
+  approvedAt DateTime? @map("approved_at")
+
+  /// What a held message is actually going to say, for the person deciding
+  /// whether to release it. Approving something described only as
+  /// "CREDENTIALS to a@b.com" is approving a category, not a message.
+  subject String? @db.VarChar(300)
+
+  attempts      Int       @default(0)
+  lastError     String?   @map("last_error") @db.Text
+  /// When this becomes due again. Backed off after each failure, and pushed
+  /// well out when the refusal was a daily limit — retrying a full mailbox
+  /// every minute achieves nothing and looks like abuse.
+  nextAttemptAt DateTime  @map("next_attempt_at")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  sentAt    DateTime? @map("sent_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// The sweep's only query: what is due now.
+  @@index([status, nextAttemptAt])
+  @@index([userId])
+  @@map("pending_emails")
+}
+
+enum PendingEmailKind {
+  /// A new account's sign-in details.
+  ///
+  /// RESENT AS A LINK TO CHOOSE A PASSWORD, never as the original password —
+  /// which is not stored and cannot be. That is better than it sounds: the
+  /// temporary password the operator can still read off the import screen goes
+  /// on working, so nothing they have already written down is invalidated,
+  /// and the student gets a way in that was never sent through the post.
+  CREDENTIALS
+  /// An existing student added to another course. Carries no secret, so it is
+  /// rebuilt and sent exactly as it would have been.
+  COURSE_ADDED
+}
+
+enum PendingEmailStatus {
+  /// Written, and deliberately NOT sent: the Institute has asked to see
+  /// outgoing account mail before it leaves. Nothing sweeps these — a person
+  /// releases them, and until somebody does they sit here indefinitely.
+  AWAITING_APPROVAL
+  PENDING
+  SENT
+  /// Given up on: too many attempts, or the account no longer needs it —
+  /// somebody who has already signed in does not want a sign-in link.
+  ABANDONED
+}
+
+/// EVERY MESSAGE THIS SYSTEM TRIED TO SEND, AND WHAT BECAME OF IT.
+///
+/// WHY IT EXISTS: "the mail account is full" is only half an answer. The other
+/// half — WHAT filled it — could not be answered at all, because a message that
+/// sent successfully left no trace anywhere. Only failures were recorded, which
+/// is precisely backwards for this question: an allowance is spent by the mail
+/// that WORKED.
+///
+/// So every attempt is written here, sent or not. Two hundred sign-in details
+/// from a re-run import look completely different from two hundred
+/// announcements, and until this table existed neither was distinguishable
+/// from the other after the fact.
+///
+/// NO BODY, EVER. The subject and the kind, which is what "where did it go"
+/// needs, and never the message itself — those carry temporary passwords,
+/// marks and balances. The failure detail is kept because it is the mail
+/// server's own diagnosis and is the difference between a full mailbox and a
+/// wrong address.
+///
+/// PRUNED, because this is the highest-volume table the System writes and its
+/// value is entirely recent. See the sweep in pending-email.service.ts.
+model EmailLog {
+  id String @id @default(uuid()) @db.Uuid
+
+  occurredAt DateTime @default(now()) @map("occurred_at")
+
+  toAddress String @map("to_address") @db.VarChar(320)
+  /// The message's own category — "account.created", "announcement". Stable
+  /// across wording changes, which is what makes it worth grouping by.
+  kind      String @db.VarChar(80)
+  subject   String @db.VarChar(300)
+
+  status EmailLogStatus
+  /// The mail server's own words when it refused. Never present on a success.
+  detail String? @db.Text
+
+  /// The rolling-24-hour question, which is the only one anybody asks of this.
+  @@index([occurredAt])
+  @@index([status, occurredAt])
+  @@map("email_log")
+}
+
+enum EmailLogStatus {
+  SENT
+  FAILED
+  /// Never attempted: no address on record, or email is not configured at all.
+  /// Costs no allowance, and must not be counted as if it did.
+  SUPPRESSED
 }

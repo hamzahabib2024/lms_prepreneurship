@@ -104,6 +104,51 @@ INSTITUTE_NAME=Prepreneurship
 
 `SMTP_USER` must be **the same account** the App Password was created on.
 
+### How much a Google account will send in a day
+
+This is the limit that actually bites an institute, and it is worth knowing
+before a cohort of two hundred is imported rather than after.
+
+| Account | Messages a day | Recipients per message over SMTP |
+|---|---|---|
+| Free `@gmail.com` | **500** | 500 |
+| Workspace, paid | **2,000** | 100 over SMTP (2,000 via the API) |
+| Workspace, trial | **500** | 100 over SMTP |
+
+The window is a **rolling 24 hours, not a calendar day**, so the allowance
+comes back gradually as the oldest sends age out rather than all at once at
+midnight. Google's own wording is that a blocked account can usually send again
+"within 1 to 24 hours".
+
+An exhausted account answers every attempt with:
+
+```
+550-5.4.5 Daily user sending limit exceeded
+```
+
+**Nothing is wrong when you see that.** Not the addresses, not the App
+Password, not the settings. The System now keeps those messages instead of
+losing them — see below — so the ordinary response is to do nothing.
+
+> **A message that is refused for the day is queued, not dropped.** It is
+> retried every half hour until it goes. A credentials email held over this way
+> arrives as a **link to choose a password** rather than the original temporary
+> one, because that password is hashed the moment it is made and cannot be read
+> back by anybody. The temporary password on the import screen keeps working, so
+> nothing already written down is invalidated — the student simply has two ways
+> in instead of one.
+>
+> A refusal that will never clear — no such mailbox, a rejected App Password —
+> is **not** queued. It is reported for a person to fix, because retrying it
+> sixty times spends the very allowance the messages behind it are waiting for.
+
+To check whether mail leaves at all, and to see the server's own words when it
+does not:
+
+```bash
+npm run mail:test -- someone@example.com
+```
+
 > **Where an applicant sends the money is NOT here.** The bank account, the
 > account name and the payment instructions live in **Settings → Payments**,
 > not in `.env`, because an institute changes bank and that should not need a

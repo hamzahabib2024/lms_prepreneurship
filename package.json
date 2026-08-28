@@ -37,7 +37,8 @@
     "db:start": "node scripts/db-local.mjs start",
     "lint:types": "npm run lint --workspaces --if-present",
     "lint:rules": "eslint apps/api/src apps/web/src packages/shared/src",
-    "qa": "node scripts/qa/full-qa.mjs"
+    "qa": "node scripts/qa/full-qa.mjs",
+    "mail:test": "node -r dotenv/config scripts/mail-test.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
