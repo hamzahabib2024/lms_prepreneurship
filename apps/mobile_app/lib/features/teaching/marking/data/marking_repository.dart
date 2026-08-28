@@ -1,6 +1,8 @@
 /// Repository for marking, grading and quiz marking — SRS §13.6, FR-TCH-018/019.
 library;
 
+import 'package:dio/dio.dart';
+
 import '../../../../core/network/api_client.dart';
 import 'models/marking_models.dart';
 
@@ -107,6 +109,21 @@ class MarkingRepository {
   Future<void> releaseQuizGrades({required String quizId}) async {
     await _api.post<dynamic>(
       '/quizzes/$quizId/release',
+    );
+  }
+
+  /// Upload voice feedback for a student's submission.
+  Future<void> uploadFeedbackAudio({
+    required String submissionId,
+    required String filePath,
+    required String fileName,
+  }) async {
+    final form = FormData.fromMap({
+      'file': await MultipartFile.fromFile(filePath, filename: fileName),
+    });
+    await _api.uploadForm<void>(
+      '/submissions/$submissionId/feedback-audio',
+      form,
     );
   }
 }

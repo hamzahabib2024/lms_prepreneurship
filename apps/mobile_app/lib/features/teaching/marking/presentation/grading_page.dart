@@ -3,6 +3,8 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:record/record.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../cubit/marking_cubit.dart';
@@ -709,6 +711,13 @@ class _StudentDetailState extends State<_StudentDetail> {
             dark: widget.dark,
             maxLines: 3,
           ),
+          const SizedBox(height: 12),
+          // Voice feedback section
+          _VoiceFeedbackSection(
+            submissionId: widget.student.submissionId,
+            repository: context.read<MarkingRepository>(),
+            dark: widget.dark,
+          ),
           const SizedBox(height: 8),
           _GradingField(
             controller: _notesController,
@@ -837,6 +846,172 @@ class _GradingField extends StatelessWidget {
       ),
       style: TextStyle(
         color: dark ? AppColorsDark.ink : AppColors.ink,
+      ),
+    );
+  }
+}
+
+/// Voice feedback section — record and upload spoken feedback for a student.
+class _VoiceFeedbackSection extends StatefulWidget {
+  const _VoiceFeedbackSection({
+    required this.submissionId,
+    required this.repository,
+    required this.dark,
+  });
+
+  final String? submissionId;
+  final MarkingRepository repository;
+  final bool dark;
+
+  @override
+  State<_VoiceFeedbackSection> createState() => _VoiceFeedbackSectionState();
+}
+
+class _VoiceFeedbackSectionState extends State<_VoiceFeedbackSection> {
+  final _recorder = AudioRecorder();
+  bool _isRecording = false;
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _recorder.dispose();
+    super.dispose();
+  }
+
+  Future<void> _toggleRecording() async {
+    if (_isRecording) {
+      final path = await _recorder.stop();
+      setState(() => _isRecording = false);
+      if (path != null && widget.submissionId != null) {
+        await _uploadRecording(path);
+      }
+    } else {
+      if (!await _recorder.hasPermission()) return;
+      final dir = await getTemporaryDirectory();
+      final path = '${dir.path}/feedback_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      await _recorder.start(
+        const RecordConfig(),
+        path: path,
+      );
+      setState(() => _isRecording = true);
+    }
+  }
+
+  Future<void> _uploadRecording(String path) async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await widget.repository.uploadFeedbackAudio(
+        submissionId: widget.submissionId!,
+        filePath: path,
+        fileName: 'feedback.m4a',
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Voice feedback uploaded')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _error = 'Could not upload recording');
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.submissionId == null) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: widget.dark ? AppColorsDark.surface2 : AppColors.surface2,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.mic,
+                size: 18,
+                color: widget.dark ? AppColorsDark.muted : AppColors.muted,
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'Voice Feedback',
+                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (_error != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                _error!,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: widget.dark ? AppColorsDark.error : AppColors.error,
+                ),
+              ),
+            ),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _busy ? null : _toggleRecording,
+                  icon: Icon(
+                    _isRecording ? Icons.stop : Icons.mic,
+                    size: 18,
+                  ),
+                  label: Text(
+                    _busy
+                        ? 'Uploading…'
+                        : _isRecording
+                            ? 'Stop Recording'
+                            : 'Record Feedback',
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: _isRecording
+                        ? (widget.dark ? AppColorsDark.error : AppColors.error)
+                        : null,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (_isRecording)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Row(
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: widget.dark ? AppColorsDark.error : AppColors.error,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Recording…',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: widget.dark ? AppColorsDark.error : AppColors.error,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
       ),
     );
   }
