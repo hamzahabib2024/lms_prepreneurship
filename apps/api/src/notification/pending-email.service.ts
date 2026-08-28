@@ -2,6 +2,8 @@ import { Injectable, Logger } from "@nestjs/common";
 import { Cron, CronExpression } from "@nestjs/schedule";
 import { randomBytes, createHash } from "node:crypto";
 import { PrismaService } from "../prisma/prisma.service";
+import { AuditService } from "../audit/audit.service";
+import { SettingsService } from "../settings/settings.service";
 import { CredentialsMailer } from "./credentials-mailer";
 import { classify, stillWanted, summarise, MAX_ATTEMPTS } from "./pending-email";
 
@@ -52,6 +54,8 @@ export class PendingEmailService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly credentials: CredentialsMailer,
+    private readonly settings: SettingsService,
+    private readonly audit: AuditService,
   ) {}
 
   /**
@@ -322,6 +326,216 @@ export class PendingEmailService {
     // Only the ticket leaves this method. The hash is what is stored, so the
     // database never holds anything that can be used to sign in.
     return token;
+  }
+
+  /**
+   * HOLD A MESSAGE FOR SOMEBODY TO RELEASE, rather than sending it.
+   *
+   * ───────────────────────────────────────────────────────────────────────────
+   * NOT THE SAME THING AS THE RETRY QUEUE, though it shares the table. A held
+   * message has not been refused by anyone — the mail server was never asked.
+   * It is waiting on a decision, and no amount of time will move it.
+   *
+   * The two must not be conflated on screen either. "The mail account is full,
+   * this will go on its own" is a thing to ignore; "twelve messages are waiting
+   * for you" is a thing to do. One status covering both is how a queue of
+   * unsent student passwords sits unnoticed for a week.
+   *
+   * NOTHING IS SENT TO CHECK. This is called INSTEAD of attempting delivery,
+   * so an institute that holds its mail spends no allowance at all until
+   * somebody decides — which is the other half of why holding is useful when a
+   * daily limit is tight.
+   * ───────────────────────────────────────────────────────────────────────────
+   */
+  async hold(input: {
+    kind: "CREDENTIALS" | "COURSE_ADDED";
+    userId: string;
+    toAddress: string;
+    fullName: string;
+    subject: string;
+    context?: Record<string, unknown>;
+  }): Promise<boolean> {
+    try {
+      await this.prisma.asSystem((db) =>
+        db.pendingEmail.create({
+          data: {
+            kind: input.kind,
+            status: "AWAITING_APPROVAL",
+            userId: input.userId,
+            toAddress: input.toAddress,
+            fullName: input.fullName,
+            subject: input.subject,
+            ...(input.context ? { context: input.context as object } : {}),
+            attempts: 0,
+            /*
+             * A DATE THAT MEANS NOTHING UNTIL IT IS APPROVED. The column is not
+             * nullable, and a held message has no next attempt — the sweep
+             * never looks at AWAITING_APPROVAL rows. Set to now so that
+             * releasing it is a single status change and the message goes on
+             * the very next sweep rather than waiting out a leftover backoff.
+             */
+            nextAttemptAt: new Date(),
+          },
+        }),
+      );
+      return true;
+    } catch (err) {
+      this.logger.error(
+        `Could not hold mail for ${input.toAddress}: ` +
+          (err instanceof Error ? err.message : "unknown error"),
+      );
+      return false;
+    }
+  }
+
+  /** Is the Institute holding outgoing account mail? */
+  async approvalRequired(): Promise<boolean> {
+    const all = await this.settings.resolveFor().catch(() => ({}) as Record<string, unknown>);
+    return all["email.requireApproval"] === true;
+  }
+
+  // ========================================================== the screen ====
+
+  /**
+   * What is waiting, and why.
+   *
+   * THE TWO REASONS ARE COUNTED SEPARATELY because they ask different things
+   * of the person reading. Held messages need a decision; refused ones need
+   * nothing at all and are shown so that "why has this not arrived" has an
+   * answer.
+   */
+  async list(): Promise<{
+    awaitingApproval: number;
+    retrying: number;
+    abandoned: number;
+    sentToday: number;
+    rows: Array<{
+      id: string;
+      kind: string;
+      status: string;
+      toAddress: string;
+      fullName: string;
+      subject: string | null;
+      attempts: number;
+      lastError: string | null;
+      createdAt: Date;
+      nextAttemptAt: Date;
+      sentAt: Date | null;
+    }>;
+  }> {
+    const midnight = new Date();
+    midnight.setHours(0, 0, 0, 0);
+
+    const [awaitingApproval, retrying, abandoned, sentToday, rows] = await Promise.all([
+      this.prisma.asSystem((db) =>
+        db.pendingEmail.count({ where: { status: "AWAITING_APPROVAL" } }),
+      ),
+      this.prisma.asSystem((db) => db.pendingEmail.count({ where: { status: "PENDING" } })),
+      this.prisma.asSystem((db) => db.pendingEmail.count({ where: { status: "ABANDONED" } })),
+      this.prisma.asSystem((db) =>
+        db.pendingEmail.count({ where: { status: "SENT", sentAt: { gte: midnight } } }),
+      ),
+      this.prisma.asSystem((db) =>
+        db.pendingEmail.findMany({
+          /*
+           * EVERYTHING EXCEPT WHAT HAS ALREADY GONE. A list of successes is a
+           * list nobody scrolls, and it would bury the handful of rows that
+           * need somebody. The count above is enough to say the sending is
+           * working.
+           */
+          where: { status: { not: "SENT" } },
+          orderBy: [{ status: "asc" }, { createdAt: "asc" }],
+          take: 200,
+          select: {
+            id: true,
+            kind: true,
+            status: true,
+            toAddress: true,
+            fullName: true,
+            subject: true,
+            attempts: true,
+            lastError: true,
+            createdAt: true,
+            nextAttemptAt: true,
+            sentAt: true,
+          },
+        }),
+      ),
+    ]);
+
+    return { awaitingApproval, retrying, abandoned, sentToday, rows };
+  }
+
+  /**
+   * Release messages so they go out on the next sweep.
+   *
+   * SENT BY THE SWEEP RATHER THAN HERE, deliberately. Approving forty messages
+   * would otherwise mean forty SMTP round trips inside one request — the exact
+   * thirty-seven-second freeze the import was just cured of. The sweep already
+   * knows how to pace itself, so approval is a status change and nothing more.
+   *
+   * `ids` empty means everything awaiting approval, which is what the
+   * "release all" button sends.
+   */
+  async approve(ids: string[], actorUserId: string): Promise<{ released: number }> {
+    const where =
+      ids.length > 0
+        ? { id: { in: ids }, status: "AWAITING_APPROVAL" as const }
+        : { status: "AWAITING_APPROVAL" as const };
+
+    const result = await this.prisma.asSystem((db) =>
+      db.pendingEmail.updateMany({
+        where,
+        data: {
+          status: "PENDING",
+          approvedBy: actorUserId,
+          approvedAt: new Date(),
+          // Due immediately: the person has just said yes and should not then
+          // wait out a backoff that was never earned.
+          nextAttemptAt: new Date(),
+        },
+      }),
+    );
+
+    await this.audit.record({
+      action: "email_queue.approve",
+      entityType: "PendingEmail",
+      entityId: ids.length === 1 ? (ids[0] ?? "many") : "many",
+      after: { released: result.count, by: actorUserId, all: ids.length === 0 },
+    });
+
+    return { released: result.count };
+  }
+
+  /**
+   * Decide a message should not go at all.
+   *
+   * THE ROW IS KEPT AND MARKED, not deleted. "Why did that student never get
+   * their sign-in details" is asked weeks later, and the honest answer —
+   * somebody looked at it and decided against it, on this date — only exists if
+   * the row does.
+   */
+  async discard(ids: string[], actorUserId: string): Promise<{ discarded: number }> {
+    if (ids.length === 0) return { discarded: 0 };
+
+    const result = await this.prisma.asSystem((db) =>
+      db.pendingEmail.updateMany({
+        where: { id: { in: ids }, status: { in: ["AWAITING_APPROVAL", "PENDING"] } },
+        data: {
+          status: "ABANDONED",
+          lastError: "Discarded by an administrator rather than sent.",
+        },
+      }),
+    );
+
+    await this.audit.record({
+      action: "email_queue.discard",
+      entityType: "PendingEmail",
+      entityId: ids.length === 1 ? (ids[0] ?? "many") : "many",
+      after: { discarded: result.count, by: actorUserId },
+    });
+
+    return { discarded: result.count };
   }
 
   /** What is waiting, for the operator who wants to know. */

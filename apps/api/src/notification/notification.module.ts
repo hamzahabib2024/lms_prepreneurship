@@ -9,6 +9,7 @@ import { WhatsAppChannel } from "./channel/whatsapp.channel";
 import { EmailChannel } from "./channel/email.channel";
 import { CredentialsMailer } from "./credentials-mailer";
 import { PendingEmailService } from "./pending-email.service";
+import { EmailQueueController } from "./email-queue.controller";
 
 /**
  * Global, because notifications are raised from everywhere — admission,
@@ -20,7 +21,7 @@ import { PendingEmailService } from "./pending-email.service";
  */
 @Global()
 @Module({
-  controllers: [NotificationController],
+  controllers: [NotificationController, EmailQueueController],
   providers: [
     AnnouncementService,
     NotificationService,
