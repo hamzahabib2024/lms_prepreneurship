@@ -85,6 +85,8 @@ interface Result {
   /** How many students were sent their own password, and how many were not. */
   emailed: number;
   notEmailed: number;
+  /** Owed a message, still going out behind the response. Not a failure. */
+  stillSending: number;
   message: string;
 }
 
@@ -637,7 +639,23 @@ function ResultPanel({ result, onAgain }: { result: Result; onAgain: () => void 
               do here at all. The System emails each student their own password
               now; this list used to be the only copy in existence, and every
               one of three hundred was relayed by hand. */}
-          {result.notEmailed === 0 ? (
+          {result.stillSending > 0 ? (
+            /*
+              STILL GOING OUT, WHICH IS NEITHER SENT NOR FAILED. Against a real
+              mail server each message costs about three seconds, so the import
+              answers after the first few and lets the rest follow — otherwise
+              twelve students meant watching a button for thirty-seven seconds
+              with nothing on screen to say why.
+            */
+            <p>
+              <strong>
+                {result.stillSending} of these {result.stillSending === 1 ? "is" : "are"} still
+                being emailed
+              </strong>{" "}
+              in the background — they carry on after this screen. This list is your copy, and
+              the one to read from if anybody says nothing arrived.
+            </p>
+          ) : result.notEmailed === 0 ? (
             <p>
               Every one of these was <strong>emailed to the student</strong> at their own
               address. This list is your copy, for anybody who says it never arrived.
@@ -688,10 +706,16 @@ function ResultPanel({ result, onAgain }: { result: Result; onAgain: () => void 
                 </span>
                 <code>{o.temporaryPassword}</code>{" "}
                 {/* A word, not a colour alone (NFR-ACC-007). */}
-                {o.emailSent ? (
+                {/* THREE STATES, not two. `undefined` means the message had
+                    not been attempted when this screen was drawn — calling
+                    that "not emailed" sends somebody off to relay a password
+                    that is about to arrive on its own. */}
+                {o.emailSent === true ? (
                   <span className="pill pill-ok">emailed</span>
-                ) : (
+                ) : o.emailSent === false ? (
                   <span className="pill pill-warn">not emailed</span>
+                ) : (
+                  <span className="pill">sending…</span>
                 )}
               </li>
             ))}

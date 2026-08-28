@@ -107,6 +107,23 @@ export class EmailChannel implements NotificationChannelAdapter {
         // that silently sends credentials in the clear.
         secure: port === 465,
         auth: { user: this.user, pass: this.pass },
+        /*
+         * TIMEOUTS, BECAUSE NODEMAILER'S DEFAULTS ARE MEANT FOR A BATCH JOB.
+         *
+         * Out of the box it waits two minutes to connect and TEN MINUTES on a
+         * silent socket. That is a reasonable default for something running
+         * unattended overnight and completely wrong for a request somebody is
+         * sitting in front of: one stalled send would hold a cohort import
+         * open past every proxy and browser timeout in the chain, and the
+         * screen would simply stop.
+         *
+         * These are generous against the measured cost — a Gmail handshake
+         * here is about 1.4 seconds and a full send about 3 — while bounding
+         * the failure at seconds instead of minutes.
+         */
+        connectionTimeout: 10_000,
+        greetingTimeout: 10_000,
+        socketTimeout: 20_000,
       });
     }
     return this.transport;
