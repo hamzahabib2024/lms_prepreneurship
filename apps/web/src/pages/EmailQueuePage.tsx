@@ -51,12 +51,32 @@ interface QueueRow {
   sentAt: string | null;
 }
 
+interface Usage {
+  sent: number;
+  failed: number;
+  limit: number;
+  remaining: number;
+  percentUsed: number;
+  /** The mail server itself refused something for being over the limit. */
+  blocked: boolean;
+  blockedSince: string | null;
+  byKind: Array<{ kind: string; label: string; sent: number }>;
+  recent: Array<{
+    occurredAt: string;
+    toAddress: string;
+    kind: string;
+    subject: string;
+    status: string;
+  }>;
+}
+
 interface Queue {
   awaitingApproval: number;
   retrying: number;
   abandoned: number;
   sentToday: number;
   requiresApproval: boolean;
+  usage: Usage;
   rows: QueueRow[];
 }
 
@@ -169,6 +189,11 @@ export function EmailQueuePage() {
 
       {queue && (
         <>
+          {/* THE ALLOWANCE FIRST, because when it is exhausted it explains
+              every other number on the page — and somebody who does not know
+              that reads the queue below as a fault. */}
+          <Allowance usage={queue.usage} />
+
           <div className="kpis">
             <div className="kpi">
               <span className="kpi-value">{queue.awaitingApproval}</span>
@@ -356,6 +381,175 @@ export function EmailQueuePage() {
           )}
         </>
       )}
+    </>
+  );
+}
+
+/**
+ * THE ALLOWANCE, AND WHAT SPENT IT.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * TWO QUESTIONS, ASKED IN THIS ORDER. "Why is nothing sending?" and then, half
+ * a second later, "what used it all up?" — and the second one had no answer
+ * anywhere in the System until the log existed, because only failures were
+ * recorded and an allowance is spent by the mail that WORKED.
+ *
+ * THE BLOCKED BAND IS THE SERVER'S OWN VERDICT, not our arithmetic. It appears
+ * because smtp.gmail.com actually refused something with 5.4.5, which is worth
+ * far more than comparing a local count to a configured number: mail sent from
+ * the same account by a person sitting in Gmail spends the same allowance and
+ * never passes through this System at all. So the count below is described as
+ * an estimate every time it is shown, and the band is stated as fact.
+ *
+ * NOTHING HERE ENFORCES ANYTHING. Google enforces the limit. A System that
+ * stopped sending at its own count of 500 would withhold mail an account still
+ * had room for, and would still be caught out when the real limit arrived
+ * early.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+function Allowance({ usage }: { usage: Usage }) {
+  const nearlyOut = !usage.blocked && usage.limit > 0 && usage.percentUsed >= 80;
+
+  return (
+    <>
+      {usage.blocked && (
+        <div className="alert alert-error" role="alert">
+          <strong>The sending account is out of its daily allowance.</strong>
+          <p className="small">
+            The mail server refused a message
+            {usage.blockedSince && ` at ${new Date(usage.blockedSince).toLocaleString()}`} with
+            &ldquo;Daily user sending limit exceeded&rdquo;. Nothing is wrong with the addresses
+            or the settings.
+          </p>
+          <p className="small">
+            The allowance is a <strong>rolling 24 hours</strong>, so it returns gradually rather
+            than at midnight. Anything waiting below is retried every half hour and will go out
+            on its own. Read passwords out from the import screen if somebody needs to get in
+            before then.
+          </p>
+        </div>
+      )}
+
+      {nearlyOut && (
+        <div className="alert alert-warn">
+          <strong>
+            About {usage.percentUsed}% of the day&rsquo;s sending allowance has been used.
+          </strong>
+          <p className="small">
+            Roughly {usage.remaining} left of {usage.limit}. A large import today may not all get
+            through — hold it until tomorrow, or expect the rest to arrive late.
+          </p>
+        </div>
+      )}
+
+      <section className="card">
+        <div className="card-head">
+          <h2>Sending allowance</h2>
+        </div>
+
+        <div className="fee-figures">
+          <div className="fee-figure">
+            <span className="fee-figure-label">Sent in the last 24 hours</span>
+            <span className="fee-figure-value">{usage.sent}</span>
+            <span className="fee-figure-note">as far as this System can see</span>
+          </div>
+          <div className="fee-figure">
+            <span className="fee-figure-label">Allowance</span>
+            <span className="fee-figure-value">{usage.limit}</span>
+            <span className="fee-figure-note">set in Settings → Email</span>
+          </div>
+          <div className="fee-figure">
+            <span className="fee-figure-label">Refused</span>
+            <span className="fee-figure-value">{usage.failed}</span>
+            <span className="fee-figure-note">in the same period</span>
+          </div>
+        </div>
+
+        {/* The shape carries it as well as the number — and the number is the
+            one that decides anything (NFR-ACC-007). */}
+        <div className="bar" role="img" aria-label={`${usage.percentUsed}% of the allowance used`}>
+          <div
+            className="bar-fill"
+            style={{ width: `${Math.min(100, usage.percentUsed)}%` }}
+          />
+        </div>
+        <p className="muted small">
+          An <strong>estimate</strong>, and always low. It counts what this System sent; anything
+          sent from the same mailbox by a person in Gmail spends the same allowance and never
+          passes through here. Google&rsquo;s own count is the one that decides.
+        </p>
+
+        {/* --------------------------------------------- where it went -- */}
+        <h3>What used it</h3>
+        {usage.byKind.length === 0 ? (
+          <p className="muted small">Nothing has been sent in the last 24 hours.</p>
+        ) : (
+          <div className="table-scroll">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th scope="col">Kind of message</th>
+                  <th scope="col">Sent</th>
+                  <th scope="col">Share</th>
+                </tr>
+              </thead>
+              <tbody>
+                {usage.byKind.map((k) => (
+                  <tr key={k.kind}>
+                    <td>{k.label}</td>
+                    <td>{k.sent}</td>
+                    <td>
+                      {usage.sent > 0 ? `${Math.round((k.sent / usage.sent) * 100)}%` : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* The individual sends, for "did this person get theirs". */}
+        {usage.recent.length > 0 && (
+          <details>
+            <summary className="small">Every message in the last 24 hours</summary>
+            <div className="table-scroll">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th scope="col">When</th>
+                    <th scope="col">To</th>
+                    <th scope="col">About</th>
+                    <th scope="col">Outcome</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {usage.recent.map((r, i) => (
+                    <tr key={`${r.occurredAt}-${i}`}>
+                      <td className="muted small">{new Date(r.occurredAt).toLocaleString()}</td>
+                      <td className="small">{r.toAddress}</td>
+                      <td className="small">{r.subject}</td>
+                      <td>
+                        {/* A word, never a colour alone. */}
+                        {r.status === "SENT" ? (
+                          <span className="pill pill-ok">sent</span>
+                        ) : r.status === "FAILED" ? (
+                          <span className="pill pill-warn">refused</span>
+                        ) : (
+                          <span className="pill">not attempted</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="muted small">
+              The most recent fifty. Nothing here records what a message said — only who it went
+              to and what it was about.
+            </p>
+          </details>
+        )}
+      </section>
     </>
   );
 }
