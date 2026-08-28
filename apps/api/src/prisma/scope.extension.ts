@@ -179,6 +179,26 @@ const STATE_FILTERED = [
 ] as const;
 
 const DELIBERATELY_UNSCOPED = [
+  /*
+   * MESSAGES THE MAIL SERVER WOULD NOT TAKE YET.
+   *
+   * NEVER REACHED THROUGH THE SCOPED CLIENT AT ALL — not by a controller, not
+   * by a route, not by any actor. It is written by the mailer when a send is
+   * refused and read by a scheduled sweep that runs as the System with no
+   * actor in context, so there is nobody to scope it BY: a cron job is not a
+   * user and cannot be given a scope.
+   *
+   * AND THERE IS NOTHING IN IT WORTH SCOPING. A row is an address, a name and
+   * which of two messages is owed — deliberately not the message itself, which
+   * is rebuilt at send time precisely so no temporary password is ever stored.
+   * The one thing that would make this sensitive is the one thing it refuses
+   * to hold.
+   *
+   * If it is ever exposed on a route — an operator asking what is still
+   * waiting to go out — that endpoint must be permission-guarded like any
+   * other, and this entry revisited rather than assumed to still apply.
+   */
+  "PendingEmail",
   "Programme",
   "Subject",
   "AcademicSession",

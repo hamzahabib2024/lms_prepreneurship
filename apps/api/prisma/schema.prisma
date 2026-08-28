@@ -315,6 +315,9 @@ model User {
   resolvedPosts         DiscussionPost[]       @relation("PostResolutions")
   assignmentAttachments AssignmentAttachment[]
 
+  /// Messages owed to this person that the mail server would not take yet.
+  pendingEmails         PendingEmail[]
+
   @@index([status])
   @@index([deletedAt])
   @@map("users")
@@ -3034,4 +3037,83 @@ model PartnerInvoiceLine {
   @@index([invoiceId])
   @@index([studentId])
   @@map("partner_invoice_lines")
+}
+
+/// WHY A MESSAGE THAT COULD NOT BE SENT IS KEPT.
+///
+/// A mail account has a daily allowance. Google's is the one that matters
+/// here: a free account stops accepting messages after roughly five hundred
+/// recipients in a rolling twenty-four hours, and answers every further
+/// attempt with "550-5.4.5 Daily user sending limit exceeded". That is not a
+/// fault in the address, the settings or the message — it is a queue that is
+/// full, and it empties on its own.
+///
+/// Before this table those messages were simply lost. The import said "not
+/// emailed", the operator was expected to read out a dozen passwords by hand,
+/// and the message that would have worked an hour later was never attempted
+/// again.
+///
+/// IT STORES THE INTENT, NEVER THE MESSAGE. The credentials email carries a
+/// temporary password, and this System's whole position on those is that they
+/// are hashed the moment they are made and nobody — including a Super Admin —
+/// can look one up. Keeping a copy here to send later would quietly undo that.
+/// So a row says WHO is owed WHAT KIND of message, and the body is built again
+/// at the moment it is sent. See PendingEmailKind.
+model PendingEmail {
+  id String @id @default(uuid()) @db.Uuid
+
+  kind   PendingEmailKind
+  status PendingEmailStatus @default(PENDING)
+
+  /// Who it is for. Kept so the message can be rebuilt from the account rather
+  /// than from a stored copy of itself.
+  userId String @map("user_id") @db.Uuid
+
+  /// Snapshotted, so a queued message still goes somewhere if the address is
+  /// changed while it waits — and so the queue can be read without joining.
+  toAddress String @map("to_address") @db.VarChar(320)
+  fullName  String @map("full_name") @db.VarChar(200)
+
+  /// The few facts the message needs that are not on the account: which
+  /// section a rejoining student was added to, for instance. Never a secret.
+  context Json?
+
+  attempts      Int       @default(0)
+  lastError     String?   @map("last_error") @db.Text
+  /// When this becomes due again. Backed off after each failure, and pushed
+  /// well out when the refusal was a daily limit — retrying a full mailbox
+  /// every minute achieves nothing and looks like abuse.
+  nextAttemptAt DateTime  @map("next_attempt_at")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  sentAt    DateTime? @map("sent_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// The sweep's only query: what is due now.
+  @@index([status, nextAttemptAt])
+  @@index([userId])
+  @@map("pending_emails")
+}
+
+enum PendingEmailKind {
+  /// A new account's sign-in details.
+  ///
+  /// RESENT AS A LINK TO CHOOSE A PASSWORD, never as the original password —
+  /// which is not stored and cannot be. That is better than it sounds: the
+  /// temporary password the operator can still read off the import screen goes
+  /// on working, so nothing they have already written down is invalidated,
+  /// and the student gets a way in that was never sent through the post.
+  CREDENTIALS
+  /// An existing student added to another course. Carries no secret, so it is
+  /// rebuilt and sent exactly as it would have been.
+  COURSE_ADDED
+}
+
+enum PendingEmailStatus {
+  PENDING
+  SENT
+  /// Given up on: too many attempts, or the account no longer needs it —
+  /// somebody who has already signed in does not want a sign-in link.
+  ABANDONED
 }
