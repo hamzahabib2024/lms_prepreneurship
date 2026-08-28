@@ -10,26 +10,40 @@ class IntegrationsState extends Equatable {
     this.status = IntegrationsStatus.loading,
     this.items = const [],
     this.error,
+    this.outbox,
+    this.loadingOutbox = false,
+    this.outboxError,
   });
 
   final IntegrationsStatus status;
   final List<IntegrationStatus> items;
   final ApiException? error;
+  final OutboxResult? outbox;
+  final bool loadingOutbox;
+  final ApiException? outboxError;
 
   IntegrationsState copyWith({
     IntegrationsStatus? status,
     List<IntegrationStatus>? items,
     ApiException? error,
     bool clearError = false,
+    OutboxResult? outbox,
+    bool clearOutbox = false,
+    bool? loadingOutbox,
+    ApiException? outboxError,
+    bool clearOutboxError = false,
   }) =>
       IntegrationsState(
         status: status ?? this.status,
         items: items ?? this.items,
         error: clearError ? null : (error ?? this.error),
+        outbox: clearOutbox ? null : (outbox ?? this.outbox),
+        loadingOutbox: loadingOutbox ?? this.loadingOutbox,
+        outboxError: clearOutboxError ? null : (outboxError ?? this.outboxError),
       );
 
   @override
-  List<Object?> get props => [status, items, error];
+  List<Object?> get props => [status, items, error, outbox, loadingOutbox, outboxError];
 }
 
 enum IntegrationsStatus { loading, loaded, failure }
@@ -56,6 +70,30 @@ class IntegrationsCubit extends Cubit<IntegrationsState> {
         status: IntegrationsStatus.failure,
         error: e,
       ));
+    }
+  }
+
+  Future<void> loadOutbox() async {
+    emit(state.copyWith(loadingOutbox: true, clearOutboxError: true));
+    try {
+      final outbox = await repository.getOutbox();
+      if (isClosed) return;
+      emit(state.copyWith(outbox: outbox, loadingOutbox: false));
+    } on ApiException catch (e) {
+      if (isClosed) return;
+      emit(state.copyWith(loadingOutbox: false, outboxError: e));
+    }
+  }
+
+  Future<void> clearOutbox() async {
+    try {
+      await repository.clearOutbox();
+      if (isClosed) return;
+      emit(state.copyWith(clearOutbox: true));
+      await loadOutbox();
+    } on ApiException catch (e) {
+      if (isClosed) return;
+      emit(state.copyWith(outboxError: e));
     }
   }
 }
