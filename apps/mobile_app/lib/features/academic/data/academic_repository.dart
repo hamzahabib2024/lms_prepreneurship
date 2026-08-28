@@ -279,7 +279,7 @@ class AcademicRepository {
       'title': title,
       'storageRef': storageRef,
       'recordedOn': DateTime.now().toIso8601String(),
-      if (durationSeconds != null) 'durationSeconds': durationSeconds,
+      'durationSeconds': ?durationSeconds,
     });
   }
 
