@@ -364,54 +364,36 @@ class UserDetailPage extends StatelessWidget {
   }
 
   void _confirmImpersonate(BuildContext context) {
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Impersonate user?'),
-        content: Text(
-          'You will be logged in as ${user.fullName}. '
-          'All actions will be recorded in the audit log under your name. '
-          'Restart the app to stop impersonating.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              Navigator.of(ctx).pop();
-              context.read<AdminCubit>().impersonate(userId: user.id);
-            },
-            child: const Text('Impersonate'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _confirmEraseData(BuildContext context) {
-    final confirmController = TextEditingController();
+    final reasonController = TextEditingController();
+    final isSuperAdmin = user.roles.contains('super_admin');
+    if (isSuperAdmin) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Cannot impersonate a Super Admin')),
+      );
+      return;
+    }
     showDialog<void>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
-          title: const Text('Erase personal data?'),
+          title: const Text('Impersonate user?'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'This will permanently delete all personal data for this user. '
-                'This action cannot be undone.',
-                style: TextStyle(fontSize: 13.5),
+              Text(
+                'You will be logged in as ${user.fullName}. '
+                'All actions will be recorded in the audit log under your name.',
+                style: const TextStyle(fontSize: 13.5),
               ),
               const SizedBox(height: 14),
               TextField(
-                controller: confirmController,
+                controller: reasonController,
                 decoration: const InputDecoration(
-                  labelText: 'Type ERASE to confirm',
+                  labelText: 'Reason (required, min 10 characters)',
+                  hintText: 'Explain why impersonation is needed',
                 ),
+                maxLines: 2,
                 onChanged: (_) => setDialogState(() {}),
               ),
             ],
@@ -422,10 +404,128 @@ class UserDetailPage extends StatelessWidget {
               child: const Text('Cancel'),
             ),
             FilledButton(
-              onPressed: confirmController.text.trim() == 'ERASE'
+              onPressed: reasonController.text.trim().length >= 10
                   ? () {
                       Navigator.of(ctx).pop();
-                      context.read<AdminCubit>().erasePersonalData(userId: user.id);
+                      context.read<AdminCubit>().impersonate(userId: user.id);
+                    }
+                  : null,
+              child: const Text('Impersonate'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _confirmEraseData(BuildContext context) async {
+    final cubit = context.read<AdminCubit>();
+    cubit.getErasurePlan(userId: user.id);
+    
+    // Wait for the plan to load
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+    if (!context.mounted) return;
+    
+    final plan = cubit.state.erasurePlan;
+    if (plan == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not load erasure plan')),
+      );
+      return;
+    }
+    
+    final canErase = plan['canErase'] != false;
+    final reasonController = TextEditingController();
+    
+    if (!canErase) {
+      showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Cannot erase'),
+          content: Text(plan['refusalReason'] as String? ?? 'Erasure is not permitted for this account.'),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+    
+    final items = (plan['items'] as List<dynamic>? ?? const []);
+    final cannotErase = (plan['cannotErase'] as List<dynamic>? ?? const []);
+    
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Erase personal data?'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (plan['warning'] != null)
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppColors.warnBg,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        plan['warning'] as String,
+                        style: const TextStyle(fontSize: 12.5, color: AppColors.warn),
+                      ),
+                    ),
+                  if (items.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    const Text('Will be anonymized:',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 6),
+                    for (final item in items)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 3),
+                        child: Text('• $item', style: const TextStyle(fontSize: 12.5)),
+                      ),
+                  ],
+                  if (cannotErase.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    const Text('Cannot be erased:',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.muted)),
+                    const SizedBox(height: 6),
+                    for (final item in cannotErase)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 3),
+                        child: Text('• $item', style: const TextStyle(fontSize: 12.5, color: AppColors.muted)),
+                      ),
+                  ],
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: reasonController,
+                    decoration: const InputDecoration(
+                      labelText: 'Reason (required, min 10 characters)',
+                    ),
+                    maxLines: 2,
+                    onChanged: (_) => setDialogState(() {}),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: reasonController.text.trim().length >= 10
+                  ? () {
+                      Navigator.of(ctx).pop();
+                      cubit.erasePersonalData(userId: user.id);
                     }
                   : null,
               style: FilledButton.styleFrom(
