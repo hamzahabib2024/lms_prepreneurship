@@ -153,13 +153,46 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   const headers: Record<string, string> = isForm ? {} : { "Content-Type": "application/json" };
   if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
 
-  const res = await fetch(`${BASE}${path}`, {
-    method: options.method ?? "GET",
-    headers,
-    ...(options.body !== undefined
-      ? { body: isForm ? (options.body as FormData) : JSON.stringify(options.body) }
-      : {}),
-  });
+  /*
+   * NOTHING WAITS FOR EVER.
+   *
+   * `fetch` has no timeout of its own: a request the server never answers
+   * leaves the promise pending until the tab is closed. There was no timeout
+   * anywhere in this client, so a slow endpoint did not fail — it simply left
+   * a disabled button reading "Loading…" with nothing to press and nothing to
+   * read, which is indistinguishable from the application being broken.
+   *
+   * A minute is deliberately generous. Every ordinary call here answers in
+   * well under a second; the ones that take real time are uploads and the
+   * cohort import, and both are bounded on the server. This is the backstop
+   * for the case where the answer is never coming at all.
+   */
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}${path}`, {
+      method: options.method ?? "GET",
+      headers,
+      signal: AbortSignal.timeout(60_000),
+      ...(options.body !== undefined
+        ? { body: isForm ? (options.body as FormData) : JSON.stringify(options.body) }
+        : {}),
+    });
+  } catch (e) {
+    /*
+     * SAID AS TWO DIFFERENT THINGS, because they need different responses. A
+     * timeout may well have been acted on at the far end — telling somebody to
+     * "try again" after an import that actually ran is how a cohort gets
+     * loaded twice — whereas an unreachable server certainly did nothing.
+     */
+    const timedOut = e instanceof DOMException && e.name === "TimeoutError";
+    throw new ApiError(0, {
+      code: timedOut ? "TIMEOUT" : "NETWORK_ERROR",
+      message: timedOut
+        ? "The server has not answered in a minute. It may still be working — reload this page " +
+          "and check before doing it again."
+        : "The server could not be reached. Check your connection and try again.",
+    });
+  }
 
   if (res.status === 204) return undefined as T;
 
