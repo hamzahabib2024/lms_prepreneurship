@@ -88,9 +88,28 @@ interface Result {
   message: string;
 }
 
+interface PartnerOption {
+  id: string;
+  name: string;
+  isActive: boolean;
+  billingMode: "PARTNER_PAYS" | "STUDENT_PAYS";
+  billingLabel: string;
+}
+
 export function CohortImportPage() {
   const [sections, setSections] = useState<Section[]>([]);
   const [sectionId, setSectionId] = useState("");
+  /*
+   * WHOSE STUDENTS THESE ARE — our own, or an outside institute's.
+   *
+   * CHOSEN ONCE FOR THE WHOLE FILE, never as a CSV column. A partner id typed
+   * on every line is a partner id mistyped on some of them, and the failure is
+   * silent: the wrong institute gains the right to read those students'
+   * results. The empty string means the Institute's own intake, which is the
+   * common case and therefore the default.
+   */
+  const [partners, setPartners] = useState<PartnerOption[]>([]);
+  const [partnerInstituteId, setPartnerInstituteId] = useState("");
   const [csv, setCsv] = useState("");
   const [fileName, setFileName] = useState("");
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -107,6 +126,16 @@ export function CohortImportPage() {
       .get<Section[]>("/sections")
       .then(setSections)
       .catch((e) => setError(e instanceof ApiError ? e.message : "Could not load batches."));
+
+    /*
+     * FAILS QUIETLY, on purpose. Most imports are of our own students and the
+     * partner picker is an extra the screen can do without — an institute
+     * list that would not load must not stop somebody importing a cohort.
+     */
+    api
+      .get<PartnerOption[]>("/partners")
+      .then((rows) => setPartners(rows.filter((p) => p.isActive)))
+      .catch(() => setPartners([]));
   }, []);
 
   // Any change to the file or the destination invalidates the preview. Leaving
@@ -136,6 +165,7 @@ export function CohortImportPage() {
   };
 
   const section = sections.find((s) => s.id === sectionId);
+  const chosenPartner = partners.find((p) => p.id === partnerInstituteId);
   const canPreview = csv.trim().length > 0 && sectionId !== "" && !busy;
   const canCommit =
     preview !== null &&
@@ -213,6 +243,59 @@ export function CohortImportPage() {
             </Field>
           </div>
 
+          {/*
+            WHOSE STUDENTS, asked BEFORE the file and offered only when there
+            is at least one institute on file — a dropdown with a single
+            "Our own students" entry is a question nobody needs asked.
+          */}
+          {partners.length > 0 && (
+            <div className="field-row">
+              <Field
+                label="Whose students are these?"
+                hint="Choose the institute before the file, never as a column in it."
+              >
+                <select
+                  value={partnerInstituteId}
+                  onChange={(e) => {
+                    setPartnerInstituteId(e.target.value);
+                    setPreview(null);
+                    setResult(null);
+                  }}
+                >
+                  <option value="">Our own students</option>
+                  {partners.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+          )}
+
+          {/*
+            AND WHAT THAT MEANS FOR THE MONEY, said here rather than left to
+            the preview alone. Somebody importing two hundred students should
+            not discover the billing consequence after pressing the button —
+            and under PARTNER_PAYS the consequence is that no charge is ever
+            raised against any of them, which is invisible until the ledger is
+            empty at the end of term.
+          */}
+          {chosenPartner && (
+            <div className={chosenPartner.billingMode === "PARTNER_PAYS" ? "alert alert-warn" : "alert"}>
+              <p className="small">
+                <strong>{chosenPartner.name}</strong> —{" "}
+                {chosenPartner.billingMode === "PARTNER_PAYS"
+                  ? "we invoice the institute. No fee charge will be raised against these students: they will owe nothing, appear on no debtors list, and be offered no payment button."
+                  : "their students pay us directly, exactly like our own. Charges and instalments will be raised as usual."}
+              </p>
+              <p className="muted small">
+                Their coordinator will be able to see these students&rsquo; released results,
+                attendance and certificates.
+              </p>
+            </div>
+          )}
+
           {/* The restriction is shown BEFORE the file is chosen, so a file of
               male students is never prepared against a women's section. */}
           {section && (
@@ -271,7 +354,11 @@ export function CohortImportPage() {
               onClick={() =>
                 void run<Preview>(
                   "/admin/cohort-import/preview",
-                  { csv, sectionId },
+                  {
+                    csv,
+                    sectionId,
+                    ...(partnerInstituteId ? { partnerInstituteId } : {}),
+                  },
                   setPreview,
                 )
               }
@@ -356,6 +443,7 @@ export function CohortImportPage() {
                   capacityOverride,
                   consentCollectedOffline: true,
                   note: note.trim(),
+                  ...(partnerInstituteId ? { partnerInstituteId } : {}),
                 },
                 setResult,
               )
