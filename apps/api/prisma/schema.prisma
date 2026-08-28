@@ -3078,6 +3078,16 @@ model PendingEmail {
   /// section a rejoining student was added to, for instance. Never a secret.
   context Json?
 
+  /// Set when a person released it. Kept because "who let this go out" is the
+  /// question asked after a message reaches somebody it should not have.
+  approvedBy String?   @map("approved_by") @db.Uuid
+  approvedAt DateTime? @map("approved_at")
+
+  /// What a held message is actually going to say, for the person deciding
+  /// whether to release it. Approving something described only as
+  /// "CREDENTIALS to a@b.com" is approving a category, not a message.
+  subject String? @db.VarChar(300)
+
   attempts      Int       @default(0)
   lastError     String?   @map("last_error") @db.Text
   /// When this becomes due again. Backed off after each failure, and pushed
@@ -3111,6 +3121,10 @@ enum PendingEmailKind {
 }
 
 enum PendingEmailStatus {
+  /// Written, and deliberately NOT sent: the Institute has asked to see
+  /// outgoing account mail before it leaves. Nothing sweeps these — a person
+  /// releases them, and until somebody does they sit here indefinitely.
+  AWAITING_APPROVAL
   PENDING
   SENT
   /// Given up on: too many attempts, or the account no longer needs it —
