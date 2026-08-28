@@ -74,6 +74,8 @@ interface Outcome {
    * by hand.
    */
   emailSent?: boolean;
+  /** Why it did not go, in the mail server's own words. */
+  emailProblem?: string;
 }
 
 interface Result {
@@ -85,8 +87,6 @@ interface Result {
   /** How many students were sent their own password, and how many were not. */
   emailed: number;
   notEmailed: number;
-  /** Owed a message, still going out behind the response. Not a failure. */
-  stillSending: number;
   message: string;
 }
 
@@ -96,6 +96,45 @@ interface PartnerOption {
   isActive: boolean;
   billingMode: "PARTNER_PAYS" | "STUDENT_PAYS";
   billingLabel: string;
+}
+
+/**
+ * Did every failure come from the mail account being used up for the day?
+ *
+ * Worth separating because it is the one mail failure that is TEMPORARY and
+ * has nothing to do with the file: no address is wrong, no setting is wrong,
+ * and the same import will work tomorrow. Told instead to "check whether email
+ * is configured", somebody spends an afternoon inspecting settings that are
+ * correct.
+ */
+function mailLimitHit(result: Result): boolean {
+  return result.outcomes.some(
+    (o) => o.emailSent === false && /daily .*limit|5\.4\.5|quota/i.test(o.emailProblem ?? ""),
+  );
+}
+
+/**
+ * The mail server's answer, shortened to the part a person can act on.
+ *
+ * An SMTP rejection arrives as several lines of repeated codes and a support
+ * URL — "550-5.4.5 Daily user sending limit exceeded. For more information on
+ * Gmail 550-5.4.5 sending limits go to 550 5.4.5 https://…". Printed whole
+ * beside a student's name it buries the one useful clause in punctuation.
+ */
+function tidyMailProblem(detail: string): string {
+  if (/daily .*limit|5\.4\.5|quota/i.test(detail)) {
+    return "The sending account has reached its daily limit — try again tomorrow.";
+  }
+  if (/550|no such user|does not exist|recipient/i.test(detail)) {
+    return "The mail server would not accept that address. Check it is spelled correctly.";
+  }
+  if (/timeout|ETIMEDOUT|ECONNREFUSED|ENOTFOUND/i.test(detail)) {
+    return "The mail server could not be reached.";
+  }
+  // Anything unrecognised is shown as it came, trimmed — a message nobody
+  // anticipated is exactly the one worth passing on verbatim.
+  const firstLine = detail.split("\n")[0] ?? detail;
+  return firstLine.length > 160 ? `${firstLine.slice(0, 157)}…` : firstLine;
 }
 
 export function CohortImportPage() {
@@ -639,23 +678,7 @@ function ResultPanel({ result, onAgain }: { result: Result; onAgain: () => void 
               do here at all. The System emails each student their own password
               now; this list used to be the only copy in existence, and every
               one of three hundred was relayed by hand. */}
-          {result.stillSending > 0 ? (
-            /*
-              STILL GOING OUT, WHICH IS NEITHER SENT NOR FAILED. Against a real
-              mail server each message costs about three seconds, so the import
-              answers after the first few and lets the rest follow — otherwise
-              twelve students meant watching a button for thirty-seven seconds
-              with nothing on screen to say why.
-            */
-            <p>
-              <strong>
-                {result.stillSending} of these {result.stillSending === 1 ? "is" : "are"} still
-                being emailed
-              </strong>{" "}
-              in the background — they carry on after this screen. This list is your copy, and
-              the one to read from if anybody says nothing arrived.
-            </p>
-          ) : result.notEmailed === 0 ? (
+          {result.notEmailed === 0 ? (
             <p>
               Every one of these was <strong>emailed to the student</strong> at their own
               address. This list is your copy, for anybody who says it never arrived.
@@ -665,10 +688,28 @@ function ResultPanel({ result, onAgain }: { result: Result; onAgain: () => void 
               <strong>
                 {result.notEmailed} of these could NOT be emailed — pass those on yourself.
               </strong>
-              <p className="small">
-                They are marked below and in the downloaded file. Check Integrations to see
-                whether email is configured.
-              </p>
+              {/*
+                THE MAIL ACCOUNT'S DAILY LIMIT IS ITS OWN CASE, because it is
+                the one failure that is temporary, affects every message
+                equally, and has nothing to do with the addresses in the file.
+                Told to check whether "email is configured", somebody goes and
+                inspects settings that are perfectly correct. The answer is to
+                wait, or to send from an account that has not been used up.
+              */}
+              {mailLimitHit(result) ? (
+                <p className="small">
+                  The sending account has <strong>reached its daily limit</strong>. Nothing is
+                  wrong with the addresses or the settings — a Google account will not accept
+                  more messages until the limit resets, roughly twenty-four hours after they were
+                  sent. Read the passwords out from this list, or reset those accounts tomorrow to
+                  have the details sent again.
+                </p>
+              ) : (
+                <p className="small">
+                  They are marked below with the reason, and in the downloaded file. Check
+                  Integrations to see whether email is configured.
+                </p>
+              )}
             </div>
           )}
 
@@ -706,16 +747,22 @@ function ResultPanel({ result, onAgain }: { result: Result; onAgain: () => void 
                 </span>
                 <code>{o.temporaryPassword}</code>{" "}
                 {/* A word, not a colour alone (NFR-ACC-007). */}
-                {/* THREE STATES, not two. `undefined` means the message had
-                    not been attempted when this screen was drawn — calling
-                    that "not emailed" sends somebody off to relay a password
-                    that is about to arrive on its own. */}
-                {o.emailSent === true ? (
+                {/* A word, not a colour alone (NFR-ACC-007). Two states and
+                    no "pending": every message is now waited for, so by the
+                    time this renders each one has either gone or failed. */}
+                {o.emailSent ? (
                   <span className="pill pill-ok">emailed</span>
-                ) : o.emailSent === false ? (
-                  <span className="pill pill-warn">not emailed</span>
                 ) : (
-                  <span className="pill">sending…</span>
+                  <span className="pill pill-warn">not emailed</span>
+                )}
+                {/* The reason, where the row is. Somebody relaying passwords by
+                    hand needs to know whether to retype an address or simply
+                    wait, and that answer belongs beside the row it concerns. */}
+                {o.emailSent === false && o.emailProblem && (
+                  <>
+                    <br />
+                    <span className="muted small">{tidyMailProblem(o.emailProblem)}</span>
+                  </>
                 )}
               </li>
             ))}

@@ -35,7 +35,17 @@ export interface RowOutcome {
    * a send was attempted and did not succeed, and the operator must relay it
    * by hand from the list on screen.
    */
+  // (see emailProblem below for WHY a send failed)
   emailSent?: boolean;
+  /**
+   * WHY it did not go, in the mail server's own words.
+   *
+   * "Not emailed" on its own is a dead end: the operator cannot tell a wrong
+   * address from a mail account that has hit its daily limit, and those need
+   * completely different responses — retype the address, or wait and send
+   * again. The reason was being thrown away at the point it was known.
+   */
+  emailProblem?: string;
 }
 
 export interface ImportResult {
@@ -48,16 +58,6 @@ export interface ImportResult {
   /** How many students were sent their own password, and how many were not. */
   emailed: number;
   notEmailed: number;
-  /**
-   * Owed a message and not yet attempted when this was returned.
-   *
-   * Neither sent nor failed. Email costs about three seconds a message against
-   * a real server, so the import answers after a few and lets the rest go out
-   * behind the response rather than making somebody watch a button for half a
-   * minute. Kept separate because reporting these as failures would send an
-   * operator off to read out passwords nobody needed.
-   */
-  stillSending: number;
   message: string;
 }
 
@@ -279,48 +279,41 @@ export class CohortImportService {
      * also arrived by email.
      */
     /*
-     * TIME-BOXED, and this is the fix for a screen that appeared to hang.
+     * A FEW AT A TIME, AND WAITED FOR.
      *
      * ─────────────────────────────────────────────────────────────────────────
-     * WHAT WENT WRONG. This loop is sequential and each send costs about three
-     * seconds against a real Gmail account — measured, not guessed. Twelve
-     * students is therefore thirty-seven seconds during which the button says
-     * "Loading 12 students…" and nothing else happens. Every one of those
-     * students already existed before the first message was attempted, so the
-     * operator was waiting on work their result does not depend on, with no
-     * indication that anything was happening. It reads as a freeze, and the
-     * natural response is to press the button again.
+     * THIS WAS SEQUENTIAL, AND THEN IT WAS FIRE-AND-FORGET, AND BOTH WERE
+     * WRONG. Sequential cost about three seconds a message, so twelve students
+     * meant thirty-seven seconds of a disabled button and somebody reasonably
+     * concluding the screen had frozen. Handing the remainder to a detached
+     * promise fixed the waiting and introduced something worse: work that only
+     * exists in memory. A restart — a deployment, a crash, a watch-mode reload
+     * on a development machine — takes those messages with it, and nothing
+     * anywhere records that they were lost. The operator had been told they
+     * were "still sending".
      *
-     * SO THE MAIL GETS A BUDGET AND THE OPERATOR GETS THEIR ANSWER. Whatever
-     * completes inside the budget is reported exactly as before. The rest
-     * keeps going after the response has been sent, and is reported honestly
-     * as still sending rather than as sent or as failed — the operator has the
-     * passwords on screen either way, which is the whole reason this was safe
-     * to detach.
+     * THE ANSWER IS TO MAKE THE SENDING FAST ENOUGH TO WAIT FOR. Five at a
+     * time over a pooled transport does twelve in about nine seconds instead
+     * of thirty-seven, because the TLS handshake is most of the cost and the
+     * pool stops paying it per message. Nine seconds is a thing to wait for.
+     * Thirty-seven is not.
      *
-     * WHY NOT SEND THEM ALL IN PARALLEL: firing three hundred at once is how a
-     * Gmail account earns a temporary block, which looks exactly like the
-     * integration being broken. The order is kept and only the WAITING is
-     * given up.
+     * FIVE, NOT ALL OF THEM. The original reasoning was sound and is kept:
+     * firing three hundred at once is how a Gmail account earns a temporary
+     * block, which looks exactly like the integration being broken. This is a
+     * small pool, not a flood.
      *
-     * WHY NOT DROP THE MAIL ENTIRELY FROM THE RESPONSE: "every one of them has
-     * been emailed" is worth saying when it is true, and on a simulated outbox
-     * — which is what a demonstration machine usually runs — every message
-     * completes in microseconds and the budget is never reached at all.
+     * THE BUDGET REMAINS, for the genuinely large file. At five a time a
+     * twenty-second budget covers about thirty students, so an ordinary cohort
+     * finishes inside it and is reported exactly. Beyond that the rest are
+     * reported as NOT SENT rather than as pending — because this no longer
+     * promises to deliver them later, and a promise nothing can keep is worse
+     * than an honest failure. The passwords are on screen and in the
+     * downloadable file, which is what makes that safe to say.
      * ─────────────────────────────────────────────────────────────────────────
      */
-    /*
-     * SMALL ON PURPOSE. The budget is checked BEFORE each send, so the worst
-     * case is the budget plus one message — at three seconds a message, two
-     * seconds here bounds the response at about five and usually at three.
-     *
-     * A LARGER BUDGET BUYS NOTHING. On a simulated outbox, which is what a
-     * demonstration machine runs, every message completes in microseconds and
-     * the whole list finishes inside any budget at all; against a real server
-     * each additional second of waiting delivers at most a third of one more
-     * message while the operator watches a disabled button.
-     */
-    const MAIL_BUDGET_MS = 2_000;
+    const MAIL_BUDGET_MS = 20_000;
+    const MAIL_CONCURRENCY = 5;
     const mailStartedAt = Date.now();
 
     /** One student's message, whichever of the two they are owed. */
@@ -335,6 +328,7 @@ export class CohortImportService {
           registrationNo: outcome.registrationNo ?? null,
         });
         outcome.emailSent = posted.sent;
+        if (!posted.sent) outcome.emailProblem = posted.detail;
         return;
       }
 
@@ -356,6 +350,7 @@ export class CohortImportService {
           sectionName: section.name,
         });
         outcome.emailSent = posted.sent;
+        if (!posted.sent) outcome.emailProblem = posted.detail;
       }
     };
 
@@ -363,36 +358,48 @@ export class CohortImportService {
       (o) => o.email && (o.temporaryPassword || o.status === "REJOINED"),
     );
 
-    let deferred: typeof owedMail = [];
-    for (const [at, outcome] of owedMail.entries()) {
-      if (Date.now() - mailStartedAt > MAIL_BUDGET_MS) {
-        deferred = owedMail.slice(at);
-        break;
-      }
-      // NOTHING HERE CAN FAIL THE IMPORT. Every student in this list already
-      // has an account and a registration number; a refused message leaves the
-      // row saying so and the password still on screen.
-      await deliver(outcome).catch(() => {
-        outcome.emailSent = false;
-      });
-    }
+    let abandoned = 0;
+    const queue = [...owedMail];
+    const workers = Array.from({ length: Math.min(MAIL_CONCURRENCY, queue.length) }, async () => {
+      for (;;) {
+        const outcome = queue.shift();
+        if (!outcome) return;
 
-    /*
-     * The remainder, after the response. Sequential still, and deliberately
-     * unawaited — the students exist, the operator has been answered, and a
-     * rejection here must not become an unhandled one.
-     */
-    if (deferred.length > 0) {
-      void (async () => {
-        for (const outcome of deferred) {
-          await deliver(outcome).catch((err: unknown) =>
-            this.logger.warn(
-              `Cohort import: could not email ${outcome.email} — ` +
-                (err instanceof Error ? err.message : "unknown error"),
-            ),
-          );
+        if (Date.now() - mailStartedAt > MAIL_BUDGET_MS) {
+          /*
+           * OUT OF TIME. Said as a failure, not as a maybe: nothing is going
+           * to pick this up afterwards, and the operator needs to know to read
+           * this one out rather than wait for a message that is not coming.
+           */
+          outcome.emailSent = false;
+          outcome.emailProblem =
+            "There was not time to send this one during the import. Read the password out, or " +
+            "reset the account to have it sent again.";
+          abandoned += 1;
+          continue;
         }
-      })();
+
+        // NOTHING HERE CAN FAIL THE IMPORT. Every student in this list already
+        // has an account and a registration number; a refused message leaves
+        // the row saying so and the password still on screen.
+        await deliver(outcome).catch((err: unknown) => {
+          outcome.emailSent = false;
+          outcome.emailProblem = err instanceof Error ? err.message : "The mailer raised an error.";
+          this.logger.warn(
+            `Cohort import: could not email ${outcome.email} — ` +
+              (err instanceof Error ? err.message : "unknown error"),
+          );
+        });
+      }
+    });
+    await Promise.all(workers);
+
+    if (abandoned > 0) {
+      this.logger.warn(
+        `Cohort import into ${section.name}: ${abandoned} credential emails were not attempted ` +
+          `within ${MAIL_BUDGET_MS}ms and are reported as not sent. The operator has the ` +
+          "passwords on screen.",
+      );
     }
 
     outcomes.sort((a, b) => a.line - b.line);
@@ -401,9 +408,7 @@ export class CohortImportService {
     const skipped = outcomes.filter((o) => o.status === "SKIPPED").length;
     const emailed = outcomes.filter((o) => o.emailSent === true).length;
     const notEmailed = outcomes.filter((o) => o.emailSent === false).length;
-    /* Owed a message, not yet attempted when the response went out. Neither
-       sent nor failed, and saying either would be a guess. */
-    const stillSending = deferred.length;
+
 
     // One entry for the import itself, in addition to the per-student ones.
     // Without it, three hundred separate creations have no single thing an
@@ -433,8 +438,7 @@ export class CohortImportService {
       outcomes,
       emailed,
       notEmailed,
-      stillSending,
-      message: importResultMessage({ loaded, rejoined, skipped, emailed, notEmailed, stillSending }),
+      message: importResultMessage({ loaded, rejoined, skipped, emailed, notEmailed }),
     };
   }
 

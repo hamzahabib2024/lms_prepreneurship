@@ -615,11 +615,8 @@ export function importResultMessage(counts: {
   skipped: number;
   emailed: number;
   notEmailed: number;
-  /** Owed a message, still going out after the answer was returned. */
-  stillSending?: number;
 }): string {
   const { loaded, rejoined, skipped, emailed, notEmailed } = counts;
-  const stillSending = counts.stillSending ?? 0;
 
   const parts: string[] = [];
   if (loaded > 0) parts.push(`${loaded} new ${loaded === 1 ? "student" : "students"} loaded`);
@@ -636,22 +633,8 @@ export function importResultMessage(counts: {
   // student the news that they are enrolled and keep their existing sign-in.
   const owed = emailed + notEmailed;
 
-  /*
-   * STILL SENDING IS ITS OWN ANSWER, and it is reported first when there is
-   * one. Email against a real mail server costs about three seconds a message,
-   * so the import stops waiting after a few and lets the rest go out behind
-   * the response — the students already exist and the passwords are on screen.
-   *
-   * It must not be folded into either of the other two. Calling an unsent
-   * message "could not be reached" sends somebody off to read out twelve
-   * passwords by hand for no reason, and calling it "emailed" is worse.
-   */
   const delivery =
-    stillSending > 0
-      ? ` ${emailed > 0 ? `${emailed} ${emailed === 1 ? "message has" : "messages have"} gone out and ` : ""}` +
-        `${stillSending} ${stillSending === 1 ? "is" : "are"} still sending in the background — ` +
-        "the passwords below are the ones to read out if anybody says nothing arrived."
-      : owed === 0
+    owed === 0
       ? ""
       : notEmailed === 0
         ? " Every one of them has been emailed."
