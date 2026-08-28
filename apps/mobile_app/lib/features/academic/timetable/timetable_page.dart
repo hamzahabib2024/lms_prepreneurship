@@ -12,9 +12,8 @@ import '../data/models/timetable.dart';
 /// The timetable — SRS §13.12, FR-LIV-030..036.
 ///
 /// THE NEXT CLASS IS THE POINT OF THE PAGE: it is stated once at the top, in
-/// words, before any grid. Days are listed rather than laid out as a grid — a
-/// list degrades to a narrow phone screen without losing anything. Whose
-/// timetable it is comes from the token, not from a parameter.
+/// words, before any grid. Three views: list (best on phone), week, and month.
+/// The list degrades to a narrow phone screen without losing anything.
 class TimetablePage extends StatefulWidget {
   const TimetablePage({super.key, required this.api, required this.user});
 
@@ -32,28 +31,77 @@ class _TimetablePageState extends State<TimetablePage> {
   Timetable? _timetable;
   bool _loading = true;
   ApiException? _error;
-  String _weeks = '2';
+
+  /// View mode: list, week, or month.
+  _ViewMode _viewMode = _ViewMode.list;
+
+  /// Anchor date for navigation — the period is computed from this.
+  DateTime _anchor = DateTime.now();
 
   @override
   void initState() {
     super.initState();
     _repository = AcademicRepository(api: widget.api);
-    _canGenerate = widget.user.isSuperAdmin || widget.user.isAdmin || widget.user.isTeacher;
+    _canGenerate =
+        widget.user.isSuperAdmin || widget.user.isAdmin || widget.user.isTeacher;
     _load();
   }
 
+  /// The date range to fetch, computed from the anchor and view mode.
+  ({DateTime from, DateTime to}) get _range {
+    final start = DateTime(_anchor.year, _anchor.month, _anchor.day);
+    final end = DateTime(_anchor.year, _anchor.month, _anchor.day);
+    switch (_viewMode) {
+      case _ViewMode.month:
+        // Show month plus a week on each side for context.
+        final from = DateTime(start.year, start.month - 1, 1);
+        final to = DateTime(end.year, end.month + 1, 1);
+        return (from: from, to: to);
+      case _ViewMode.week:
+        // Monday-based week.
+        final lead = (start.weekday - 1);
+        return (
+          from: start.subtract(Duration(days: lead)),
+          to: end.add(Duration(days: 6 - lead)),
+        );
+      case _ViewMode.list:
+        // The next 14 days.
+        return (from: start, to: end.add(const Duration(days: 14)));
+    }
+  }
+
+  String get _periodLabel {
+    switch (_viewMode) {
+      case _ViewMode.month:
+        const months = [
+          'January', 'February', 'March', 'April', 'May', 'June',
+          'July', 'August', 'September', 'October', 'November', 'December',
+        ];
+        return '${months[_anchor.month - 1]} ${_anchor.year}';
+      case _ViewMode.week:
+        final from = _range.from;
+        return 'Week of ${_shortDate(from)}';
+      case _ViewMode.list:
+        return 'The next fortnight';
+    }
+  }
+
+  String _shortDate(DateTime d) {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return '${d.day} ${months[d.month - 1]}';
+  }
+
   Future<void> _load() async {
-    final weeks = int.parse(_weeks);
     setState(() {
       _loading = _timetable == null;
       _error = null;
     });
-    final now = DateTime.now();
+    final range = _range;
     try {
-      final t = await _repository.myTimetable(
-        from: now,
-        to: now.add(Duration(days: weeks * 7)),
-      );
+      final t = await _repository.myTimetable(from: range.from, to: range.to);
       if (!mounted) return;
       setState(() {
         _timetable = t;
@@ -68,12 +116,37 @@ class _TimetablePageState extends State<TimetablePage> {
     }
   }
 
+  void _move(int direction) {
+    setState(() {
+      switch (_viewMode) {
+        case _ViewMode.month:
+          _anchor = DateTime(_anchor.year, _anchor.month + direction, 1);
+        case _ViewMode.week:
+          _anchor = _anchor.add(Duration(days: direction * 7));
+        case _ViewMode.list:
+          _anchor = _anchor.add(Duration(days: direction * 14));
+      }
+    });
+    _load();
+  }
+
+  void _goToday() {
+    setState(() => _anchor = DateTime.now());
+    _load();
+  }
+
+  void _setView(_ViewMode mode) {
+    setState(() => _viewMode = mode);
+    _load();
+  }
+
   void _openGenerate() {
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
-      builder: (_) => GenerateSheet(repository: _repository, onGenerated: _load),
+      builder: (_) =>
+          GenerateSheet(repository: _repository, onGenerated: _load),
     );
   }
 
@@ -81,7 +154,6 @@ class _TimetablePageState extends State<TimetablePage> {
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
     final muted = dark ? AppColorsDark.muted : AppColors.muted;
-
     final t = _timetable;
 
     return Scaffold(
@@ -89,11 +161,19 @@ class _TimetablePageState extends State<TimetablePage> {
         title: const Text('Timetable'),
         backgroundColor: Theme.of(context).colorScheme.surface,
         surfaceTintColor: Colors.transparent,
+        actions: [
+          // Today button
+          TextButton(
+            onPressed: _goToday,
+            child: const Text('Today'),
+          ),
+        ],
       ),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
           children: [
+            // Subtitle and view toggle
             Row(
               children: [
                 Expanded(
@@ -102,17 +182,14 @@ class _TimetablePageState extends State<TimetablePage> {
                     style: TextStyle(fontSize: 12.5, color: muted),
                   ),
                 ),
-                SegmentedButton<String>(
+                SegmentedButton<_ViewMode>(
                   segments: const [
-                    ButtonSegment(value: '1', label: Text('1w')),
-                    ButtonSegment(value: '2', label: Text('2w')),
-                    ButtonSegment(value: '4', label: Text('4w')),
+                    ButtonSegment(value: _ViewMode.list, label: Text('List')),
+                    ButtonSegment(value: _ViewMode.week, label: Text('Week')),
+                    ButtonSegment(value: _ViewMode.month, label: Text('Month')),
                   ],
-                  selected: {_weeks},
-                  onSelectionChanged: (s) {
-                    setState(() => _weeks = s.first);
-                    _load();
-                  },
+                  selected: {_viewMode},
+                  onSelectionChanged: (s) => _setView(s.first),
                   showSelectedIcon: false,
                   style: ButtonStyle(
                     visualDensity: VisualDensity.compact,
@@ -123,6 +200,34 @@ class _TimetablePageState extends State<TimetablePage> {
                       ),
                     ),
                   ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            // Navigation row
+            Row(
+              children: [
+                IconButton(
+                  onPressed: () => _move(-1),
+                  icon: const Icon(Icons.chevron_left, size: 20),
+                  visualDensity: VisualDensity.compact,
+                  tooltip: 'Previous',
+                ),
+                Expanded(
+                  child: Text(
+                    _periodLabel,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => _move(1),
+                  icon: const Icon(Icons.chevron_right, size: 20),
+                  visualDensity: VisualDensity.compact,
+                  tooltip: 'Next',
                 ),
               ],
             ),
@@ -154,15 +259,20 @@ class _TimetablePageState extends State<TimetablePage> {
                   children: [
                     Text(
                       'Next: ${t!.nextClass!.subject} — ${whenNext(t.nextClass!.scheduledStart)}',
-                      style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700),
+                      style: const TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       [
                         dayName(t.nextClass!.scheduledStart),
                         'at ${time(t.nextClass!.scheduledStart)}',
-                        if ((t.nextClass?.teacher ?? '').isNotEmpty) t.nextClass!.teacher!,
-                        if (t.nextClass!.section.isNotEmpty) t.nextClass!.section,
+                        if ((t.nextClass?.teacher ?? '').isNotEmpty)
+                          t.nextClass!.teacher!,
+                        if (t.nextClass!.section.isNotEmpty)
+                          t.nextClass!.section,
                       ].join(' · '),
                       style: TextStyle(fontSize: 12.5, color: muted),
                     ),
@@ -187,73 +297,410 @@ class _TimetablePageState extends State<TimetablePage> {
                 t.message ?? 'No classes scheduled in this period.',
                 style: TextStyle(fontSize: 13.5, color: muted, height: 1.5),
               )
+            else if (_viewMode == _ViewMode.month)
+              _MonthCalendar(
+                anchor: _anchor,
+                days: t.days,
+                onPickDay: (date) {
+                  setState(() {
+                    _anchor = date;
+                    _viewMode = _ViewMode.list;
+                  });
+                  _load();
+                },
+              )
+            else if (_viewMode == _ViewMode.week)
+              _WeekView(
+                anchor: _anchor,
+                days: t.days,
+                onPickDay: (date) {
+                  setState(() {
+                    _anchor = date;
+                    _viewMode = _ViewMode.list;
+                  });
+                  _load();
+                },
+              )
             else
+              // List view — the default and best for phones.
               for (final day in t.days)
-                Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surface,
-                    border: Border.all(color: dark ? AppColorsDark.line : AppColors.line),
-                    borderRadius: BorderRadius.circular(AppRadius.md),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        dayNameFor(day.date),
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-                      ),
-                      const SizedBox(height: 6),
-                      for (final e in day.entries)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      '${time(e.scheduledStart)}–${time(e.scheduledEnd)}  '
-                                      '${e.subject}',
-                                      style: const TextStyle(
-                                        fontSize: 13.5,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    if ((e.title.isNotEmpty && e.title != e.subject) ||
-                                        (e.teacher ?? '').isNotEmpty ||
-                                        e.section.isNotEmpty)
-                                      Text(
-                                        [
-                                          if (e.title.isNotEmpty && e.title != e.subject) e.title,
-                                          if ((e.teacher ?? '').isNotEmpty) e.teacher!,
-                                          if (e.section.isNotEmpty) e.section,
-                                        ].join(' · '),
-                                        style: TextStyle(fontSize: 12, color: muted),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                              // LIVE is worth saying as a word: it means join now.
-                              if (e.status == 'LIVE')
-                                const Padding(
-                                  padding: EdgeInsets.only(left: 8, top: 2),
-                                  child: Pill(text: 'Live now', kind: PillKind.ok),
-                                ),
-                            ],
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
+                _DayCard(day: day),
           ],
         ),
       ),
     );
   }
+}
+
+enum _ViewMode { list, week, month }
+
+/// A single day's card in list view.
+class _DayCard extends StatelessWidget {
+  const _DayCard({required this.day});
+
+  final TimetableDay day;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final muted = dark ? AppColorsDark.muted : AppColors.muted;
+    final today = _bareDate(DateTime.now());
+    final isToday = day.date == today;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: isToday
+            ? (dark ? AppColorsDark.brand050 : AppColors.brand050)
+            : Theme.of(context).colorScheme.surface,
+        border: Border.all(
+          color: isToday
+              ? (dark ? AppColorsDark.brand600 : AppColors.brand600)
+                  .withValues(alpha: 0.3)
+              : (dark ? AppColorsDark.line : AppColors.line),
+        ),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            dayNameFor(day.date) + (isToday ? ' (Today)' : ''),
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 6),
+          for (final e in day.entries)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${time(e.scheduledStart)}–${time(e.scheduledEnd)}  '
+                          '${e.subject}',
+                          style: const TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        if ((e.title.isNotEmpty && e.title != e.subject) ||
+                            (e.teacher ?? '').isNotEmpty ||
+                            e.section.isNotEmpty)
+                          Text(
+                            [
+                              if (e.title.isNotEmpty && e.title != e.subject)
+                                e.title,
+                              if ((e.teacher ?? '').isNotEmpty) e.teacher!,
+                              if (e.section.isNotEmpty) e.section,
+                            ].join(' · '),
+                            style: TextStyle(fontSize: 12, color: muted),
+                          ),
+                      ],
+                    ),
+                  ),
+                  if (e.status == 'LIVE')
+                    const Padding(
+                      padding: EdgeInsets.only(left: 8, top: 2),
+                      child: Pill(text: 'Live now', kind: PillKind.ok),
+                    ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Week view — 7 columns with events stacked vertically.
+class _WeekView extends StatelessWidget {
+  const _WeekView({
+    required this.anchor,
+    required this.days,
+    required this.onPickDay,
+  });
+
+  final DateTime anchor;
+  final List<TimetableDay> days;
+  final void Function(DateTime date) onPickDay;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final muted = dark ? AppColorsDark.muted : AppColors.muted;
+    final today = _bareDate(DateTime.now());
+
+    // Build 7 days starting from Monday.
+    final lead = (anchor.weekday - 1);
+    final start = anchor.subtract(Duration(days: lead));
+    final columns = List.generate(7, (i) => start.add(Duration(days: i)));
+
+    // Index entries by date.
+    final byDate = <String, List<TimetableEntry>>{};
+    for (final d in days) {
+      byDate[d.date] = d.entries;
+    }
+
+    return Column(
+      children: [
+        for (final date in columns) ...[
+          _WeekDayHeader(
+            date: date,
+            isToday: _bareDate(date) == today,
+            onTap: () => onPickDay(date),
+          ),
+          SizedBox(
+            height: 80,
+            child: () {
+              final entries = byDate[_bareDate(date)];
+              if (entries == null || entries.isEmpty) {
+                return Center(
+                  child: Text('—', style: TextStyle(color: muted)),
+                );
+              }
+              return ListView.builder(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                itemCount: entries.length,
+                itemBuilder: (_, i) {
+                  final e = entries[i];
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Text(
+                      '${time(e.scheduledStart)} ${e.subject}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  );
+                },
+              );
+            }(),
+          ),
+          const Divider(height: 1),
+        ],
+      ],
+    );
+  }
+}
+
+class _WeekDayHeader extends StatelessWidget {
+  const _WeekDayHeader({
+    required this.date,
+    required this.isToday,
+    required this.onTap,
+  });
+
+  final DateTime date;
+  final bool isToday;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        color: isToday
+            ? (dark ? AppColorsDark.brand050 : AppColors.brand050)
+            : null,
+        child: Row(
+          children: [
+            const SizedBox(width: 12),
+            Text(
+              weekdays[date.weekday - 1],
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: dark ? AppColorsDark.muted : AppColors.muted,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              '${date.day}',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: isToday ? FontWeight.w700 : FontWeight.w600,
+                color: isToday
+                    ? (dark ? AppColorsDark.brand600 : AppColors.brand600)
+                    : null,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Month calendar view — a grid of days with event chips.
+class _MonthCalendar extends StatelessWidget {
+  const _MonthCalendar({
+    required this.anchor,
+    required this.days,
+    required this.onPickDay,
+  });
+
+  final DateTime anchor;
+  final List<TimetableDay> days;
+  final void Function(DateTime date) onPickDay;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final muted = dark ? AppColorsDark.muted : AppColors.muted;
+    final today = _bareDate(DateTime.now());
+
+    // Index entries by date.
+    final byDate = <String, List<TimetableEntry>>{};
+    for (final d in days) {
+      byDate[d.date] = d.entries;
+    }
+
+    // Build 6 weeks of cells.
+    final first = DateTime(anchor.year, anchor.month, 1);
+    final lead = (first.weekday - 1);
+    final start = first.subtract(Duration(days: lead));
+    final cells = List.generate(42, (i) => start.add(Duration(days: i)));
+
+    const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    final currentMonth = anchor.month;
+
+    return Column(
+      children: [
+        // Weekday headers
+        Row(
+          children: [
+            for (final w in weekdays)
+              Expanded(
+                child: Center(
+                  child: Text(
+                    w,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: muted,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        // Calendar grid
+        for (int row = 0; row < 6; row++)
+          Row(
+            children: [
+              for (int col = 0; col < 7; col++) ...[
+                if (col > 0) const SizedBox(width: 2),
+                Expanded(
+                  child: () {
+                    final date = cells[row * 7 + col];
+                    final key = _bareDate(date);
+                    final entries = byDate[key] ?? [];
+                    final isCurrentMonth = date.month == currentMonth;
+                    final isTodayCell = key == today;
+                    final shown = entries.take(2).toList();
+                    final more = entries.length - shown.length;
+
+                    return InkWell(
+                      onTap: () => onPickDay(date),
+                      borderRadius: BorderRadius.circular(6),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 4,
+                          horizontal: 2,
+                        ),
+                        decoration: isTodayCell
+                            ? BoxDecoration(
+                                color: dark
+                                    ? AppColorsDark.brand600
+                                    : AppColors.brand600,
+                                borderRadius: BorderRadius.circular(6),
+                              )
+                            : null,
+                        child: Column(
+                          children: [
+                            Text(
+                              '${date.day}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: isTodayCell
+                                    ? FontWeight.w700
+                                    : FontWeight.w500,
+                                color: isTodayCell
+                                    ? Colors.white
+                                    : isCurrentMonth
+                                        ? null
+                                        : muted,
+                              ),
+                            ),
+                            for (final e in shown)
+                              Container(
+                                margin: const EdgeInsets.only(top: 1),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 3,
+                                  vertical: 1,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: _subjectHue(e.subject),
+                                  borderRadius: BorderRadius.circular(3),
+                                ),
+                                child: Text(
+                                  time(e.scheduledStart),
+                                  style: const TextStyle(
+                                    fontSize: 8,
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            if (more > 0)
+                              Text(
+                                '+$more',
+                                style: TextStyle(
+                                  fontSize: 8,
+                                  color: muted,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }(),
+                ),
+              ],
+            ],
+          ),
+      ],
+    );
+  }
+}
+
+/// Generate a consistent hue for a subject name.
+Color _subjectHue(String subject) {
+  int h = 0;
+  for (int i = 0; i < subject.length; i++) {
+    h = (h * 31 + subject.codeUnitAt(i)) % 360;
+  }
+  final hue = (h / 60).round() * 60;
+  return HSLColor.fromAHSL(1.0, hue.toDouble(), 0.5, 0.45).toColor();
+}
+
+/// The bare date string "2026-08-20" for matching server dates.
+String _bareDate(DateTime d) {
+  return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 }
 
 /// "in 2 hours", "tomorrow at 09:00" — the form somebody actually wants.
@@ -286,7 +733,8 @@ String dayName(DateTime iso) {
 }
 
 /// The day's name from the server's bare-date identity ("2026-08-20").
-String dayNameFor(String date) => dayName(DateTime.tryParse(date) ?? DateTime.now());
+String dayNameFor(String date) =>
+    dayName(DateTime.tryParse(date) ?? DateTime.now());
 
 const _dayOptions = <(int, String)>[
   (1, 'Mon'),
@@ -301,7 +749,11 @@ const _dayOptions = <(int, String)>[
 /// FR-LIV-031/032 — describe a term once. PREVIEW BEFORE GENERATE: the
 /// generate button is unreachable until the pattern has been checked.
 class GenerateSheet extends StatefulWidget {
-  const GenerateSheet({super.key, required this.repository, required this.onGenerated});
+  const GenerateSheet({
+    super.key,
+    required this.repository,
+    required this.onGenerated,
+  });
 
   final AcademicRepository repository;
   final Future<void> Function() onGenerated;
@@ -358,7 +810,10 @@ class _GenerateSheetState extends State<GenerateSheet> {
   }
 
   bool get _ready =>
-      _sectionSubjectId.isNotEmpty && _days.isNotEmpty && _fromDate != null && _toDate != null;
+      _sectionSubjectId.isNotEmpty &&
+      _days.isNotEmpty &&
+      _fromDate != null &&
+      _toDate != null;
 
   Future<void> _run(String path, Future<Object?> Function() call) async {
     setState(() {
@@ -552,8 +1007,10 @@ class _GenerateSheetState extends State<GenerateSheet> {
                     label: 'Term starts',
                     value: _fromDate,
                     hint: 'Choose…',
-                    firstDate: DateTime.now().subtract(const Duration(days: 7)),
-                    lastDate: DateTime.now().add(const Duration(days: 730)),
+                    firstDate:
+                        DateTime.now().subtract(const Duration(days: 7)),
+                    lastDate:
+                        DateTime.now().add(const Duration(days: 730)),
                     onChanged: (v) {
                       setState(() {
                         _fromDate = v;
@@ -566,8 +1023,10 @@ class _GenerateSheetState extends State<GenerateSheet> {
                     label: 'Term ends',
                     value: _toDate,
                     hint: 'Choose…',
-                    firstDate: DateTime.now().subtract(const Duration(days: 7)),
-                    lastDate: DateTime.now().add(const Duration(days: 730)),
+                    firstDate:
+                        DateTime.now().subtract(const Duration(days: 7)),
+                    lastDate:
+                        DateTime.now().add(const Duration(days: 730)),
                     onChanged: (v) {
                       setState(() {
                         _toDate = v;
@@ -577,22 +1036,25 @@ class _GenerateSheetState extends State<GenerateSheet> {
                   ),
                   const SizedBox(height: 16),
                   FilledButton(
-                    onPressed:
-                        _busy || !_ready || _hostTeacherId == null ? null : () => _run(
-                              'preview',
-                              _previewCall,
-                            ),
+                    onPressed: _busy ||
+                            !_ready ||
+                            _hostTeacherId == null
+                        ? null
+                        : () => _run('preview', _previewCall),
                     child: _busy
                         ? const SizedBox(
                             width: 18,
                             height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                            child:
+                                CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Text('Check what this would create'),
                   ),
                   const SizedBox(height: 10),
                   OutlinedButton(
-                    onPressed: _busy || _preview == null || _preview!.count == 0
+                    onPressed: _busy ||
+                            _preview == null ||
+                            _preview!.count == 0
                         ? null
                         : () => _run('generate', _generateCall),
                     child: Text(
@@ -606,7 +1068,11 @@ class _GenerateSheetState extends State<GenerateSheet> {
                     const SizedBox(height: 10),
                     Text(
                       _preview!.message,
-                      style: TextStyle(fontSize: 12.5, color: muted, height: 1.4),
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: muted,
+                        height: 1.4,
+                      ),
                     ),
                   ],
                   if (_result != null) ...[
@@ -615,19 +1081,28 @@ class _GenerateSheetState extends State<GenerateSheet> {
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         color: _result!.failed > 0
-                            ? (dark ? AppColorsDark.warnBg : AppColors.warnBg)
-                            : (dark ? AppColorsDark.okBg : AppColors.okBg),
+                            ? (dark
+                                ? AppColorsDark.warnBg
+                                : AppColors.warnBg)
+                            : (dark
+                                ? AppColorsDark.okBg
+                                : AppColors.okBg),
                         border: Border.all(
                           color: (_result!.failed > 0
-                                  ? (dark ? AppColorsDark.warn : AppColors.warn)
-                                  : (dark ? AppColorsDark.ok : AppColors.ok))
+                                  ? (dark
+                                      ? AppColorsDark.warn
+                                      : AppColors.warn)
+                                  : (dark
+                                      ? AppColorsDark.ok
+                                      : AppColors.ok))
                               .withValues(alpha: 0.3),
                         ),
-                        borderRadius: BorderRadius.circular(AppRadius.sm),
+                        borderRadius:
+                            BorderRadius.circular(AppRadius.sm),
                       ),
                       child: Text(
                         _result!.summary,
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
                           height: 1.4,
