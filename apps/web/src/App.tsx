@@ -38,6 +38,7 @@ import { SecurityPage } from "./pages/SecurityPage";
 import { BulkPage } from "./pages/BulkPage";
 import { CohortImportPage } from "./pages/CohortImportPage";
 import { PartnersPage } from "./pages/PartnersPage";
+import { EmailQueuePage } from "./pages/EmailQueuePage";
 import { PartnerPortalPage } from "./pages/PartnerPortalPage";
 import { ReceiptPage } from "./pages/ReceiptPage";
 import { TemplatesPage } from "./pages/TemplatesPage";
@@ -644,6 +645,15 @@ export function App() {
           {/* Recording an outside institute and giving its staff an account.
               Office only — the page itself offers Super Admin actions that
               the server refuses to anybody else. */}
+          {/* Releasing a message sends somebody their way into the System,
+              and the queue lists every address the Institute is about to
+              write to. Neither is a teacher's business. */}
+          <Route
+            path="/email-queue"
+            element={
+              hasRole("super_admin", "admin") ? <EmailQueuePage /> : <Navigate to="/" replace />
+            }
+          />
           <Route
             path="/partners"
             element={

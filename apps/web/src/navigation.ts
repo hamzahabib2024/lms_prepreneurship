@@ -181,6 +181,9 @@ export const DESTINATIONS: readonly Destination[] = [
   // ------------------------------------------------------ administration --
   { to: "/settings", label: "Settings", icon: "settings", group: "Administration", roles: OFFICE, also: ["policy", "configuration"] },
   { to: "/messages", label: "Messages", icon: "bell", group: "Administration", roles: OFFICE, also: ["templates", "notifications", "email"] },
+  /* Held mail, beside Messages because they are the same subject from two
+     ends: what the System says, and whether it has said it yet. */
+  { to: "/email-queue", label: "Outgoing email", icon: "megaphone", group: "Administration", roles: OFFICE, also: ["queue", "outbox", "pending", "approve", "release", "unsent", "mail", "email"] },
   { to: "/audit", label: "Audit", icon: "clipboard", group: "Administration", roles: OFFICE, also: ["log", "history"] },
   /* Super Admin ALONE (§4.5). Unlike the audit log there is no Admin tier:
      this log names who has been attacked and from where, and is as useful for
