@@ -199,6 +199,22 @@ const DELIBERATELY_UNSCOPED = [
    * other, and this entry revisited rather than assumed to still apply.
    */
   "PendingEmail",
+  /*
+   * EVERY MESSAGE THE SYSTEM TRIED TO SEND.
+   *
+   * Never reached through the scoped client: it is written by the email
+   * adapter and read by one office-only screen answering "where did the day's
+   * sending allowance go". There is no actor to scope it by — the adapter runs
+   * inside whatever request happened to trigger a message, and the question it
+   * answers is about the Institute's mail account rather than about any
+   * person.
+   *
+   * AND IT DELIBERATELY HOLDS NO MESSAGE. An address, a category and a subject
+   * line; never a body, because those carry temporary passwords, marks and
+   * balances. The endpoint that exposes it is guarded by email_queue:read,
+   * which is Admin and Super Admin only.
+   */
+  "EmailLog",
   "Programme",
   "Subject",
   "AcademicSession",

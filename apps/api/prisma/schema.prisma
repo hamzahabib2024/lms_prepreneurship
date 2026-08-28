@@ -3131,3 +3131,53 @@ enum PendingEmailStatus {
   /// somebody who has already signed in does not want a sign-in link.
   ABANDONED
 }
+
+/// EVERY MESSAGE THIS SYSTEM TRIED TO SEND, AND WHAT BECAME OF IT.
+///
+/// WHY IT EXISTS: "the mail account is full" is only half an answer. The other
+/// half — WHAT filled it — could not be answered at all, because a message that
+/// sent successfully left no trace anywhere. Only failures were recorded, which
+/// is precisely backwards for this question: an allowance is spent by the mail
+/// that WORKED.
+///
+/// So every attempt is written here, sent or not. Two hundred sign-in details
+/// from a re-run import look completely different from two hundred
+/// announcements, and until this table existed neither was distinguishable
+/// from the other after the fact.
+///
+/// NO BODY, EVER. The subject and the kind, which is what "where did it go"
+/// needs, and never the message itself — those carry temporary passwords,
+/// marks and balances. The failure detail is kept because it is the mail
+/// server's own diagnosis and is the difference between a full mailbox and a
+/// wrong address.
+///
+/// PRUNED, because this is the highest-volume table the System writes and its
+/// value is entirely recent. See the sweep in pending-email.service.ts.
+model EmailLog {
+  id String @id @default(uuid()) @db.Uuid
+
+  occurredAt DateTime @default(now()) @map("occurred_at")
+
+  toAddress String @map("to_address") @db.VarChar(320)
+  /// The message's own category — "account.created", "announcement". Stable
+  /// across wording changes, which is what makes it worth grouping by.
+  kind      String @db.VarChar(80)
+  subject   String @db.VarChar(300)
+
+  status EmailLogStatus
+  /// The mail server's own words when it refused. Never present on a success.
+  detail String? @db.Text
+
+  /// The rolling-24-hour question, which is the only one anybody asks of this.
+  @@index([occurredAt])
+  @@index([status, occurredAt])
+  @@map("email_log")
+}
+
+enum EmailLogStatus {
+  SENT
+  FAILED
+  /// Never attempted: no address on record, or email is not configured at all.
+  /// Costs no allowance, and must not be counted as if it did.
+  SUPPRESSED
+}

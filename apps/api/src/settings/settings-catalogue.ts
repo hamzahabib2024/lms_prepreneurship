@@ -251,6 +251,20 @@ export const CATALOGUE: SettingDefinition[] = [
       "immediately, as the System did before.",
   },
 
+  {
+    key: "email.dailyLimit",
+    type: "number",
+    default: 500,
+    min: 0,
+    max: 100000,
+    group: "Email",
+    description:
+      "How many messages the sending account is allowed in 24 hours, used to show how much " +
+      "is left. A free Google account is 500; paid Google Workspace is 2,000. This does not " +
+      "impose the limit — the mail provider does — it only lets the System warn you before " +
+      "you reach it.",
+  },
+
   // ----------------------------------------------------------- maintenance --
   //
   // Operational state rather than policy, but it lives here for the same
