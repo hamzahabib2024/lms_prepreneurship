@@ -31,6 +31,7 @@
  *   node -r dotenv/config scripts/demo-data.mjs --dry
  */
 import { PrismaClient } from "@prisma/client";
+import * as argon2 from "argon2";
 
 const DRY = process.argv.includes("--dry");
 const prisma = new PrismaClient();
@@ -47,6 +48,22 @@ if (!/@(localhost|127\.0\.0\.1)[:/]/.test(url)) {
 
 /** Everything written here carries this, so a human can tell demo from real. */
 const MARK = "[demo]";
+
+/*
+ * THE SAME PASSWORD THE SEEDED STUDENTS USE, and the same parameters, so one
+ * sentence in the notes covers every account on a development machine. Hashed
+ * once rather than per account: argon2 is deliberately slow, and doing it
+ * inside the loop made the script look hung.
+ */
+const DEMO_PASSWORD = "ChangeMe!Student2026";
+let demoPasswordHash = null;
+const passwordHash = async () =>
+  (demoPasswordHash ??= await argon2.hash(DEMO_PASSWORD, {
+    type: argon2.argon2id,
+    memoryCost: 65536,
+    timeCost: 3,
+    parallelism: 4,
+  }));
 
 const added = [];
 const note = (what, n) => {
@@ -805,6 +822,187 @@ async function main() {
     }
     note("submissions for assignments that had none", made);
     note("  of those, marked and awaiting release", graded);
+  }
+
+
+  /* =====================================================================
+   *  7. PARTNER INSTITUTES, AND THE PEOPLE WHO SIGN IN FOR THEM.
+   *
+   *  WHY THIS IS HERE RATHER THAN IN THE SEED. The two institutes existed
+   *  only because somebody created them through the API while the feature
+   *  was being built, so a database reset made the Partners screen empty
+   *  and the whole feature look unbuilt. Demo data belongs in the script
+   *  that makes demo data.
+   *
+   *  BOTH BILLING MODES, on purpose. One institute we invoice and one whose
+   *  students pay us directly — because the difference between them is the
+   *  single most important thing about the feature, and a demo with only
+   *  one of them cannot show it. The STUDENT_PAYS partner is the one that
+   *  proves the negative: their coordinator sees no Invoices tab at all.
+   *
+   *  THE ACCOUNTS SIGN IN IMMEDIATELY. `mustChangePassword` is false, the
+   *  same concession the seeded staff accounts make, because a demo that
+   *  opens on a change-password form is a demo of a change-password form.
+   * ===================================================================== */
+  {
+    const INSTITUTES = [
+      {
+        name: "Beaconhouse Faisalabad",
+        code: "BHF",
+        city: "Faisalabad",
+        billingMode: "PARTNER_PAYS",
+        contactName: "Ms Ayesha Tariq",
+        contactEmail: "coord@bhf.example",
+        coordinator: { email: "coord@bhf.example", fullName: "Ayesha Tariq" },
+      },
+      {
+        name: "Superior College Lahore",
+        code: "SCL",
+        city: "Lahore",
+        billingMode: "STUDENT_PAYS",
+        contactName: "Mr Bilal Aslam",
+        contactEmail: "coord@scl.example",
+        coordinator: { email: "coord@scl.example", fullName: "Bilal Aslam" },
+      },
+    ];
+
+    const owner = await prisma.user.findFirst({
+      where: { email: "superadmin@institute.local" },
+      select: { id: true },
+    });
+    const partnerRole = await prisma.role.findFirst({
+      where: { key: "partner_admin" },
+      select: { id: true },
+    });
+
+    let institutes = 0;
+    let accounts = 0;
+    let repaired = 0;
+    let attached = 0;
+
+    if (owner && partnerRole) {
+      for (const spec of INSTITUTES) {
+        let institute = await prisma.partnerInstitute.findFirst({
+          where: { code: spec.code },
+          select: { id: true },
+        });
+
+        if (!institute && !DRY) {
+          institute = await prisma.partnerInstitute.create({
+            data: {
+              name: spec.name,
+              code: spec.code,
+              city: spec.city,
+              billingMode: spec.billingMode,
+              contactName: spec.contactName,
+              contactEmail: spec.contactEmail,
+              isActive: true,
+              notes: MARK,
+              createdBy: owner.id,
+            },
+            select: { id: true },
+          });
+          institutes += 1;
+        } else if (!institute) {
+          institutes += 1;
+        }
+
+        if (!institute) continue;
+
+        /*
+         * THE COORDINATOR'S ACCOUNT. `partnerInstituteId` is the whole of
+         * their reach — the PARTNER predicates resolve to DENY_ALL without
+         * it — so an account created without one signs in to an empty
+         * portal and looks like a broken System.
+         */
+        const existing = await prisma.user.findFirst({
+          where: { email: spec.coordinator.email },
+          select: { id: true, partnerInstituteId: true },
+        });
+
+        if (!existing) {
+          if (!DRY) {
+            await prisma.user.create({
+              data: {
+                email: spec.coordinator.email,
+                // The same demo password the seeded students use, so one
+                // sentence in the notes covers every account on the machine.
+                passwordHash: await passwordHash(),
+                fullName: spec.coordinator.fullName,
+                status: "ACTIVE",
+                mustChangePassword: false,
+                partnerInstituteId: institute.id,
+                roles: { create: { roleId: partnerRole.id, grantedBy: owner.id } },
+              },
+            });
+          }
+          accounts += 1;
+        } else if (existing.partnerInstituteId === institute.id) {
+          /*
+           * AN ACCOUNT THAT EXISTS BUT CANNOT BE SIGNED INTO IS WORSE THAN
+           * NO ACCOUNT, and that is exactly what was on this machine: two
+           * coordinator accounts created by hand while the feature was being
+           * built, with a password nobody wrote down. Creating them was
+           * skipped because they existed, so the portal could not be
+           * demonstrated at all and nothing said why.
+           *
+           * So the password is put back to the known demo one. NARROWLY: only
+           * an account that is already the partner_admin for THIS demo
+           * institute — never an arbitrary user who happens to share the
+           * address. Combined with the localhost guard at the top of this
+           * file, that is as far as a repair should reach.
+           */
+          if (!DRY) {
+            await prisma.user.update({
+              where: { id: existing.id },
+              data: {
+                passwordHash: await passwordHash(),
+                status: "ACTIVE",
+                mustChangePassword: false,
+                failedLoginCount: 0,
+                lockedUntil: null,
+              },
+            });
+          }
+          repaired += 1;
+        }
+
+        /*
+         * AND SOME STUDENTS TO LOOK AT. A portal with nobody in it
+         * demonstrates the empty state and nothing else. Taken from the
+         * students nobody has claimed yet, and the fee payer is SNAPSHOTTED
+         * to match the institute's mode — which is what the fee system
+         * reads, never the mode itself (BR-DAT-02).
+         */
+        const wanted = spec.billingMode === "PARTNER_PAYS" ? 6 : 3;
+        const held = await prisma.student.count({
+          where: { partnerInstituteId: institute.id, deletedAt: null },
+        });
+
+        if (held < wanted) {
+          const free = await prisma.student.findMany({
+            where: { partnerInstituteId: null, deletedAt: null },
+            select: { id: true },
+            take: wanted - held,
+          });
+          if (!DRY && free.length > 0) {
+            await prisma.student.updateMany({
+              where: { id: { in: free.map((s) => s.id) } },
+              data: {
+                partnerInstituteId: institute.id,
+                feePayer: spec.billingMode === "PARTNER_PAYS" ? "PARTNER" : "SELF",
+              },
+            });
+          }
+          attached += free.length;
+        }
+      }
+    }
+
+    note("partner institutes", institutes);
+    note("  coordinators who can sign in for them", accounts);
+    note("  coordinator sign-ins put back to the demo password", repaired);
+    note("  students attached to a partner", attached);
   }
 
   /* ------------------------------------------------------------ report -- */
