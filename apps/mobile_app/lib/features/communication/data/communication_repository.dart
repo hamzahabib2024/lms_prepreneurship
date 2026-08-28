@@ -32,7 +32,7 @@ class CommunicationRepository {
   }) async {
     final result = await api.post<Map<String, dynamic>>('/announcements', {
       'audience': audience,
-      if (sectionSubjectId != null) 'sectionSubjectId': sectionSubjectId,
+      'sectionSubjectId': ?sectionSubjectId,
       'title': title,
       'body': body,
       'priority': priority,
@@ -87,14 +87,14 @@ class CommunicationRepository {
     final data = await api.patch<Map<String, dynamic>>(
       '/me/notification-preferences',
       {
-        if (channels != null) 'channels': channels,
-        if (mutedKinds != null) 'mutedKinds': mutedKinds,
+        'channels': ?channels,
+        'mutedKinds': ?mutedKinds,
         if (clearQuietHours) ...{
           'quietHoursStart': null,
           'quietHoursEnd': null,
         } else ...{
-          if (quietHoursStart != null) 'quietHoursStart': quietHoursStart,
-          if (quietHoursEnd != null) 'quietHoursEnd': quietHoursEnd,
+          'quietHoursStart': ?quietHoursStart,
+          'quietHoursEnd': ?quietHoursEnd,
         },
       },
     );
@@ -168,8 +168,8 @@ class CommunicationRepository {
     final data = await api.post<Map<String, dynamic>>(
       '/discussions/$postId/moderate',
       {
-        if (isPinned != null) 'isPinned': isPinned,
-        if (isLocked != null) 'isLocked': isLocked,
+        'isPinned': ?isPinned,
+        'isLocked': ?isLocked,
       },
     );
     return DiscussionPost.fromJson(data);
@@ -230,5 +230,15 @@ class CommunicationRepository {
         .whereType<Map<String, dynamic>>()
         .map(IntegrationStatus.fromJson)
         .toList();
+  }
+
+  Future<OutboxResult> getOutbox() async {
+    final data = await api.get<Map<String, dynamic>>('/integrations/outbox');
+    return OutboxResult.fromJson(data);
+  }
+
+  Future<int> clearOutbox() async {
+    final data = await api.delete<Map<String, dynamic>>('/integrations/outbox');
+    return data['cleared'] as int? ?? 0;
   }
 }

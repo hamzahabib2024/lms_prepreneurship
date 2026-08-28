@@ -306,3 +306,175 @@ class Handout {
     return kb < 1024 ? '$kb KB' : '${(kb / 1024).toStringAsFixed(1)} MB';
   }
 }
+
+// ------------------------------------------------------------- assignments ---
+
+class StudentAssignment {
+  const StudentAssignment({
+    required this.id,
+    required this.title,
+    required this.instructions,
+    this.hasBriefAudio = false,
+    this.briefAudioSeconds,
+    this.attachmentCount = 0,
+    required this.marksAvailable,
+    required this.dueAt,
+    this.extendedTo,
+    required this.submissionType,
+    required this.allowedFileTypes,
+    required this.maxFileSizeMb,
+    required this.maxFileCount,
+    required this.resubmissionPolicy,
+    required this.latePolicy,
+    required this.isOpen,
+    required this.isOverdue,
+    required this.submitted,
+    this.submittedAt,
+    this.version = 1,
+    this.wasLate = false,
+    this.fileCount = 0,
+    this.submissionId,
+    this.commentCount = 0,
+    this.hasFeedbackAudio = false,
+    this.feedbackAudioSeconds,
+    this.grade,
+  });
+
+  final String id;
+  final String title;
+  final String instructions;
+  final bool hasBriefAudio;
+  final int? briefAudioSeconds;
+  final int attachmentCount;
+  final int marksAvailable;
+  final DateTime dueAt;
+  final DateTime? extendedTo;
+  final String submissionType;
+  final List<String> allowedFileTypes;
+  final int maxFileSizeMb;
+  final int maxFileCount;
+  final String resubmissionPolicy;
+  final String latePolicy;
+  final bool isOpen;
+  final bool isOverdue;
+  final bool submitted;
+  final DateTime? submittedAt;
+  final int version;
+  final bool wasLate;
+  final int fileCount;
+  final String? submissionId;
+  final int commentCount;
+  final bool hasFeedbackAudio;
+  final int? feedbackAudioSeconds;
+  final AssignmentGrade? grade;
+
+  factory StudentAssignment.fromJson(Map<String, dynamic> json) {
+    final gradeData = json['grade'] as Map<String, dynamic>?;
+    return StudentAssignment(
+      id: json['id'] as String? ?? '',
+      title: json['title'] as String? ?? '',
+      instructions: json['instructions'] as String? ?? '',
+      hasBriefAudio: json['hasBriefAudio'] as bool? ?? false,
+      briefAudioSeconds: json['briefAudioSeconds'] as int?,
+      attachmentCount: json['attachmentCount'] as int? ?? 0,
+      marksAvailable: json['marksAvailable'] as int? ?? 0,
+      dueAt: DateTime.tryParse(json['dueAt'] as String? ?? '') ?? DateTime.now(),
+      extendedTo: DateTime.tryParse(json['extendedTo'] as String? ?? ''),
+      submissionType: json['submissionType'] as String? ?? 'FILE',
+      allowedFileTypes: (json['allowedFileTypes'] as List<dynamic>? ?? const [])
+          .whereType<String>()
+          .toList(),
+      maxFileSizeMb: json['maxFileSizeMb'] as int? ?? 10,
+      maxFileCount: json['maxFileCount'] as int? ?? 5,
+      resubmissionPolicy: json['resubmissionPolicy'] as String? ?? 'NONE',
+      latePolicy: json['latePolicy'] as String? ?? '',
+      isOpen: json['isOpen'] as bool? ?? false,
+      isOverdue: json['isOverdue'] as bool? ?? false,
+      submitted: json['submitted'] as bool? ?? false,
+      submittedAt: DateTime.tryParse(json['submittedAt'] as String? ?? ''),
+      version: json['version'] as int? ?? 1,
+      wasLate: json['wasLate'] as bool? ?? false,
+      fileCount: json['fileCount'] as int? ?? 0,
+      submissionId: json['submissionId'] as String?,
+      commentCount: json['commentCount'] as int? ?? 0,
+      hasFeedbackAudio: json['hasFeedbackAudio'] as bool? ?? false,
+      feedbackAudioSeconds: json['feedbackAudioSeconds'] as int?,
+      grade: gradeData != null ? AssignmentGrade.fromJson(gradeData) : null,
+    );
+  }
+
+  String get deadlineText {
+    final due = extendedTo ?? dueAt;
+    final days = due.difference(DateTime.now()).inDays;
+    if (submitted && submittedAt != null) {
+      final d = submittedAt!;
+      return 'Submitted ${d.day}/${d.month}/${d.year}${version > 1 ? ' · version $version' : ''}';
+    }
+    if (days < 0) return '${-days} day${days == -1 ? '' : 's'} overdue';
+    if (days == 0) return 'Due today';
+    return 'Due in $days day${days == 1 ? '' : 's'}';
+  }
+
+  bool get canSubmit =>
+      isOpen && (!submitted || resubmissionPolicy != 'NONE');
+}
+
+class AssignmentGrade {
+  const AssignmentGrade({
+    required this.status,
+    this.finalMarks,
+    this.penaltyApplied,
+    this.feedback,
+  });
+
+  final String status;
+  final int? finalMarks;
+  final int? penaltyApplied;
+  final String? feedback;
+
+  factory AssignmentGrade.fromJson(Map<String, dynamic> json) => AssignmentGrade(
+        status: json['status'] as String? ?? 'AWAITING_GRADE',
+        finalMarks: json['finalMarks'] as int?,
+        penaltyApplied: json['penaltyApplied'] as int?,
+        feedback: json['feedback'] as String?,
+      );
+}
+
+class PendingFile {
+  const PendingFile({
+    required this.id,
+    required this.filename,
+    required this.sizeBytes,
+    required this.scanStatus,
+  });
+
+  final String id;
+  final String filename;
+  final int sizeBytes;
+  final String scanStatus;
+
+  factory PendingFile.fromJson(Map<String, dynamic> json) => PendingFile(
+        id: json['id'] as String? ?? '',
+        filename: json['filename'] as String? ?? '',
+        sizeBytes: (json['sizeBytes'] as num?)?.toInt() ?? 0,
+        scanStatus: json['scanStatus'] as String? ?? 'PENDING',
+      );
+
+  String get sizeLabel {
+    if (sizeBytes < 1024) return '$sizeBytes B';
+    if (sizeBytes < 1024 * 1024) return '${(sizeBytes / 1024).round()} KB';
+    return '${(sizeBytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+}
+
+class SubmissionResult {
+  const SubmissionResult({this.isLate = false, this.version = 1});
+
+  final bool isLate;
+  final int version;
+
+  factory SubmissionResult.fromJson(Map<String, dynamic> json) => SubmissionResult(
+        isLate: json['isLate'] as bool? ?? false,
+        version: json['version'] as int? ?? 1,
+      );
+}

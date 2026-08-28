@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../core/network/api_client.dart';
 import '../bloc/auth_bloc.dart';
 import 'widgets/login_form.dart';
 
@@ -20,11 +21,13 @@ class LoginPage extends StatelessWidget {
         final error = state.status == AuthStatus.failure ? state.error : null;
         final lockedOut = error?.code == 'AUTH_ACCOUNT_LOCKED';
         final suspended = error?.code == 'AUTH_ACCOUNT_SUSPENDED';
+        final api = context.read<ApiClient>();
         return LoginForm(
           error: error,
           lockedOut: lockedOut,
           suspended: suspended,
           isLoading: state.status == AuthStatus.loading,
+          api: api,
           onSignIn: (email, password) {
             context.read<AuthBloc>().add(
                   LoginRequested(email: email, password: password),

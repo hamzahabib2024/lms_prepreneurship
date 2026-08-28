@@ -179,6 +179,7 @@ class _AssignmentBuilderPageState extends State<AssignmentBuilderPage> {
                           lastDate: DateTime.now().add(const Duration(days: 365)),
                         );
                         if (date != null) {
+                          if (!context.mounted) return;
                           final time = await showTimePicker(
                             context: context,
                             initialTime: const TimeOfDay(hour: 23, minute: 59),

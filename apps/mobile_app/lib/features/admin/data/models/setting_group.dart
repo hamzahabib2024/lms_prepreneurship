@@ -31,6 +31,11 @@ class SettingItem {
     this.min,
     this.max,
     this.value,
+    this.allowed,
+    this.maxLength,
+    this.multiline = false,
+    this.isSecret = false,
+    this.isSet = false,
   });
 
   final String key;
@@ -44,6 +49,11 @@ class SettingItem {
   final num? min;
   final num? max;
   final dynamic value;
+  final List<String>? allowed;
+  final int? maxLength;
+  final bool multiline;
+  final bool isSecret;
+  final bool isSet;
 
   factory SettingItem.fromJson(Map<String, dynamic> json) {
     return SettingItem(
@@ -60,6 +70,13 @@ class SettingItem {
       min: json['min'] as num?,
       max: json['max'] as num?,
       value: json['value'],
+      allowed: (json['allowed'] as List<dynamic>?)
+          ?.map((e) => e.toString())
+          .toList(),
+      maxLength: json['maxLength'] as int?,
+      multiline: json['multiline'] as bool? ?? false,
+      isSecret: json['isSecret'] as bool? ?? false,
+      isSet: json['isSet'] as bool? ?? false,
     );
   }
 
@@ -71,5 +88,19 @@ class SettingItem {
     if (v is bool) return v ? 'On' : 'Off';
     if (type == 'percent') return '$v%';
     return v.toString();
+  }
+
+  String get label {
+    final parts = key.split('.');
+    final last = parts.last;
+    return last
+        .replaceAllMapped(RegExp(r'([A-Z])'), (m) => ' ${m[1]}')
+        .replaceFirstMapped(RegExp(r'^.'), (m) => m[1]!.toUpperCase());
+  }
+
+  String get groupName {
+    final parts = key.split('.');
+    if (parts.length < 2) return '';
+    return parts[0];
   }
 }
