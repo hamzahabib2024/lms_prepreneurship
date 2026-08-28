@@ -10,6 +10,7 @@ import { EmailChannel } from "./channel/email.channel";
 import { CredentialsMailer } from "./credentials-mailer";
 import { PendingEmailService } from "./pending-email.service";
 import { EmailQueueController } from "./email-queue.controller";
+import { EmailLogService } from "./email-log.service";
 
 /**
  * Global, because notifications are raised from everywhere — admission,
@@ -30,6 +31,7 @@ import { EmailQueueController } from "./email-queue.controller";
     LoggedWhatsAppChannel,
     WhatsAppChannel,
     EmailChannel,
+    EmailLogService,
     CredentialsMailer,
     PendingEmailService,
   ],
@@ -56,6 +58,7 @@ import { EmailQueueController } from "./email-queue.controller";
     CredentialsMailer,
     // The queue, so a caller can ask what is still waiting to go out.
     PendingEmailService,
+    EmailLogService,
   ],
 })
 export class NotificationModule {}

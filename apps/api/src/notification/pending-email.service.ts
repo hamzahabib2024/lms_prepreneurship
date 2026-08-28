@@ -5,6 +5,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { SettingsService } from "../settings/settings.service";
 import { CredentialsMailer } from "./credentials-mailer";
+import { EmailLogService } from "./email-log.service";
 import { classify, stillWanted, summarise, MAX_ATTEMPTS } from "./pending-email";
 
 /**
@@ -56,6 +57,7 @@ export class PendingEmailService {
     private readonly credentials: CredentialsMailer,
     private readonly settings: SettingsService,
     private readonly audit: AuditService,
+    private readonly log: EmailLogService,
   ) {}
 
   /**
@@ -151,6 +153,11 @@ export class PendingEmailService {
         );
         return [];
       });
+
+    /* Housekeeping on the same schedule rather than a cron of its own: it is
+       one indexed delete that almost always removes nothing, and a second
+       timer for that would be more moving parts than the job is worth. */
+    void this.log.prune();
 
     if (due.length === 0) return;
     this.logger.log(`Mail queue: ${due.length} due.`);

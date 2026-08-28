@@ -1,6 +1,7 @@
 import { Body, Controller, Get, HttpCode, Post } from "@nestjs/common";
 import { z } from "zod";
 import { PendingEmailService } from "./pending-email.service";
+import { EmailLogService } from "./email-log.service";
 import { zodBody } from "../common/zod-validation.pipe";
 import { RequirePermission } from "../rbac/permissions.guard";
 import { getActor } from "../prisma/actor-context";
@@ -44,17 +45,25 @@ const discardSchema = z.object({
 
 @Controller("admin/email-queue")
 export class EmailQueueController {
-  constructor(private readonly queue: PendingEmailService) {}
+  constructor(
+    private readonly queue: PendingEmailService,
+    private readonly log: EmailLogService,
+  ) {}
 
   /** What is waiting, why, and whether the Institute is holding mail at all. */
   @RequirePermission("email_queue", "read")
   @Get()
   async list() {
-    const [state, requiresApproval] = await Promise.all([
+    const [state, requiresApproval, usage] = await Promise.all([
       this.queue.list(),
       this.queue.approvalRequired(),
+      /* WHERE THE ALLOWANCE WENT, on the same screen as what is waiting —
+         because "why is nothing sending" and "what used it all up" are one
+         question asked twice, and answering them on two screens means the
+         second is never found. */
+      this.log.usage(),
     ]);
-    return { ...state, requiresApproval };
+    return { ...state, requiresApproval, usage };
   }
 
   /**
