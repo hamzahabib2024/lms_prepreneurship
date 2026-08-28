@@ -615,8 +615,11 @@ export function importResultMessage(counts: {
   skipped: number;
   emailed: number;
   notEmailed: number;
+  /** Written to the queue for an administrator to release. */
+  held?: number;
 }): string {
   const { loaded, rejoined, skipped, emailed, notEmailed } = counts;
+  const held = counts.held ?? 0;
 
   const parts: string[] = [];
   if (loaded > 0) parts.push(`${loaded} new ${loaded === 1 ? "student" : "students"} loaded`);
@@ -633,8 +636,18 @@ export function importResultMessage(counts: {
   // student the news that they are enrolled and keep their existing sign-in.
   const owed = emailed + notEmailed;
 
+  /*
+   * HELD IS ITS OWN ANSWER AND COMES FIRST. The Institute has chosen to see
+   * these before they leave, so nothing has gone wrong and there is nothing to
+   * relay by hand — but somebody does have to go and release them, and a
+   * message that did not say so would leave a cohort waiting on a screen
+   * nobody knew to open.
+   */
   const delivery =
-    owed === 0
+    held > 0
+      ? ` ${held} ${held === 1 ? "message is" : "messages are"} waiting to be released in ` +
+        "Administration → Outgoing email. Nothing has been sent yet."
+      : owed === 0
       ? ""
       : notEmailed === 0
         ? " Every one of them has been emailed."

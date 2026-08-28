@@ -78,6 +78,8 @@ interface Outcome {
   emailProblem?: string;
   /** Whether it will be tried again on its own. */
   emailQueued?: boolean;
+  /** Held for an administrator to release. Not a failure. */
+  emailHeld?: boolean;
 }
 
 interface Result {
@@ -89,6 +91,8 @@ interface Result {
   /** How many students were sent their own password, and how many were not. */
   emailed: number;
   notEmailed: number;
+  /** Written to the queue for an administrator to release. */
+  held: number;
   message: string;
 }
 
@@ -684,7 +688,25 @@ function ResultPanel({ result, onAgain }: { result: Result; onAgain: () => void 
               do here at all. The System emails each student their own password
               now; this list used to be the only copy in existence, and every
               one of three hundred was relayed by hand. */}
-          {result.notEmailed === 0 ? (
+          {result.held > 0 ? (
+            /*
+              HELD IS NOT A FAILURE AND MUST NOT LOOK LIKE ONE. Nothing has
+              gone wrong: the Institute asked to see these first. But somebody
+              does have to go and release them, and a message that did not say
+              where would leave a cohort waiting on a screen nobody knew about.
+            */
+            <div className="alert">
+              <strong>
+                {result.held} {result.held === 1 ? "message is" : "messages are"} waiting to be
+                released — nothing has been sent yet.
+              </strong>
+              <p className="small">
+                Open <a href="/email-queue">Outgoing email</a> to look at them and send them. The
+                temporary passwords below work whether or not a message is ever sent, so you can
+                read them out now if somebody needs to get in today.
+              </p>
+            </div>
+          ) : result.notEmailed === 0 ? (
             <p>
               Every one of these was <strong>emailed to the student</strong> at their own
               address. This list is your copy, for anybody who says it never arrived.

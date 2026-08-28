@@ -55,6 +55,15 @@ export interface RowOutcome {
    * needs from this row, and the two demand opposite responses.
    */
   emailQueued?: boolean;
+  /**
+   * Written to the queue for somebody to release, rather than sent.
+   *
+   * A THIRD ANSWER, not a shade of failure. Nothing went wrong and nothing is
+   * owed to the mail server — the Institute has asked to see these before they
+   * leave. Reported as a failure it would send an operator relaying passwords
+   * that are about to be released by the colleague sitting next to them.
+   */
+  emailHeld?: boolean;
   /** Set for every row that has an account, so a queued message can find it. */
   userId?: string;
 }
@@ -69,6 +78,8 @@ export interface ImportResult {
   /** How many students were sent their own password, and how many were not. */
   emailed: number;
   notEmailed: number;
+  /** Written to the queue for an administrator to release. */
+  held: number;
   message: string;
 }
 
@@ -404,6 +415,45 @@ export class CohortImportService {
       (o) => o.email && (o.temporaryPassword || o.status === "REJOINED"),
     );
 
+    /*
+     * THE INSTITUTE MAY WANT TO SEE THESE FIRST.
+     *
+     * With email.requireApproval on, nothing is sent from here at all: each
+     * message is written to the queue and an administrator releases it from
+     * Administration → Outgoing email. Checked ONCE for the whole import
+     * rather than per row, so a setting changed mid-import cannot send half a
+     * cohort and hold the other half.
+     *
+     * NO ALLOWANCE IS SPENT. The mail server is never asked, which is the
+     * other reason holding is useful when a daily limit is tight: the office
+     * can decide what is worth sending today.
+     */
+    if (await this.pendingEmail.approvalRequired()) {
+      let held = 0;
+      for (const outcome of owedMail) {
+        if (!outcome.email || !outcome.userId) continue;
+        const ok = await this.pendingEmail.hold({
+          kind: outcome.temporaryPassword ? "CREDENTIALS" : "COURSE_ADDED",
+          userId: outcome.userId,
+          toAddress: outcome.email,
+          fullName: outcome.fullName,
+          subject: outcome.temporaryPassword
+            ? "Their sign-in details"
+            : `Enrolled in ${section.name}`,
+          context: {
+            sectionName: section.name,
+            ...(outcome.registrationNo ? { registrationNo: outcome.registrationNo } : {}),
+          },
+        });
+        outcome.emailSent = false;
+        outcome.emailHeld = ok;
+        if (ok) held += 1;
+      }
+      if (held > 0) {
+        this.logger.log(`Cohort import into ${section.name}: ${held} messages held for approval.`);
+      }
+    } else {
+
     let abandoned = 0;
     const queue = [...owedMail];
     const workers = Array.from({ length: Math.min(MAIL_CONCURRENCY, queue.length) }, async () => {
@@ -447,13 +497,17 @@ export class CohortImportService {
           "passwords on screen.",
       );
     }
+    }
 
     outcomes.sort((a, b) => a.line - b.line);
     const loaded = outcomes.filter((o) => o.status === "LOADED").length;
     const rejoined = outcomes.filter((o) => o.status === "REJOINED").length;
     const skipped = outcomes.filter((o) => o.status === "SKIPPED").length;
     const emailed = outcomes.filter((o) => o.emailSent === true).length;
-    const notEmailed = outcomes.filter((o) => o.emailSent === false).length;
+    /* HELD IS NOT FAILED. A message waiting for a colleague to release it must
+       not be counted with the ones that could not be delivered. */
+    const held = outcomes.filter((o) => o.emailHeld === true).length;
+    const notEmailed = outcomes.filter((o) => o.emailSent === false && !o.emailHeld).length;
 
 
     // One entry for the import itself, in addition to the per-student ones.
@@ -484,7 +538,8 @@ export class CohortImportService {
       outcomes,
       emailed,
       notEmailed,
-      message: importResultMessage({ loaded, rejoined, skipped, emailed, notEmailed }),
+      held,
+      message: importResultMessage({ loaded, rejoined, skipped, emailed, notEmailed, held }),
     };
   }
 
