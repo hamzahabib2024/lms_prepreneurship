@@ -7,6 +7,7 @@ import { RegistrationNumberService } from "../admission/registration-number.serv
 import { getActor } from "../prisma/actor-context";
 import { AppError } from "@lms/shared";
 import { CredentialsMailer } from "../notification/credentials-mailer";
+import { PendingEmailService } from "../notification/pending-email.service";
 import {
   countAgainstSection,
   describePlan,
@@ -46,6 +47,16 @@ export interface RowOutcome {
    * again. The reason was being thrown away at the point it was known.
    */
   emailProblem?: string;
+  /**
+   * Whether it will be tried again on its own.
+   *
+   * The difference between "this will arrive later" and "this will never
+   * arrive and you must relay it yourself" is the whole of what the operator
+   * needs from this row, and the two demand opposite responses.
+   */
+  emailQueued?: boolean;
+  /** Set for every row that has an account, so a queued message can find it. */
+  userId?: string;
 }
 
 export interface ImportResult {
@@ -95,6 +106,7 @@ export class CohortImportService {
     // FR-OPS-026 — a hundred students whose passwords never leave the
     // operator's screen are a hundred accounts nobody signs in to.
     private readonly credentials: CredentialsMailer,
+    private readonly pendingEmail: PendingEmailService,
   ) {}
 
   /**
@@ -318,7 +330,13 @@ export class CohortImportService {
 
     /** One student's message, whichever of the two they are owed. */
     const deliver = async (outcome: (typeof outcomes)[number]): Promise<void> => {
-      if (!outcome.email) return;
+      /*
+       * A ROW WITH NO ACCOUNT HAS NOTHING TO SEND TO. A skipped row never got
+       * one, and queueing against a userId that does not exist would be a
+       * foreign key violation at the tail of a successful import.
+       */
+      if (!outcome.email || !outcome.userId) return;
+      const userId = outcome.userId;
 
       if (outcome.temporaryPassword) {
         const posted = await this.credentials.sendNewAccount({
@@ -328,7 +346,22 @@ export class CohortImportService {
           registrationNo: outcome.registrationNo ?? null,
         });
         outcome.emailSent = posted.sent;
-        if (!posted.sent) outcome.emailProblem = posted.detail;
+        if (!posted.sent) {
+          outcome.emailProblem = posted.detail;
+          /*
+           * KEPT, IF IT IS WORTH KEEPING. A daily limit empties on its own, so
+           * the message is queued and goes out when it does; a wrong address
+           * never will, and is reported for a person to fix.
+           */
+          outcome.emailQueued = await this.pendingEmail.queue({
+            kind: "CREDENTIALS",
+            userId,
+            toAddress: outcome.email,
+            fullName: outcome.fullName,
+            ...(outcome.registrationNo ? { context: { registrationNo: outcome.registrationNo } } : {}),
+            detail: posted.detail,
+          });
+        }
         return;
       }
 
@@ -350,7 +383,20 @@ export class CohortImportService {
           sectionName: section.name,
         });
         outcome.emailSent = posted.sent;
-        if (!posted.sent) outcome.emailProblem = posted.detail;
+        if (!posted.sent) {
+          outcome.emailProblem = posted.detail;
+          outcome.emailQueued = await this.pendingEmail.queue({
+            kind: "COURSE_ADDED",
+            userId,
+            toAddress: outcome.email,
+            fullName: outcome.fullName,
+            context: {
+              sectionName: section.name,
+              ...(outcome.registrationNo ? { registrationNo: outcome.registrationNo } : {}),
+            },
+            detail: posted.detail,
+          });
+        }
       }
     };
 
@@ -572,8 +618,12 @@ export class CohortImportService {
           const rollNo = await this.numbers.allocateRollNumber(tx, section.id);
 
           let studentId: string;
+          /* Carried out of both branches so a message that could not be sent
+             can be queued against the account it belongs to. */
+          let accountUserId: string;
           if (returning) {
             studentId = returning.id;
+            accountUserId = existing!.id;
             await tx.student.update({
               where: { id: studentId },
               data: { currentSectionId: section.id, currentRollNo: rollNo },
@@ -607,6 +657,7 @@ export class CohortImportService {
               },
               select: { id: true },
             });
+            accountUserId = user.id;
             const created = await tx.student.create({
               data: {
                 userId: user.id,
@@ -685,6 +736,7 @@ export class CohortImportService {
             status: (returning ? "REJOINED" : "LOADED") as "LOADED" | "REJOINED",
             registrationNo,
             rollNo,
+            userId: accountUserId,
             // Only for a new account. A returning student's existing password
             // is untouched, and saying otherwise would have the Institute hand
             // out a password that does not work.

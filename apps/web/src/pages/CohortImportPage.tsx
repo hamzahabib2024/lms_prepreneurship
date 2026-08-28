@@ -76,6 +76,8 @@ interface Outcome {
   emailSent?: boolean;
   /** Why it did not go, in the mail server's own words. */
   emailProblem?: string;
+  /** Whether it will be tried again on its own. */
+  emailQueued?: boolean;
 }
 
 interface Result {
@@ -107,6 +109,10 @@ interface PartnerOption {
  * is configured", somebody spends an afternoon inspecting settings that are
  * correct.
  */
+function queuedCount(result: Result): number {
+  return result.outcomes.filter((o) => o.emailQueued).length;
+}
+
 function mailLimitHit(result: Result): boolean {
   return result.outcomes.some(
     (o) => o.emailSent === false && /daily .*limit|5\.4\.5|quota/i.test(o.emailProblem ?? ""),
@@ -701,8 +707,17 @@ function ResultPanel({ result, onAgain }: { result: Result; onAgain: () => void 
                   The sending account has <strong>reached its daily limit</strong>. Nothing is
                   wrong with the addresses or the settings — a Google account will not accept
                   more messages until the limit resets, roughly twenty-four hours after they were
-                  sent. Read the passwords out from this list, or reset those accounts tomorrow to
-                  have the details sent again.
+                  sent.{" "}
+                  {queuedCount(result) > 0 && (
+                    <>
+                      <strong>
+                        {queuedCount(result)} of these will be sent automatically
+                      </strong>{" "}
+                      once it does: each student gets a link to choose their own password, and
+                      the temporary passwords below go on working either way. Read them out if
+                      anybody needs to get in before then.
+                    </>
+                  )}
                 </p>
               ) : (
                 <p className="small">
@@ -758,10 +773,22 @@ function ResultPanel({ result, onAgain }: { result: Result; onAgain: () => void 
                 {/* The reason, where the row is. Somebody relaying passwords by
                     hand needs to know whether to retype an address or simply
                     wait, and that answer belongs beside the row it concerns. */}
-                {o.emailSent === false && o.emailProblem && (
+                {o.emailSent === false && (
                   <>
                     <br />
-                    <span className="muted small">{tidyMailProblem(o.emailProblem)}</span>
+                    {/* QUEUED IS NOT A FAILURE, and must not read as one. The
+                        operator's response to "will arrive later" is to do
+                        nothing; to "will never arrive" it is to pick up the
+                        telephone. */}
+                    {o.emailQueued ? (
+                      <span className="muted small">
+                        Waiting for the mail account — it will be sent on its own.
+                      </span>
+                    ) : (
+                      o.emailProblem && (
+                        <span className="muted small">{tidyMailProblem(o.emailProblem)}</span>
+                      )
+                    )}
                   </>
                 )}
               </li>
