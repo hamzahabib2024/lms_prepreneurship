@@ -187,7 +187,7 @@ class _ReportCardState extends State<_ReportCard> {
                 child: FilledButton(
                   onPressed: _hasMissingRequired || isRunning
                       ? null
-                      : () {
+                       : () {
                           context.read<ReportRunnerCubit>().run(
                                 widget.report.key,
                                 filters: _filters.isNotEmpty ? _filters : null,
@@ -195,6 +195,7 @@ class _ReportCardState extends State<_ReportCard> {
                           // Scroll to result after a tick.
                           Future.delayed(
                               const Duration(milliseconds: 300), () {
+                            if (!context.mounted) return;
                             Scrollable.ensureVisible(
                               context,
                               duration: const Duration(milliseconds: 300),

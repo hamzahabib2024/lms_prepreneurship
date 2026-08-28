@@ -58,7 +58,7 @@ class _InboxView extends StatelessWidget {
                 child: ListView.separated(
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   itemCount: state.items.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  separatorBuilder: (_, a) => const Divider(height: 1),
                   itemBuilder: (context, i) {
                     final item = state.items[i];
                     return _InboxTile(

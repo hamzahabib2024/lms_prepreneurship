@@ -127,7 +127,7 @@ class AdminRepository {
       {
         'value': value,
         'scopeType': scopeType,
-        if (scopeId != null) 'scopeId': scopeId,
+        'scopeId': ?scopeId,
       },
     );
     return data;
@@ -199,8 +199,8 @@ class AdminRepository {
       '/maintenance',
       {
         'enabled': enabled,
-        if (message != null) 'message': message,
-        if (expectedEndAt != null) 'expectedEndAt': expectedEndAt,
+        'message': ?message,
+        'expectedEndAt': ?expectedEndAt,
       },
     );
     return data;

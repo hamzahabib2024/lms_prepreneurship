@@ -127,14 +127,16 @@ class QuizBuilderCubit extends Cubit<QuizBuilderState> {
 
   void updateQuestionStem(String questionId, String stem) {
     final questions = state.questions.map((q) {
-      if (q.id == questionId) return QuizQuestion(
-        id: q.id,
-        type: q.type,
-        stem: stem,
-        marks: q.marks,
-        options: q.options,
-        correctAnswer: q.correctAnswer,
-      );
+      if (q.id == questionId) {
+        return QuizQuestion(
+          id: q.id,
+          type: q.type,
+          stem: stem,
+          marks: q.marks,
+          options: q.options,
+          correctAnswer: q.correctAnswer,
+        );
+      }
       return q;
     }).toList();
     emit(state.copyWith(questions: questions));
@@ -142,14 +144,16 @@ class QuizBuilderCubit extends Cubit<QuizBuilderState> {
 
   void updateQuestionMarks(String questionId, int marks) {
     final questions = state.questions.map((q) {
-      if (q.id == questionId) return QuizQuestion(
-        id: q.id,
-        type: q.type,
-        stem: q.stem,
-        marks: marks,
-        options: q.options,
-        correctAnswer: q.correctAnswer,
-      );
+      if (q.id == questionId) {
+        return QuizQuestion(
+          id: q.id,
+          type: q.type,
+          stem: q.stem,
+          marks: marks,
+          options: q.options,
+          correctAnswer: q.correctAnswer,
+        );
+      }
       return q;
     }).toList();
     emit(state.copyWith(questions: questions));

@@ -36,8 +36,8 @@ class CourseAdminRepository {
       <String, dynamic>{
         'name': name,
         'code': code,
-        if (description != null) 'description': description,
-        if (credits != null) 'credits': credits,
+        'description': ?description,
+        'credits': ?credits,
       },
     );
     return Subject.fromJson(map);
@@ -54,10 +54,10 @@ class CourseAdminRepository {
     final map = await _api.patch<Map<String, dynamic>>(
       '/subjects/$id',
       <String, dynamic>{
-        if (name != null) 'name': name,
-        if (description != null) 'description': description,
-        if (credits != null) 'credits': credits,
-        if (isActive != null) 'isActive': isActive,
+        'name': ?name,
+        'description': ?description,
+        'credits': ?credits,
+        'isActive': ?isActive,
       },
     );
     return Subject.fromJson(map);
@@ -75,8 +75,8 @@ class CourseAdminRepository {
       <String, dynamic>{
         'name': name,
         'code': code,
-        if (description != null) 'description': description,
-        if (durationWeeks != null) 'durationWeeks': durationWeeks,
+        'description': ?description,
+        'durationWeeks': ?durationWeeks,
       },
     );
     return Programme.fromJson(map);
@@ -93,10 +93,10 @@ class CourseAdminRepository {
     final map = await _api.patch<Map<String, dynamic>>(
       '/programmes/$id',
       <String, dynamic>{
-        if (name != null) 'name': name,
-        if (description != null) 'description': description,
-        if (durationWeeks != null) 'durationWeeks': durationWeeks,
-        if (isActive != null) 'isActive': isActive,
+        'name': ?name,
+        'description': ?description,
+        'durationWeeks': ?durationWeeks,
+        'isActive': ?isActive,
       },
     );
     return Programme.fromJson(map);
@@ -136,9 +136,9 @@ class CourseAdminRepository {
         'shift': shift,
         'deliveryMode': deliveryMode,
         'subjectIds': subjectIds,
-        if (teacherId != null) 'teacherId': teacherId,
-        if (whatsappChannelUrl != null) 'whatsappChannelUrl': whatsappChannelUrl,
-        if (whatsappGroupUrl != null) 'whatsappGroupUrl': whatsappGroupUrl,
+        'teacherId': ?teacherId,
+        'whatsappChannelUrl': ?whatsappChannelUrl,
+        'whatsappGroupUrl': ?whatsappGroupUrl,
       },
     );
   }
@@ -175,8 +175,8 @@ class CourseAdminRepository {
         'programmeId': programmeId,
         'name': name,
         'totalAmount': totalAmount,
-        if (notes != null) 'notes': notes,
-        if (lines != null) 'lines': lines,
+        'notes': ?notes,
+        'lines': ?lines,
       },
     );
     return FeeStructure.fromJson(map);

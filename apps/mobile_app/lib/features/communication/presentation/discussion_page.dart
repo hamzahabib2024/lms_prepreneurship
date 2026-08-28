@@ -962,6 +962,7 @@ class _BubbleState extends State<_Bubble> {
 
   void _confirmRemove(BuildContext context) {
     if (!widget.mine && widget.isTeacher) {
+      final cubit = context.read<DiscussionCubit>();
       showDialog<String>(
         context: context,
         builder: (ctx) {
@@ -996,7 +997,7 @@ class _BubbleState extends State<_Bubble> {
         },
       ).then((reason) {
         if (reason != null || widget.mine) {
-          context.read<DiscussionCubit>().removePost(
+          cubit.removePost(
                 postId: widget.post.id,
                 reason: reason,
               );

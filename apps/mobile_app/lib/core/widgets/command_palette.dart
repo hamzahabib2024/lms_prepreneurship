@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../network/api_client.dart';
 import '../theme/app_theme.dart';
@@ -33,12 +32,12 @@ class CommandPalette extends StatefulWidget {
         opaque: false,
         barrierColor: Colors.black54,
         transitionDuration: const Duration(milliseconds: 150),
-        pageBuilder: (_, __, ___) => CommandPalette(
+        pageBuilder: (_, a, b) => CommandPalette(
           api: api,
           user: user,
           onNavigate: onNavigate,
         ),
-        transitionsBuilder: (_, animation, __, child) {
+        transitionsBuilder: (_, animation, c, child) {
           return FadeTransition(
             opacity: animation,
             child: SlideTransition(

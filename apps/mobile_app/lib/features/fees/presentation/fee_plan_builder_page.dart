@@ -26,7 +26,7 @@ class FeePlanBuilderPage extends StatefulWidget {
 }
 
 class _FeePlanBuilderPageState extends State<FeePlanBuilderPage> {
-  List<_Instalment> _instalments = [];
+  final List<_Instalment> _instalments = [];
   final _formKey = GlobalKey<FormState>();
 
   @override
@@ -190,7 +190,6 @@ class _Instalment {
   _Instalment({
     required this.label,
     required this.amount,
-    this.dueDate,
   });
 
   String label;
