@@ -106,7 +106,21 @@ export const MAX_IMPORT = 500;
  * and match nothing.
  */
 export function parseCsv(text: string): string[][] {
-  const clean = text.replace(/^/, "");
+  /*
+   * The BOM, stripped for real.
+   *
+   * This line used to read `text.replace(/^/, "")` — the U+FEFF had been lost
+   * out of the pattern at some point, leaving a no-op with a comment above it
+   * claiming to strip a byte-order mark. Nobody noticed because it WORKED
+   * anyway: the header cells are `.trim()`ed below, and ECMAScript counts
+   * U+FEFF as whitespace, so trim happened to eat it.
+   *
+   * That is an accident, not a design. Anybody tightening the header handling
+   * to something other than trim() would have reintroduced "The file has no
+   * fullName column" for every file Excel saves as CSV UTF-8, with a comment
+   * three lines up promising that could not happen.
+   */
+  const clean = text.replace(/^\uFEFF/, "");
   const rows: string[][] = [];
   let row: string[] = [];
   let field = "";
