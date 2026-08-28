@@ -14,10 +14,12 @@ export interface CreateStaffInput {
   email: string;
   fullName: string;
   phone?: string;
-  role: "teacher" | "admin";
+  role: "teacher" | "admin" | "partner_admin";
   /** §4.2.2 — granted individually, never implied by the role. */
   subPermissions?: string[];
   employeeCode?: string;
+  /** Set on a partner_admin ALONE: the institute whose students they may read. */
+  partnerInstituteId?: string;
 }
 
 /**
@@ -139,6 +141,60 @@ export class UserAdminService {
     // The role comes from the request body, so the route guard cannot know
     // which resource applies. Checking here is the only place it can be done —
     // without it, any Admin could promote themselves a colleague.
+    /*
+     * CREATING SOMEBODY OUTSIDE THIS INSTITUTE is the most consequential act
+     * this method performs, and it is guarded by the permission that governs
+     * the partner itself rather than by an account permission.
+     *
+     * `partner_institute:create` is Super Admin alone. That is deliberate and
+     * it matches who may create the institute: the decision to let an outside
+     * organisation read our students' records is the same decision either
+     * way, and an Admin with admin_manager must not be able to arrive at it
+     * by the side door of the user form.
+     */
+    if (input.role === "partner_admin") {
+      const decision = resolvePermission(
+        {
+          roles: actor.roles,
+          subPermissions: actor.subPermissions,
+          steppedUp: actor.steppedUpAt != null && Date.now() - actor.steppedUpAt * 1000 < 600_000,
+        },
+        "partner_institute",
+        "create",
+      );
+      if (!decision.allowed) {
+        throw new AppError("AUTH_FORBIDDEN", {
+          message:
+            "Only a Super Admin can create an account for an outside institute, because it " +
+            "grants somebody who does not work here the ability to read student records.",
+        });
+      }
+
+      /*
+       * AND THE INSTITUTE MUST EXIST AND BE ACTIVE. Attaching an account to a
+       * partner we have stopped working with hands out a live credential
+       * against a closed relationship — and attaching it to an id that
+       * matches nothing produces an account whose scope resolves to DENY_ALL,
+       * which looks to its owner exactly like a broken System.
+       */
+      const partner = await this.prisma.asSystem((db) =>
+        db.partnerInstitute.findFirst({
+          where: { id: input.partnerInstituteId, deletedAt: null },
+          select: { id: true, isActive: true, name: true },
+        }),
+      );
+      if (!partner) {
+        throw new AppError("RESOURCE_NOT_FOUND", {
+          message: "That institute is not on file.",
+        });
+      }
+      if (!partner.isActive) {
+        throw new AppError("VALIDATION_FAILED", {
+          message: `${partner.name} is marked inactive. Reactivate the institute before giving anybody an account for it.`,
+        });
+      }
+    }
+
     if (input.role === "admin") {
       const decision = resolvePermission(
         {
@@ -181,6 +237,10 @@ export class UserAdminService {
             phone: input.phone ?? null,
             status: "ACTIVE",
             mustChangePassword: true,
+            /* The whole of a partner_admin's reach, and null for everybody
+               else — a member of our own staff must never carry one. */
+            partnerInstituteId:
+              input.role === "partner_admin" ? (input.partnerInstituteId ?? null) : null,
             roles: {
               create: {
                 role: { connect: { key: input.role } },
@@ -214,7 +274,17 @@ export class UserAdminService {
       action: "user.create",
       entityType: "User",
       entityId: created.id,
-      after: { email, role: input.role, subPermissions: input.subPermissions ?? [] },
+      after: {
+        email,
+        role: input.role,
+        subPermissions: input.subPermissions ?? [],
+        // SEC-LOG-009 — WHICH outside institute, not merely that one was
+        // involved. "Who was given access to whose students" is the question
+        // this line has to answer a year from now.
+        ...(input.role === "partner_admin"
+          ? { partnerInstituteId: input.partnerInstituteId }
+          : {}),
+      },
     });
 
     /*
@@ -231,7 +301,12 @@ export class UserAdminService {
       to: email,
       fullName: input.fullName.trim(),
       temporaryPassword,
-      roleLabel: input.role === "admin" ? "administrator" : "teacher",
+      roleLabel:
+        input.role === "admin"
+          ? "administrator"
+          : input.role === "partner_admin"
+            ? "partner institute coordinator"
+            : "teacher",
     });
 
     return {
