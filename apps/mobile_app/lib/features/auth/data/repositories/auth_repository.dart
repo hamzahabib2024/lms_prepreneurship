@@ -65,6 +65,28 @@ class AuthRepository {
     });
     return true;
   }
+
+  /// Sends a password-reset link to the given email address. The link expires
+  /// after 30 minutes and signing in with it ends every session on the account.
+  Future<String> forgotPassword({required String email}) async {
+    final json = await _api.post<Map<String, dynamic>>(
+      '/auth/password/forgot',
+      {'email': email.trim()},
+    );
+    return json['message'] as String? ??
+        'Check your email for a link to reset your password.';
+  }
+
+  /// Resets the password using the token from the emailed link.
+  Future<void> resetPassword({
+    required String token,
+    required String newPassword,
+  }) async {
+    await _api.post<void>('/auth/password/reset', {
+      'token': token,
+      'newPassword': newPassword,
+    });
+  }
 }
 
 class MeResult {

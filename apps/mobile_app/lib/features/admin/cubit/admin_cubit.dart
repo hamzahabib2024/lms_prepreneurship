@@ -195,6 +195,24 @@ class AdminCubit extends Cubit<AdminState> {
     }
   }
 
+  Future<void> restoreSetting({required String key}) async {
+    if (state.busy) return;
+    emit(state.copyWith(busy: true, actionError: null));
+    try {
+      await repository.deleteSetting(key: key);
+      if (isClosed) return;
+      emit(state.copyWith(busy: false, actionSuccess: 'Setting restored to default'));
+      await loadSettings();
+    } on ApiException catch (error) {
+      if (isClosed) return;
+      emit(state.copyWith(busy: false, actionError: error));
+    }
+  }
+
+  void setSettingsSearch(String query) {
+    emit(state.copyWith(settingsSearch: query));
+  }
+
   // ------------------------------------------------------------ backups ---
 
   Future<void> loadBackups() async {
@@ -273,7 +291,13 @@ class AdminCubit extends Cubit<AdminState> {
     if (state.loadingAudit) return;
     emit(state.copyWith(loadingAudit: true, auditError: null));
     try {
-      final result = await repository.listAuditLog(page: page);
+      final result = await repository.listAuditLog(
+        action: state.auditActionFilter,
+        entityType: state.auditEntityFilter,
+        from: state.auditFromDate,
+        to: state.auditToDate,
+        page: page,
+      );
       if (isClosed) return;
       final entries = result['entries'] as List<AuditEntry>;
       final pag = result['pagination'] as Map<String, dynamic>;
@@ -282,11 +306,48 @@ class AdminCubit extends Cubit<AdminState> {
         loadingAudit: false,
         auditPage: pag['page'] as int? ?? 1,
         auditTotalPages: pag['totalPages'] as int? ?? 1,
+        auditTotalItems: pag['totalItems'] as int? ?? 0,
       ));
     } on ApiException catch (error) {
       if (isClosed) return;
       emit(state.copyWith(loadingAudit: false, auditError: error));
     }
+  }
+
+  Future<void> loadAuditActions() async {
+    try {
+      final actions = await repository.listAuditActions();
+      if (isClosed) return;
+      emit(state.copyWith(auditActions: actions));
+    } on ApiException {
+      // non-critical
+    }
+  }
+
+  void setAuditActionFilter(String? action) {
+    emit(state.copyWith(
+      auditActionFilter: action,
+      clearAuditActionFilter: action == null,
+    ));
+    loadAuditLog(page: 1);
+  }
+
+  void setAuditEntityFilter(String? entity) {
+    emit(state.copyWith(
+      auditEntityFilter: entity,
+      clearAuditEntityFilter: entity == null,
+    ));
+    loadAuditLog(page: 1);
+  }
+
+  void setAuditDateRange({String? from, String? to}) {
+    emit(state.copyWith(
+      auditFromDate: from,
+      clearAuditFromDate: from == null,
+      auditToDate: to,
+      clearAuditToDate: to == null,
+    ));
+    loadAuditLog(page: 1);
   }
 
   // ------------------------------------------------------------ security ---
@@ -444,6 +505,12 @@ class AdminState extends Equatable {
     this.settingGroups = const [],
     this.loadingSettings = false,
     this.settingsError,
+    this.settingsSearch = '',
+    this.auditActions = const [],
+    this.auditActionFilter,
+    this.auditEntityFilter,
+    this.auditFromDate,
+    this.auditToDate,
     this.backups = const [],
     this.loadingBackups = false,
     this.backupsError,
@@ -452,6 +519,7 @@ class AdminState extends Equatable {
     this.auditError,
     this.auditPage = 1,
     this.auditTotalPages = 1,
+    this.auditTotalItems = 0,
     this.securityOverview,
     this.securityEvents = const [],
     this.loadingSecurity = false,
@@ -484,6 +552,12 @@ class AdminState extends Equatable {
   final List<SettingGroup> settingGroups;
   final bool loadingSettings;
   final ApiException? settingsError;
+  final String settingsSearch;
+  final List<AuditActionCount> auditActions;
+  final String? auditActionFilter;
+  final String? auditEntityFilter;
+  final String? auditFromDate;
+  final String? auditToDate;
 
   final List<BackupItem> backups;
   final bool loadingBackups;
@@ -494,6 +568,7 @@ class AdminState extends Equatable {
   final ApiException? auditError;
   final int auditPage;
   final int auditTotalPages;
+  final int auditTotalItems;
 
   final SecurityOverview? securityOverview;
   final List<SecurityEvent> securityEvents;
@@ -532,6 +607,16 @@ class AdminState extends Equatable {
     List<SettingGroup>? settingGroups,
     bool? loadingSettings,
     ApiException? settingsError,
+    String? settingsSearch,
+    List<AuditActionCount>? auditActions,
+    String? auditActionFilter,
+    bool clearAuditActionFilter = false,
+    String? auditEntityFilter,
+    bool clearAuditEntityFilter = false,
+    String? auditFromDate,
+    bool clearAuditFromDate = false,
+    String? auditToDate,
+    bool clearAuditToDate = false,
     List<BackupItem>? backups,
     bool? loadingBackups,
     ApiException? backupsError,
@@ -540,6 +625,7 @@ class AdminState extends Equatable {
     ApiException? auditError,
     int? auditPage,
     int? auditTotalPages,
+    int? auditTotalItems,
     SecurityOverview? securityOverview,
     List<SecurityEvent>? securityEvents,
     bool? loadingSecurity,
@@ -574,6 +660,12 @@ class AdminState extends Equatable {
       settingGroups: settingGroups ?? this.settingGroups,
       loadingSettings: loadingSettings ?? this.loadingSettings,
       settingsError: settingsError,
+      settingsSearch: settingsSearch ?? this.settingsSearch,
+      auditActions: auditActions ?? this.auditActions,
+      auditActionFilter: clearAuditActionFilter ? null : (auditActionFilter ?? this.auditActionFilter),
+      auditEntityFilter: clearAuditEntityFilter ? null : (auditEntityFilter ?? this.auditEntityFilter),
+      auditFromDate: clearAuditFromDate ? null : (auditFromDate ?? this.auditFromDate),
+      auditToDate: clearAuditToDate ? null : (auditToDate ?? this.auditToDate),
       backups: backups ?? this.backups,
       loadingBackups: loadingBackups ?? this.loadingBackups,
       backupsError: backupsError,
@@ -582,6 +674,7 @@ class AdminState extends Equatable {
       auditError: auditError,
       auditPage: auditPage ?? this.auditPage,
       auditTotalPages: auditTotalPages ?? this.auditTotalPages,
+      auditTotalItems: auditTotalItems ?? this.auditTotalItems,
       securityOverview: securityOverview ?? this.securityOverview,
       securityEvents: securityEvents ?? this.securityEvents,
       loadingSecurity: loadingSecurity ?? this.loadingSecurity,
@@ -600,9 +693,10 @@ class AdminState extends Equatable {
         users, loadingUsers, usersError, currentPage, totalPages, totalItems,
         roleFilter, statusFilter, searchQuery, selectedUser,
         busy, actionError, actionSuccess, staffCreationResult, passwordResetResult,
-        settingGroups, loadingSettings, settingsError,
+        settingGroups, loadingSettings, settingsError, settingsSearch,
+        auditActions, auditActionFilter, auditEntityFilter, auditFromDate, auditToDate,
         backups, loadingBackups, backupsError,
-        auditEntries, loadingAudit, auditError, auditPage, auditTotalPages,
+        auditEntries, loadingAudit, auditError, auditPage, auditTotalPages, auditTotalItems,
         securityOverview, securityEvents, loadingSecurity, loadingSecurityEvents,
         securityError, securityPage, securityTotalPages,
         maintenanceEnabled, personalDataExport, erasurePlan,

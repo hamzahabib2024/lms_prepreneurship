@@ -1,11 +1,13 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../../../core/network/api_client.dart';
 import '../../../../core/network/api_exception.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/ui.dart';
 import '../../../admission/application/application_page.dart';
 import '../../../admission/application/track_application_page.dart';
+import '../forgot_password_page.dart';
 import 'auth_brand_panel.dart';
 
 /// The sign-in card — ported from the web's LoginPage. The screen is the
@@ -19,6 +21,7 @@ class LoginForm extends StatefulWidget {
     this.lockedOut = false,
     this.suspended = false,
     this.isLoading = false,
+    this.api,
     required this.onSignIn,
   });
 
@@ -26,6 +29,7 @@ class LoginForm extends StatefulWidget {
   final bool lockedOut;
   final bool suspended;
   final bool isLoading;
+  final ApiClient? api;
   final void Function(String email, String password) onSignIn;
 
   @override
@@ -162,6 +166,44 @@ class _LoginFormState extends State<LoginForm> {
                   : const Text('Sign in'),
             ),
           ),
+          // FR-AUT — show "Forgot password?" on wrong password or locked account,
+          // not on suspended accounts (resetting a suspended account's password
+          // changes nothing).
+          if ((widget.lockedOut || (widget.error != null && !widget.suspended)) &&
+              widget.api != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: TextButton(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => ForgotPasswordPage(api: widget.api!),
+                    ),
+                  );
+                },
+                child: Text(
+                  widget.lockedOut
+                      ? 'Set a new password instead of waiting'
+                      : 'I have forgotten my password',
+                ),
+              ),
+            ),
+          // Always show "Forgot password?" link for convenience
+          if (widget.api != null &&
+              !(widget.lockedOut || (widget.error != null && !widget.suspended)))
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: TextButton(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => ForgotPasswordPage(api: widget.api!),
+                    ),
+                  );
+                },
+                child: const Text('I have forgotten my password'),
+              ),
+            ),
           const SizedBox(height: 16),
           // Development accounts, shown only in development builds — the web
           // client shows the same note.

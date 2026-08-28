@@ -231,4 +231,14 @@ class CommunicationRepository {
         .map(IntegrationStatus.fromJson)
         .toList();
   }
+
+  Future<OutboxResult> getOutbox() async {
+    final data = await api.get<Map<String, dynamic>>('/integrations/outbox');
+    return OutboxResult.fromJson(data);
+  }
+
+  Future<int> clearOutbox() async {
+    final data = await api.delete<Map<String, dynamic>>('/integrations/outbox');
+    return data['cleared'] as int? ?? 0;
+  }
 }

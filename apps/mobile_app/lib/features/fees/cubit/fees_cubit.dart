@@ -86,6 +86,7 @@ class PaymentSubmitState extends Equatable {
   const PaymentSubmitState({
     this.status = PaymentSubmitStatus.initial,
     this.bankDetails,
+    this.feeSummary,
     this.amount = 0,
     this.method = 'BANK_TRANSFER',
     this.paidOn = '',
@@ -97,6 +98,7 @@ class PaymentSubmitState extends Equatable {
 
   final PaymentSubmitStatus status;
   final BankDetails? bankDetails;
+  final FeeSummary? feeSummary;
   final num amount;
   final String method;
   final String paidOn;
@@ -107,13 +109,14 @@ class PaymentSubmitState extends Equatable {
 
   @override
   List<Object?> get props => [
-    status, bankDetails, amount, method, paidOn,
+    status, bankDetails, feeSummary, amount, method, paidOn,
     bankReference, studentNote, submitting, error,
   ];
 
   PaymentSubmitState copyWith({
     PaymentSubmitStatus? status,
     BankDetails? bankDetails,
+    FeeSummary? feeSummary,
     num? amount,
     String? method,
     String? paidOn,
@@ -125,6 +128,7 @@ class PaymentSubmitState extends Equatable {
     return PaymentSubmitState(
       status: status ?? this.status,
       bankDetails: bankDetails ?? this.bankDetails,
+      feeSummary: feeSummary ?? this.feeSummary,
       amount: amount ?? this.amount,
       method: method ?? this.method,
       paidOn: paidOn ?? this.paidOn,
@@ -155,6 +159,15 @@ class PaymentSubmitCubit extends Cubit<PaymentSubmitState> {
         status: PaymentSubmitStatus.failure,
         error: 'Failed to load bank details: $e',
       ));
+    }
+  }
+
+  Future<void> loadFeeSummary() async {
+    try {
+      final summary = await _repo.getMyFeeSummary();
+      emit(state.copyWith(feeSummary: summary));
+    } catch (e) {
+      // Fee summary is non-critical — don't block the form.
     }
   }
 
