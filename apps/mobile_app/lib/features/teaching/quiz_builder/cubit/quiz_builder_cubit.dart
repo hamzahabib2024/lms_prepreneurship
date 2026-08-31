@@ -112,7 +112,7 @@ class QuizBuilderCubit extends Cubit<QuizBuilderState> {
       type: type,
       stem: '',
       marks: 1,
-      options: type == 'MCQ'
+      options: type == 'MCQ' || type == 'MCQ_MULTI'
           ? [
               QuizOption(id: _newId(), text: ''),
               QuizOption(id: _newId(), text: ''),
@@ -184,6 +184,27 @@ class QuizBuilderCubit extends Cubit<QuizBuilderState> {
   void setCorrectAnswer(String questionId, String optionId) {
     final questions = state.questions.map((q) {
       if (q.id == questionId) {
+        if (q.type == 'MCQ_MULTI') {
+          // Toggle multi-select
+          final currentCorrect = q.correctAnswer?.split(',').where((s) => s.isNotEmpty).toSet() ?? {};
+          if (currentCorrect.contains(optionId)) {
+            currentCorrect.remove(optionId);
+          } else {
+            currentCorrect.add(optionId);
+          }
+          final options = q.options.map((o) {
+            return QuizOption(id: o.id, text: o.text, isCorrect: currentCorrect.contains(o.id));
+          }).toList();
+          return QuizQuestion(
+            id: q.id,
+            type: q.type,
+            stem: q.stem,
+            marks: q.marks,
+            options: options,
+            correctAnswer: currentCorrect.join(','),
+          );
+        }
+        // Single select
         final options = q.options.map((o) {
           return QuizOption(id: o.id, text: o.text, isCorrect: o.id == optionId);
         }).toList();
@@ -194,6 +215,23 @@ class QuizBuilderCubit extends Cubit<QuizBuilderState> {
           marks: q.marks,
           options: options,
           correctAnswer: optionId,
+        );
+      }
+      return q;
+    }).toList();
+    emit(state.copyWith(questions: questions));
+  }
+
+  void setCorrectAnswerText(String questionId, String text) {
+    final questions = state.questions.map((q) {
+      if (q.id == questionId) {
+        return QuizQuestion(
+          id: q.id,
+          type: q.type,
+          stem: q.stem,
+          marks: q.marks,
+          options: q.options,
+          correctAnswer: text,
         );
       }
       return q;
