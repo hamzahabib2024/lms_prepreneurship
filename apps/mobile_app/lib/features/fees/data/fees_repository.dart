@@ -85,6 +85,69 @@ class FeesRepository {
 
   // ── Staff endpoints ──
 
+  Future<StudentStatement> getStudentStatement(String studentId) async {
+    final result = await _api.get<Map<String, dynamic>>(
+      '/students/$studentId/fees',
+    );
+    return StudentStatement.fromJson(result);
+  }
+
+  Future<StudentStatement> getMyStatement() async {
+    final result = await _api.get<Map<String, dynamic>>('/me/fees');
+    return StudentStatement.fromJson(result);
+  }
+
+  Future<void> addCharge({
+    required String studentId,
+    required String description,
+    required num amount,
+    required String dueDate,
+  }) async {
+    await _api.post<dynamic>('/fees/charges', {
+      'studentId': studentId,
+      'description': description,
+      'amount': amount,
+      'dueDate': dueDate,
+    });
+  }
+
+  Future<void> waiveCharge({
+    required String chargeId,
+    required String reason,
+  }) async {
+    await _api.post<dynamic>('/fees/charges/$chargeId/waive', {
+      'reason': reason,
+    });
+  }
+
+  Future<void> recordPayment({
+    required String studentId,
+    required num amount,
+    required String paymentDate,
+    required String method,
+    String? bankReference,
+  }) async {
+    final body = <String, dynamic>{
+      'studentId': studentId,
+      'amount': amount,
+      'paymentDate': paymentDate,
+      'method': method,
+    };
+    if (bankReference != null && bankReference.isNotEmpty) {
+      body['bankReference'] = bankReference;
+    }
+    await _api.post<dynamic>('/fees/payments', body);
+  }
+
+  Future<void> reversePayment({
+    required String paymentId,
+    required String reason,
+  }) async {
+    await _api.post<dynamic>('/fees/payments/$paymentId/reverse', {
+      'reason': reason,
+    });
+  }
+
   Future<List<DebtorRow>> getDebtors() async {
     final result = await _api.get<Map<String, dynamic>>(
       '/fees/debtors',
