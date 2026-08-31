@@ -126,4 +126,54 @@ class MarkingRepository {
       form,
     );
   }
+
+  // ── Submission Comments ──
+
+  Future<List<SubmissionComment>> getSubmissionComments({
+    required String submissionId,
+    String? fileId,
+  }) async {
+    var url = '/submissions/$submissionId/comments';
+    if (fileId != null) url += '?fileId=$fileId';
+    final result = await _api.get<Map<String, dynamic>>(url);
+    return (result['comments'] as List<dynamic>? ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .map(SubmissionComment.fromJson)
+        .toList();
+  }
+
+  Future<SubmissionComment> postComment({
+    required String submissionId,
+    required String body,
+    String? fileId,
+  }) async {
+    final payload = <String, dynamic>{'body': body};
+    if (fileId != null) payload['fileId'] = fileId;
+    final result = await _api.post<Map<String, dynamic>>(
+      '/submissions/$submissionId/comments',
+      payload,
+    );
+    return SubmissionComment.fromJson(result);
+  }
+
+  Future<SubmissionComment> editComment({
+    required String submissionId,
+    required String commentId,
+    required String body,
+  }) async {
+    final result = await _api.put<Map<String, dynamic>>(
+      '/submissions/$submissionId/comments/$commentId',
+      {'body': body},
+    );
+    return SubmissionComment.fromJson(result);
+  }
+
+  Future<void> withdrawComment({
+    required String submissionId,
+    required String commentId,
+  }) async {
+    await _api.delete<dynamic>(
+      '/submissions/$submissionId/comments/$commentId',
+    );
+  }
 }

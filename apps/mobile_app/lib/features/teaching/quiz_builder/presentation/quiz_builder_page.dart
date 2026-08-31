@@ -210,9 +210,12 @@ class _QuizBuilderPageState extends State<QuizBuilderPage> {
                       PopupMenuButton<String>(
                         onSelected: (type) => _cubit.addQuestion(type),
                         itemBuilder: (_) => [
-                          const PopupMenuItem(value: 'MCQ', child: Text('Multiple Choice')),
+                          const PopupMenuItem(value: 'MCQ', child: Text('Multiple Choice (Single)')),
+                          const PopupMenuItem(value: 'MCQ_MULTI', child: Text('Multiple Choice (Multi)')),
                           const PopupMenuItem(value: 'TRUE_FALSE', child: Text('True/False')),
                           const PopupMenuItem(value: 'SHORT_ANSWER', child: Text('Short Answer')),
+                          const PopupMenuItem(value: 'NUMERIC', child: Text('Numeric')),
+                          const PopupMenuItem(value: 'FILL_BLANK', child: Text('Fill in the Blank')),
                           const PopupMenuItem(value: 'ESSAY', child: Text('Essay')),
                         ],
                         child: Chip(
@@ -264,6 +267,8 @@ class _QuizBuilderPageState extends State<QuizBuilderPage> {
                           _cubit.updateOptionText(question.id, optionId, text),
                       onCorrectChanged: (optionId) =>
                           _cubit.setCorrectAnswer(question.id, optionId),
+                      onCorrectTextChanged: (text) =>
+                          _cubit.setCorrectAnswerText(question.id, text),
                       onAddOption: () => _cubit.addOption(question.id),
                       onRemove: () => _cubit.removeQuestion(question.id),
                     );
@@ -405,6 +410,7 @@ class _QuestionCard extends StatelessWidget {
     required this.onCorrectChanged,
     required this.onAddOption,
     required this.onRemove,
+    this.onCorrectTextChanged,
   });
 
   final int index;
@@ -416,13 +422,17 @@ class _QuestionCard extends StatelessWidget {
   final ValueChanged<String> onCorrectChanged;
   final VoidCallback onAddOption;
   final VoidCallback onRemove;
+  final ValueChanged<String>? onCorrectTextChanged;
 
   @override
   Widget build(BuildContext context) {
     final typeLabel = {
       'MCQ': 'Multiple Choice',
+      'MCQ_MULTI': 'Multi-Select',
       'TRUE_FALSE': 'True/False',
       'SHORT_ANSWER': 'Short Answer',
+      'NUMERIC': 'Numeric',
+      'FILL_BLANK': 'Fill Blank',
       'ESSAY': 'Essay',
     }[question.type] ?? question.type;
 
@@ -516,10 +526,12 @@ class _QuestionCard extends StatelessWidget {
                 color: dark ? AppColorsDark.ink : AppColors.ink,
               ),
             ),
-            if (question.type == 'MCQ' || question.type == 'TRUE_FALSE') ...[
+            if (question.type == 'MCQ' ||
+                question.type == 'MCQ_MULTI' ||
+                question.type == 'TRUE_FALSE') ...[
               const SizedBox(height: 12),
               Text(
-                'Options',
+                question.type == 'MCQ_MULTI' ? 'Options (select all correct)' : 'Options',
                 style: TextStyle(
                   color: dark ? AppColorsDark.ink : AppColors.ink,
                   fontWeight: FontWeight.w500,
@@ -527,65 +539,182 @@ class _QuestionCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 8),
-              RadioGroup<String>(
-                groupValue: question.correctAnswer ?? '',
-                onChanged: (v) {
-                  if (v != null) onCorrectChanged(v);
-                },
-                child: Column(
-                  children: [
-                    ...question.options.map((option) {
-                      final isCorrect = option.id == question.correctAnswer;
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 6),
-                        child: Row(
-                          children: [
-                            Radio<String>(
-                              value: option.id,
-                              activeColor: AppColors.ok,
-                            ),
-                      Expanded(
-                        child: TextField(
-                          onChanged: (v) => onOptionChanged(option.id, v),
-                          decoration: InputDecoration(
-                            hintText: 'Option text...',
-                            hintStyle: TextStyle(
-                              color: dark ? AppColorsDark.muted : AppColors.muted,
-                              fontSize: 12,
-                            ),
-                            isDense: true,
-                            filled: true,
-                            fillColor: dark ? AppColorsDark.surface : AppColors.surface,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(AppRadius.sm),
-                              borderSide: isCorrect
-                                  ? const BorderSide(color: AppColors.ok, width: 2)
-                                  : BorderSide(
-                                      color: dark ? AppColorsDark.line : AppColors.line),
-                            ),
+              if (question.type == 'MCQ_MULTI')
+                _MultiSelectOptions(
+                  question: question,
+                  dark: dark,
+                  onOptionChanged: onOptionChanged,
+                  onCorrectChanged: onCorrectChanged,
+                  onAddOption: onAddOption,
+                )
+              else
+                RadioGroup<String>(
+                  groupValue: question.correctAnswer ?? '',
+                  onChanged: (v) {
+                    if (v != null) onCorrectChanged(v);
+                  },
+                  child: Column(
+                    children: [
+                      ...question.options.map((option) {
+                        final isCorrect = option.id == question.correctAnswer;
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: Row(
+                            children: [
+                              Radio<String>(
+                                value: option.id,
+                                activeColor: AppColors.ok,
+                              ),
+                              Expanded(
+                                child: TextField(
+                                  onChanged: (v) => onOptionChanged(option.id, v),
+                                  decoration: InputDecoration(
+                                    hintText: 'Option text...',
+                                    hintStyle: TextStyle(
+                                      color: dark ? AppColorsDark.muted : AppColors.muted,
+                                      fontSize: 12,
+                                    ),
+                                    isDense: true,
+                                    filled: true,
+                                    fillColor: dark ? AppColorsDark.surface : AppColors.surface,
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(AppRadius.sm),
+                                      borderSide: isCorrect
+                                          ? const BorderSide(color: AppColors.ok, width: 2)
+                                          : BorderSide(
+                                              color: dark ? AppColorsDark.line : AppColors.line),
+                                    ),
+                                  ),
+                                  style: TextStyle(
+                                    color: dark ? AppColorsDark.ink : AppColors.ink,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                          style: TextStyle(
-                            color: dark ? AppColorsDark.ink : AppColors.ink,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
+                        );
+                      }),
                     ],
                   ),
-                );
-              }),
-                  ],
+                ),
+              if (question.type != 'TRUE_FALSE')
+                OutlinedButton.icon(
+                  onPressed: onAddOption,
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text('Add Option', style: TextStyle(fontSize: 12)),
+                ),
+            ],
+            if (question.type == 'NUMERIC' || question.type == 'FILL_BLANK') ...[
+              const SizedBox(height: 12),
+              Text(
+                'Correct Answer',
+                style: TextStyle(
+                  color: dark ? AppColorsDark.ink : AppColors.ink,
+                  fontWeight: FontWeight.w500,
+                  fontSize: 13,
                 ),
               ),
-              OutlinedButton.icon(
-                onPressed: onAddOption,
-                icon: const Icon(Icons.add, size: 16),
-                label: const Text('Add Option', style: TextStyle(fontSize: 12)),
+              const SizedBox(height: 8),
+              TextField(
+                onChanged: (v) => onCorrectTextChanged?.call(v),
+                decoration: InputDecoration(
+                  hintText: question.type == 'NUMERIC' ? 'e.g. 42' : 'e.g. correct answer',
+                  hintStyle: TextStyle(
+                    color: dark ? AppColorsDark.muted : AppColors.muted,
+                    fontSize: 12,
+                  ),
+                  isDense: true,
+                  filled: true,
+                  fillColor: dark ? AppColorsDark.surface : AppColors.surface,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
+                    borderSide: BorderSide(
+                      color: dark ? AppColorsDark.line : AppColors.line),
+                  ),
+                ),
+                style: TextStyle(
+                  color: dark ? AppColorsDark.ink : AppColors.ink,
+                  fontSize: 12,
+                ),
               ),
             ],
           ],
         ),
       ),
+    );
+  }
+}
+
+// ── Multi-Select Options ──
+
+class _MultiSelectOptions extends StatelessWidget {
+  const _MultiSelectOptions({
+    required this.question,
+    required this.dark,
+    required this.onOptionChanged,
+    required this.onCorrectChanged,
+    required this.onAddOption,
+  });
+
+  final QuizQuestion question;
+  final bool dark;
+  final Function(String optionId, String text) onOptionChanged;
+  final ValueChanged<String> onCorrectChanged;
+  final VoidCallback onAddOption;
+
+  @override
+  Widget build(BuildContext context) {
+    final correctIds = question.correctAnswer?.split(',').where((s) => s.isNotEmpty).toSet() ?? {};
+    return Column(
+      children: [
+        ...question.options.map((option) {
+          final isCorrect = correctIds.contains(option.id);
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Row(
+              children: [
+                Checkbox(
+                  value: isCorrect,
+                  activeColor: AppColors.ok,
+                  onChanged: (_) => onCorrectChanged(option.id),
+                ),
+                Expanded(
+                  child: TextField(
+                    onChanged: (v) => onOptionChanged(option.id, v),
+                    decoration: InputDecoration(
+                      hintText: 'Option text...',
+                      hintStyle: TextStyle(
+                        color: dark ? AppColorsDark.muted : AppColors.muted,
+                        fontSize: 12,
+                      ),
+                      isDense: true,
+                      filled: true,
+                      fillColor: dark ? AppColorsDark.surface : AppColors.surface,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(AppRadius.sm),
+                        borderSide: isCorrect
+                            ? const BorderSide(color: AppColors.ok, width: 2)
+                            : BorderSide(
+                                color: dark ? AppColorsDark.line : AppColors.line),
+                      ),
+                    ),
+                    style: TextStyle(
+                      color: dark ? AppColorsDark.ink : AppColors.ink,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }),
+        OutlinedButton.icon(
+          onPressed: onAddOption,
+          icon: const Icon(Icons.add, size: 16),
+          label: const Text('Add Option', style: TextStyle(fontSize: 12)),
+        ),
+      ],
     );
   }
 }

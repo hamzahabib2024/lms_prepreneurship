@@ -22,6 +22,18 @@ class AssignmentBuilderRepository {
         .toList();
   }
 
+  Future<List<RubricSummary>> getRubrics() async {
+    try {
+      final result = await _api.get<Map<String, dynamic>>('/rubrics');
+      return (result['rubrics'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(RubricSummary.fromJson)
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
   Future<AssignmentDraft> createAssignment(AssignmentDraft draft) async {
     final result = await _api.post<Map<String, dynamic>>(
       '/assignments',

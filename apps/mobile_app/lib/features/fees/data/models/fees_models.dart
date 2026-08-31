@@ -396,6 +396,277 @@ class VerificationQueueRow {
   }
 }
 
+class StudentStatement {
+  const StudentStatement({
+    required this.student,
+    required this.balance,
+    required this.aging,
+    required this.lines,
+    required this.charges,
+    required this.payments,
+    this.note = '',
+  });
+
+  final StatementStudent student;
+  final StatementBalance balance;
+  final StatementAging aging;
+  final List<StatementLine> lines;
+  final List<StatementCharge> charges;
+  final List<StatementPayment> payments;
+  final String note;
+
+  factory StudentStatement.fromJson(Map<String, dynamic> json) {
+    return StudentStatement(
+      student: StatementStudent.fromJson(
+        json['student'] as Map<String, dynamic>? ?? const {},
+      ),
+      balance: StatementBalance.fromJson(
+        json['balance'] as Map<String, dynamic>? ?? const {},
+      ),
+      aging: StatementAging.fromJson(
+        json['aging'] as Map<String, dynamic>? ?? const {},
+      ),
+      lines: (json['lines'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(StatementLine.fromJson)
+          .toList(),
+      charges: (json['charges'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(StatementCharge.fromJson)
+          .toList(),
+      payments: (json['payments'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(StatementPayment.fromJson)
+          .toList(),
+      note: json['note'] as String? ?? '',
+    );
+  }
+}
+
+class StatementStudent {
+  const StatementStudent({
+    required this.id,
+    required this.name,
+    required this.registrationNo,
+  });
+
+  final String id;
+  final String name;
+  final String registrationNo;
+
+  factory StatementStudent.fromJson(Map<String, dynamic> json) {
+    return StatementStudent(
+      id: json['id'] as String? ?? '',
+      name: json['name'] as String? ?? '',
+      registrationNo: json['registrationNo'] as String? ?? '',
+    );
+  }
+}
+
+class StatementBalance {
+  const StatementBalance({
+    required this.charged,
+    required this.waived,
+    required this.paid,
+    required this.reversed,
+    required this.outstanding,
+  });
+
+  final num charged;
+  final num waived;
+  final num paid;
+  final num reversed;
+  final num outstanding;
+
+  factory StatementBalance.fromJson(Map<String, dynamic> json) {
+    return StatementBalance(
+      charged: json['charged'] as num? ?? 0,
+      waived: json['waived'] as num? ?? 0,
+      paid: json['paid'] as num? ?? 0,
+      reversed: json['reversed'] as num? ?? 0,
+      outstanding: json['outstanding'] as num? ?? 0,
+    );
+  }
+}
+
+class StatementAging {
+  const StatementAging({
+    required this.current,
+    required this.overdue30,
+    required this.overdue60,
+    required this.overdue90Plus,
+    this.oldestOverdueDays,
+  });
+
+  final num current;
+  final num overdue30;
+  final num overdue60;
+  final num overdue90Plus;
+  final int? oldestOverdueDays;
+
+  factory StatementAging.fromJson(Map<String, dynamic> json) {
+    return StatementAging(
+      current: json['current'] as num? ?? 0,
+      overdue30: json['overdue30'] as num? ?? 0,
+      overdue60: json['overdue60'] as num? ?? 0,
+      overdue90Plus: json['overdue90Plus'] as num? ?? 0,
+      oldestOverdueDays: (json['oldestOverdueDays'] as num?)?.toInt(),
+    );
+  }
+}
+
+class StatementLine {
+  const StatementLine({
+    required this.date,
+    required this.kind,
+    required this.description,
+    this.debit,
+    this.credit,
+    required this.balance,
+  });
+
+  final String date;
+  final String kind;
+  final String description;
+  final num? debit;
+  final num? credit;
+  final num balance;
+
+  factory StatementLine.fromJson(Map<String, dynamic> json) {
+    return StatementLine(
+      date: json['date'] as String? ?? '',
+      kind: json['kind'] as String? ?? 'CHARGE',
+      description: json['description'] as String? ?? '',
+      debit: json['debit'] as num?,
+      credit: json['credit'] as num?,
+      balance: json['balance'] as num? ?? 0,
+    );
+  }
+}
+
+class StatementCharge {
+  const StatementCharge({
+    required this.id,
+    required this.description,
+    required this.amount,
+    required this.dueDate,
+    required this.waived,
+  });
+
+  final String id;
+  final String description;
+  final num amount;
+  final String dueDate;
+  final bool waived;
+
+  factory StatementCharge.fromJson(Map<String, dynamic> json) {
+    return StatementCharge(
+      id: json['id'] as String? ?? '',
+      description: json['description'] as String? ?? '',
+      amount: json['amount'] as num? ?? 0,
+      dueDate: json['dueDate'] as String? ?? '',
+      waived: json['waived'] as bool? ?? false,
+    );
+  }
+}
+
+class StatementPayment {
+  const StatementPayment({
+    required this.id,
+    required this.amount,
+    required this.paidOn,
+    required this.method,
+    this.reference,
+    required this.isReversed,
+    this.reversedAt,
+    this.reversalReason,
+  });
+
+  final String id;
+  final num amount;
+  final String paidOn;
+  final String method;
+  final String? reference;
+  final bool isReversed;
+  final String? reversedAt;
+  final String? reversalReason;
+
+  factory StatementPayment.fromJson(Map<String, dynamic> json) {
+    return StatementPayment(
+      id: json['id'] as String? ?? '',
+      amount: json['amount'] as num? ?? 0,
+      paidOn: json['paidOn'] as String? ?? '',
+      method: json['method'] as String? ?? 'OTHER',
+      reference: json['reference'] as String?,
+      isReversed: json['isReversed'] as bool? ?? false,
+      reversedAt: json['reversedAt'] as String?,
+      reversalReason: json['reversalReason'] as String?,
+    );
+  }
+}
+
+class InstalmentPlanPreview {
+  const InstalmentPlanPreview({
+    required this.instalments,
+    this.problem,
+    this.message = '',
+  });
+
+  final List<PlanInstalment> instalments;
+  final PlanProblem? problem;
+  final String message;
+
+  factory InstalmentPlanPreview.fromJson(Map<String, dynamic> json) {
+    return InstalmentPlanPreview(
+      instalments: (json['instalments'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(PlanInstalment.fromJson)
+          .toList(),
+      problem: json['problem'] != null
+          ? PlanProblem.fromJson(json['problem'] as Map<String, dynamic>)
+          : null,
+      message: json['message'] as String? ?? '',
+    );
+  }
+}
+
+class PlanInstalment {
+  const PlanInstalment({
+    required this.number,
+    required this.amount,
+    required this.dueDate,
+    required this.description,
+  });
+
+  final int number;
+  final num amount;
+  final String dueDate;
+  final String description;
+
+  factory PlanInstalment.fromJson(Map<String, dynamic> json) {
+    return PlanInstalment(
+      number: (json['number'] as num?)?.toInt() ?? 0,
+      amount: json['amount'] as num? ?? 0,
+      dueDate: json['dueDate'] as String? ?? '',
+      description: json['description'] as String? ?? '',
+    );
+  }
+}
+
+class PlanProblem {
+  const PlanProblem({this.code = '', this.message = ''});
+
+  final String code;
+  final String message;
+
+  factory PlanProblem.fromJson(Map<String, dynamic> json) {
+    return PlanProblem(
+      code: json['code'] as String? ?? '',
+      message: json['message'] as String? ?? '',
+    );
+  }
+}
+
 class VerificationStats {
   const VerificationStats({
     this.pendingCount = 0,

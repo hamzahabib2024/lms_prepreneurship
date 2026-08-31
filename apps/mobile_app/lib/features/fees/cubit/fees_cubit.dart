@@ -356,3 +356,239 @@ class FeesCubit extends Cubit<FeesState> {
     }
   }
 }
+
+// ── Staff Fees Cubit (Debtor List) ──
+
+class StaffFeesState extends Equatable {
+  const StaffFeesState({
+    this.status = StaffFeesStatus.initial,
+    this.debtors = const [],
+    this.error,
+  });
+
+  final StaffFeesStatus status;
+  final List<DebtorRow> debtors;
+  final String? error;
+
+  @override
+  List<Object?> get props => [status, debtors, error];
+
+  StaffFeesState copyWith({
+    StaffFeesStatus? status,
+    List<DebtorRow>? debtors,
+    String? error,
+  }) {
+    return StaffFeesState(
+      status: status ?? this.status,
+      debtors: debtors ?? this.debtors,
+      error: error,
+    );
+  }
+}
+
+enum StaffFeesStatus { initial, loading, loaded, failure }
+
+class StaffFeesCubit extends Cubit<StaffFeesState> {
+  StaffFeesCubit(this._repo) : super(const StaffFeesState());
+  final FeesRepository _repo;
+
+  Future<void> load() async {
+    emit(state.copyWith(status: StaffFeesStatus.loading));
+    try {
+      final debtors = await _repo.getDebtors();
+      emit(state.copyWith(
+        status: StaffFeesStatus.loaded,
+        debtors: debtors,
+      ));
+    } catch (e) {
+      emit(state.copyWith(
+        status: StaffFeesStatus.failure,
+        error: 'Failed to load debtors: $e',
+      ));
+    }
+  }
+}
+
+// ── Staff Statement Cubit (Student Statement View) ──
+
+class StaffStatementState extends Equatable {
+  const StaffStatementState({
+    this.status = StaffStatementStatus.initial,
+    this.statement,
+    this.busy = false,
+    this.planPreview,
+    this.planLoading = false,
+    this.error,
+  });
+
+  final StaffStatementStatus status;
+  final StudentStatement? statement;
+  final bool busy;
+  final InstalmentPlanPreview? planPreview;
+  final bool planLoading;
+  final String? error;
+
+  @override
+  List<Object?> get props => [status, statement, busy, planPreview, planLoading, error];
+
+  StaffStatementState copyWith({
+    StaffStatementStatus? status,
+    StudentStatement? statement,
+    bool? busy,
+    InstalmentPlanPreview? planPreview,
+    bool? planLoading,
+    String? error,
+  }) {
+    return StaffStatementState(
+      status: status ?? this.status,
+      statement: statement ?? this.statement,
+      busy: busy ?? this.busy,
+      planPreview: planPreview,
+      planLoading: planLoading ?? this.planLoading,
+      error: error,
+    );
+  }
+}
+
+enum StaffStatementStatus { initial, loading, loaded, failure }
+
+class StaffStatementCubit extends Cubit<StaffStatementState> {
+  StaffStatementCubit(this._repo) : super(const StaffStatementState());
+  final FeesRepository _repo;
+  String? _studentId;
+
+  Future<void> load(String studentId) async {
+    _studentId = studentId;
+    emit(state.copyWith(status: StaffStatementStatus.loading));
+    try {
+      final statement = await _repo.getStudentStatement(studentId);
+      emit(state.copyWith(
+        status: StaffStatementStatus.loaded,
+        statement: statement,
+      ));
+    } catch (e) {
+      emit(state.copyWith(
+        status: StaffStatementStatus.failure,
+        error: 'Failed to load statement: $e',
+      ));
+    }
+  }
+
+  Future<void> addCharge({
+    required String description,
+    required num amount,
+    required String dueDate,
+  }) async {
+    if (_studentId == null) return;
+    emit(state.copyWith(busy: true, error: null));
+    try {
+      await _repo.addCharge(
+        studentId: _studentId!,
+        description: description,
+        amount: amount,
+        dueDate: dueDate,
+      );
+      await load(_studentId!);
+    } catch (e) {
+      emit(state.copyWith(busy: false, error: 'Failed to add charge: $e'));
+    }
+  }
+
+  Future<void> waiveCharge({
+    required String chargeId,
+    required String reason,
+  }) async {
+    if (_studentId == null) return;
+    emit(state.copyWith(busy: true, error: null));
+    try {
+      await _repo.waiveCharge(chargeId: chargeId, reason: reason);
+      await load(_studentId!);
+    } catch (e) {
+      emit(state.copyWith(busy: false, error: 'Failed to waive charge: $e'));
+    }
+  }
+
+  Future<void> recordPayment({
+    required num amount,
+    required String paymentDate,
+    required String method,
+    String? bankReference,
+  }) async {
+    if (_studentId == null) return;
+    emit(state.copyWith(busy: true, error: null));
+    try {
+      await _repo.recordPayment(
+        studentId: _studentId!,
+        amount: amount,
+        paymentDate: paymentDate,
+        method: method,
+        bankReference: bankReference,
+      );
+      await load(_studentId!);
+    } catch (e) {
+      emit(state.copyWith(busy: false, error: 'Failed to record payment: $e'));
+    }
+  }
+
+  Future<void> reversePayment({
+    required String paymentId,
+    required String reason,
+  }) async {
+    if (_studentId == null) return;
+    emit(state.copyWith(busy: true, error: null));
+    try {
+      await _repo.reversePayment(paymentId: paymentId, reason: reason);
+      await load(_studentId!);
+    } catch (e) {
+      emit(state.copyWith(busy: false, error: 'Failed to reverse payment: $e'));
+    }
+  }
+
+  Future<void> previewPlan({
+    required num totalRupees,
+    required int count,
+    required String firstDueDate,
+    required String cadence,
+    required String label,
+  }) async {
+    emit(state.copyWith(planLoading: true, error: null));
+    try {
+      final result = await _repo.previewInstalmentPlan(
+        totalRupees: totalRupees,
+        count: count,
+        firstDueDate: firstDueDate,
+        cadence: cadence,
+        label: label,
+      );
+      final preview = InstalmentPlanPreview.fromJson(result);
+      emit(state.copyWith(planLoading: false, planPreview: preview));
+    } catch (e) {
+      emit(state.copyWith(planLoading: false, error: 'Could not work out the schedule: $e'));
+    }
+  }
+
+  Future<void> createPlan({
+    required num totalRupees,
+    required int count,
+    required String firstDueDate,
+    required String cadence,
+    required String label,
+  }) async {
+    if (_studentId == null) return;
+    emit(state.copyWith(busy: true, error: null));
+    try {
+      await _repo.createInstalmentPlan(
+        studentId: _studentId!,
+        totalRupees: totalRupees,
+        count: count,
+        firstDueDate: firstDueDate,
+        cadence: cadence,
+        label: label,
+      );
+      emit(state.copyWith(planPreview: null));
+      await load(_studentId!);
+    } catch (e) {
+      emit(state.copyWith(busy: false, error: 'Failed to create plan: $e'));
+    }
+  }
+}

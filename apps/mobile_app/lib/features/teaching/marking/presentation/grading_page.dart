@@ -10,6 +10,8 @@ import '../../../../core/theme/app_theme.dart';
 import '../cubit/marking_cubit.dart';
 import '../data/marking_repository.dart';
 import '../data/models/marking_models.dart';
+import 'submission_comments_widget.dart';
+import 'submission_document_widget.dart';
 
 class GradingPage extends StatefulWidget {
   const GradingPage({
@@ -639,49 +641,29 @@ class _StudentDetailState extends State<_StudentDetail> {
               ),
             ),
             const SizedBox(height: 8),
-            ...s.files.map((f) => Card(
-                  color: widget.dark ? AppColorsDark.surface : null,
-                  child: ListTile(
-                    leading: Icon(
-                      Icons.description,
-                      color: widget.dark ? AppColorsDark.muted : AppColors.muted,
-                    ),
-                    title: Text(
-                      f.filename,
-                      style: TextStyle(
-                        color: widget.dark ? AppColorsDark.ink : AppColors.ink,
-                      ),
-                    ),
-                  ),
-                )),
+            SubmissionDocumentWidget(
+              files: s.files
+                  .map((f) => SubmissionFileRef(
+                        id: f.id,
+                        filename: f.filename,
+                        contentType: 'application/octet-stream',
+                        sizeBytes: 0,
+                      ))
+                  .toList(),
+              textResponse: s.textResponse,
+            ),
             const SizedBox(height: 12),
           ],
 
-          if (s.submitted && s.textResponse != null) ...[
-            Text(
-              'Text Response',
-              style: TextStyle(
-                color: widget.dark ? AppColorsDark.ink : AppColors.ink,
-                fontWeight: FontWeight.w600,
+          if (s.submitted && s.files.isNotEmpty && s.submissionId != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: SubmissionCommentsWidget(
+                submissionId: s.submissionId!,
+                fileId: s.files.isNotEmpty ? s.files.first.id : null,
+                filename: s.files.isNotEmpty ? s.files.first.filename : null,
               ),
             ),
-            const SizedBox(height: 8),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: widget.dark ? AppColorsDark.surface2 : AppColors.surface2,
-                borderRadius: BorderRadius.circular(AppRadius.sm),
-              ),
-              child: Text(
-                s.textResponse!,
-                style: TextStyle(
-                  color: widget.dark ? AppColorsDark.ink : AppColors.ink,
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-          ],
 
           Text(
             'Grade',

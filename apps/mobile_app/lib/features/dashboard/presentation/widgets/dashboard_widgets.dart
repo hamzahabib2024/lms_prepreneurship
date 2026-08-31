@@ -60,6 +60,7 @@ class DashboardWidgetBody extends StatelessWidget {
         final joinWindowOpen = v['joinWindowOpen'] == true;
         final linkReady = v['linkReady'] == true;
         final sessionId = v['sessionId'] as String? ?? '';
+        final meetingUrl = v['meetingUrl'] as String? ?? '';
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -74,17 +75,28 @@ class DashboardWidgetBody extends StatelessWidget {
               style: TextStyle(color: mutedColor, fontSize: 13),
             ),
             const SizedBox(height: 14),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: joinWindowOpen && sessionId.isNotEmpty
-                    ? () => _openClassPage(context, sessionId)
-                    : null,
-                child: Text(joinWindowOpen ? 'Join class' : 'Join opens shortly'),
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton(
+                    onPressed: joinWindowOpen && sessionId.isNotEmpty
+                        ? () => _openClassPage(context, sessionId)
+                        : null,
+                    child: Text(joinWindowOpen ? 'Join class' : 'Join opens shortly'),
+                  ),
+                ),
+                if (meetingUrl.isNotEmpty) ...[
+                  const SizedBox(width: 8),
+                  OutlinedButton(
+                    onPressed: () {
+                      // Would launch meeting URL
+                    },
+                    child: const Text('Meeting'),
+                  ),
+                ],
+              ],
             ),
-            // FR-LIV-019 — surfaced before the class, not during it.
-            if (!linkReady)
+            if (!linkReady && meetingUrl.isEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: Text(
@@ -295,7 +307,7 @@ class DashboardWidgetBody extends StatelessWidget {
                 title: i['title'] as String? ?? '',
                 subtitle: i['kind'] as String?,
                 trailing: Text(
-                  _shortDate(DateTime.tryParse(i['dueAt'] as String? ?? '')),
+                  _formatDueDate(DateTime.tryParse(i['dueAt'] as String? ?? '')),
                   style: TextStyle(color: mutedColor, fontSize: 12.5),
                 ),
               ),
@@ -326,6 +338,17 @@ class DashboardWidgetBody extends StatelessWidget {
       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
     ];
     return '${date.day} ${months[date.month - 1]}';
+  }
+
+  String _formatDueDate(DateTime? date) {
+    if (date == null) return '';
+    final now = DateTime.now();
+    final diff = date.difference(now);
+    if (diff.isNegative) return 'Overdue';
+    if (diff.inHours < 1) return '${diff.inMinutes}m left';
+    if (diff.inHours < 24) return '${diff.inHours}h left';
+    if (diff.inDays < 7) return '${diff.inDays}d left';
+    return _shortDate(date);
   }
 
   String _formatDateTime(DateTime dt) {
