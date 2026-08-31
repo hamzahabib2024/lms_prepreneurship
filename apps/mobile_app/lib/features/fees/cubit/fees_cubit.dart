@@ -416,27 +416,35 @@ class StaffStatementState extends Equatable {
     this.status = StaffStatementStatus.initial,
     this.statement,
     this.busy = false,
+    this.planPreview,
+    this.planLoading = false,
     this.error,
   });
 
   final StaffStatementStatus status;
   final StudentStatement? statement;
   final bool busy;
+  final InstalmentPlanPreview? planPreview;
+  final bool planLoading;
   final String? error;
 
   @override
-  List<Object?> get props => [status, statement, busy, error];
+  List<Object?> get props => [status, statement, busy, planPreview, planLoading, error];
 
   StaffStatementState copyWith({
     StaffStatementStatus? status,
     StudentStatement? statement,
     bool? busy,
+    InstalmentPlanPreview? planPreview,
+    bool? planLoading,
     String? error,
   }) {
     return StaffStatementState(
       status: status ?? this.status,
       statement: statement ?? this.statement,
       busy: busy ?? this.busy,
+      planPreview: planPreview,
+      planLoading: planLoading ?? this.planLoading,
       error: error,
     );
   }
@@ -533,6 +541,54 @@ class StaffStatementCubit extends Cubit<StaffStatementState> {
       await load(_studentId!);
     } catch (e) {
       emit(state.copyWith(busy: false, error: 'Failed to reverse payment: $e'));
+    }
+  }
+
+  Future<void> previewPlan({
+    required num totalRupees,
+    required int count,
+    required String firstDueDate,
+    required String cadence,
+    required String label,
+  }) async {
+    emit(state.copyWith(planLoading: true, error: null));
+    try {
+      final result = await _repo.previewInstalmentPlan(
+        totalRupees: totalRupees,
+        count: count,
+        firstDueDate: firstDueDate,
+        cadence: cadence,
+        label: label,
+      );
+      final preview = InstalmentPlanPreview.fromJson(result);
+      emit(state.copyWith(planLoading: false, planPreview: preview));
+    } catch (e) {
+      emit(state.copyWith(planLoading: false, error: 'Could not work out the schedule: $e'));
+    }
+  }
+
+  Future<void> createPlan({
+    required num totalRupees,
+    required int count,
+    required String firstDueDate,
+    required String cadence,
+    required String label,
+  }) async {
+    if (_studentId == null) return;
+    emit(state.copyWith(busy: true, error: null));
+    try {
+      await _repo.createInstalmentPlan(
+        studentId: _studentId!,
+        totalRupees: totalRupees,
+        count: count,
+        firstDueDate: firstDueDate,
+        cadence: cadence,
+        label: label,
+      );
+      emit(state.copyWith(planPreview: null));
+      await load(_studentId!);
+    } catch (e) {
+      emit(state.copyWith(busy: false, error: 'Failed to create plan: $e'));
     }
   }
 }

@@ -556,6 +556,10 @@ class _StudentStatementPageState extends State<_StudentStatementPage> {
                   value: 'record_payment',
                   child: Text('Record Payment'),
                 ),
+                const PopupMenuItem(
+                  value: 'instalment_plan',
+                  child: Text('Instalment Plan'),
+                ),
               ],
             ),
           ],
@@ -685,6 +689,9 @@ class _StudentStatementPageState extends State<_StudentStatementPage> {
         break;
       case 'record_payment':
         _showRecordPaymentDialog(context);
+        break;
+      case 'instalment_plan':
+        _showInstalmentPlanDialog(context);
         break;
     }
   }
@@ -851,6 +858,201 @@ class _StudentStatementPageState extends State<_StudentStatementPage> {
                 );
               },
               child: const Text('Record'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showInstalmentPlanDialog(BuildContext context) {
+    final totalController = TextEditingController();
+    final countController = TextEditingController(text: '3');
+    final labelController = TextEditingController();
+    DateTime? firstDueDate;
+    String cadence = 'MONTHLY';
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Instalment Plan'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: totalController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Total',
+                    hintText: '90000',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: countController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Number of instalments',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(
+                    firstDueDate != null
+                        ? 'First due: ${firstDueDate!.toLocal().toString().split(' ')[0]}'
+                        : 'Select first due date',
+                  ),
+                  trailing: const Icon(Icons.calendar_today),
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: ctx,
+                      initialDate: DateTime.now().add(const Duration(days: 30)),
+                      firstDate: DateTime.now(),
+                      lastDate: DateTime.now().add(const Duration(days: 365)),
+                    );
+                    if (picked != null) {
+                      setDialogState(() => firstDueDate = picked);
+                    }
+                  },
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  initialValue: cadence,
+                  decoration: const InputDecoration(labelText: 'Then every'),
+                  items: const [
+                    DropdownMenuItem(value: 'MONTHLY', child: Text('Month')),
+                    DropdownMenuItem(value: 'FORTNIGHTLY', child: Text('Fortnight')),
+                    DropdownMenuItem(value: 'WEEKLY', child: Text('Week')),
+                  ],
+                  onChanged: (v) {
+                    if (v != null) setDialogState(() => cadence = v);
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: labelController,
+                  decoration: const InputDecoration(
+                    labelText: 'What it is for',
+                    hintText: 'e.g. Spring 2026 tuition',
+                  ),
+                ),
+                const SizedBox(height: 16),
+                // Preview button
+                BlocBuilder<StaffStatementCubit, StaffStatementState>(
+                  buildWhen: (prev, curr) =>
+                      prev.planLoading != curr.planLoading ||
+                      prev.planPreview != curr.planPreview,
+                  builder: (context, state) {
+                    return Column(
+                      children: [
+                        if (state.planPreview != null) ...[
+                          if (state.planPreview!.problem != null)
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: AppColors.warn.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                state.planPreview!.problem!.message,
+                                style: const TextStyle(
+                                  color: AppColors.warn,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          if (state.planPreview!.message.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Text(
+                                state.planPreview!.message,
+                                style: TextStyle(
+                                  color: state.planPreview!.problem != null
+                                      ? AppColors.warn
+                                      : AppColors.muted,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ...state.planPreview!.instalments.map(
+                            (inst) => ListTile(
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              title: Text(
+                                '${inst.amount}',
+                                style: const TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                              subtitle: Text(
+                                '${inst.description} • due ${Formats.shortDate(DateTime.parse(inst.dueDate))}',
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          FilledButton(
+                            onPressed: state.busy
+                                ? null
+                                : () {
+                                    final total =
+                                        num.tryParse(totalController.text) ?? 0;
+                                    final count =
+                                        int.tryParse(countController.text) ?? 0;
+                                    final label = labelController.text.trim();
+                                    if (total <= 0 ||
+                                        count <= 0 ||
+                                        firstDueDate == null ||
+                                        label.length < 3) {
+                                      return;
+                                    }
+                                    Navigator.of(ctx).pop();
+                                    _cubit.createPlan(
+                                      totalRupees: total,
+                                      count: count,
+                                      firstDueDate: firstDueDate!
+                                          .toUtc()
+                                          .toIso8601String(),
+                                      cadence: cadence,
+                                      label: label,
+                                    );
+                                  },
+                            child: Text(
+                              'Create these ${state.planPreview!.instalments.length} charges',
+                            ),
+                          ),
+                        ],
+                      ],
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                final total = num.tryParse(totalController.text) ?? 0;
+                final count = int.tryParse(countController.text) ?? 0;
+                final label = labelController.text.trim();
+                if (total <= 0 || count <= 0 || firstDueDate == null || label.length < 3) {
+                  return;
+                }
+                _cubit.previewPlan(
+                  totalRupees: total,
+                  count: count,
+                  firstDueDate: firstDueDate!.toUtc().toIso8601String(),
+                  cadence: cadence,
+                  label: label,
+                );
+              },
+              child: const Text('Work out schedule'),
             ),
           ],
         ),

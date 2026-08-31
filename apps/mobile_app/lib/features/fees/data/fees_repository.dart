@@ -148,6 +148,41 @@ class FeesRepository {
     });
   }
 
+  Future<Map<String, dynamic>> previewInstalmentPlan({
+    required num totalRupees,
+    required int count,
+    required String firstDueDate,
+    required String cadence,
+    required String label,
+  }) async {
+    final result = await _api.post<Map<String, dynamic>>('/fees/plans/preview', {
+      'totalRupees': totalRupees,
+      'count': count,
+      'firstDueDate': firstDueDate,
+      'cadence': cadence,
+      'label': label,
+    });
+    return result;
+  }
+
+  Future<void> createInstalmentPlan({
+    required String studentId,
+    required num totalRupees,
+    required int count,
+    required String firstDueDate,
+    required String cadence,
+    required String label,
+  }) async {
+    await _api.post<dynamic>('/fees/plans', {
+      'studentId': studentId,
+      'totalRupees': totalRupees,
+      'count': count,
+      'firstDueDate': firstDueDate,
+      'cadence': cadence,
+      'label': label,
+    });
+  }
+
   Future<List<DebtorRow>> getDebtors() async {
     final result = await _api.get<Map<String, dynamic>>(
       '/fees/debtors',

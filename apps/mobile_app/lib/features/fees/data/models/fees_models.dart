@@ -605,6 +605,68 @@ class StatementPayment {
   }
 }
 
+class InstalmentPlanPreview {
+  const InstalmentPlanPreview({
+    required this.instalments,
+    this.problem,
+    this.message = '',
+  });
+
+  final List<PlanInstalment> instalments;
+  final PlanProblem? problem;
+  final String message;
+
+  factory InstalmentPlanPreview.fromJson(Map<String, dynamic> json) {
+    return InstalmentPlanPreview(
+      instalments: (json['instalments'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(PlanInstalment.fromJson)
+          .toList(),
+      problem: json['problem'] != null
+          ? PlanProblem.fromJson(json['problem'] as Map<String, dynamic>)
+          : null,
+      message: json['message'] as String? ?? '',
+    );
+  }
+}
+
+class PlanInstalment {
+  const PlanInstalment({
+    required this.number,
+    required this.amount,
+    required this.dueDate,
+    required this.description,
+  });
+
+  final int number;
+  final num amount;
+  final String dueDate;
+  final String description;
+
+  factory PlanInstalment.fromJson(Map<String, dynamic> json) {
+    return PlanInstalment(
+      number: (json['number'] as num?)?.toInt() ?? 0,
+      amount: json['amount'] as num? ?? 0,
+      dueDate: json['dueDate'] as String? ?? '',
+      description: json['description'] as String? ?? '',
+    );
+  }
+}
+
+class PlanProblem {
+  const PlanProblem({this.code = '', this.message = ''});
+
+  final String code;
+  final String message;
+
+  factory PlanProblem.fromJson(Map<String, dynamic> json) {
+    return PlanProblem(
+      code: json['code'] as String? ?? '',
+      message: json['message'] as String? ?? '',
+    );
+  }
+}
+
 class VerificationStats {
   const VerificationStats({
     this.pendingCount = 0,
