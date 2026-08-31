@@ -9,6 +9,12 @@ class Rubric {
     required this.createdAt,
     required this.createdBy,
     required this.criteria,
+    this.description,
+    this.isShared = false,
+    this.isMine = true,
+    this.criteriaCount = 0,
+    this.totalMarks = 0,
+    this.usedByAssignments = 0,
   });
 
   final String id;
@@ -17,6 +23,12 @@ class Rubric {
   final String createdAt;
   final String createdBy;
   final List<RubricCriterion> criteria;
+  final String? description;
+  final bool isShared;
+  final bool isMine;
+  final int criteriaCount;
+  final num totalMarks;
+  final int usedByAssignments;
 
   factory Rubric.fromJson(Map<String, dynamic> json) {
     return Rubric(
@@ -29,6 +41,12 @@ class Rubric {
           .whereType<Map<String, dynamic>>()
           .map(RubricCriterion.fromJson)
           .toList(),
+      description: json['description'] as String?,
+      isShared: json['isShared'] as bool? ?? false,
+      isMine: json['isMine'] as bool? ?? true,
+      criteriaCount: (json['criteriaCount'] as num?)?.toInt() ?? 0,
+      totalMarks: json['totalMarks'] as num? ?? 0,
+      usedByAssignments: (json['usedByAssignments'] as num?)?.toInt() ?? 0,
     );
   }
 }

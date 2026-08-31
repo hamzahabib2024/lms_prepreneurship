@@ -153,6 +153,8 @@ class _RubricTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final count = rubric.criteriaCount > 0 ? rubric.criteriaCount : rubric.criteria.length;
+    final marks = rubric.totalMarks > 0 ? rubric.totalMarks : rubric.criteria.fold<num>(0, (s, c) => s + c.weight);
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       color: dark ? AppColorsDark.surface : null,
@@ -176,19 +178,56 @@ class _RubricTile extends StatelessWidget {
             fontWeight: FontWeight.w500,
           ),
         ),
-        subtitle: Text(
-          '${rubric.criteria.length} criteria • ${rubric.type}',
-          style: TextStyle(
-            color: dark ? AppColorsDark.muted : AppColors.muted,
-            fontSize: 12,
-          ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '$count ${count == 1 ? 'criterion' : 'criteria'} • $marks marks'
+              '${rubric.usedByAssignments > 0 ? ' • used by ${rubric.usedByAssignments} ${rubric.usedByAssignments == 1 ? 'assignment' : 'assignments'}' : ''}',
+              style: TextStyle(
+                color: dark ? AppColorsDark.muted : AppColors.muted,
+                fontSize: 12,
+              ),
+            ),
+            if (rubric.description != null && rubric.description!.isNotEmpty)
+              Text(
+                rubric.description!,
+                style: TextStyle(
+                  color: dark ? AppColorsDark.muted : AppColors.muted,
+                  fontSize: 11,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+          ],
         ),
-        trailing: PopupMenuButton<String>(
-          onSelected: (v) {
-            if (v == 'delete') onDelete();
-          },
-          itemBuilder: (_) => [
-            const PopupMenuItem(value: 'delete', child: Text('Delete')),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (rubric.isShared)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: dark ? AppColorsDark.brand050 : AppColors.brand050,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  'Shared',
+                  style: TextStyle(
+                    color: dark ? AppColorsDark.brand600 : AppColors.brand600,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            PopupMenuButton<String>(
+              onSelected: (v) {
+                if (v == 'delete') onDelete();
+              },
+              itemBuilder: (_) => [
+                const PopupMenuItem(value: 'delete', child: Text('Delete')),
+              ],
+            ),
           ],
         ),
         onTap: onTap,
@@ -333,6 +372,35 @@ class _CreateRubricSheetState extends State<CreateRubricSheet> {
               onPressed: _addCriterion,
               icon: const Icon(Icons.add),
               label: const Text('Add Criterion'),
+            ),
+            const SizedBox(height: 12),
+            // Running total
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: dark ? AppColorsDark.surface2 : AppColors.surface2,
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+              ),
+              child: Row(
+                children: [
+                  Text(
+                    'Total marks: ',
+                    style: TextStyle(
+                      color: dark ? AppColorsDark.muted : AppColors.muted,
+                      fontSize: 13,
+                    ),
+                  ),
+                  Text(
+                    '${_criteria.fold<num>(0, (s, c) => s + (num.tryParse(c.weightController.text) ?? 0))}',
+                    style: TextStyle(
+                      color: dark ? AppColorsDark.ink : AppColors.ink,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 16,
+                    ),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 16),
             Row(
