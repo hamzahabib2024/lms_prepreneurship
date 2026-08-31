@@ -167,6 +167,41 @@ class _AssignmentBuilderPageState extends State<AssignmentBuilderPage> {
                   ),
                   const SizedBox(height: 16),
 
+                  // Opens At
+                  _FormField(
+                    label: 'Opens At',
+                    child: InkWell(
+                      onTap: () async {
+                        final date = await showDatePicker(
+                          context: context,
+                          initialDate: DateTime.now(),
+                          firstDate: DateTime.now().subtract(const Duration(days: 30)),
+                          lastDate: DateTime.now().add(const Duration(days: 365)),
+                        );
+                        if (date != null) {
+                          if (!context.mounted) return;
+                          final time = await showTimePicker(
+                            context: context,
+                            initialTime: const TimeOfDay(hour: 9, minute: 0),
+                          );
+                          final opensAt = DateTime(
+                            date.year, date.month, date.day,
+                            time?.hour ?? 9, time?.minute ?? 0,
+                          );
+                          _cubit.updateOpensAt(opensAt.toIso8601String());
+                        }
+                      },
+                      child: InputDecorator(
+                        decoration: _inputDecoration(dark, 'Select open date'),
+                        child: Text(
+                          state.opensAt.isNotEmpty ? _formatDate(state.opensAt) : 'Tap to select',
+                          style: _textStyle(dark),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
                   // Due Date
                   _FormField(
                     label: 'Due Date',
@@ -207,6 +242,41 @@ class _AssignmentBuilderPageState extends State<AssignmentBuilderPage> {
                   ),
                   const SizedBox(height: 16),
 
+                  // Hard Close At
+                  _FormField(
+                    label: 'Hard Close (optional)',
+                    child: InkWell(
+                      onTap: () async {
+                        final date = await showDatePicker(
+                          context: context,
+                          initialDate: DateTime.now().add(const Duration(days: 14)),
+                          firstDate: DateTime.now(),
+                          lastDate: DateTime.now().add(const Duration(days: 365)),
+                        );
+                        if (date != null) {
+                          if (!context.mounted) return;
+                          final time = await showTimePicker(
+                            context: context,
+                            initialTime: const TimeOfDay(hour: 23, minute: 59),
+                          );
+                          final hardClose = DateTime(
+                            date.year, date.month, date.day,
+                            time?.hour ?? 23, time?.minute ?? 59,
+                          );
+                          _cubit.updateHardCloseAt(hardClose.toIso8601String());
+                        }
+                      },
+                      child: InputDecorator(
+                        decoration: _inputDecoration(dark, 'Nothing can be submitted after this'),
+                        child: Text(
+                          state.hardCloseAt.isNotEmpty ? _formatDate(state.hardCloseAt) : 'Tap to select (optional)',
+                          style: _textStyle(dark),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
                   // Late Policy
                   _FormField(
                     label: 'Late Submission Policy',
@@ -214,13 +284,175 @@ class _AssignmentBuilderPageState extends State<AssignmentBuilderPage> {
                       initialValue: state.latePolicy,
                       decoration: _inputDecoration(dark, 'Select policy'),
                       items: const [
-                        DropdownMenuItem(value: 'FLAG_ONLY', child: Text('Flag Only')),
-                        DropdownMenuItem(value: 'DEDUCTION', child: Text('Point Deduction')),
-                        DropdownMenuItem(value: 'REJECT', child: Text('Reject Late')),
+                        DropdownMenuItem(value: 'FLAG_ONLY', child: Text('Flag only, no deduction')),
+                        DropdownMenuItem(value: 'NOT_ACCEPTED', child: Text('Do not accept late work')),
+                        DropdownMenuItem(value: 'FIXED_DEDUCTION', child: Text('Fixed mark deduction')),
+                        DropdownMenuItem(value: 'PER_DAY_PERCENT', child: Text('Percentage per day')),
                       ],
                       onChanged: (v) {
                         if (v != null) _cubit.updateLatePolicy(v);
                       },
+                    ),
+                  ),
+                  if (state.latePolicy == 'FIXED_DEDUCTION' || state.latePolicy == 'PER_DAY_PERCENT') ...[
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _FormField(
+                            label: state.latePolicy == 'PER_DAY_PERCENT' ? 'Percent per day' : 'Marks off',
+                            child: TextField(
+                              keyboardType: TextInputType.number,
+                              onChanged: (v) => _cubit.updateLatePenaltyValue(v),
+                              decoration: _inputDecoration(dark, '10'),
+                              style: _textStyle(dark),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: _FormField(
+                            label: 'Floor (%)',
+                            child: TextField(
+                              keyboardType: TextInputType.number,
+                              onChanged: (v) => _cubit.updateLatePenaltyFloor(v),
+                              decoration: _inputDecoration(dark, '40'),
+                              style: _textStyle(dark),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+
+                  _FormField(
+                    label: 'Submission Type',
+                    child: DropdownButtonFormField<String>(
+                      initialValue: state.submissionType,
+                      decoration: _inputDecoration(dark, 'Select type'),
+                      items: const [
+                        DropdownMenuItem(value: 'FILE', child: Text('Files only')),
+                        DropdownMenuItem(value: 'TEXT', child: Text('Typed into the page')),
+                        DropdownMenuItem(value: 'BOTH', child: Text('Either, or both')),
+                      ],
+                      onChanged: (v) {
+                        if (v != null) _cubit.updateSubmissionType(v);
+                      },
+                    ),
+                  ),
+                  if (state.submissionType != 'TEXT') ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      'Accepted file types',
+                      style: TextStyle(
+                        color: dark ? AppColorsDark.ink : AppColors.ink,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: ['pdf', 'docx', 'doc', 'pptx', 'xlsx', 'jpg', 'png', 'zip', 'txt'].map((t) {
+                        final selected = state.allowedFileTypes.contains(t);
+                        return FilterChip(
+                          label: Text('.$t', style: TextStyle(fontSize: 12)),
+                          selected: selected,
+                          onSelected: (_) => _cubit.toggleFileType(t),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _FormField(
+                            label: 'Max file size (MB)',
+                            child: TextField(
+                              keyboardType: TextInputType.number,
+                              onChanged: (v) => _cubit.updateMaxFileSizeMb(v),
+                              decoration: _inputDecoration(dark, '10'),
+                              style: _textStyle(dark),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: _FormField(
+                            label: 'Max files',
+                            child: TextField(
+                              keyboardType: TextInputType.number,
+                              onChanged: (v) => _cubit.updateMaxFileCount(v),
+                              decoration: _inputDecoration(dark, '3'),
+                              style: _textStyle(dark),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+
+                  _FormField(
+                    label: 'Resubmission Policy',
+                    child: DropdownButtonFormField<String>(
+                      initialValue: state.resubmissionPolicy,
+                      decoration: _inputDecoration(dark, 'Select policy'),
+                      items: const [
+                        DropdownMenuItem(value: 'NONE', child: Text('No resubmission')),
+                        DropdownMenuItem(value: 'UNLIMITED_UNTIL_DUE', child: Text('Unlimited until deadline')),
+                        DropdownMenuItem(value: 'LIMITED', child: Text('Limited attempts')),
+                      ],
+                      onChanged: (v) {
+                        if (v != null) _cubit.updateResubmissionPolicy(v);
+                      },
+                    ),
+                  ),
+                  if (state.resubmissionPolicy == 'LIMITED') ...[
+                    const SizedBox(height: 12),
+                    _FormField(
+                      label: 'Max attempts',
+                      child: TextField(
+                        keyboardType: TextInputType.number,
+                        onChanged: (v) => _cubit.updateMaxAttempts(v),
+                        decoration: _inputDecoration(dark, '2'),
+                        style: _textStyle(dark),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  _FormField(
+                    label: 'Grace period (minutes)',
+                    child: TextField(
+                      keyboardType: TextInputType.number,
+                      onChanged: (v) => _cubit.updateGraceMinutes(v),
+                      decoration: _inputDecoration(dark, '0'),
+                      style: _textStyle(dark),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Rubric Selection
+                  _FormField(
+                    label: 'Marking Guide',
+                    child: DropdownButtonFormField<String>(
+                      initialValue: state.rubricId ?? '',
+                      decoration: _inputDecoration(dark, 'None'),
+                      items: [
+                        const DropdownMenuItem(
+                          value: '',
+                          child: Text('None — mark it out of the total'),
+                        ),
+                        ...state.rubrics.map((r) => DropdownMenuItem(
+                              value: r.id,
+                              child: Text(
+                                '${r.name}${r.totalMarks != null ? ' — ${r.totalMarks} marks' : ''}',
+                              ),
+                            )),
+                      ],
+                      onChanged: (v) => _cubit.updateRubricId(v?.isEmpty == true ? null : v),
                     ),
                   ),
                   const SizedBox(height: 16),
