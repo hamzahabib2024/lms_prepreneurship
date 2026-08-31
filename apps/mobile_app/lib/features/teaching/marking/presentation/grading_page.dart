@@ -10,6 +10,7 @@ import '../../../../core/theme/app_theme.dart';
 import '../cubit/marking_cubit.dart';
 import '../data/marking_repository.dart';
 import '../data/models/marking_models.dart';
+import 'submission_comments_widget.dart';
 
 class GradingPage extends StatefulWidget {
   const GradingPage({
@@ -682,6 +683,16 @@ class _StudentDetailState extends State<_StudentDetail> {
             ),
             const SizedBox(height: 12),
           ],
+
+          if (s.submitted && s.files.isNotEmpty && s.submissionId != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: SubmissionCommentsWidget(
+                submissionId: s.submissionId!,
+                fileId: s.files.isNotEmpty ? s.files.first.id : null,
+                filename: s.files.isNotEmpty ? s.files.first.filename : null,
+              ),
+            ),
 
           Text(
             'Grade',

@@ -377,3 +377,41 @@ class QuizInfo {
     );
   }
 }
+
+class SubmissionComment {
+  const SubmissionComment({
+    required this.id,
+    this.fileId,
+    this.filename,
+    required this.body,
+    required this.authorName,
+    required this.authorRole,
+    required this.isMine,
+    this.editedAt,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String? fileId;
+  final String? filename;
+  final String body;
+  final String authorName;
+  final String authorRole;
+  final bool isMine;
+  final String? editedAt;
+  final String createdAt;
+
+  factory SubmissionComment.fromJson(Map<String, dynamic> json) {
+    return SubmissionComment(
+      id: json['id'] as String? ?? '',
+      fileId: json['fileId'] as String?,
+      filename: json['filename'] as String?,
+      body: json['body'] as String? ?? '',
+      authorName: json['authorName'] as String? ?? '',
+      authorRole: json['authorRole'] as String? ?? '',
+      isMine: json['isMine'] as bool? ?? false,
+      editedAt: json['editedAt'] as String?,
+      createdAt: json['createdAt'] as String? ?? '',
+    );
+  }
+}
