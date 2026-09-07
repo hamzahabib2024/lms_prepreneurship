@@ -180,6 +180,11 @@ services:
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
       LIVEKIT_TOKEN_TTL_MINUTES: ${LIVEKIT_TOKEN_TTL_MINUTES:-240}
+      # How much of a class counts as having attended it, for the attendance
+      # the classroom proposes. A policy rather than a fact, so it is settable;
+      # half the class is the default. Anybody present but under it is proposed
+      # LATE, never ABSENT — the room saw them.
+      LIVE_PRESENCE_MIN_PERCENT: ${LIVE_PRESENCE_MIN_PERCENT:-50}
       LECTURE_STORAGE: ${LECTURE_STORAGE:-local}
       DOCUMENT_STORAGE: ${DOCUMENT_STORAGE:-local}
       WHATSAPP_ACCESS_TOKEN: ${WHATSAPP_ACCESS_TOKEN:-}

@@ -40,6 +40,24 @@ room:
   empty_timeout: 600
   departure_timeout: 300
 
+# Attendance, taken by the room — FR-ATT-012.
+#
+# LiveKit posts here as people arrive and leave, and the LMS accumulates the
+# time onto each student's attendance record. Without this block the classroom
+# still works perfectly; attendance simply stays something the teacher types.
+webhook:
+  # WHICH KEY SIGNS THE DELIVERY. It must be one of the keys above — the LMS
+  # verifies the signature with the same secret it uses to mint join tokens,
+  # and a mismatch rejects every delivery with a 401 that looks, from the
+  # LiveKit side, like the LMS being down.
+  api_key: devkey
+  urls:
+    # The COMPOSE SERVICE NAME and the API's INTERNAL port. This is a
+    # server-to-server call that never leaves the Docker network, so it is
+    # deliberately not the public address — and it must not be localhost, which
+    # inside this container is this container.
+    - http://api:3000/api/v1/live/webhooks/livekit
+
 logging:
   level: info
 
