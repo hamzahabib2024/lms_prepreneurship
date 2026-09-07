@@ -159,6 +159,27 @@ services:
       # manual until the Calendar adapter is written: the teacher pastes the
       # link and everything else about the class works unchanged.
       LIVE_PROVIDER: ${LIVE_PROVIDER:-manual}
+      # ------------------------------------------- live classes (LiveKit)
+      #
+      # THE BROWSER CONNECTS TO THIS, NOT THE API, so it is the address a
+      # STUDENT'S machine must be able to reach — not a name that resolves only
+      # inside the compose network. `livekit:7880` would be correct for a
+      # container talking to a container and useless to everybody else, which
+      # is the one mistake this variable invites. The adapter also derives the
+      # management URL from it by swapping the scheme, so both halves break
+      # together if it is set to an internal name.
+      LIVEKIT_URL: ${LIVEKIT_URL:-ws://localhost:7880}
+      # And THIS is where the API itself reaches LiveKit, which is a different
+      # address from the one above whenever the two run as containers: inside
+      # this container `localhost` is this container, so the management calls
+      # get ECONNREFUSED and the adapter reports a perfectly healthy classroom
+      # as down. `livekit` is the compose service name and resolves on the
+      # shared network. On a server where LiveKit has one public hostname,
+      # leave it unset — the adapter then derives it from LIVEKIT_URL.
+      LIVEKIT_API_URL: ${LIVEKIT_API_URL:-http://livekit:7880}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
+      LIVEKIT_TOKEN_TTL_MINUTES: ${LIVEKIT_TOKEN_TTL_MINUTES:-240}
       LECTURE_STORAGE: ${LECTURE_STORAGE:-local}
       DOCUMENT_STORAGE: ${DOCUMENT_STORAGE:-local}
       WHATSAPP_ACCESS_TOKEN: ${WHATSAPP_ACCESS_TOKEN:-}
@@ -210,6 +231,30 @@ services:
       timeout: 5s
       retries: 5
       start_period: 40s
+
+  # The classroom itself — SRS §3.4, CON-03.
+  #
+  # Runs only when asked for: `docker compose --profile livekit up -d`. The
+  # stack has to keep starting on a box with no spare RAM and no open UDP
+  # ports, and nothing else here depends on this service — with LIVE_PROVIDER
+  # unset the adapter reports itself unhealthy and classes fall back to a
+  # teacher-supplied link, which is the documented degradation (FR-LIV-018).
+  livekit:
+    image: livekit/livekit-server:latest
+    profiles: ["livekit"]
+    restart: unless-stopped
+    command: --config /etc/livekit.yaml
+    volumes:
+      - ./docker/livekit.yaml:/etc/livekit.yaml:ro
+    ports:
+      # Signalling and management.
+      - "7880:7880"
+      # TCP media fallback, for a network that drops UDP. Students behind a
+      # school or office firewall arrive on this one.
+      - "7881:7881"
+      # Media. THE PORT THAT CARRIES THE CLASS — if it is closed, participants
+      # connect, see each other listed, and no video ever appears.
+      - "7882:7882/udp"
 
   web:
     build:

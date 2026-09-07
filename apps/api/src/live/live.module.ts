@@ -7,6 +7,7 @@ import { TimetableController } from "./timetable.controller";
 import { ProviderRegistry } from "./provider/provider.registry";
 import { ManualProvider } from "./provider/manual.provider";
 import { GoogleMeetProvider } from "./provider/google-meet.provider";
+import { LiveKitProvider } from "./provider/livekit.provider";
 
 /**
  * Adding a live provider touches this file and one adapter beside it. Nothing
@@ -20,7 +21,10 @@ import { GoogleMeetProvider } from "./provider/google-meet.provider";
     AttendanceService,
     ProviderRegistry,
     ManualProvider,
-    GoogleMeetProvider, TimetableService],
+    GoogleMeetProvider,
+    LiveKitProvider,
+    TimetableService,
+  ],
   exports: [LiveSessionService, AttendanceService, ProviderRegistry],
 })
 export class LiveModule {}

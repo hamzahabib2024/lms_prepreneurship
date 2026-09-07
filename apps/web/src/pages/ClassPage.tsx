@@ -12,6 +12,8 @@ interface SessionSummary {
   scheduledEnd: string;
   status: string;
   joinWindowOpensAt: string;
+  /** Whether the person reading this is the teacher taking the class. */
+  isHost: boolean;
 }
 
 /**
@@ -73,6 +75,7 @@ export function ClassPage() {
    */
   const [attendance, setAttendance] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  const [ending, setEnding] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -85,6 +88,31 @@ export function ClassPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  /**
+   * The teacher ends the class — FR-LIV.
+   *
+   * Confirmed first, because it ends the lesson for EVERYONE in the room, and
+   * the button sits beside a "live now" badge where a misclick is easy.
+   *
+   * Reloads rather than assuming: ending closes the provider's room too, so
+   * what the page should show afterwards is the server's answer, not a guess
+   * made here.
+   */
+  const end = useCallback(async () => {
+    if (!window.confirm("End this class for everyone?\n\nAnybody still in the room is disconnected.")) {
+      return;
+    }
+    setEnding(true);
+    try {
+      await api.post(`/live-sessions/${sessionId}/end`);
+      await load();
+    } catch (e) {
+      setError(e instanceof ApiError ? e : null);
+    } finally {
+      setEnding(false);
+    }
+  }, [sessionId, load]);
 
   /*
    * A ticking clock, so "starts in 4 minutes" is still true a minute later.
@@ -179,11 +207,30 @@ export function ClassPage() {
             })}
           </p>
         </div>
-        {live && (
-          <span className="pill pill-live">
-            <span className="live-dot" aria-hidden="true" /> live now
-          </span>
-        )}
+        <div className="class-head-actions">
+          {live && (
+            <span className="pill pill-live">
+              <span className="live-dot" aria-hidden="true" /> live now
+            </span>
+          )}
+          {/*
+            THE TEACHER'S END, and only theirs.
+
+            A class holds its teacher's diary against the clash check until its
+            nominal end, so an hour finished in twenty minutes blocks the next
+            one. It also closes the provider's room, which turns out anybody
+            still sitting in it after the lesson.
+
+            Confirmed, because it ends the class for EVERYONE — and offered
+            only while there is something to end, so a finished class does not
+            carry a button that would do nothing.
+          */}
+          {s.isHost && s.status !== "ENDED" && s.status !== "CANCELLED" && (
+            <button className="btn btn-quiet btn-sm" disabled={ending} onClick={() => void end()}>
+              {ending ? "Ending…" : "End the class"}
+            </button>
+          )}
+        </div>
       </header>
 
       <div className="class-stage">

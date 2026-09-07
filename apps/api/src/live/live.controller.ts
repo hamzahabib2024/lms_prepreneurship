@@ -32,6 +32,25 @@ const scheduleSchema = z.object({
   joinWindowMinutesBefore: z.coerce.number().int().min(0).max(120).optional(),
 });
 
+/**
+ * FR-LIV — an instant class asks for almost nothing.
+ *
+ * A teacher pressing "start now" has a class in front of them. Every field
+ * except which subject has a sensible answer already, and each extra box is one
+ * more thing between them and the room.
+ */
+export const startNowSchema = z.object({
+  sectionSubjectId: z.string().uuid(),
+  // Defaults to the subject's own name in the service.
+  title: z.string().trim().min(3).max(255).optional(),
+  // Capped at four hours: this sets how long the class holds the teacher's
+  // diary against the clash check, and a typo of 600 would block their day.
+  durationMinutes: z.coerce.number().int().min(5).max(240).optional(),
+  // Only an administrator opening a room on somebody's behalf sends this; a
+  // teacher's own id comes from their session, never from the body.
+  hostTeacherId: z.string().uuid().optional(),
+});
+
 const bulkMarkSchema = z.object({
   defaultStatus: z.enum(ATTENDANCE_STATUS),
   exceptions: z
@@ -98,6 +117,41 @@ export class LiveController {
   @Get("live-sessions/:id/join-route")
   joinRoute(@Param("id") id: string) {
     return this.sessions.getJoinRoute(id);
+  }
+
+  /**
+   * FR-LIV — start a class now, with nothing scheduled in advance.
+   *
+   * `live_session:create`, the same grant scheduling needs, so an instant class
+   * cannot be started by anybody who could not have booked one. A teacher holds
+   * it at ASSIGNED scope, so the section-subject in the body is checked against
+   * what they actually teach before anything is created.
+   */
+  @RequirePermission("live_session", "create")
+  @Post("live-sessions/start-now")
+  startNow(@Body(zodBody(startNowSchema)) dto: z.infer<typeof startNowSchema>) {
+    return this.sessions.startNow(dto);
+  }
+
+  /** The picker behind "start now" — what this teacher could open a room for. */
+  @RequirePermission("live_session", "create")
+  @Get("me/teaching")
+  myTeaching() {
+    return this.sessions.myTeaching();
+  }
+
+  /**
+   * FR-LIV — the class is over.
+   *
+   * `update`, not `delete`. Ending a class that happened is a normal part of
+   * teaching it; cancelling one that did not is the destructive act, and they
+   * must not need the same grant.
+   */
+  @RequirePermission("live_session", "update")
+  @Post("live-sessions/:id/end")
+  @HttpCode(200)
+  end(@Param("id") id: string) {
+    return this.sessions.end(id);
   }
 
   @RequirePermission("live_session", "update")

@@ -244,6 +244,15 @@ export class LiveSessionService {
       scheduledEnd: session.scheduledEnd,
       status: session.status,
       joinWindowOpensAt: new Date(opensAt),
+      /*
+       * So the class page can offer the host the controls only a host has —
+       * ending the class for everyone.
+       *
+       * Not provider knowledge, and so not an ARC-025 breach: it says who this
+       * person is to this class, which the System has always known. The
+       * adapter receives the same fact through UserContext.isHost.
+       */
+      isHost,
     };
 
     if (session.status === "CANCELLED") {
@@ -407,6 +416,223 @@ export class LiveSessionService {
     });
 
     return updated;
+  }
+
+  /**
+   * A CLASS THAT STARTS NOW — FR-LIV, the ad-hoc case.
+   *
+   * The System could only ever hold a class somebody had scheduled in advance,
+   * which is not how teaching actually goes: a revision hour is called because
+   * an assessment went badly, a cancelled slot is picked up, a topic overruns
+   * and needs another hour tomorrow. Every one of those ended up outside the
+   * LMS entirely — a link pasted into WhatsApp, no register, no recording, no
+   * record it happened (§2.2.2).
+   *
+   * Deliberately built ON schedule() rather than beside it. An instant class is
+   * a scheduled class whose start time is now, and routing it through the same
+   * method means it inherits the clash check, the provider binding, the
+   * attendance register and the audit entry — all of which an "instant" path
+   * written separately would have quietly done without.
+   *
+   * It is then marked LIVE, which nothing in the System did before: the column
+   * and its enum have existed since the first migration and every session sat
+   * at SCHEDULED for ever. A class a teacher has actually walked into should
+   * say so.
+   */
+  async startNow(input: {
+    sectionSubjectId: string;
+    title?: string;
+    durationMinutes?: number;
+    hostTeacherId?: string;
+  }) {
+    const actor = getActor();
+    if (!actor) throw new AppError("AUTH_TOKEN_INVALID");
+
+    /*
+     * The teacher is WHOEVER IS PRESSING THE BUTTON, not a field in the form.
+     *
+     * An explicit id is honoured so an administrator can open a room on behalf
+     * of somebody, but the default has to be the caller: a body-supplied
+     * teacher id with no default would let anybody start a class in another
+     * teacher's name, and the register would then say that teacher held it.
+     */
+    const hostTeacherId = input.hostTeacherId ?? actor.teacherId;
+    if (!hostTeacherId) {
+      throw new AppError("VALIDATION_FAILED", {
+        message: "Only a teacher can start a class. Say which teacher is taking it.",
+        details: [
+          { field: "hostTeacherId", code: "REQUIRED", message: "No teacher record for this user." },
+        ],
+      });
+    }
+
+    const offering = await this.prisma.scoped.sectionSubject.findFirst({
+      where: { id: input.sectionSubjectId, deletedAt: null },
+      include: { subject: { select: { name: true } } },
+    });
+    if (!offering) {
+      throw new AppError("VALIDATION_FAILED", {
+        details: [
+          {
+            field: "sectionSubjectId",
+            code: "NOT_FOUND",
+            message: "That subject is not offered to that batch.",
+          },
+        ],
+      });
+    }
+
+    const now = new Date();
+    const minutes = input.durationMinutes ?? 60;
+
+    const session = await this.schedule({
+      sectionSubjectId: input.sectionSubjectId,
+      // Named after the subject unless the teacher said otherwise, because
+      // this appears on a student's dashboard as the thing to join and
+      // "Untitled class" tells them nothing about whether it is theirs.
+      title: input.title?.trim() || offering.subject.name,
+      scheduledStart: now,
+      scheduledEnd: new Date(now.getTime() + minutes * 60_000),
+      hostTeacherId,
+      sessionType: "ONLINE",
+      // Zero, because the class has already begun. The default fifteen minutes
+      // would put the join window in the PAST, which changes nothing for a
+      // student but reads as wrong to anybody looking at the record.
+      joinWindowMinutesBefore: 0,
+    });
+
+    const live = await this.prisma.scoped.liveSession.update({
+      where: { id: session.id },
+      data: { status: "LIVE", actualStart: now },
+    });
+
+    await this.audit.record({
+      action: "session.start_now",
+      entityType: "LiveSession",
+      entityId: session.id,
+      after: { sectionSubjectId: input.sectionSubjectId, hostTeacherId, durationMinutes: minutes },
+    });
+
+    return live;
+  }
+
+  /**
+   * FR-LIV — the class is over, said out loud.
+   *
+   * Without this an instant class occupies its teacher's diary until its
+   * nominal end time, so the clash check refuses the next one: a teacher who
+   * starts an hour, finishes in twenty minutes and wants another room is told
+   * they are already teaching. Ending it frees them.
+   *
+   * It also closes the provider's room, which disconnects anybody still sitting
+   * in it and invalidates the tokens already issued for it — tokens outlive a
+   * class by design, because the adapter cannot see the scheduled end time.
+   */
+  async end(sessionId: string) {
+    const session = await this.prisma.scoped.liveSession.findFirst({
+      where: { id: sessionId, deletedAt: null },
+      include: {
+        binding: true,
+        sectionSubject: { include: { section: { select: { liveProviderKey: true } } } },
+      },
+    });
+    if (!session) throw new AppError("RESOURCE_NOT_FOUND");
+    if (session.status === "CANCELLED") {
+      throw new AppError("RESOURCE_CONFLICT", {
+        message: "This class was cancelled, so there is nothing to end.",
+      });
+    }
+    // Idempotent on purpose. Two teachers on one class, or one teacher with the
+    // button pressed twice on a slow connection, must not produce an error that
+    // reads as a fault.
+    if (session.status === "ENDED") return session;
+
+    const now = new Date();
+    const updated = await this.prisma.scoped.liveSession.update({
+      where: { id: sessionId },
+      data: {
+        status: "ENDED",
+        actualEnd: now,
+        // A class ended without ever being marked LIVE was scheduled the old
+        // way; its best-known start is the one on the timetable. Leaving this
+        // null would make the duration unreportable.
+        ...(session.actualStart ? {} : { actualStart: session.scheduledStart }),
+      },
+    });
+
+    if (session.binding) {
+      const provider = this.providers.resolve(session.sectionSubject.section.liveProviderKey);
+      // Optional on the interface — a provider that cannot close a room
+      // remotely simply does not offer it (ARC-030), and the class is over in
+      // the System either way.
+      await provider
+        .endSession?.({
+          providerKey: session.binding.providerKey,
+          externalId: session.binding.externalId,
+          joinUrl: session.binding.joinUrl,
+          hostUrl: session.binding.hostUrl,
+          providerMetadata: null,
+          status: session.binding.status,
+        })
+        .catch((e) => this.logger.warn(`Provider end failed: ${String(e)}`));
+    }
+
+    await this.audit.record({
+      action: "session.end",
+      entityType: "LiveSession",
+      entityId: sessionId,
+      before: { status: session.status },
+      after: { status: "ENDED", actualEnd: now },
+    });
+
+    return updated;
+  }
+
+  /**
+   * What the caller could start a class for — the picker behind "start now".
+   *
+   * Scoped twice over, and both are meant. ARC-051 already limits
+   * `prisma.scoped` to a teacher's own assignments; the explicit filter states
+   * the same thing so that a future scope change cannot silently widen this
+   * into "every subject in the Institute" on a screen whose whole purpose is
+   * one-click room creation.
+   */
+  async myTeaching() {
+    const actor = getActor();
+    // An administrator holds no teaching assignments and gets an empty list
+    // rather than everything — they are not the person walking into a class.
+    if (!actor?.teacherId) return [];
+
+    const today = new Date();
+    const rows = await this.prisma.scoped.sectionSubject.findMany({
+      where: {
+        deletedAt: null,
+        status: { not: "ARCHIVED" },
+        assignments: {
+          some: {
+            teacherId: actor.teacherId,
+            deletedAt: null,
+            // FR-CRS-025 — an expired assignment withdraws scope, so a teacher
+            // who finished with a batch last term is not offered it now.
+            OR: [{ endDate: null }, { endDate: { gte: today } }],
+          },
+        },
+      },
+      include: {
+        subject: { select: { code: true, name: true } },
+        section: { select: { code: true, name: true } },
+      },
+    });
+
+    return rows
+      .map((r) => ({
+        sectionSubjectId: r.id,
+        subject: r.subject,
+        section: r.section,
+      }))
+      .sort((a, b) =>
+        `${a.section.code} ${a.subject.name}`.localeCompare(`${b.section.code} ${b.subject.name}`),
+      );
   }
 
   /**

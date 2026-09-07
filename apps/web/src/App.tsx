@@ -19,6 +19,7 @@ import { SubjectPage } from "./pages/SubjectPage";
 import { CoursePage } from "./pages/CoursePage";
 import { CoursesPage } from "./pages/CoursesPage";
 import { ClassPage } from "./pages/ClassPage";
+import { LiveRoomPage } from "./pages/LiveRoomPage";
 import { WatchPage } from "./pages/WatchPage";
 import { MarkingPage } from "./pages/MarkingPage";
 import { GradingPage } from "./pages/GradingPage";
@@ -183,6 +184,29 @@ export function App() {
       <Routes>
         <Route path="/track" element={<TrackPage />} />
         <Route path="/track/:trackingRef" element={<TrackPage />} />
+      </Routes>
+    );
+  }
+
+  /*
+   * The embedded classroom — the address ClassPage puts in its iframe when a
+   * provider answers EMBEDDED_ROUTE.
+   *
+   * BARE, WITH NO SHELL, and checked before the authentication gate for the
+   * same reason /track is. It renders inside a frame on a page that already has
+   * the sidebar, the topbar and the class heading around it; rendering the
+   * shell again would put a second sidebar inside the video.
+   *
+   * Signed out is not a hole here. The token in the query string is what
+   * authorises the room, and the API issued it only after checking who was
+   * asking, that they are in the section, and that the join window is open. A
+   * login check at this point would add nothing and would break the frame for
+   * anybody whose access token rotated mid-class.
+   */
+  if (location.pathname.startsWith("/live-room/")) {
+    return (
+      <Routes>
+        <Route path="/live-room/:room" element={<LiveRoomPage />} />
       </Routes>
     );
   }

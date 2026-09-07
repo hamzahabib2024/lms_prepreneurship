@@ -20,8 +20,22 @@ interface Section {
   deliveryMode: string;
   status: string;
   batchId: string;
+  /**
+   * ARC-027 — where this batch's live classes happen, overriding the Institute
+   * default. Null means "whatever the Institute is set to", which is what
+   * almost every section should say.
+   */
+  liveProviderKey: string | null;
   batch?: { name: string; academicSession: { code: string; name: string } };
   _count?: { sectionSubjects: number };
+}
+
+/** As reported by GET /live-providers, health included (FR-SAD-008). */
+interface LiveProvider {
+  key: string;
+  isDefault: boolean;
+  capabilities: { canReportParticipation: boolean; maxParticipants: number | null };
+  health: { healthy: boolean; detail?: string };
 }
 
 interface Batch {
@@ -56,6 +70,18 @@ const MODES = ["ONLINE", "HYBRID", "ON_CAMPUS"] as const;
 const STATUSES = ["PLANNED", "ACTIVE", "CLOSED_FOR_ADMISSION", "ARCHIVED"] as const;
 
 const pretty = (s: string) => s.toLowerCase().replace(/_/g, " ");
+
+/**
+ * A provider's key, made readable.
+ *
+ * DERIVED, not mapped. A table of friendly names here would be a second place
+ * that has to learn about every provider — and would be the first thing to go
+ * stale when one is added, showing a blank where a name should be. ARC-025 is
+ * about not knowing which provider is which, and this screen honours it by
+ * knowing nothing beyond what the API told it.
+ */
+const providerLabel = (key: string) =>
+  key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
 /**
  * Sections — SRS §13.11.
@@ -103,6 +129,13 @@ export function SectionsPage() {
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  const [providers, setProviders] = useState<LiveProvider[]>([]);
+  /*
+   * The column appears only for somebody who can act on it. /live-providers
+   * refuses a teacher, so their list stays empty and the table keeps its shape
+   * rather than growing a column of blanks.
+   */
+  const showClassroom = mayEdit && providers.length > 0;
   const [batchFilter, setBatchFilter] = useState("");
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState<Record<string, string>>({});
@@ -155,6 +188,19 @@ export function SectionsPage() {
     // refusal here leaves the pickers empty rather than breaking the list.
     api.get<Batch[]>("/batches").then(setBatches).catch(() => setBatches([]));
     api.get<Subject[]>("/subjects").then(setSubjects).catch(() => setSubjects([]));
+    /*
+     * ARC-027 — the migration control, and the health beside it.
+     *
+     * Only a super admin or an admin holds live_provider_selection:read, so a
+     * teacher gets an empty list and simply does not see the column. Fetched
+     * WITH health because the decision this informs is "is the classroom
+     * actually up?", and an administrator who has to check that somewhere else
+     * before switching a section will switch it without checking.
+     */
+    api
+      .get<LiveProvider[]>("/live-providers")
+      .then(setProviders)
+      .catch(() => setProviders([]));
   }, []);
 
   async function run(work: () => Promise<unknown>, said: string) {
@@ -210,6 +256,18 @@ export function SectionsPage() {
           ...(draft["capacity"] ? { capacity: Number(draft["capacity"]) } : {}),
           ...(draft["status"] ? { status: draft["status"] } : {}),
           ...(draft["shift"] ? { shift: draft["shift"] } : {}),
+          /*
+           * PRESENCE, not truthiness — unlike every field above it.
+           *
+           * "" is the meaningful choice here: it means "follow the Institute
+           * default" and has to be sent as null to clear the override. The
+           * truthy test the others use would silently drop exactly that
+           * choice, so an administrator moving a section BACK off a provider
+           * would watch the change save and nothing happen.
+           */
+          ...(draft["liveProviderKey"] !== undefined
+            ? { liveProviderKey: draft["liveProviderKey"] || null }
+            : {}),
         }),
       "Batch updated.",
     );
@@ -475,6 +533,7 @@ Only possible while it has not been ` +
                   <th className="num">Capacity</th>
                   <th>Places</th>
                   <th>Status</th>
+                  {showClassroom && <th>Classroom</th>}
                   <th />
                 </tr>
               </thead>
@@ -574,6 +633,55 @@ Only possible while it has not been ` +
                             </span>
                           )}
                         </td>
+                        {/* ARC-027 — the migration control. Providers run side
+                            by side, so this moves ONE batch at a time and the
+                            rest of the Institute carries on unchanged. */}
+                        {showClassroom && (
+                          <td>
+                            {isEditing ? (
+                              <select
+                                aria-label="Where live classes happen"
+                                value={draft["liveProviderKey"] ?? s.liveProviderKey ?? ""}
+                                onChange={(e) =>
+                                  setDraft((d) => ({ ...d, liveProviderKey: e.target.value }))
+                                }
+                              >
+                                <option value="">Institute default</option>
+                                {providers.map((p) => (
+                                  <option key={p.key} value={p.key}>
+                                    {providerLabel(p.key)}
+                                    {/* Said at the point of the decision. An
+                                        administrator who has to check whether
+                                        the classroom is up on another screen
+                                        will switch the section without
+                                        checking. */}
+                                    {p.health.healthy ? "" : " — unavailable"}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : s.liveProviderKey ? (
+                              (() => {
+                                const p = providers.find((x) => x.key === s.liveProviderKey);
+                                // Unknown means the key does not match any
+                                // registered provider — a typo, or a provider
+                                // that has been removed. The server falls back
+                                // to manual so classes still happen, and this
+                                // is where somebody notices why.
+                                const bad = !p || !p.health.healthy;
+                                return (
+                                  <span
+                                    className={`pill ${bad ? "pill-warn" : "pill-ok"}`}
+                                    title={p?.health.detail ?? "Not a registered provider."}
+                                  >
+                                    {providerLabel(s.liveProviderKey)}
+                                  </span>
+                                );
+                              })()
+                            ) : (
+                              <span className="muted small">default</span>
+                            )}
+                          </td>
+                        )}
                         <td className="row-actions">
                           <button
                             className="btn btn-quiet btn-sm"
@@ -644,7 +752,10 @@ Only possible while it has not been ` +
 
                       {isOpen && (
                         <tr>
-                          <td colSpan={9} className="row-detail">
+                          {/* Tracks the header above it — the Classroom column
+                              is conditional, and a detail row that spans one
+                              column too few pulls the whole table crooked. */}
+                          <td colSpan={showClassroom ? 10 : 9} className="row-detail">
                             <h3>Subjects in {s.code}</h3>
                             {offerings === null ? (
                               <Skeleton lines={2} />

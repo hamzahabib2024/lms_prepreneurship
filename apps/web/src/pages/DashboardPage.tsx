@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { text } from "../api/text";
 import { ApiError, api } from "../api/client";
 import { ProgressRing, SkeletonCards } from "../components/Ui";
@@ -173,11 +173,130 @@ export function DashboardPage() {
       </header>
 
       <div className="grid">
+        {/* FIRST IN THE GRID, and only for somebody who teaches. A class called
+            on the spot is called because something just happened — the room is
+            worth nothing if it is three screens away. It removes itself for
+            everybody else. */}
+        <StartClassNow />
         {Object.entries(data.widgets).map(([key, value]) => (
           <Widget key={key} name={key} value={value} may={may} />
         ))}
       </div>
     </>
+  );
+}
+
+/** One subject-section this teacher is assigned to, from GET /me/teaching. */
+interface Teaching {
+  sectionSubjectId: string;
+  subject: { code: string; name: string };
+  section: { code: string; name: string };
+}
+
+/**
+ * START A CLASS NOW — FR-LIV, the ad-hoc case.
+ *
+ * The System could only hold a class somebody had booked in advance, which is
+ * not how teaching goes. A revision hour called after a bad assessment, a
+ * cancelled slot picked up, a topic that needs one more hour — all of it
+ * happened OUTSIDE the LMS, as a link pasted into WhatsApp with no register and
+ * no record that the class occurred at all (§2.2.2).
+ *
+ * Two fields, because a teacher pressing this has students waiting. Which
+ * subject cannot be guessed; everything else has a sane answer already.
+ */
+function StartClassNow() {
+  const navigate = useNavigate();
+  const [options, setOptions] = useState<Teaching[] | null>(null);
+  const [sectionSubjectId, setSectionSubjectId] = useState("");
+  const [minutes, setMinutes] = useState(60);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Refused for anybody without live_session:create, which is the same answer
+    // as "nothing to teach" as far as this card is concerned.
+    api
+      .get<Teaching[]>("/me/teaching")
+      .then(setOptions)
+      .catch(() => setOptions([]));
+  }, []);
+
+  /*
+   * Absent, not disabled, and not an empty dropdown.
+   *
+   * A student and an administrator hold no teaching assignments, and a card
+   * offering them a class they cannot start is clutter that also reads as
+   * broken. `null` while loading keeps the grid from jumping.
+   */
+  if (!options || options.length === 0) return null;
+
+  async function start() {
+    if (!sectionSubjectId) {
+      setError("Choose which class you are taking.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const session = await api.post<{ id: string }>("/live-sessions/start-now", {
+        sectionSubjectId,
+        durationMinutes: minutes,
+      });
+      // Straight into the room. Coming back to the dashboard to find the class
+      // you just started would be one click of nothing.
+      navigate(`/classes/${session.id}`);
+    } catch (e) {
+      // The clash check speaks plainly here — "you already have X at that time"
+      // is exactly what a teacher needs to read, so it is shown as sent.
+      setError(e instanceof ApiError ? e.message : "The class could not be started.");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="card widget start-now">
+      <h2>Start a class now</h2>
+      <p className="muted small">
+        Opens the room straight away and takes the register, the same as a class you booked.
+      </p>
+
+      <label className="start-now-field">
+        <span>Which class</span>
+        <select
+          value={sectionSubjectId}
+          onChange={(e) => setSectionSubjectId(e.target.value)}
+          disabled={busy}
+        >
+          <option value="">Choose…</option>
+          {options.map((o) => (
+            <option key={o.sectionSubjectId} value={o.sectionSubjectId}>
+              {o.subject.name} · {o.section.code}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className="start-now-field">
+        <span>For how long</span>
+        <select value={minutes} onChange={(e) => setMinutes(Number(e.target.value))} disabled={busy}>
+          <option value={30}>30 minutes</option>
+          <option value={60}>1 hour</option>
+          <option value={90}>1½ hours</option>
+          <option value={120}>2 hours</option>
+        </select>
+      </label>
+
+      {/* Says what it is for: this holds the teacher's diary against the clash
+          check, and can be ended early from the class itself. */}
+      <p className="muted small">You can end the class whenever you are finished.</p>
+
+      {error && <p className="warn small">{error}</p>}
+
+      <button className="btn btn-primary" disabled={busy} onClick={() => void start()}>
+        {busy ? "Opening the room…" : "Start now"}
+      </button>
+    </section>
   );
 }
 

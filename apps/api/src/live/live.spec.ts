@@ -18,6 +18,8 @@ import { ConfigService } from "@nestjs/config";
 import { ProviderRegistry } from "./provider/provider.registry";
 import { ManualProvider } from "./provider/manual.provider";
 import { GoogleMeetProvider } from "./provider/google-meet.provider";
+import { LiveKitProvider } from "./provider/livekit.provider";
+import type { PrismaService } from "../prisma/prisma.service";
 import type {
   JoinRoute,
   LiveClassroomProvider,
@@ -32,6 +34,21 @@ import type {
 
 const configWith = (v: Record<string, string> = {}): ConfigService =>
   ({ get: (k: string, d?: string) => v[k] ?? d }) as unknown as ConfigService;
+
+/**
+ * THIS FILE NAMING A THIRD PROVIDER IS NOT A BREACH OF §3.4.6.
+ *
+ * The pass criterion is that no DOMAIN module, schema, API shape, report or
+ * template changes when a provider is added. This is the test itself, and it
+ * builds the registry by hand rather than through Nest, so its constructor
+ * call necessarily tracks the registry's — as it already did when Google Meet
+ * was added beside the manual provider. Adding LiveKit changed the adapter,
+ * one registry entry, one module entry, and these two constructor calls.
+ *
+ * LiveKit reads a display name from the database when somebody joins a class.
+ * Nothing in this file joins one, so there is nothing for it to read.
+ */
+const noPrisma = {} as PrismaService;
 
 /**
  * Step 1 of §3.4.6 — a stub adapter for the Institute's own classroom.
@@ -105,7 +122,12 @@ class InternalClassroomProvider implements LiveClassroomProvider {
 describe("§3.4.6 substitution test — CON-03", () => {
   const build = (defaultKey = "manual") => {
     const config = configWith({ LIVE_PROVIDER: defaultKey });
-    return new ProviderRegistry(config, new ManualProvider(), new GoogleMeetProvider(config));
+    return new ProviderRegistry(
+      config,
+      new ManualProvider(),
+      new GoogleMeetProvider(config),
+      new LiveKitProvider(config, noPrisma),
+    );
   };
 
   it("step 1–2: a new provider is added by registration alone", () => {
@@ -245,6 +267,7 @@ describe("provider degradation (ARC-030, §3.9)", () => {
       configWith({ LIVE_PROVIDER: "manual" }),
       new ManualProvider(),
       new GoogleMeetProvider(configWith()),
+      new LiveKitProvider(configWith(), noPrisma),
     );
     // A typo in configuration must not stop a class from happening.
     expect(registry.resolve("does_not_exist").key).toBe("manual");

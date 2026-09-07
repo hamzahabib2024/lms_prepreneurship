@@ -40,6 +40,68 @@ Any provider is fine: DigitalOcean, Hetzner, Linode, AWS Lightsail, or a
 machine in the Institute's own office. **Ubuntu 22.04 or 24.04** is assumed
 below.
 
+### 1.2b Live classes need their own server
+
+The table above sizes the LMS: a web app and a database, both of which spend
+most of their time idle. **Live classes are a different kind of load and do not
+belong on that machine.** Put LiveKit on its own instance.
+
+Two reasons, and the second is the one that surprises people.
+
+**It is not spare capacity, it is a different shape of work.** LiveKit holds a
+UDP socket open per participant and forwards packets in real time. A database
+query that takes 200 ms extra is invisible; 200 ms of jitter is a class that
+stutters. Co-locating means the API's next backup or report run degrades a
+lesson in progress. The current application server is already sharing with
+other services and its swap is nearly full — it has nothing to give.
+
+**What you are actually buying is bandwidth, not CPU.** LiveKit is an SFU: it
+does not mix or re-encode video, it *relays* it. One teacher publishing at
+~1.5 Mbps to thirty students is ~45 Mbps of sustained outbound traffic, and a
+one-hour class is roughly **20 GB of egress**. CPU is rarely the limit — on a
+1 Gbps port, bandwidth caps you at roughly 200–400 participants before the
+processor is troubled.
+
+| Peak concurrent classes | Class size | Peak egress | vCPU | RAM | Port |
+|---|---|---|---|---|---|
+| 1 | 30 | ~50 Mbps | 2 | 4 GB | 100 Mbps |
+| 3 | 30 | ~150 Mbps | 4 | 8 GB | 250 Mbps |
+| 6 | 40 | ~400 Mbps | 8 | 16 GB | 1 Gbps |
+| 10 | 50 | ~800 Mbps | 8–16 | 16–32 GB | 1 Gbps (at the cap) |
+
+Assumes the normal lecture shape — **teacher on camera, students mostly
+listening**, simulcast on. If every student turns their camera on, the traffic
+grows with the *square* of the class, not in a line: thirty people all publishing
+and all subscribing is roughly 250 Mbps for that one room. Cap class size or
+keep student cameras off by default before you buy a bigger port.
+
+**Leave 30–40% CPU headroom.** WebRTC degrades before the CPU graph looks
+alarming — congestion control and keyframe storms bite first, so a server at
+"only" 70% is already dropping quality.
+
+**The monthly bill is the number for the Institute's approval.** Three
+concurrent classes, four hours a day, twenty-two days a month is about
+**5 TB of egress per month**. Check what your provider includes — Hetzner
+bundles generous transfer, DigitalOcean includes a few TB then charges per GB —
+because this is a recurring cost that did not exist while classes ran on Meet,
+and it dwarfs the lecture-storage figure in CON-01.
+
+**Ports to open on that instance:**
+
+| Port | Why |
+|---|---|
+| 443/TCP | HTTPS and TURN over TLS |
+| 80/TCP | Certificate issuance |
+| 7880/TCP | Signalling, behind nginx/TLS |
+| 7881/TCP | WebRTC over TCP — **the fallback students on school and office Wi-Fi arrive on** |
+| 7882/UDP | The media itself. Closed, participants connect and no video ever appears |
+| 3478/UDP | TURN |
+
+**Recording changes the sizing.** LiveKit Egress *does* re-encode, and it is
+CPU-hungry in a way the SFU is not — budget roughly 2 cores per concurrent
+recording, on its own instance again. Nothing in the System records live classes
+today, so this is only relevant when that is asked for.
+
 ### 1.3 A domain name
 
 You need one — say `lms.prepreneurship.com` — pointed at the server's IP
