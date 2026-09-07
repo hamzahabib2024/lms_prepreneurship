@@ -354,6 +354,7 @@ Read next:
 | `README.md` | the architecture and why things are the way they are |
 | `PROGRESS-REPORT.md` | a short report written for the company |
 | `INTEGRATIONS.md` | connecting email, Google Drive, Meet and WhatsApp |
+| `LIVE-CLASSES.md` | setting up the Institute's own classroom, and holding a class in it |
 | `BEAUTIFICATION.md` | what every screen looks like and why |
 
 ### What is not finished
