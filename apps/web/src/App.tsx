@@ -20,6 +20,7 @@ import { CoursePage } from "./pages/CoursePage";
 import { CoursesPage } from "./pages/CoursesPage";
 import { ClassPage } from "./pages/ClassPage";
 import { LiveRoomPage } from "./pages/LiveRoomPage";
+import { LiveNowBanner } from "./components/LiveNowBanner";
 import { WatchPage } from "./pages/WatchPage";
 import { MarkingPage } from "./pages/MarkingPage";
 import { GradingPage } from "./pages/GradingPage";
@@ -484,6 +485,10 @@ export function App() {
       */}
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
 
+      {/* FR-LIV — above the content and on every screen, because the student
+          who needs telling that a class has begun is the one currently reading
+          something else. */}
+      <LiveNowBanner />
       {/* `tabIndex={-1}` is what makes the skip link land: an element the
           browser cannot focus is one it jumps straight past. It adds no tab
           stop of its own. */}

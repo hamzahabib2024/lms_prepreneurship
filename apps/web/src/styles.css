@@ -4060,6 +4060,30 @@ details > summary:hover { text-decoration: underline; }
   .live-dot { animation: none; }
 }
 
+/*
+ * "Your class has started" — FR-LIV.
+ *
+ * Sits above the page content on every screen. It borrows .live-dot, which
+ * already pulses and already stops pulsing under prefers-reduced-motion — the
+ * dot is what draws the eye, so the bar itself does not need to flash. A
+ * banner that blinks as a whole is an accessibility problem and, at three
+ * flashes a second, a seizure risk.
+ */
+.live-now-banner {
+  display: flex; align-items: center; gap: .6rem;
+  margin: 0 0 1rem; padding: .55rem .8rem;
+  border-radius: var(--radius);
+  background: var(--ok-bg);
+  border: 1px solid color-mix(in srgb, var(--ok) 35%, transparent);
+  color: var(--ink);
+}
+.live-now-text { flex: 1; min-width: 0; font-size: .9rem; }
+.live-now-dismiss {
+  font: inherit; font-size: 1.1rem; line-height: 1; cursor: pointer;
+  background: none; border: 0; color: var(--muted); padding: .1rem .3rem;
+}
+.live-now-dismiss:hover { color: var(--ink); }
+
 /* The teacher's controls, beside the "live now" badge on the class heading. */
 .class-head-actions { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
 
@@ -4174,18 +4198,94 @@ details > summary:hover { text-decoration: underline; }
  * Quiet until it is wanted: this competes with the lesson for attention, and
  * the lesson should win.
  */
-.room-fullscreen {
-  position: absolute; top: .75rem; right: .75rem; z-index: 5;
-  padding: .3rem .6rem; font-size: .78rem;
+.room-bar {
+  position: absolute; top: .7rem; right: .7rem; z-index: 6;
+  display: flex; gap: .4rem; flex-wrap: wrap; justify-content: flex-end;
+}
+.room-bar-btn {
+  padding: .32rem .62rem; font-size: .78rem; font: inherit; font-size: .78rem;
   border-radius: var(--radius-sm);
   border: 1px solid rgb(255 255 255 / 18%);
-  background: rgb(0 0 0 / 45%);
-  color: rgb(255 255 255 / 78%);
+  background: rgb(0 0 0 / 50%);
+  color: rgb(255 255 255 / 80%);
   cursor: pointer;
-  opacity: .55;
-  transition: opacity .15s ease;
+  opacity: .6;
+  transition: opacity .15s ease, background .15s ease;
 }
-.room-fullscreen:hover, .room-fullscreen:focus-visible { opacity: 1; }
+.room-bar-btn:hover, .room-bar-btn:focus-visible { opacity: 1; }
+.room-bar-btn.is-on { opacity: 1; background: rgb(255 255 255 / 16%); }
+.room-count {
+  display: inline-block; margin-left: .3rem; padding: 0 .32rem;
+  border-radius: 999px; background: rgb(255 255 255 / 18%); font-variant-numeric: tabular-nums;
+}
+
+/*
+ * The panel is INSIDE the frame, not a page-level drawer — the classroom is an
+ * iframe on the class page, so there is no outer layout to attach to. Bounded
+ * by the frame height with its own scroll, because a class of forty in a 16:9
+ * box would otherwise run off the bottom with no way to reach the last row.
+ */
+.room-panel {
+  position: absolute; top: 0; right: 0; bottom: 0; z-index: 7;
+  width: min(310px, 82%);
+  display: flex; flex-direction: column;
+  background: rgb(12 14 19 / 96%);
+  border-left: 1px solid rgb(255 255 255 / 12%);
+  color: rgb(255 255 255 / 88%);
+  padding: .7rem;
+  overflow-y: auto;
+}
+.room-panel-head {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: .82rem; font-weight: 600; margin-bottom: .5rem;
+}
+.room-panel-close {
+  font: inherit; font-size: .75rem; background: none; cursor: pointer;
+  border: 0; color: rgb(255 255 255 / 55%); padding: .2rem;
+}
+.room-panel-close:hover { color: rgb(255 255 255 / 90%); }
+.room-panel-note { margin: .5rem 0 0; font-size: .74rem; color: rgb(255 255 255 / 48%); }
+.room-panel-said { color: #7dd3a0; }
+
+.room-people { list-style: none; margin: 0; padding: 0; display: grid; gap: .1rem; }
+.room-person {
+  display: flex; justify-content: space-between; align-items: center; gap: .4rem;
+  padding: .38rem .3rem; border-radius: var(--radius-sm);
+}
+.room-person:hover { background: rgb(255 255 255 / 6%); }
+.room-person-who { min-width: 0; }
+.room-person-name {
+  display: block; font-size: .84rem;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.room-person-you { color: rgb(255 255 255 / 45%); }
+/* The state in words as well as position, so a screen reader reads out "muted"
+   rather than announcing nothing at all. */
+.room-person-state { font-size: .7rem; color: rgb(255 255 255 / 42%); }
+.room-person-actions { display: flex; gap: .25rem; flex-shrink: 0; }
+
+.room-mini {
+  font: inherit; font-size: .68rem; padding: .2rem .4rem; cursor: pointer;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgb(255 255 255 / 16%);
+  background: rgb(255 255 255 / 8%);
+  color: rgb(255 255 255 / 78%);
+}
+.room-mini:hover:not(:disabled) { background: rgb(255 255 255 / 16%); }
+.room-mini:disabled { opacity: .45; cursor: default; }
+/* Removing somebody is the one action here that interrupts a person's lesson,
+   so it does not look like the others. */
+.room-mini-warn { border-color: rgb(248 113 113 / 45%); color: #fca5a5; }
+
+.room-invite-link {
+  width: 100%; margin-top: .5rem; font-size: .75rem;
+  background: rgb(255 255 255 / 8%);
+  color: rgb(255 255 255 / 88%);
+  border: 1px solid rgb(255 255 255 / 15%);
+  border-radius: var(--radius-sm);
+  padding: .4rem .5rem;
+}
+.room-invite-copy { margin-top: .5rem; width: 100%; }
 /* The button is positioned against the room, so the room has to be the
    containing block — without this it anchors to the page and drifts. */
 .live-room { position: relative; }

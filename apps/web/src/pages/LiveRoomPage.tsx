@@ -4,11 +4,12 @@ import {
   ConnectionStateToast,
   LiveKitRoom,
   VideoConference,
+  useParticipants,
   usePreviewTracks,
 } from "@livekit/components-react";
 import { Track } from "livekit-client";
-import type { LocalVideoTrack } from "livekit-client";
 import "@livekit/components-styles";
+import { ApiError, api } from "../api/client";
 
 /**
  * The classroom itself — the web half of the LiveKit adapter.
@@ -24,17 +25,22 @@ import "@livekit/components-styles";
  * draws the line above both of them, and neither ClassPage nor any domain
  * module changed to add this.
  *
- * NO SESSION AUTH HERE, deliberately. The token in the query string was minted
- * by the API only after it checked the caller's identity, their enrolment in
- * the section, and the join window (FR-LIV-006/007). It is scoped to one room,
- * one participant identity and a fixed lifetime, so it IS the authorisation.
- * Re-checking a login inside the frame would add nothing and would break the
- * frame for anybody whose access token rotated mid-class.
+ * NO SESSION AUTH TO GET IN, deliberately. The token in the query string was
+ * minted by the API only after it checked the caller's identity, their enrolment
+ * in the section, and the join window (FR-LIV-006/007). It is scoped to one
+ * room, one participant identity and a fixed lifetime, so it IS the
+ * authorisation for the video.
+ *
+ * The moderation calls are a different matter and go through the ordinary API
+ * with the ordinary permissions — a token that lets somebody into a room must
+ * not also let them throw people out of it.
  */
 
 interface JoinEnvelope {
   url: string;
   jwt: string;
+  isHost: boolean;
+  sessionId: string;
 }
 
 /**
@@ -54,7 +60,15 @@ function decodeEnvelope(raw: string | null): JoinEnvelope | null {
     const parsed = JSON.parse(atob(padded)) as Partial<JoinEnvelope>;
     if (typeof parsed.url !== "string" || typeof parsed.jwt !== "string") return null;
     if (!parsed.url || !parsed.jwt) return null;
-    return { url: parsed.url, jwt: parsed.jwt };
+    return {
+      url: parsed.url,
+      jwt: parsed.jwt,
+      // Absent means student. A page that guessed "host" from a missing field
+      // would show moderation controls to a class, and every one of them would
+      // be refused by the API — which reads as the LMS being broken.
+      isHost: parsed.isHost === true,
+      sessionId: typeof parsed.sessionId === "string" ? parsed.sessionId : "",
+    };
   } catch {
     return null;
   }
@@ -128,18 +142,262 @@ function Classroom({ envelope }: { envelope: JoinEnvelope }) {
         onError={(err) => setFailure(err.message)}
         style={{ height: "100%" }}
       >
-        {/* Grid, speaker focus, screen share, chat and the control bar. The
-            prefab rather than the pieces: this is a lesson, not a product
-            surface, and the prefab is the part LiveKit maintains. */}
+        {/* Grid, speaker focus, screen share, chat, and the camera and
+            microphone controls along the bottom. The prefab rather than the
+            pieces: this is a lesson, not a product surface, and the prefab is
+            the part LiveKit maintains. */}
         <VideoConference />
         {/* Says "reconnecting" instead of freezing silently — on a patchy
             connection this is the difference between waiting and giving up. */}
         <ConnectionStateToast />
-        <FullscreenButton />
+        <RoomChrome isHost={envelope.isHost} sessionId={envelope.sessionId} />
       </LiveKitRoom>
     </div>
   );
 }
+
+/* -------------------------------------------------------------------------- */
+/*  In-class chrome: who is here, inviting, full screen                        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * WHAT THE TEACHER GETS THAT THE STUDENT DOES NOT.
+ *
+ * Both see who is in the room — a student wanting to know whether the class has
+ * filled up is asking a reasonable question, and every conferencing tool answers
+ * it. Only the teacher sees mute and remove, and that is not merely hidden: the
+ * endpoints behind them require live_session:update, which a student does not
+ * hold at any scope. The interface and the permission agree.
+ */
+function RoomChrome({ isHost, sessionId }: { isHost: boolean; sessionId: string }) {
+  const participants = useParticipants();
+  const [panel, setPanel] = useState<"none" | "people" | "invite">("none");
+  const [full, setFull] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+
+  useEffect(() => {
+    const onChange = () => setFull(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) void document.exitFullscreen();
+    // Failure is silent by design: some browsers and embedded webviews refuse
+    // fullscreen outright, and an error dialog over a live lesson helps nobody.
+    else void document.documentElement.requestFullscreen().catch(() => undefined);
+  };
+
+  /**
+   * Muting and removing go through the API, not the room.
+   *
+   * They have to: LiveKit only accepts these from a server holding the API
+   * secret, and the browser must never hold that. It also means the ordinary
+   * permission check applies, and the act lands in the audit log — acting on
+   * somebody in front of a class is the kind of thing that gets disputed later.
+   */
+  const act = useCallback(
+    async (identity: string, what: "audio" | "video" | "remove", who: string) => {
+      if (what === "remove" && !window.confirm(`Remove ${who} from the class?`)) return;
+      setBusy(identity + what);
+      setNote(null);
+      try {
+        if (what === "remove") {
+          await api.post(`/live-sessions/${sessionId}/participants/${identity}/remove`);
+          setNote(`${who} was removed.`);
+        } else {
+          await api.post(`/live-sessions/${sessionId}/participants/${identity}/mute`, {
+            kind: what,
+          });
+          setNote(`${who} was muted.`);
+        }
+      } catch (e) {
+        setNote(e instanceof ApiError ? e.message : "That did not work.");
+      } finally {
+        setBusy(null);
+      }
+    },
+    [sessionId],
+  );
+
+  return (
+    <>
+      <div className="room-bar">
+        <button
+          type="button"
+          className={`room-bar-btn ${panel === "people" ? "is-on" : ""}`}
+          aria-pressed={panel === "people"}
+          onClick={() => setPanel((p) => (p === "people" ? "none" : "people"))}
+        >
+          People <span className="room-count">{participants.length}</span>
+        </button>
+        {/* Sharing the way in is the teacher's job. A student passing the class
+            link around is not useful — the page behind it refuses anybody not
+            enrolled — and offering it to them implies otherwise. */}
+        {isHost && (
+          <button
+            type="button"
+            className={`room-bar-btn ${panel === "invite" ? "is-on" : ""}`}
+            aria-pressed={panel === "invite"}
+            onClick={() => setPanel((p) => (p === "invite" ? "none" : "invite"))}
+          >
+            Invite
+          </button>
+        )}
+        <button type="button" className="room-bar-btn" onClick={toggleFullscreen}>
+          {full ? "Exit full screen" : "Full screen"}
+        </button>
+      </div>
+
+      {panel === "people" && (
+        <aside className="room-panel" aria-label="People in this class">
+          <header className="room-panel-head">
+            <span>In the class · {participants.length}</span>
+            <button type="button" className="room-panel-close" onClick={() => setPanel("none")}>
+              Close
+            </button>
+          </header>
+
+          <ul className="room-people">
+            {participants.map((p) => {
+              const who = p.name || p.identity;
+              return (
+                <li key={p.identity} className="room-person">
+                  <div className="room-person-who">
+                    <span className="room-person-name">
+                      {who}
+                      {p.isLocal && <span className="room-person-you"> (you)</span>}
+                    </span>
+                    {/* Words, not only icons: "muted" is a fact a screen reader
+                        has to be able to read out. */}
+                    <span className="room-person-state">
+                      {p.isMicrophoneEnabled ? "microphone on" : "muted"}
+                      {" · "}
+                      {p.isCameraEnabled ? "camera on" : "camera off"}
+                    </span>
+                  </div>
+
+                  {isHost && !p.isLocal && (
+                    <div className="room-person-actions">
+                      {/* Offered only where there is something to switch off.
+                          A mute button on somebody already muted does nothing
+                          and teaches people the buttons are unreliable. */}
+                      {p.isMicrophoneEnabled && (
+                        <button
+                          type="button"
+                          className="room-mini"
+                          disabled={busy === p.identity + "audio"}
+                          onClick={() => void act(p.identity, "audio", who)}
+                        >
+                          Mute
+                        </button>
+                      )}
+                      {p.isCameraEnabled && (
+                        <button
+                          type="button"
+                          className="room-mini"
+                          disabled={busy === p.identity + "video"}
+                          onClick={() => void act(p.identity, "video", who)}
+                        >
+                          Camera off
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="room-mini room-mini-warn"
+                        disabled={busy === p.identity + "remove"}
+                        onClick={() => void act(p.identity, "remove", who)}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+
+          {isHost && (
+            /* Said once, in the panel, rather than discovered by pressing a
+               button that is not there: a teacher looking for "unmute" needs to
+               know it is a decision and not an oversight. */
+            <p className="room-panel-note">
+              You can mute someone, but not switch their microphone or camera back
+              on — only they can do that.
+            </p>
+          )}
+          {note && <p className="room-panel-note room-panel-said">{note}</p>}
+        </aside>
+      )}
+
+      {panel === "invite" && <InvitePanel sessionId={sessionId} onClose={() => setPanel("none")} />}
+    </>
+  );
+}
+
+/**
+ * Sharing the way in.
+ *
+ * The link is to the CLASS PAGE, never to the room. The class page is what
+ * checks enrolment and the join window and records attendance; a link straight
+ * into the video would skip all three, and the token in it would work for
+ * anybody who was sent it.
+ *
+ * So this is safe to paste into a group chat: somebody not enrolled who opens
+ * it is refused, and somebody enrolled gets a proper join with a register entry.
+ */
+function InvitePanel({ sessionId, onClose }: { sessionId: string; onClose: () => void }) {
+  const link = `${window.location.origin}/classes/${sessionId}`;
+  const [copied, setCopied] = useState(false);
+  const field = useRef<HTMLInputElement>(null);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+    } catch {
+      /*
+       * The clipboard API needs a secure context and a permission, and refuses
+       * inside some embedded webviews. Selecting the text is the fallback that
+       * always works — the teacher presses Ctrl-C, which is one key more than
+       * they hoped for and infinitely better than a button that does nothing.
+       */
+      field.current?.select();
+    }
+  };
+
+  return (
+    <aside className="room-panel" aria-label="Invite someone to this class">
+      <header className="room-panel-head">
+        <span>Invite</span>
+        <button type="button" className="room-panel-close" onClick={onClose}>
+          Close
+        </button>
+      </header>
+
+      <p className="room-panel-note">
+        Send this to anybody on the class list. It opens the class page, which takes
+        the register as they come in.
+      </p>
+
+      <input ref={field} className="room-invite-link" readOnly value={link} onFocus={(e) => e.target.select()} />
+
+      <button type="button" className="btn btn-primary room-invite-copy" onClick={() => void copy()}>
+        {copied ? "Copied" : "Copy the link"}
+      </button>
+
+      <p className="room-panel-note">
+        Students enrolled in this class already see it on their dashboard the
+        moment it starts — this is for nudging somebody who has not noticed.
+      </p>
+    </aside>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Before the class                                                          */
+/* -------------------------------------------------------------------------- */
 
 /**
  * THE SCREEN BEFORE THE CLASS, and the one that earns its place.
@@ -175,7 +433,7 @@ function PreJoin({ onJoin }: { onJoin: (c: Choices) => void }) {
   const videoTrack = useMemo(
     // The enum, not the string it happens to equal — Track.Kind is a real enum
     // and comparing it to a literal is how this silently stops matching.
-    () => tracks?.find((t): t is LocalVideoTrack => t.kind === Track.Kind.Video),
+    () => tracks?.find((t) => t.kind === Track.Kind.Video),
     [tracks],
   );
 
@@ -309,37 +567,6 @@ function PreJoin({ onJoin }: { onJoin: (c: Choices) => void }) {
         </div>
       </div>
     </div>
-  );
-}
-
-/**
- * The class, filling the screen.
- *
- * The classroom renders inside a 16:9 frame on a page that also carries a
- * sidebar and a topbar, which is right for glancing at a lesson and wrong for
- * following one. The iframe carries `allow="fullscreen"`, so this works from
- * inside it.
- */
-function FullscreenButton() {
-  const [full, setFull] = useState(false);
-
-  useEffect(() => {
-    const onChange = () => setFull(!!document.fullscreenElement);
-    document.addEventListener("fullscreenchange", onChange);
-    return () => document.removeEventListener("fullscreenchange", onChange);
-  }, []);
-
-  const toggle = () => {
-    if (document.fullscreenElement) void document.exitFullscreen();
-    // Failure is silent by design: some browsers and embedded webviews refuse
-    // fullscreen outright, and an error dialog over a live lesson helps nobody.
-    else void document.documentElement.requestFullscreen().catch(() => undefined);
-  };
-
-  return (
-    <button type="button" className="room-fullscreen" onClick={toggle}>
-      {full ? "Exit full screen" : "Full screen"}
-    </button>
   );
 }
 
