@@ -4,6 +4,7 @@ import { AppError } from "@lms/shared";
 import type { LiveClassroomProvider } from "./live-classroom.provider";
 import { ManualProvider } from "./manual.provider";
 import { GoogleMeetProvider } from "./google-meet.provider";
+import { LiveKitProvider } from "./livekit.provider";
 
 /**
  * The provider registry — ARC-028.
@@ -26,11 +27,13 @@ export class ProviderRegistry {
     private readonly config: ConfigService,
     manual: ManualProvider,
     googleMeet: GoogleMeetProvider,
+    livekit: LiveKitProvider,
     // A new provider is added as a constructor parameter and one register()
     // call. Nothing else in the System is aware of it.
   ) {
     this.register(manual);
     this.register(googleMeet);
+    this.register(livekit);
   }
 
   register(provider: LiveClassroomProvider): void {
