@@ -1,0 +1,71 @@
+# LiveKit — the Institute's own classroom (CON-03).
+#
+# This file is the DEVELOPMENT and single-box configuration. It is enough to
+# hold a real class on a LAN and enough to run the acceptance test in §3.4.6.
+# Read the production notes at the bottom before putting a cohort on it.
+
+# Signalling: the WebSocket the browser connects to, and the management API the
+# adapter calls. One port for both, which is why LIVEKIT_URL is the only
+# address the LMS has to know.
+port: 7880
+
+rtc:
+  # Media. UDP is the path that actually carries video; everything else here is
+  # a fallback for a network that will not pass it.
+  udp_port: 7882
+  # THE ONE THAT MATTERS FOR STUDENTS ON RESTRICTIVE NETWORKS. A school or
+  # office firewall that drops UDP leaves TCP as the only way in, and without
+  # this those students see a black screen and no error worth reading.
+  tcp_port: 7881
+  # false for local work: the server advertises its LAN address, which is
+  # correct behind Docker on one machine. MUST become true on a public server,
+  # or clients are handed an unroutable 172.x address and never connect.
+  use_external_ip: false
+
+keys:
+  # Matches LIVEKIT_API_KEY / LIVEKIT_API_SECRET in .env.
+  #
+  # DEVELOPMENT VALUES, PUBLISHED IN THIS REPOSITORY. Anybody holding them can
+  # mint a token for any room on this server. Generate a real pair before this
+  # faces a student:
+  #   docker run --rm livekit/livekit-server generate-keys
+  devkey: devsecretdevsecretdevsecretdevsecret
+
+# Rooms are created by the adapter at scheduling time, and again by LiveKit
+# itself if the first participant arrives before that succeeded. Both paths set
+# their own timeouts, so nothing is configured here.
+room:
+  # A class that empties for a few minutes — a break, a dropped connection on
+  # the teacher's side — should not be torn down under the students still in it.
+  empty_timeout: 600
+  departure_timeout: 300
+
+logging:
+  level: info
+
+# ---------------------------------------------------------------------------
+# BEFORE A REAL COHORT
+#
+# 1. use_external_ip: true, and open UDP 7882 plus TCP 7881 and 7880 to the
+#    internet. A NAT that does not forward UDP is the usual reason a class
+#    "works for the teacher and nobody else".
+#
+# 2. TLS. The browser will refuse a ws:// signalling connection from an https://
+#    page, so LIVEKIT_URL has to be wss:// and this server needs a certificate —
+#    either terminated at nginx in front of port 7880, or LiveKit's own
+#    Let's Encrypt support.
+#
+# 3. TURN over TLS on 443, for students whose network passes nothing else.
+#    Without it a real fraction of a class simply cannot join, and they will
+#    report it as "the LMS is broken" rather than as a network problem:
+#      turn:
+#        enabled: true
+#        tls_port: 443
+#        domain: livekit.prepreneurship.com
+#
+# 4. Capacity. This is an SFU: it relays the teacher's stream to every student
+#    rather than meshing them. One teacher publishing ~1.5 Mbps to 30 students
+#    is ~45 Mbps of sustained EGRESS, near 20 GB for a one-hour class. That is
+#    the number that belongs in the Institute's written approval — it is far
+#    larger than the storage figure, and it is a recurring bill.
+# ---------------------------------------------------------------------------
