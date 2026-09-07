@@ -1,6 +1,12 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { AccessToken, RoomServiceClient, TrackSource } from "livekit-server-sdk";
+import {
+  AccessToken,
+  RoomServiceClient,
+  TrackSource,
+  TrackType,
+  WebhookReceiver,
+} from "livekit-server-sdk";
 import { PrismaService } from "../../prisma/prisma.service";
 import type {
   JoinRoute,
@@ -10,6 +16,8 @@ import type {
   ProviderCapabilities,
   ProviderHealth,
   RecordingReference,
+  RoomEvent,
+  RoomParticipant,
   SessionRequest,
   UserContext,
 } from "./live-classroom.provider";
@@ -107,14 +115,98 @@ export class LiveKitProvider implements LiveClassroomProvider {
        * attendance on the register the teacher already uses, and do not offer a
        * feature that would silently under-report.
        */
-      canReportParticipation: false,
+      /*
+       * TRUE NOW, and the route it arrives by matters.
+       *
+       * Not by asking — LiveKit cannot answer "who attended this class?" after
+       * the fact, because it only knows who is connected right now. It arrives
+       * by webhook instead: joins and leaves are pushed as they happen and
+       * accumulated onto the attendance record.
+       *
+       * Still a PROPOSAL and never a verdict (FR-ATT-012). The System writes
+       * proposedStatus and the seconds; the teacher decides. A student whose
+       * connection dropped for the second half was still in the lesson, and no
+       * amount of participation data knows that.
+       */
+      canReportParticipation: this.isConfigured,
       // Recording needs a LiveKit Egress service and somewhere to put the
       // output. Also separate work.
       canProvideRecording: false,
       canEndMeetingRemotely: this.isConfigured,
       supportsWaitingRoom: false,
       maxParticipants: null,
+      // We own the room, so the teacher can see who is in it and act on them.
+      canModerateParticipants: this.isConfigured,
     };
+  }
+
+  // ---------------------------------------------------------- moderation --
+
+  /**
+   * Who is in the room right now.
+   *
+   * The room register, not the class register — this empties as people leave,
+   * and nothing about attendance is derived from it.
+   */
+  async listParticipants(binding: ProviderBinding): Promise<RoomParticipant[]> {
+    if (!this.isConfigured || !binding.externalId) return [];
+
+    const rows = await this.client().listParticipants(binding.externalId);
+    return rows.map((p) => {
+      // Camera and microphone specifically — a teacher sharing their screen
+      // publishes a second video track, and counting that as "camera on" would
+      // show them on camera when they are not.
+      const audio = p.tracks.find(
+        (t) => t.type === TrackType.AUDIO && t.source === TrackSource.MICROPHONE,
+      );
+      const video = p.tracks.find(
+        (t) => t.type === TrackType.VIDEO && t.source === TrackSource.CAMERA,
+      );
+      return {
+        identity: p.identity,
+        // The name the adapter put in the token. Empty would render a blank row
+        // rather than an obviously-unknown one.
+        name: p.name || "Participant",
+        // Protobuf int64, in seconds.
+        joinedAt: new Date(Number(p.joinedAt) * 1000),
+        isPublishingAudio: !!audio && !audio.muted,
+        isPublishingVideo: !!video && !video.muted,
+        audioTrackSid: audio?.sid ?? null,
+        videoTrackSid: video?.sid ?? null,
+      };
+    });
+  }
+
+  /**
+   * Mute one person's microphone or camera.
+   *
+   * The track has to be named, and only the server knows its id, so the
+   * participant is read first. Somebody who has published nothing is a no-op
+   * rather than an error: the teacher pressed mute on a student who had already
+   * muted themselves, and that is not a failure.
+   */
+  async muteParticipant(
+    binding: ProviderBinding,
+    identity: string,
+    kind: "audio" | "video",
+  ): Promise<void> {
+    if (!this.isConfigured || !binding.externalId) return;
+
+    const participant = await this.client().getParticipant(binding.externalId, identity);
+    const wanted = kind === "audio" ? TrackType.AUDIO : TrackType.VIDEO;
+    const track = participant.tracks.find((t) => t.type === wanted);
+    if (!track) return;
+
+    // `true` only. Unmuting somebody remotely would let a teacher open a
+    // student's microphone and camera into their room without consent, and
+    // LiveKit refuses it by default for exactly that reason.
+    await this.client().mutePublishedTrack(binding.externalId, identity, track.sid, true);
+  }
+
+  /** Remove somebody from the room. They can come back — this is not a ban. */
+  async removeParticipant(binding: ProviderBinding, identity: string): Promise<void> {
+    if (!this.isConfigured || !binding.externalId) return;
+    await this.client().removeParticipant(binding.externalId, identity);
   }
 
   // -------------------------------------------------------------- session --
@@ -318,7 +410,17 @@ export class LiveKitProvider implements LiveClassroomProvider {
        * change — or a new API endpoint, which would mean a domain change to add
        * a provider and is exactly what §3.4.6 forbids.
        */
-      token: encodeEnvelope({ url: this.cfg("LIVEKIT_URL"), jwt: await at.toJwt() }),
+      token: encodeEnvelope({
+        url: this.cfg("LIVEKIT_URL"),
+        jwt: await at.toJwt(),
+        // What the room page may show. Read from the SERVER's decision rather
+        // than from the page guessing at the JWT: the grants and the interface
+        // then cannot disagree about who is running the class.
+        isHost: user.isHost,
+        // The room page needs it to reach the moderation endpoints, and only
+        // this adapter knows the room-name convention it comes out of.
+        sessionId: room.replace(/^session-/, ""),
+      }),
     };
   }
 
@@ -352,8 +454,88 @@ export class LiveKitProvider implements LiveClassroomProvider {
   // -------------------------------------------------- participation/health --
 
   fetchParticipation(_binding: ProviderBinding): Promise<ParticipationRecord[]> {
-    // See canReportParticipation. Empty keeps attendance on MANUAL (ARC-030).
+    /*
+     * STILL EMPTY, AND STILL CORRECT.
+     *
+     * This is the PULL side: "tell me who attended", asked after the fact.
+     * LiveKit cannot answer it — listParticipants reports who is connected at
+     * this instant, so a class asked about an hour later reports nobody.
+     *
+     * The push side is handleWebhook below, which is how participation actually
+     * reaches the System: events arrive as they happen and are accumulated onto
+     * the attendance record. Answering this method by guessing would be worse
+     * than answering it honestly.
+     */
     return Promise.resolve([]);
+  }
+
+  /**
+   * LiveKit's webhooks, verified and normalised.
+   *
+   * THE SIGNATURE IS THE ONLY AUTHENTICATION. The endpoint that calls this is
+   * public, because a media server cannot sign in to the LMS — so anybody on
+   * the internet can post to it, and what stops them writing attendance for a
+   * class they are not in is this check and nothing else. WebhookReceiver
+   * verifies an HMAC over the exact bytes with the API secret, which is why the
+   * raw body has to survive the body parser untouched.
+   */
+  async handleWebhook(rawBody: Buffer, authorization: string): Promise<RoomEvent[]> {
+    if (!this.isConfigured) return [];
+
+    const receiver = new WebhookReceiver(this.cfg("LIVEKIT_API_KEY"), this.cfg("LIVEKIT_API_SECRET"));
+    // Throws on a bad or missing signature. Deliberately not caught here: the
+    // controller answers 401 and the delivery is rejected.
+    const event = await receiver.receive(rawBody.toString("utf8"), authorization);
+
+    const room = event.room?.name;
+    if (!room) return [];
+    const at = event.createdAt ? new Date(Number(event.createdAt) * 1000) : new Date();
+
+    switch (event.event) {
+      case "participant_joined":
+        return [
+          {
+            kind: "PARTICIPANT_JOINED",
+            room,
+            identity: event.participant?.identity ?? null,
+            at,
+            secondsInRoom: null,
+          },
+        ];
+
+      case "participant_left": {
+        /*
+         * LiveKit does not send a duration, so it is derived: the event's own
+         * timestamp minus when that participant joined, both in seconds.
+         *
+         * Clamped at zero. Clock skew between the media server and this one
+         * would otherwise produce a negative that silently subtracts from a
+         * student's attendance.
+         */
+        const joinedAt = event.participant?.joinedAt;
+        const seconds =
+          joinedAt != null
+            ? Math.max(0, Math.round(at.getTime() / 1000 - Number(joinedAt)))
+            : null;
+        return [
+          {
+            kind: "PARTICIPANT_LEFT",
+            room,
+            identity: event.participant?.identity ?? null,
+            at,
+            secondsInRoom: seconds,
+          },
+        ];
+      }
+
+      case "room_finished":
+        return [{ kind: "ROOM_FINISHED", room, identity: null, at, secondsInRoom: null }];
+
+      default:
+        // track_published, egress_started and the rest. Accepted and ignored —
+        // returning empty is not an error, it is "nothing here concerns us".
+        return [];
+    }
   }
 
   fetchRecordingRefs(_binding: ProviderBinding): Promise<RecordingReference[]> {
@@ -389,6 +571,10 @@ export class LiveKitProvider implements LiveClassroomProvider {
 export interface JoinEnvelope {
   url: string;
   jwt: string;
+  /** Whether this viewer runs the class — decides what the room page offers. */
+  isHost: boolean;
+  /** The LMS session id, so the room page can reach the moderation endpoints. */
+  sessionId: string;
 }
 
 /** base64url, so the value survives a query string untouched. */

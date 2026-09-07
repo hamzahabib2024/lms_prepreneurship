@@ -70,6 +70,25 @@ export interface ParticipationRecord {
   rejoinCount: number;
 }
 
+/**
+ * Something that happened in a room, normalised — ARC-034.
+ *
+ * A provider that can tell the System when somebody arrived and left turns
+ * attendance from a thing the teacher types into a thing the System proposes.
+ * The shape is identical whichever provider produced it, so the attendance code
+ * contains no vendor parsing and no vendor's idea of an event name.
+ */
+export interface RoomEvent {
+  kind: "PARTICIPANT_JOINED" | "PARTICIPANT_LEFT" | "ROOM_FINISHED";
+  /** The provider's room id. Matches ProviderBinding.externalId. */
+  room: string;
+  /** The identity the adapter issued — for this System, the LMS user id. */
+  identity: string | null;
+  at: Date;
+  /** How long they had been in the room when they left, where it is known. */
+  secondsInRoom: number | null;
+}
+
 export interface RecordingReference {
   externalId: string;
   storageRef: string;
@@ -93,6 +112,37 @@ export interface ProviderCapabilities {
   canEndMeetingRemotely: boolean;
   supportsWaitingRoom: boolean;
   maxParticipants: number | null;
+  /**
+   * Whether the teacher can see who is in the room and act on them.
+   *
+   * OPTIONAL, so that adding it did not force every existing adapter to be
+   * edited — an absent flag means "no", which is the correct answer for the
+   * manual provider and for a Meet link the System does not own. That is the
+   * same shape `endSession?` already has, and ARC-030 requires the interface to
+   * say a capability is missing rather than offer one that will not work.
+   */
+  canModerateParticipants?: boolean;
+}
+
+/**
+ * Somebody in the room right now.
+ *
+ * Normalised, like ParticipationRecord: the shape is identical whichever
+ * provider produced it, so nothing above the adapter learns a vendor's idea of
+ * a participant. `identity` is the LMS user id, which is what the adapter puts
+ * in the token.
+ *
+ * The track ids are here because muting somebody requires naming the track,
+ * and they are opaque — the System passes them back and never reads them.
+ */
+export interface RoomParticipant {
+  identity: string;
+  name: string;
+  joinedAt: Date;
+  isPublishingAudio: boolean;
+  isPublishingVideo: boolean;
+  audioTrackSid: string | null;
+  videoTrackSid: string | null;
 }
 
 export interface ProviderHealth {
@@ -122,9 +172,61 @@ export interface LiveClassroomProvider {
   /** Returns a JoinRoute, never a bare URL. The System never inspects it. */
   getJoinRoute(binding: ProviderBinding, user: UserContext): Promise<JoinRoute>;
 
+  /**
+   * Who is in the room AT THIS MOMENT — the teacher's register of the room, not
+   * of the class.
+   *
+   * Distinct from fetchParticipation, which is a history and is what attendance
+   * is built from. This is live and disappears when people leave.
+   *
+   * Optional: a provider that does not own the room cannot answer it, and the
+   * interface says so rather than returning an empty list that would read as
+   * "nobody is here".
+   */
+  listParticipants?(binding: ProviderBinding): Promise<RoomParticipant[]>;
+
+  /**
+   * Mute somebody — the control every classroom needs when one microphone is
+   * left open in a noisy room.
+   *
+   * MUTE ONLY, AND DELIBERATELY SO. There is no unmute here and there will not
+   * be one: a teacher who could switch a student's microphone or camera back on
+   * could listen to their room and look into it without consent. Google Meet
+   * draws the line in the same place, and so does LiveKit, which refuses remote
+   * unmute unless a server setting is turned on. The student turns their own
+   * devices back on.
+   *
+   * Enforced by the provider rather than by the interface hiding a button: a
+   * client that can be asked nicely can also decline.
+   */
+  muteParticipant?(
+    binding: ProviderBinding,
+    identity: string,
+    kind: "audio" | "video",
+  ): Promise<void>;
+
+  /** Remove somebody from the room. They can rejoin; this is not a ban. */
+  removeParticipant?(binding: ProviderBinding, identity: string): Promise<void>;
+
   /** Empty array where unsupported — see canReportParticipation. */
   fetchParticipation(binding: ProviderBinding): Promise<ParticipationRecord[]>;
   fetchRecordingRefs(binding: ProviderBinding): Promise<RecordingReference[]>;
+
+  /**
+   * Turn a webhook the provider sent into normalised RoomEvents.
+   *
+   * THE ADAPTER VERIFIES THE SIGNATURE, not the controller. The endpoint is
+   * necessarily public — a provider cannot sign in — so the signature is the
+   * only thing standing between a stranger and the attendance register. Where
+   * that check lives matters: putting it in the controller would mean the
+   * controller knowing one provider's signing scheme, which is precisely the
+   * knowledge ARC-025 keeps out of the domain.
+   *
+   * Throwing rejects the delivery. Returning an empty array accepts it and does
+   * nothing, which is right for the many event kinds the System does not care
+   * about.
+   */
+  handleWebhook?(rawBody: Buffer, authorization: string): Promise<RoomEvent[]>;
 
   healthCheck(): Promise<ProviderHealth>;
 }

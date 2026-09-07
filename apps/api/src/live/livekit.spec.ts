@@ -258,6 +258,55 @@ describe("LiveKit adapter — configured", () => {
     expect(route.reasonCode).toBe("LINK_NOT_SET");
   });
 
+  /**
+   * MODERATION IS A SERVER ACT, and that is not an implementation detail.
+   *
+   * LiveKit accepts mute and remove only from a caller holding the API secret,
+   * which the browser must never hold. So these exist here rather than in the
+   * room page, which means the ordinary permission check applies and the act
+   * reaches the audit log.
+   */
+  it("offers moderation once it owns a room", () => {
+    expect(provider().capabilities().canModerateParticipants).toBe(true);
+    // Absent, not false, when there is no server to ask — see the note on the
+    // optional flag in the interface.
+    expect(
+      new LiveKitProvider(configWith(), prismaWith("Ayesha Khan")).capabilities()
+        .canModerateParticipants,
+    ).toBe(false);
+  });
+
+  it("reports an empty room rather than failing when unconfigured", async () => {
+    const unconfigured = new LiveKitProvider(configWith(), prismaWith("Ayesha Khan"));
+    await expect(unconfigured.listParticipants(bindingFor("session-x"))).resolves.toEqual([]);
+  });
+
+  it("does nothing for a class that never got a room", async () => {
+    // A teacher pressing mute on a class held somewhere else must not produce
+    // an error; there is simply nothing to act on.
+    await expect(provider().listParticipants(bindingFor(null))).resolves.toEqual([]);
+    await expect(provider().muteParticipant(bindingFor(null), "u-1", "audio")).resolves.toBeUndefined();
+    await expect(provider().removeParticipant(bindingFor(null), "u-1")).resolves.toBeUndefined();
+  });
+
+  /**
+   * There is no unmute, by design. A teacher who could switch a student's
+   * microphone or camera back on could listen to their room and look into it
+   * without consent. LiveKit refuses remote unmute by default for the same
+   * reason. If this ever grows a boolean, that is the argument to have first.
+   */
+  it("mutes only — the signature admits no unmute", () => {
+    // Three parameters: binding, identity, kind. A fourth would be `muted`.
+    //
+    // Reflect.get rather than reading the member: pulling a method off an
+    // object to look at it is the unbound-method trap, and nothing is called
+    // here.
+    const fn = Reflect.get(LiveKitProvider.prototype, "muteParticipant") as unknown as {
+      length: number;
+    };
+    expect(fn.length).toBe(3);
+  });
+
   it("refuses a route when the binding never got a room", async () => {
     const route = await provider().getJoinRoute(bindingFor(null, "FAILED"), student);
     expect(route.kind).toBe("UNAVAILABLE");
@@ -265,12 +314,47 @@ describe("LiveKit adapter — configured", () => {
     expect(route.reasonCode).toBe("PROVIDER_UNREACHABLE");
   });
 
-  it("keeps attendance on the register until webhooks exist", async () => {
-    // ARC-030 — an absent capability degrades, it does not fabricate. Claiming
-    // participation LiveKit cannot supply would under-report every class.
-    expect(provider().capabilities().canReportParticipation).toBe(false);
+  /**
+   * PARTICIPATION IS PUSHED, NOT PULLED, and the two must not be confused.
+   *
+   * fetchParticipation asks "who attended?" after the fact, and LiveKit cannot
+   * answer it — it knows only who is connected right now, so a class asked
+   * about an hour later reports nobody. Answering it by guessing would
+   * under-report every class. The webhook is the route that works.
+   */
+  it("reports participation by webhook, and says so", () => {
+    expect(provider().capabilities().canReportParticipation).toBe(true);
+    // Nothing to sign a delivery with, so nothing can be reported.
+    expect(
+      new LiveKitProvider(configWith(), prismaWith("Ayesha Khan")).capabilities()
+        .canReportParticipation,
+    ).toBe(false);
+  });
+
+  it("still answers the pull side honestly, which is with nothing", async () => {
     expect(await provider().fetchParticipation(bindingFor("session-x"))).toEqual([]);
     expect(await provider().fetchRecordingRefs(bindingFor("session-x"))).toEqual([]);
+  });
+
+  /**
+   * THE SIGNATURE IS THE ONLY THING GUARDING THE REGISTER.
+   *
+   * The webhook endpoint is public, because a media server cannot sign in. So
+   * anybody on the internet can post to it, and the only reason they cannot
+   * write attendance for a class they are not in is this check. If this test
+   * ever goes green on a forged delivery, the register is writable by strangers.
+   */
+  it("rejects a delivery that is not signed", async () => {
+    const body = Buffer.from(JSON.stringify({ event: "participant_joined" }), "utf8");
+    await expect(provider().handleWebhook(body, "")).rejects.toThrow();
+    await expect(provider().handleWebhook(body, "Bearer nonsense")).rejects.toThrow();
+  });
+
+  it("ignores webhooks entirely when it has no secret to check them with", async () => {
+    // Unconfigured: it cannot verify anything, so it accepts nothing rather
+    // than trusting the body.
+    const unconfigured = new LiveKitProvider(configWith(), prismaWith("Ayesha Khan"));
+    await expect(unconfigured.handleWebhook(Buffer.alloc(0), "")).resolves.toEqual([]);
   });
 
   it("reports unhealthy, with the address, when the server does not answer", async () => {

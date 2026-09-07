@@ -1,10 +1,23 @@
-import { Body, Controller, Get, HttpCode, Param, Post, Query } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  Headers,
+  HttpCode,
+  Param,
+  Post,
+  Query,
+  Req,
+  UnauthorizedException,
+  type RawBodyRequest,
+} from "@nestjs/common";
+import type { Request } from "express";
 import { z } from "zod";
 import { LiveSessionService } from "./live-session.service";
 import { AttendanceService } from "./attendance.service";
 import { ProviderRegistry } from "./provider/provider.registry";
 import { zodBody } from "../common/zod-validation.pipe";
-import { RequirePermission } from "../rbac/permissions.guard";
+import { Public, RequirePermission } from "../rbac/permissions.guard";
 import { assertOwnStudent, requireOwnStudentId } from "../rbac/ownership";
 
 const ATTENDANCE_STATUS = ["PRESENT", "ABSENT", "LATE", "EXCUSED", "NOT_MARKED"] as const;
@@ -50,6 +63,9 @@ export const startNowSchema = z.object({
   // teacher's own id comes from their session, never from the body.
   hostTeacherId: z.string().uuid().optional(),
 });
+
+/** Which of somebody's devices to silence. No unmute — see the endpoint. */
+const muteSchema = z.object({ kind: z.enum(["audio", "video"]) });
 
 const bulkMarkSchema = z.object({
   defaultStatus: z.enum(ATTENDANCE_STATUS),
@@ -133,11 +149,106 @@ export class LiveController {
     return this.sessions.startNow(dto);
   }
 
+  /**
+   * FR-ATT-012 — the classroom reporting who came and went.
+   *
+   * PUBLIC, AND THAT IS NOT A HOLE. A media server cannot sign in, so this
+   * endpoint is reachable by anybody. What protects the attendance register is
+   * the signature over the raw bytes, checked with the API secret inside the
+   * adapter — the same secret that mints join tokens. A delivery that does not
+   * verify throws, and this answers 401.
+   *
+   * The controller names no provider: the key in the path selects an adapter
+   * from the registry, and the adapter owns its own signing scheme. Adding a
+   * second provider with webhooks needs nothing here (ARC-025).
+   */
+  @Public()
+  @Post("live/webhooks/:providerKey")
+  @HttpCode(200)
+  async webhook(
+    @Param("providerKey") providerKey: string,
+    @Req() req: RawBodyRequest<Request>,
+    @Headers("authorization") authorization?: string,
+  ) {
+    const provider = this.providers.get(providerKey);
+    if (!provider.handleWebhook) {
+      // Registered, but it does not speak webhooks. Accepted and dropped: a
+      // provider retrying a delivery this System will never understand is
+      // noise on both sides.
+      return { received: 0 };
+    }
+
+    let events;
+    try {
+      // rawBody, never the parsed object: re-serialising would reorder keys and
+      // the signature would never match its own payload.
+      events = await provider.handleWebhook(req.rawBody ?? Buffer.alloc(0), authorization ?? "");
+    } catch {
+      // Deliberately says nothing about why. An unauthenticated caller probing
+      // this endpoint learns only that it refused them.
+      throw new UnauthorizedException("Webhook signature could not be verified.");
+    }
+
+    return this.sessions.applyRoomEvents(events);
+  }
+
   /** The picker behind "start now" — what this teacher could open a room for. */
   @RequirePermission("live_session", "create")
   @Get("me/teaching")
   myTeaching() {
     return this.sessions.myTeaching();
+  }
+
+  /**
+   * FR-LIV — classes happening now that the caller can walk into.
+   *
+   * `live_session:read`, which a STUDENT holds at ENROLLED scope: this is what
+   * tells them a class has begun. Scoped by the server, so it can only ever
+   * name their own classes.
+   */
+  @RequirePermission("live_session", "read")
+  @Get("me/live-now")
+  liveNow() {
+    return this.sessions.liveNow();
+  }
+
+  /**
+   * Who is in the room — FR-LIV.
+   *
+   * `attendance_register:read`, the teaching resource, NOT `live_session:read`.
+   * A student holds live_session:read over their own classes, and this names
+   * every classmate in the room together with whether their camera is on. That
+   * is a roster, and it belongs to whoever takes the register.
+   */
+  @RequirePermission("attendance_register", "read")
+  @Get("live-sessions/:id/participants")
+  participants(@Param("id") id: string) {
+    return this.sessions.participants(id);
+  }
+
+  /**
+   * FR-LIV — mute one person.
+   *
+   * Mute only; there is no unmute endpoint and there will not be one. A teacher
+   * who could switch a student's microphone back on could listen to their room
+   * without consent.
+   */
+  @RequirePermission("live_session", "update")
+  @Post("live-sessions/:id/participants/:identity/mute")
+  @HttpCode(200)
+  mute(
+    @Param("id") id: string,
+    @Param("identity") identity: string,
+    @Body(zodBody(muteSchema)) dto: z.infer<typeof muteSchema>,
+  ) {
+    return this.sessions.muteParticipant(id, identity, dto.kind);
+  }
+
+  @RequirePermission("live_session", "update")
+  @Post("live-sessions/:id/participants/:identity/remove")
+  @HttpCode(200)
+  removeParticipant(@Param("id") id: string, @Param("identity") identity: string) {
+    return this.sessions.removeParticipant(id, identity);
   }
 
   /**
