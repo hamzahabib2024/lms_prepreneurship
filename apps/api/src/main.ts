@@ -1,6 +1,7 @@
 import "reflect-metadata";
 import { Logger } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
+import type { NestExpressApplication } from "@nestjs/platform-express";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import helmet from "helmet";
 import { AppModule } from "./app.module";
@@ -13,9 +14,28 @@ import {
 async function bootstrap(): Promise<void> {
   const logger = new Logger("Bootstrap");
 
-  const app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     logger: ["error", "warn", "log"],
+    /*
+     * KEEPS THE EXACT BYTES OF EVERY REQUEST BODY, for the one endpoint that
+     * needs them: the live-classroom webhook.
+     *
+     * That endpoint is public — a media server cannot sign in — so its only
+     * authentication is an HMAC the provider computed over the bytes it sent.
+     * Verifying it against a re-serialised object cannot work: JSON.stringify
+     * does not promise the same key order or the same spacing, so a body that
+     * parsed perfectly would fail its own signature.
+     */
+    rawBody: true,
   });
+
+  /*
+   * Providers send webhooks as `application/webhook+json`, which the JSON
+   * parser does not recognise — so without this the body arrives EMPTY and the
+   * signature check fails on every delivery, with nothing in the logs to say
+   * why. Naming the type here parses it and keeps `rawBody` alongside.
+   */
+  app.useBodyParser("json", { type: ["application/json", "application/webhook+json"] });
 
   // §9.1 — everything under /api/v1.
   app.setGlobalPrefix(process.env["API_PREFIX"] ?? "api/v1");
