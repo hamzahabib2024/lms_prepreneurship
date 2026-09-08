@@ -15,6 +15,7 @@ import 'users/users_page.dart';
 import 'email_queue/email_queue_page.dart';
 import 'partners/partners_page.dart';
 import 'partners/partner_portal_page.dart';
+import 'signatories/signatories_page.dart';
 import '../../cohort_import/data/cohort_import_repository.dart';
 import '../../cohort_import/cubit/cohort_import_cubit.dart';
 import '../../cohort_import/presentation/cohort_import_page.dart';
@@ -119,6 +120,12 @@ class _AdminPanelView extends StatelessWidget {
         title: 'Partner portal',
         subtitle: 'View partner institute students and results',
         builder: (_) => PartnerPortalPage(api: api),
+      ),
+      _AdminEntry(
+        icon: Icons.badge_outlined,
+        title: 'Certificate signatories',
+        subtitle: 'Manage who signs certificates',
+        builder: (_) => SignatoriesPage(api: api),
       ),
     ];
 
