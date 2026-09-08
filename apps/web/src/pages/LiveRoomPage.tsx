@@ -4,6 +4,7 @@ import {
   ConnectionStateToast,
   LiveKitRoom,
   VideoConference,
+  useIsRecording,
   useParticipants,
   usePreviewTracks,
 } from "@livekit/components-react";
@@ -171,10 +172,46 @@ function Classroom({ envelope }: { envelope: JoinEnvelope }) {
  */
 function RoomChrome({ isHost, sessionId }: { isHost: boolean; sessionId: string }) {
   const participants = useParticipants();
+  /*
+   * FROM LIVEKIT, NOT FROM OUR API, and that is what makes it honest.
+   *
+   * Everybody in the room has to be able to see that they are being recorded —
+   * it is the difference between a lesson and a lesson somebody is keeping, and
+   * in many places it is also the law. Our recording endpoints need
+   * live_session:update, which a student does not hold, so a student polling
+   * them would learn nothing.
+   *
+   * LiveKit publishes the room's recording state to every participant. This
+   * reads that, so the badge cannot disagree with reality and cannot be hidden
+   * by anybody's permissions.
+   */
+  const isRecording = useIsRecording();
   const [panel, setPanel] = useState<"none" | "people" | "invite">("none");
   const [full, setFull] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [recBusy, setRecBusy] = useState(false);
+
+  /** FR-VID — start or stop, never a toggle. See the endpoints. */
+  const record = useCallback(
+    async (start: boolean) => {
+      if (!start && !window.confirm("Stop recording this class?")) return;
+      setRecBusy(true);
+      setNote(null);
+      try {
+        await api.post(`/live-sessions/${sessionId}/recording/${start ? "start" : "stop"}`);
+        // Deliberately says the file is not ready. Encoding continues after the
+        // room closes, and a teacher who goes looking immediately and finds
+        // nothing concludes it failed.
+        setNote(start ? "Recording." : "Stopped. The lecture appears once it has finished encoding.");
+      } catch (e) {
+        setNote(e instanceof ApiError ? e.message : "The recorder did not respond.");
+      } finally {
+        setRecBusy(false);
+      }
+    },
+    [sessionId],
+  );
 
   useEffect(() => {
     const onChange = () => setFull(!!document.fullscreenElement);
@@ -223,7 +260,26 @@ function RoomChrome({ isHost, sessionId }: { isHost: boolean; sessionId: string 
 
   return (
     <>
+      {/* Seen by EVERYONE in the room, teacher and student alike. Being
+          recorded is not something to discover afterwards. */}
+      {isRecording && (
+        <div className="room-recording" role="status">
+          <span className="room-recording-dot" aria-hidden="true" />
+          Recording
+        </div>
+      )}
+
       <div className="room-bar">
+        {isHost && (
+          <button
+            type="button"
+            className={`room-bar-btn ${isRecording ? "is-recording" : ""}`}
+            disabled={recBusy}
+            onClick={() => void record(!isRecording)}
+          >
+            {recBusy ? "Working…" : isRecording ? "Stop recording" : "Record"}
+          </button>
+        )}
         <button
           type="button"
           className={`room-bar-btn ${panel === "people" ? "is-on" : ""}`}

@@ -4214,6 +4214,34 @@ details > summary:hover { text-decoration: underline; }
 }
 .room-bar-btn:hover, .room-bar-btn:focus-visible { opacity: 1; }
 .room-bar-btn.is-on { opacity: 1; background: rgb(255 255 255 / 16%); }
+.room-bar-btn.is-recording { opacity: 1; border-color: rgb(248 113 113 / 55%); color: #fca5a5; }
+.room-bar-btn:disabled { opacity: .4; cursor: default; }
+
+/*
+ * "Recording", where nobody can miss it — top LEFT, opposite the controls.
+ *
+ * Every participant sees this, not only the teacher: being recorded is not a
+ * thing to find out afterwards. It is driven by the room's own state rather
+ * than by our API, so it cannot disagree with what is actually happening.
+ */
+.room-recording {
+  position: absolute; top: .7rem; left: .7rem; z-index: 6;
+  display: flex; align-items: center; gap: .35rem;
+  padding: .3rem .6rem; font-size: .75rem; font-weight: 600;
+  border-radius: var(--radius-sm);
+  background: rgb(0 0 0 / 55%);
+  border: 1px solid rgb(248 113 113 / 45%);
+  color: #fca5a5;
+}
+.room-recording-dot {
+  width: 8px; height: 8px; border-radius: 50%; background: #ef4444;
+  animation: live-pulse 1.6s ease-in-out infinite;
+}
+/* The dot carries the meaning through colour AND motion; under reduced motion
+   the word "Recording" beside it still says everything. */
+@media (prefers-reduced-motion: reduce) {
+  .room-recording-dot { animation: none; }
+}
 .room-count {
   display: inline-block; margin-left: .3rem; padding: 0 .32rem;
   border-radius: 999px; background: rgb(255 255 255 / 18%); font-variant-numeric: tabular-nums;
