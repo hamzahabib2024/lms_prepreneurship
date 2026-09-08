@@ -13,6 +13,7 @@ import 'settings/settings_page.dart';
 import 'security/security_page.dart';
 import 'users/users_page.dart';
 import 'email_queue/email_queue_page.dart';
+import 'partners/partners_page.dart';
 import '../../cohort_import/data/cohort_import_repository.dart';
 import '../../cohort_import/cubit/cohort_import_cubit.dart';
 import '../../cohort_import/presentation/cohort_import_page.dart';
@@ -105,6 +106,12 @@ class _AdminPanelView extends StatelessWidget {
         title: 'Email queue',
         subtitle: 'Manage outgoing email, release or discard messages',
         builder: (_) => EmailQueuePage(api: api),
+      ),
+      _AdminEntry(
+        icon: Icons.handshake_outlined,
+        title: 'Partner institutes',
+        subtitle: 'Manage partner institutes and their accounts',
+        builder: (_) => PartnersPage(api: api),
       ),
     ];
 
