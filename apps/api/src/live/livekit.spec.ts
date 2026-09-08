@@ -344,6 +344,50 @@ describe("LiveKit adapter — configured", () => {
    * write attendance for a class they are not in is this check. If this test
    * ever goes green on a forged delivery, the register is writable by strangers.
    */
+  /* ------------------------------------------------------------ recording */
+
+  it("offers recording once it has a server to ask", () => {
+    expect(provider().capabilities().canProvideRecording).toBe(true);
+    expect(
+      new LiveKitProvider(configWith(), prismaWith("Ayesha Khan")).capabilities()
+        .canProvideRecording,
+    ).toBe(false);
+  });
+
+  it("refuses to record a class that has no room", async () => {
+    // Loudly, unlike mute and remove. Those are corrections a teacher makes in
+    // passing; this one they will go looking for the file afterwards.
+    await expect(provider().startRecording(bindingFor(null), "Founding a company")).rejects.toThrow();
+  });
+
+  it("reports no recording when the recorder cannot be reached", async () => {
+    // A recorder that is down is not a recorder that is running. Answering
+    // "recording" here is the one lie that would matter — the teacher relies on
+    // it to know the lesson is being kept.
+    await expect(provider().activeRecording(bindingFor(null))).resolves.toBeNull();
+  });
+
+  it("stopping a recording that is not running is not an error", async () => {
+    // Ending a class stops the recorder first, every time, whether or not one
+    // was started. That path must not throw on the ordinary case.
+    await expect(provider().stopRecording(bindingFor(null))).resolves.toBeUndefined();
+  });
+
+  /**
+   * Egress reports where it wrote the file; the Institute's storage addresses
+   * things relative to its own root. A ref that kept the leading slash would be
+   * refused by the storage layer as an attempted traversal — a recording that
+   * exists on disk and cannot be played.
+   */
+  it("turns the recorder's path into a ref the storage understands", () => {
+    const p = provider() as unknown as { toStorageRef(f: string): string };
+    expect(p.toStorageRef("/out/lectures/session-x-123.mp4")).toBe("lectures/session-x-123.mp4");
+    // Already relative — left alone.
+    expect(p.toStorageRef("lectures/session-x-123.mp4")).toBe("lectures/session-x-123.mp4");
+    // Never a leading slash, whatever it was handed.
+    expect(p.toStorageRef("/lectures/x.mp4").startsWith("/")).toBe(false);
+  });
+
   it("rejects a delivery that is not signed", async () => {
     const body = Buffer.from(JSON.stringify({ event: "participant_joined" }), "utf8");
     await expect(provider().handleWebhook(body, "")).rejects.toThrow();

@@ -569,6 +569,27 @@ export class LiveSessionService {
 
     if (session.binding) {
       const provider = this.providers.resolve(session.sectionSubject.section.liveProviderKey);
+      const asBinding: ProviderBinding = {
+        providerKey: session.binding.providerKey,
+        externalId: session.binding.externalId,
+        joinUrl: session.binding.joinUrl,
+        hostUrl: session.binding.hostUrl,
+        providerMetadata: null,
+        status: session.binding.status,
+      };
+
+      /*
+       * STOP THE RECORDER BEFORE CLOSING THE ROOM, and never fail on it.
+       *
+       * A teacher who finishes a lesson presses "End the class" and nothing
+       * else; expecting them to remember to stop the recording first is how
+       * recordings get lost. Deleting the room under a running Egress is also
+       * the case most likely to produce a truncated file.
+       */
+      await provider
+        .stopRecording?.(asBinding)
+        .catch((e) => this.logger.warn(`Stopping the recorder failed: ${String(e)}`));
+
       // Optional on the interface — a provider that cannot close a room
       // remotely simply does not offer it (ARC-030), and the class is over in
       // the System either way.
@@ -626,6 +647,12 @@ export class LiveSessionService {
 
       if (event.kind === "ROOM_FINISHED") {
         await this.proposeAttendance(binding.liveSessionId);
+        applied++;
+        continue;
+      }
+
+      if (event.kind === "RECORDING_FINISHED") {
+        if (event.recording) await this.saveRecording(binding.liveSessionId, event.recording);
         applied++;
         continue;
       }
@@ -759,6 +786,144 @@ export class LiveSessionService {
       `Proposed attendance for ${session.attendance.length} student(s) on session ${liveSessionId}` +
         `${adopt ? " and adopted it (policy)" : ""}.`,
     );
+  }
+
+  /**
+   * A finished recording becomes a lecture — FR-VID.
+   *
+   * Nothing is copied and nothing is converted. Egress wrote the file into the
+   * same storage the Institute already serves lectures from, so the recording
+   * IS the lecture: this writes the row that points at it and the existing
+   * watch page plays it, signed URLs and all.
+   *
+   * DRAFT, which is the model's default and the right one. A lesson that has
+   * just been recorded has not been looked at by anybody — a teacher may have
+   * started it early, or said something at the end meant for one student. The
+   * teacher publishes it.
+   */
+  private async saveRecording(
+    liveSessionId: string,
+    recording: { storageRef: string; durationSeconds: number | null },
+  ): Promise<void> {
+    const session = await this.prisma.asSystem((db) =>
+      db.liveSession.findUnique({ where: { id: liveSessionId } }),
+    );
+    if (!session) return;
+
+    // The lecture store, whatever the Institute has it set to. Egress writes to
+    // the API's own disk, so this is `local` in every configuration that can
+    // record at all — read rather than assumed, so the row is not wrong the day
+    // that changes.
+    const storageProvider = this.config.get<string>("LECTURE_STORAGE", "local");
+
+    /*
+     * Keyed on the session, which the schema already makes unique.
+     *
+     * Egress retries a delivery it thinks failed, and a teacher can stop and
+     * restart a recording within one class. Both would otherwise leave a class
+     * with several "lectures" that are the same lesson, and a student with no
+     * way of telling which to watch.
+     */
+    await this.prisma.asSystem((db) =>
+      db.recordedLecture.upsert({
+        where: { liveSessionId },
+        update: {
+          storageProvider,
+          storageRef: recording.storageRef,
+          durationSeconds: recording.durationSeconds,
+          availabilityStatus: "AVAILABLE",
+        },
+        create: {
+          liveSessionId,
+          sectionSubjectId: session.sectionSubjectId,
+          lessonId: session.lessonId,
+          title: session.title,
+          storageProvider,
+          storageRef: recording.storageRef,
+          durationSeconds: recording.durationSeconds,
+          recordedOn: session.actualStart ?? session.scheduledStart,
+          teacherId: session.hostTeacherId,
+        },
+      }),
+    );
+
+    this.logger.log(`Recording saved for session ${liveSessionId} at ${recording.storageRef}.`);
+  }
+
+  /** Start recording — FR-VID. Started by a person, never automatically. */
+  async startRecording(sessionId: string) {
+    const { provider, binding } = await this.roomFor(sessionId);
+    if (!provider.startRecording) {
+      throw new AppError("RESOURCE_CONFLICT", {
+        message: "This classroom cannot be recorded from the LMS.",
+      });
+    }
+
+    const session = await this.prisma.scoped.liveSession.findFirst({
+      where: { id: sessionId, deletedAt: null },
+      select: { title: true },
+    });
+
+    let handle;
+    try {
+      handle = await provider.startRecording(binding, session?.title ?? "class");
+    } catch (err) {
+      /*
+       * Said plainly, because the usual cause is fixable and invisible: one
+       * Egress worker records ONE room, so the second class to press record
+       * gets nothing and no explanation. A teacher told "already recording
+       * another class" goes and asks; a teacher told "error" does not.
+       */
+      throw new AppError("RESOURCE_CONFLICT", {
+        message:
+          "The recorder could not be started. It may already be recording another class — " +
+          "each recorder handles one at a time.",
+        details: [{ field: "recording", code: "EGRESS_FAILED", message: (err as Error).message }],
+      });
+    }
+
+    await this.audit.record({
+      action: "session.recording_start",
+      entityType: "LiveSession",
+      entityId: sessionId,
+      after: { recordingId: handle.recordingId },
+    });
+    return { sessionId, recording: true, startedAt: handle.startedAt };
+  }
+
+  /** Stop recording. Ending the class does this too. */
+  async stopRecording(sessionId: string) {
+    const { provider, binding } = await this.roomFor(sessionId);
+    if (!provider.stopRecording) {
+      throw new AppError("RESOURCE_CONFLICT", {
+        message: "This classroom cannot be recorded from the LMS.",
+      });
+    }
+    await provider.stopRecording(binding);
+
+    await this.audit.record({
+      action: "session.recording_stop",
+      entityType: "LiveSession",
+      entityId: sessionId,
+    });
+    // The FILE does not exist yet — encoding continues after the room closes,
+    // and it arrives later by webhook. Saying so stops a teacher going to look
+    // for it immediately and concluding it failed.
+    return { sessionId, recording: false, pending: true };
+  }
+
+  /** Whether one is running — asked of the provider, never remembered here. */
+  async recordingStatus(sessionId: string) {
+    const { provider, binding } = await this.roomFor(sessionId);
+    if (!provider.activeRecording) return { supported: false, recording: false };
+    try {
+      const active = await provider.activeRecording(binding);
+      return { supported: true, recording: !!active, startedAt: active?.startedAt ?? null };
+    } catch {
+      // A recorder that cannot be reached is not a recorder that is running.
+      // Reporting "recording" here would be the one lie that matters.
+      return { supported: true, recording: false };
+    }
   }
 
   /**

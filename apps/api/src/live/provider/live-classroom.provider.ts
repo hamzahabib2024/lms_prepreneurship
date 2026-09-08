@@ -79,7 +79,7 @@ export interface ParticipationRecord {
  * contains no vendor parsing and no vendor's idea of an event name.
  */
 export interface RoomEvent {
-  kind: "PARTICIPANT_JOINED" | "PARTICIPANT_LEFT" | "ROOM_FINISHED";
+  kind: "PARTICIPANT_JOINED" | "PARTICIPANT_LEFT" | "ROOM_FINISHED" | "RECORDING_FINISHED";
   /** The provider's room id. Matches ProviderBinding.externalId. */
   room: string;
   /** The identity the adapter issued — for this System, the LMS user id. */
@@ -87,6 +87,18 @@ export interface RoomEvent {
   at: Date;
   /** How long they had been in the room when they left, where it is known. */
   secondsInRoom: number | null;
+  /** Set on RECORDING_FINISHED: where the finished lecture landed. */
+  recording?: {
+    /** A ref the Institute's storage understands — never an absolute path. */
+    storageRef: string;
+    durationSeconds: number | null;
+  } | null;
+}
+
+/** A recording in progress. `recordingId` is opaque and provider-owned. */
+export interface RecordingHandle {
+  recordingId: string;
+  startedAt: Date;
 }
 
 export interface RecordingReference {
@@ -207,6 +219,35 @@ export interface LiveClassroomProvider {
 
   /** Remove somebody from the room. They can rejoin; this is not a ban. */
   removeParticipant?(binding: ProviderBinding, identity: string): Promise<void>;
+
+  /**
+   * Start recording the class — FR-VID.
+   *
+   * STARTED BY A PERSON, NOT AUTOMATICALLY. Recording a room is expensive and
+   * it is also a decision about the people in it: a lesson that is being kept
+   * is a different thing from one that is not, and the teacher is who should
+   * say which this is.
+   *
+   * The finished file does not come back from here. Encoding continues after
+   * the class ends, so the provider reports it later through a webhook —
+   * RECORDING_FINISHED, carrying a ref the Institute's storage understands.
+   */
+  startRecording?(binding: ProviderBinding, title: string): Promise<RecordingHandle>;
+
+  /**
+   * Stop it. Ending the class does this too, so a teacher who simply finishes
+   * does not lose the recording.
+   */
+  stopRecording?(binding: ProviderBinding): Promise<void>;
+
+  /**
+   * Whether one is running, asked of the provider rather than remembered here.
+   *
+   * The provider is the only thing that actually knows: a recording can fail on
+   * its own, and a flag in our database would then say "recording" over a class
+   * nobody is capturing — which is the worst way to find out, an hour later.
+   */
+  activeRecording?(binding: ProviderBinding): Promise<RecordingHandle | null>;
 
   /** Empty array where unsupported — see canReportParticipation. */
   fetchParticipation(binding: ProviderBinding): Promise<ParticipationRecord[]>;

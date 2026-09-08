@@ -2,6 +2,9 @@ import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import {
   AccessToken,
+  EgressClient,
+  EncodedFileOutput,
+  EncodedFileType,
   RoomServiceClient,
   TrackSource,
   TrackType,
@@ -15,6 +18,7 @@ import type {
   ProviderBinding,
   ProviderCapabilities,
   ProviderHealth,
+  RecordingHandle,
   RecordingReference,
   RoomEvent,
   RoomParticipant,
@@ -129,9 +133,14 @@ export class LiveKitProvider implements LiveClassroomProvider {
        * amount of participation data knows that.
        */
       canReportParticipation: this.isConfigured,
-      // Recording needs a LiveKit Egress service and somewhere to put the
-      // output. Also separate work.
-      canProvideRecording: false,
+      /*
+       * Needs the Egress service and a Redis for it to be dispatched through
+       * — both in docker-compose behind the `livekit` profile. This flag says
+       * the ADAPTER can ask; whether a worker is listening shows up as the
+       * request failing, which the teacher is told about rather than finding
+       * out when they go looking for the file.
+       */
+      canProvideRecording: this.isConfigured,
       canEndMeetingRemotely: this.isConfigured,
       supportsWaitingRoom: false,
       maxParticipants: null,
@@ -207,6 +216,92 @@ export class LiveKitProvider implements LiveClassroomProvider {
   async removeParticipant(binding: ProviderBinding, identity: string): Promise<void> {
     if (!this.isConfigured || !binding.externalId) return;
     await this.client().removeParticipant(binding.externalId, identity);
+  }
+
+  // ----------------------------------------------------------- recording --
+
+  private egress(): EgressClient {
+    return new EgressClient(
+      this.httpUrl,
+      this.cfg("LIVEKIT_API_KEY"),
+      this.cfg("LIVEKIT_API_SECRET"),
+    );
+  }
+
+  /**
+   * Record the class to a lecture file — FR-VID.
+   *
+   * A ROOM COMPOSITE, not a per-track capture: Egress renders the room as a
+   * viewer sees it — speaker view, screen share and all — and encodes that to
+   * one MP4. A student watching it back should see the lesson, not a grid of
+   * separate video files nothing can play together.
+   *
+   * The path is RELATIVE, and deliberately. Egress resolves it under its
+   * configured output directory, which is mounted from the same volume the API
+   * serves lectures from — so the same string is a valid storageRef here, and
+   * the recording becomes a playable lecture with nothing copying it.
+   */
+  async startRecording(binding: ProviderBinding, title: string): Promise<RecordingHandle> {
+    if (!this.isConfigured || !binding.externalId) {
+      throw new Error("LiveKit is not configured, or this class has no room.");
+    }
+
+    // The title only names the file for a human reading the directory; the
+    // System addresses it by storageRef. Anything that is not a plain word is
+    // dropped rather than escaped — a filename is not the place to be clever.
+    const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
+    /*
+     * ABSOLUTE, and it has to be.
+     *
+     * A relative filepath is NOT resolved against the recorder's configured
+     * output directory — it is taken from the filesystem root. Measured: a
+     * request for `lectures/x.mp4` died with
+     *
+     *   Local upload failed: mkdir /lectures/: permission denied
+     *
+     * after the entire lesson had been encoded, which is the most expensive
+     * moment possible to discover a path bug. toStorageRef strips this prefix
+     * back off, so what the System stores stays relative to its own root.
+     */
+    const dir = (this.cfg("LIVEKIT_EGRESS_OUTPUT_DIR") || "/out").replace(/\/+$/, "");
+    const filepath = `${dir}/lectures/${binding.externalId}-${Date.now()}${slug ? `-${slug}` : ""}.mp4`;
+
+    const info = await this.egress().startRoomCompositeEgress(
+      binding.externalId,
+      { file: new EncodedFileOutput({ fileType: EncodedFileType.MP4, filepath }) },
+      // The layout a lesson wants: whoever is talking, large. A grid of thirty
+      // muted students is not what anybody watches a lecture back for.
+      { layout: "speaker" },
+    );
+
+    return { recordingId: info.egressId, startedAt: new Date() };
+  }
+
+  /** Stop whatever is recording this room. */
+  async stopRecording(binding: ProviderBinding): Promise<void> {
+    const active = await this.activeRecording(binding);
+    if (!active) return; // nothing running — not a failure
+    await this.egress().stopEgress(active.recordingId);
+  }
+
+  /**
+   * Asked of Egress, never remembered here.
+   *
+   * A recording can die on its own — the renderer runs out of memory, the
+   * worker is restarted mid-lesson. A flag in our own database would then show
+   * "recording" over a class nobody is capturing, and the teacher would find
+   * out when they went looking for the file.
+   */
+  async activeRecording(binding: ProviderBinding): Promise<RecordingHandle | null> {
+    if (!this.isConfigured || !binding.externalId) return null;
+
+    const running = await this.egress().listEgress({ roomName: binding.externalId, active: true });
+    const first = running[0];
+    if (!first) return null;
+    return {
+      recordingId: first.egressId,
+      startedAt: first.startedAt ? new Date(Number(first.startedAt) / 1_000_000) : new Date(),
+    };
   }
 
   // -------------------------------------------------------------- session --
@@ -424,6 +519,23 @@ export class LiveKitProvider implements LiveClassroomProvider {
     };
   }
 
+  /**
+   * Egress reports where it wrote the file; the Institute's storage addresses
+   * things relative to its own root. This is the one place those two ideas of
+   * a path meet.
+   *
+   * Egress may answer with the absolute path it used or with the relative one
+   * it was given, so the output directory is stripped when present. Anything
+   * else would store a ref beginning with a slash, which the storage layer
+   * treats as an attempted traversal and refuses — a recording that exists on
+   * disk and cannot be played.
+   */
+  private toStorageRef(filename: string): string {
+    const dir = this.cfg("LIVEKIT_EGRESS_OUTPUT_DIR") || "/out";
+    const prefix = dir.endsWith("/") ? dir : `${dir}/`;
+    return filename.startsWith(prefix) ? filename.slice(prefix.length) : filename.replace(/^\/+/, "");
+  }
+
   private ttlMinutes(): number {
     const raw = Number(this.cfg("LIVEKIT_TOKEN_TTL_MINUTES"));
     return Number.isFinite(raw) && raw > 0 ? raw : 240;
@@ -530,6 +642,35 @@ export class LiveKitProvider implements LiveClassroomProvider {
 
       case "room_finished":
         return [{ kind: "ROOM_FINISHED", room, identity: null, at, secondsInRoom: null }];
+
+      case "egress_ended": {
+        /*
+         * The recording, arriving LATE and by push — which is why there is no
+         * "give me the file" call anywhere in this adapter.
+         *
+         * Encoding continues after the last person leaves, so the file does not
+         * exist when the class ends. Egress reports it when it is finished and
+         * playable, which is the only moment the LMS can usefully hear about it.
+         */
+        const file = event.egressInfo?.fileResults?.[0];
+        if (!file?.filename) return [];
+
+        return [
+          {
+            kind: "RECORDING_FINISHED",
+            room,
+            identity: null,
+            at,
+            secondsInRoom: null,
+            recording: {
+              storageRef: this.toStorageRef(file.filename),
+              // Nanoseconds, because protobuf durations are. Zero means Egress
+              // did not measure it rather than a zero-length lecture.
+              durationSeconds: file.duration ? Math.round(Number(file.duration) / 1e9) : null,
+            },
+          },
+        ];
+      }
 
       default:
         // track_published, egress_started and the rest. Accepted and ignored —

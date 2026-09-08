@@ -244,6 +244,35 @@ export class LiveController {
     return this.sessions.muteParticipant(id, identity, dto.kind);
   }
 
+  /**
+   * FR-VID — record the class.
+   *
+   * Three endpoints rather than a toggle: a toggle has to know the current
+   * state to decide what it means, and the only thing that truly knows is the
+   * recorder. Two presses of a toggle over a flaky connection would otherwise
+   * stop a recording somebody meant to start.
+   */
+  @RequirePermission("live_session", "update")
+  @Post("live-sessions/:id/recording/start")
+  @HttpCode(200)
+  startRecording(@Param("id") id: string) {
+    return this.sessions.startRecording(id);
+  }
+
+  @RequirePermission("live_session", "update")
+  @Post("live-sessions/:id/recording/stop")
+  @HttpCode(200)
+  stopRecording(@Param("id") id: string) {
+    return this.sessions.stopRecording(id);
+  }
+
+  /** Asked of the recorder, so a dead one never shows as running. */
+  @RequirePermission("live_session", "update")
+  @Get("live-sessions/:id/recording")
+  recordingStatus(@Param("id") id: string) {
+    return this.sessions.recordingStatus(id);
+  }
+
   @RequirePermission("live_session", "update")
   @Post("live-sessions/:id/participants/:identity/remove")
   @HttpCode(200)
