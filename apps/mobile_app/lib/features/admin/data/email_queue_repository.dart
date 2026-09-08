@@ -1,5 +1,5 @@
 import '../../../core/network/api_client.dart';
-import '../models/email_queue_summary.dart';
+import 'models/email_queue_summary.dart';
 
 class EmailQueueRepository {
   EmailQueueRepository({required this.api});

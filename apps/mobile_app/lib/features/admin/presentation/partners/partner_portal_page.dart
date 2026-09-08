@@ -6,7 +6,6 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/ui.dart';
 import '../../cubit/partner_portal_cubit.dart';
 import '../../data/partner_portal_repository.dart';
-import '../../data/models/partner.dart';
 
 class PartnerPortalPage extends StatelessWidget {
   const PartnerPortalPage({super.key, required this.api});

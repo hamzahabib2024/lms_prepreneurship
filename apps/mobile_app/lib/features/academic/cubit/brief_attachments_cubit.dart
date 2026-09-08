@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -64,11 +65,12 @@ class BriefAttachmentsCubit extends Cubit<BriefAttachmentsState> {
   Future<void> upload(String filePath, String filename) async {
     emit(state.copyWith(uploading: true, error: null));
     try {
+      final form = FormData.fromMap({
+        'file': await MultipartFile.fromFile(filePath, filename: filename),
+      });
       await api.uploadForm(
         '/assignments/$assignmentId/attachments',
-        filePath: filePath,
-        filename: filename,
-        fieldName: 'file',
+        form,
       );
       if (isClosed) return;
       emit(state.copyWith(uploading: false));

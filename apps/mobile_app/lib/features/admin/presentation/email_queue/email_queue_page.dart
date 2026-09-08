@@ -223,9 +223,6 @@ class _AllowanceFigures extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final muted = dark ? AppColorsDark.muted : AppColors.muted;
-
     return Row(
       children: [
         _AllowanceItem(

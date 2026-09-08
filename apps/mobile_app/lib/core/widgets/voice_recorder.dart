@@ -3,9 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../../core/network/api_client.dart';
-import '../../../core/theme/app_theme.dart';
-import '../../teaching/data/teaching_repository.dart';
+import '../theme/app_theme.dart';
 
 enum RecordingStatus { idle, recording, stopped }
 

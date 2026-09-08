@@ -3,8 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/network/api_client.dart';
-import '../../../core/theme/app_theme.dart';
-import '../../../core/widgets/ui.dart';
+import '../../../core/network/api_exception.dart';
 
 class LectureUploadCubit extends Cubit<LectureUploadState> {
   LectureUploadCubit({required this.api}) : super(const LectureUploadState());

@@ -22,6 +22,7 @@ class ProgressSettingsData {
         assignment: (w['assignment'] as num?)?.toDouble() ?? 0,
         quiz: (w['quiz'] as num?)?.toDouble() ?? 0,
         attendance: (w['attendance'] as num?)?.toDouble() ?? 0,
+        ownedByThisClass: w['ownedByThisClass'] as bool? ?? false,
       ),
       criteria: ProgressCriteria(
         minProgressPercent: (c['minProgressPercent'] as num?)?.toDouble() ?? 0,
@@ -38,12 +39,14 @@ class ProgressWeights {
     required this.assignment,
     required this.quiz,
     required this.attendance,
+    this.ownedByThisClass = false,
   });
 
   final double video;
   final double assignment;
   final double quiz;
   final double attendance;
+  final bool ownedByThisClass;
 
   double get total => video + assignment + quiz + attendance;
 }

@@ -1,9 +1,7 @@
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../../core/network/api_client.dart';
-import '../../../core/theme/app_theme.dart';
+import '../network/api_client.dart';
+import '../theme/app_theme.dart';
 
 class ThumbnailUploadWidget extends StatefulWidget {
   const ThumbnailUploadWidget({

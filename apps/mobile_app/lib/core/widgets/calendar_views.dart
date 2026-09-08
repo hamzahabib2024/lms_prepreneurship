@@ -19,8 +19,8 @@ class CalendarEntry {
   final String subject;
   final String section;
   final String? teacher;
-  final DateTime scheduledStart;
-  final DateTime scheduledEnd;
+  final String scheduledStart;
+  final String scheduledEnd;
   final String status;
 }
 

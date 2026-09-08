@@ -5,7 +5,6 @@ import '../../../core/network/api_exception.dart';
 import '../data/email_queue_repository.dart';
 import '../data/models/email_queue_item.dart';
 import '../data/models/email_queue_summary.dart';
-import '../data/models/email_queue_usage.dart';
 
 class EmailQueueCubit extends Cubit<EmailQueueState> {
   EmailQueueCubit({required this.repository}) : super(const EmailQueueState());

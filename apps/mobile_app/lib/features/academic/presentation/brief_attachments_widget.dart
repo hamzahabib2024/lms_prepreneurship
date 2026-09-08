@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:file_picker/file_picker.dart';
 
-import '../../theme/app_theme.dart';
+import '../../../core/theme/app_theme.dart';
 import '../cubit/brief_attachments_cubit.dart';
 
 class BriefAttachmentsWidget extends StatelessWidget {
@@ -181,11 +181,12 @@ class _BriefAttachmentsView extends StatelessWidget {
   }
 
   Future<void> _pickFile(BuildContext context) async {
-    final result = await FilePicker.platform.pickFiles();
-    if (result != null && result.files.isNotEmpty) {
-      final file = result.files.first;
-      if (file.path != null) {
-        context.read<BriefAttachmentsCubit>().upload(file.path!, file.name);
+    final cubit = context.read<BriefAttachmentsCubit>();
+    final result = await FilePicker.pickFiles();
+    if (result.isNotEmpty) {
+      final file = result.first;
+      if (file.path != null && context.mounted) {
+        cubit.upload(file.path!, file.name);
       }
     }
   }
