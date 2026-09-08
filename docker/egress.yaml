@@ -1,0 +1,72 @@
+# LiveKit Egress — recording a class to a lecture file. FR-VID, SRS §3.4.
+#
+# One instance records ONE room at a time. Two classes recording at once needs
+# a second instance; a third needs a third. That is a property of the service,
+# not a setting, and it is the first thing to check when a teacher reports that
+# recording "did not start".
+
+# The job queue, and the only channel between this worker and the LiveKit
+# server. Both must point at the same Redis or nothing is ever dispatched —
+# there is no error for this, the request simply sits unclaimed.
+redis:
+  address: redis:6379
+
+# Must MATCH docker/livekit.yaml and the LMS .env. Egress authenticates to the
+# LiveKit server with these, exactly as the API does.
+#
+# DEVELOPMENT VALUES, PUBLISHED IN THIS REPOSITORY. Generate your own before a
+# real cohort:
+#   docker run --rm livekit/livekit-server generate-keys
+api_key: devkey
+api_secret: devsecretdevsecretdevsecretdevsecret
+
+# The compose service name and the INTERNAL port. This is Egress joining the
+# room as an invisible participant, from inside the Docker network — not the
+# address a student's browser uses.
+ws_url: ws://livekit:7880
+
+# Where the finished file lands.
+#
+# /out is the api-storage volume, which is the same disk the API serves
+# lectures from — so the recording IS the lecture, with nothing copying it
+# afterwards. The API stores a path relative to its storage root, which is why
+# the `lectures/` prefix here matters and must not change casually.
+file_output_directory: /out
+
+# Insecure because ws_url above is plain ws:// inside the Docker network. On a
+# server where LiveKit is behind TLS, use wss:// and remove this line.
+insecure: true
+
+# THE TEMPLATE CHROME LOADS, and it must be served over plain http here.
+#
+# Egress records by opening the room in a headless Chrome and capturing the
+# page. The default template is the hosted one at https://template.livekit.io —
+# and an HTTPS page is not allowed to open an insecure ws:// WebSocket, so
+# Chrome blocks the connection back to LiveKit and the job dies with
+#
+#   failed to launch chrome: page load error: websocket url timeout reached
+#
+# which names neither TLS nor mixed content. Measured on this stack: the
+# network was fine and `wget http://livekit:7880` from inside the egress
+# container answered OK.
+#
+# This container already serves the same templates locally on 7980 over http,
+# so pointing at those keeps the whole exchange insecure-but-consistent. On a
+# server where ws_url is wss://, the hosted template works and this can go.
+template_base: http://localhost:7980
+
+logging:
+  level: info
+
+# ---------------------------------------------------------------------------
+# WHY THIS IS NOT ON THE APPLICATION SERVER
+#
+# The SFU forwards packets without decoding them. Egress does the opposite: it
+# runs a headless Chrome, renders the room as a web page, and re-encodes the
+# result. That is 2-6 CPUs per recording, sustained for the length of a lesson,
+# and it will starve anything sharing the machine.
+#
+# It also needs more shared memory than Docker gives by default (shm_size in
+# docker-compose.yml). Under it, Chrome's renderer dies partway through and the
+# recording is silently truncated.
+# ---------------------------------------------------------------------------

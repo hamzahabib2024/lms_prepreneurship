@@ -261,6 +261,47 @@ services:
       # connect, see each other listed, and no video ever appears.
       - "7882:7882/udp"
 
+  # Egress talks to LiveKit through Redis and in no other way — SRS §3.4.
+  #
+  # Not a cache and not optional: it is the job queue by which a recording
+  # request reaches a worker. Both services must see the SAME Redis, which is
+  # why it sits here rather than inside either of them.
+  redis:
+    image: redis:7-alpine
+    profiles: ["livekit"]
+    restart: unless-stopped
+    # No volume on purpose. Everything here is in-flight job state; a recording
+    # queue that survived a restart would re-run jobs whose rooms are long gone.
+    command: redis-server --save "" --appendonly no
+
+  # Recording the class — FR-VID.
+  #
+  # THIS IS THE EXPENSIVE ONE. Unlike the SFU, which forwards packets without
+  # looking at them, Egress runs a headless Chrome, renders the room and
+  # re-encodes it: budget 2-6 CPUs per recording, and note that each instance
+  # records ONE room at a time. Two classes recording at once needs two of these.
+  egress:
+    image: livekit/egress:latest
+    profiles: ["livekit"]
+    restart: unless-stopped
+    depends_on:
+      - redis
+      - livekit
+    environment:
+      EGRESS_CONFIG_FILE: /etc/egress.yaml
+    volumes:
+      - ./docker/egress.yaml:/etc/egress.yaml:ro
+      # THE SAME VOLUME THE API READS LECTURES FROM. Egress writes the finished
+      # file straight into the Institute's lecture storage, so a recording
+      # becomes a playable lecture without anything copying it afterwards.
+      - api-storage:/out
+    # Chrome needs more shared memory than Docker's 64 MB default. Under it the
+    # renderer crashes partway through a lesson and the recording is truncated
+    # with no error worth reading.
+    shm_size: 1gb
+    cap_add:
+      - SYS_ADMIN
+
   web:
     build:
       context: .

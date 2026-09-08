@@ -58,6 +58,14 @@ webhook:
     # inside this container is this container.
     - http://api:3000/api/v1/live/webhooks/livekit
 
+# How Egress reaches this server, and the only way it can — SRS §3.4.
+#
+# Present but unreachable is harmless: LiveKit runs without Redis for
+# everything except recording, so a stack started WITHOUT the livekit profile
+# still holds classes perfectly. Recording is what stops working.
+redis:
+  address: redis:6379
+
 logging:
   level: info
 
