@@ -302,6 +302,36 @@ class _ComposerState extends State<_Composer> {
     }
   }
 
+  String _audienceNote(String audience) {
+    switch (audience) {
+      case 'SECTION_SUBJECT':
+        return 'Only the students in that subject, and its teacher.';
+      case 'INSTITUTE':
+        return 'Everybody with an account — students and staff.';
+      case 'TEACHERS':
+        return 'Teaching staff only. Students never see it.';
+      case 'STAFF':
+        return 'Teachers and the office. Students never see it.';
+      case 'PUBLIC_ONLY':
+        return 'Visitors on the public page, and nobody with an account. For an open day or an admissions deadline.';
+      default:
+        return '';
+    }
+  }
+
+  String _priorityHelp(String priority) {
+    switch (priority) {
+      case 'NORMAL':
+        return 'Appears in the list and the inbox. Held back during quiet hours.';
+      case 'IMPORTANT':
+        return 'Stands out in amber. Still respects quiet hours.';
+      case 'URGENT':
+        return 'Red, and the only level that ignores quiet hours — it reaches people at night.';
+      default:
+        return '';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (!_expanded) {
@@ -362,6 +392,14 @@ class _ComposerState extends State<_Composer> {
             ],
             onChanged: (v) => setState(() => _audience = v ?? 'INSTITUTE'),
           ),
+          const SizedBox(height: 4),
+          Text(
+            _audienceNote(_audience),
+            style: TextStyle(
+              fontSize: 11.5,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
 
           if (_audience == 'SECTION_SUBJECT') ...[
             const SizedBox(height: 12),
@@ -415,10 +453,22 @@ class _ComposerState extends State<_Composer> {
             AppAlert(
               title: 'This will reach people during their quiet hours.',
               message:
-                  'An urgent announcement ignores muted topics and night-time suppression.',
+                  'An urgent announcement ignores muted topics and night-time suppression. Use it when waiting until morning would be worse.',
               warn: true,
             ),
           ],
+
+          // Priority help text
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              _priorityHelp(_priority),
+              style: TextStyle(
+                fontSize: 11.5,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
 
           const SizedBox(height: 12),
           Row(
