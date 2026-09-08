@@ -572,13 +572,22 @@ class _ThreadViewState extends State<_ThreadView> {
             itemCount: messages.length,
             itemBuilder: (context, i) {
               final msg = messages[i];
+              final prev = i > 0 ? messages[i - 1] : null;
+              final showDateSeparator = prev == null ||
+                  !_sameDay(prev.createdAt, msg.createdAt);
               final mine = msg.authorUserId == widget.myUserId;
-              return _Bubble(
-                post: msg,
-                isQuestion: i == 0,
-                mine: mine,
-                isTeacher: widget.isTeacher,
-                myUserId: widget.myUserId,
+              return Column(
+                children: [
+                  if (showDateSeparator)
+                    _DateSeparator(date: msg.createdAt),
+                  _Bubble(
+                    post: msg,
+                    isQuestion: i == 0,
+                    mine: mine,
+                    isTeacher: widget.isTeacher,
+                    myUserId: widget.myUserId,
+                  ),
+                ],
               );
             },
           ),
@@ -705,6 +714,61 @@ class _ModerationButton extends StatelessWidget {
       child: Text(label, style: const TextStyle(fontSize: 12.5)),
     );
   }
+}
+
+bool _sameDay(DateTime a, DateTime b) =>
+    a.year == b.year && a.month == b.month && a.day == b.day;
+
+class _DateSeparator extends StatelessWidget {
+  const _DateSeparator({required this.date});
+
+  final DateTime date;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final muted = dark ? AppColorsDark.muted : AppColors.muted;
+    final line = dark ? AppColorsDark.line : AppColors.line;
+
+    final now = DateTime.now();
+    final yesterday = now.subtract(const Duration(days: 1));
+    String label;
+    if (_sameDay(date, now)) {
+      label = 'Today';
+    } else if (_sameDay(date, yesterday)) {
+      label = 'Yesterday';
+    } else {
+      label = '${date.day} ${_month(date.month)} ${date.year}';
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Row(
+        children: [
+          Expanded(child: Divider(color: line)),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w600,
+                color: muted,
+              ),
+            ),
+          ),
+          Expanded(child: Divider(color: line)),
+        ],
+      ),
+    );
+  }
+
+  static const _months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+
+  String _month(int m) => _months[m - 1];
 }
 
 class _Bubble extends StatefulWidget {
