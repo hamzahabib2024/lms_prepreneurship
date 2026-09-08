@@ -30,12 +30,23 @@ about **5 TB a month**. Check what your provider includes before committing.
 
 ### 1.2 Start it
 
-The service sits behind a compose profile, so it never starts by accident on a
-box that cannot carry it:
+The services sit behind a compose profile, so they never start by accident on a
+box that cannot carry them:
 
 ```bash
-docker compose --profile livekit up -d livekit
+docker compose --profile livekit up -d livekit redis egress
 ```
+
+Three services, and each earns its place:
+
+| | |
+|---|---|
+| **livekit** | The classroom. Relays video between the people in it |
+| **redis** | The job queue between LiveKit and the recorder, and nothing else. Without it recording never dispatches — with no error, the request simply sits unclaimed |
+| **egress** | The recorder. Runs a headless Chrome, renders the room and encodes it |
+
+**Only `livekit` is needed to hold classes.** Leave the other two out and
+everything works except recording.
 
 Check it is answering:
 
@@ -163,13 +174,56 @@ The length you choose is not a countdown — it is how long the class holds your
 diary. You cannot be booked in two places at once, so a two-hour class you
 finish in twenty minutes will refuse you the next room until you end it.
 
-### 3C. Ending the class
+### 3C. Recording the class
+
+Inside the classroom, top right: **Record**. Press it again to stop.
+
+While it runs, **everybody in the room sees a red "Recording" badge** — not just
+you. That is deliberate and not configurable: being recorded is not something to
+discover afterwards, and in many places telling people is also the law.
+
+**The file does not appear immediately.** Encoding continues after the room
+closes, so the recording arrives a short while later — for a long lesson,
+minutes. It then shows up on the course page as a **draft** lecture, with the
+class's own title, ready for you to check and publish. Nothing is published to
+students automatically: a teacher may have started recording early, or said
+something at the end meant for one person.
+
+**One recorder handles one class at a time.** If a second class presses Record
+while the first is still going, it is refused — and the message says so. Add a
+second `egress` service to record two at once.
+
+You do not have to remember to stop it: ending the class stops the recorder
+first, then closes the room.
+
+### 3D. Ending the class
 
 On the class page, beside the **live now** badge: **End the class**.
 
 It asks first, because it ends the lesson for everyone and disconnects anybody
 still in the room. Use it when you finish early — it frees your diary for the
 next class and closes the room behind you.
+
+### 3E. Who is in the room
+
+Inside the classroom: **People**. Everyone can see the list; only you get the
+controls beside each name.
+
+| Control | What it does |
+|---|---|
+| **Mute** | Silences that person's microphone |
+| **Camera off** | Switches off their camera |
+| **Remove** | Puts them out of the room. They can rejoin — it is not a ban |
+
+**You cannot switch anybody's microphone or camera back on.** There is no unmute
+and there will not be one: a teacher who could open a student's microphone could
+listen into their room without consent. The student turns their own devices back
+on. Google Meet draws the line in the same place.
+
+**Invite** copies a link to the class page — safe to paste into a group chat,
+because the page checks enrolment and the join window and takes the register.
+Students already enrolled see the class on their dashboard the moment it starts,
+so this is for nudging somebody who has not noticed.
 
 ---
 
@@ -233,18 +287,31 @@ closes the tab by accident presses one button.
 
 ## Part 6 — Attendance
 
-**What happens automatically:** a student's join is recorded the moment they are
-let into the class. That is evidence they were there, and it happens whichever
-provider the batch is on.
+**Automatic.** The classroom reports every arrival and departure as it happens,
+and the System adds the time up. A student who drops out and rejoins three times
+on a bad line is credited with the total of those visits, not the last one.
 
-**What still decides the register:** the teacher, or self check-in, exactly as
-before. Nothing about attendance changed when live classes moved into the LMS.
+When the class ends, each student gets a **proposed** status:
 
-**What the classroom does not do:** it does not work out attendance from how
-long somebody stayed. LiveKit reports who is connected *at this instant*, not a
-join and leave history, so the System declares that capability absent rather
-than publishing a figure that would quietly under-report every class. See
-Part 8.
+| Time in the room | Proposed |
+|---|---|
+| At least half the class | PRESENT |
+| Some, but under half | LATE |
+| None at all | ABSENT |
+
+The half is `LIVE_PRESENCE_MIN_PERCENT` and can be changed. Somebody who was
+there at all is never proposed absent — the room saw them.
+
+**A proposal is not a verdict.** The register stays exactly as the teacher left
+it; the suggestion and the measured seconds sit beside it. A student whose
+connection died for the second half was still in the lesson, and no participation
+figure knows that.
+
+**Unless you ask for it.** Set a class's attendance policy to `PROVIDER_DERIVED`
+and the proposal is adopted as the register automatically.
+
+**Manual attendance is unchanged** — the teacher's register and self check-in
+work exactly as before, and remain the default.
 
 ---
 
@@ -260,6 +327,11 @@ Part 8.
 | **"— unavailable"** beside a provider | The API cannot reach LiveKit | If both are containers, check `LIVEKIT_API_URL` — see §1.4 |
 | **"This teacher already has … at that time"** | You are booked elsewhere; two places at once is refused | End the class you are in, or use the one already scheduled |
 | Camera works nowhere in the LMS | Browser permission, or another program holds it | Allow camera and microphone for the site; close Zoom, Teams, or anything else using it |
+| **Record** is refused | One recorder handles one class at a time | Wait, or add a second `egress` service |
+| Recording never starts, no error | `redis` is not running, so the job is never dispatched | `docker compose --profile livekit up -d redis egress` |
+| Recording dies at the end, after the whole lesson | The recorder could not write the file | Check the API started cleanly — it creates and opens `storage/lectures` for the recorder, which runs as a different user |
+| Recording fails with *"websocket url timeout reached"* | The recorder's page is loaded over HTTPS and cannot open an insecure `ws://` back to LiveKit | Keep `template_base: http://localhost:7980` in `docker/egress.yaml` while LiveKit is plain `ws://` |
+| No attendance is proposed | The webhook is not reaching the API | Check `webhook:` in `docker/livekit.yaml`; `docker logs …-livekit-1 \| grep webhook` shows every delivery and its status code |
 
 ### The fallback link
 
@@ -280,20 +352,22 @@ room a class uses every week under the `manual` provider.
 
 ---
 
-## Part 8 — What this does not do yet
+## Part 8 — Limits worth knowing
 
-Neither is a defect; both are decisions worth taking knowingly.
+**One recording at a time, per recorder.** Not a setting — a property of the
+service. Each `egress` instance records one room; a second concurrent class
+needs a second instance, and each wants 2–6 CPUs while it runs.
 
-**Attendance is not derived from the classroom.** Doing it properly means
-receiving LiveKit's join and leave webhooks and storing them, which needs a new
-endpoint and a new table — and that crosses the provider boundary the
-substitution test at §3.4.6 protects. Until then attendance works as it always
-has.
+**Recording is the expensive part of all this.** The classroom relays video
+without looking at it; the recorder renders and re-encodes it. Measured on this
+stack, a single recording peaked at 4.3 CPUs. Size for the recordings you expect
+to run at once, not for the classes.
 
-**Classes are not recorded.** LiveKit can record, but it needs a separate Egress
-service and somewhere to put the output, and unlike the classroom itself that
-work *does* re-encode video and is CPU-hungry. Recorded lectures continue to
-come from the existing recordings pipeline.
+**Nothing unmutes anybody.** Covered in Part 3E, and it is a decision rather
+than a gap.
+
+**Recordings do not publish themselves.** They arrive as drafts. That is
+deliberate — see Part 3C.
 
 ---
 
@@ -304,6 +378,10 @@ come from the existing recordings pipeline.
 | Turn the classroom on for a batch | Sections → Edit → Classroom → Livekit |
 | Book classes for the term | Timetable → pattern → Preview → Generate |
 | Start a class right now | Dashboard → Start a class now |
+| Record a class | In the classroom → Record |
+| See who is in the room, mute or remove | In the classroom → People |
+| Share the way in | In the classroom → Invite |
 | End a class early | Class page → End the class |
 | Join a class | Dashboard → Join class |
+| Publish a recording | Course page → the draft lecture |
 | Check the classroom is up | Sections → Edit → Classroom dropdown |
