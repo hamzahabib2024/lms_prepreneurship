@@ -7,8 +7,9 @@ import {
   useIsRecording,
   useParticipants,
   usePreviewTracks,
+  useRoomContext,
 } from "@livekit/components-react";
-import { Track } from "livekit-client";
+import { RoomEvent, Track } from "livekit-client";
 import "@livekit/components-styles";
 import { ApiError, api } from "../api/client";
 
@@ -186,6 +187,10 @@ function RoomChrome({ isHost, sessionId }: { isHost: boolean; sessionId: string 
    * by anybody's permissions.
    */
   const isRecording = useIsRecording();
+  const hands = useRaisedHands();
+  const room = useRoomContext();
+  const localIdentity = room.localParticipant.identity;
+  const handCount = Object.keys(hands).length;
   const [panel, setPanel] = useState<"none" | "people" | "invite">("none");
   const [full, setFull] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -270,6 +275,7 @@ function RoomChrome({ isHost, sessionId }: { isHost: boolean; sessionId: string 
       )}
 
       <div className="room-bar">
+        <RaiseHandButton raised={!!hands[localIdentity]} />
         {isHost && (
           <button
             type="button"
@@ -287,6 +293,10 @@ function RoomChrome({ isHost, sessionId }: { isHost: boolean; sessionId: string 
           onClick={() => setPanel((p) => (p === "people" ? "none" : "people"))}
         >
           People <span className="room-count">{participants.length}</span>
+          {/* The count of raised hands, on the button that opens the list.
+              A teacher presenting is not looking at the roster, and a hand
+              nobody notices is the same as a hand not raised. */}
+          {handCount > 0 && <span className="room-hands">✋ {handCount}</span>}
         </button>
         {/* Sharing the way in is the teacher's job. A student passing the class
             link around is not useful — the page behind it refuses anybody not
@@ -316,12 +326,18 @@ function RoomChrome({ isHost, sessionId }: { isHost: boolean; sessionId: string 
           </header>
 
           <ul className="room-people">
-            {participants.map((p) => {
+            {/* Hands to the top, in the order they went up is not something the
+                room tells us — but a raised hand above an unraised one is the
+                part that matters when thirty names are scrolling. */}
+            {[...participants]
+              .sort((a, b) => Number(!!hands[b.identity]) - Number(!!hands[a.identity]))
+              .map((p) => {
               const who = p.name || p.identity;
               return (
-                <li key={p.identity} className="room-person">
+                <li key={p.identity} className={`room-person ${hands[p.identity] ? "has-hand" : ""}`}>
                   <div className="room-person-who">
                     <span className="room-person-name">
+                      {hands[p.identity] && <span className="room-person-hand" aria-label="hand raised">✋</span>}
                       {who}
                       {p.isLocal && <span className="room-person-you"> (you)</span>}
                     </span>
@@ -389,6 +405,89 @@ function RoomChrome({ isHost, sessionId }: { isHost: boolean; sessionId: string 
 
       {panel === "invite" && <InvitePanel sessionId={sessionId} onClose={() => setPanel("none")} />}
     </>
+  );
+}
+
+/**
+ * RAISING A HAND — the one thing a student must be able to do without a
+ * microphone.
+ *
+ * Held as an attribute on the participant rather than sent as a message: an
+ * attribute is part of who they are in the room, so somebody joining late sees
+ * the hands that are already up. A broadcast message would be missed by anybody
+ * not in the room at the moment it was sent, which in a class is most people.
+ *
+ * A hand goes down when its owner puts it down, and when they leave. The
+ * teacher does not lower it for them — a hand that can be dismissed from the
+ * front of the room is one students stop bothering to raise.
+ */
+function useRaisedHands(): Record<string, boolean> {
+  const room = useRoomContext();
+  const [hands, setHands] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    const read = () => {
+      const next: Record<string, boolean> = {};
+      if (room.localParticipant.attributes?.["hand"] === "up") {
+        next[room.localParticipant.identity] = true;
+      }
+      room.remoteParticipants.forEach((p) => {
+        if (p.attributes?.["hand"] === "up") next[p.identity] = true;
+      });
+      setHands(next);
+    };
+
+    read();
+    /*
+     * Every event that can change the answer. Attributes are the obvious one;
+     * the other two matter because a participant who leaves with their hand up
+     * would otherwise stay in the list for ever, and one who arrives with it
+     * already raised would never appear.
+     */
+    room.on(RoomEvent.ParticipantAttributesChanged, read);
+    room.on(RoomEvent.ParticipantConnected, read);
+    room.on(RoomEvent.ParticipantDisconnected, read);
+    return () => {
+      room.off(RoomEvent.ParticipantAttributesChanged, read);
+      room.off(RoomEvent.ParticipantConnected, read);
+      room.off(RoomEvent.ParticipantDisconnected, read);
+    };
+  }, [room]);
+
+  return hands;
+}
+
+/** The button, and the only thing that may change your own hand. */
+function RaiseHandButton({ raised }: { raised: boolean }) {
+  const room = useRoomContext();
+  const [busy, setBusy] = useState(false);
+
+  const toggle = async () => {
+    setBusy(true);
+    try {
+      // Merged, not replaced: setAttributes overwrites the whole map, so
+      // anything else living there would be wiped by a raised hand.
+      await room.localParticipant.setAttributes({
+        ...room.localParticipant.attributes,
+        hand: raised ? "" : "up",
+      });
+    } catch {
+      // A hand that will not go up is not worth an error dialog over a lesson.
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      className={`room-bar-btn ${raised ? "is-on" : ""}`}
+      aria-pressed={raised}
+      disabled={busy}
+      onClick={() => void toggle()}
+    >
+      {raised ? "Lower hand" : "Raise hand"}
+    </button>
   );
 }
 

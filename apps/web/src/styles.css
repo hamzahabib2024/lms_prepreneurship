@@ -4314,6 +4314,100 @@ details > summary:hover { text-decoration: underline; }
   padding: .4rem .5rem;
 }
 .room-invite-copy { margin-top: .5rem; width: 100%; }
+
+/* Raised hands — the count on the People button, the mark on the row. */
+.room-hands {
+  display: inline-block; margin-left: .35rem; padding: 0 .3rem;
+  border-radius: 999px; background: #f6c344; color: #1b1b1b; font-weight: 600;
+}
+.room-person.has-hand { background: rgb(246 195 68 / 12%); }
+.room-person-hand { margin-right: .3rem; }
+
+/* -------------------------------------------------------------------------- */
+/*  THE CLASSROOM, styled to the conventions everybody already knows           */
+/*                                                                            */
+/*  A dark stage, rounded tiles with the name in the corner, a strip of round  */
+/*  controls along the bottom, red to leave. That layout is not any one        */
+/*  product's — Meet, Zoom, Teams and Jitsi all share it, and a student who    */
+/*  has used any of them can already use this.                                 */
+/*                                                                            */
+/*  What is NOT copied is anybody's branding: the palette below is the         */
+/*  Institute's own dark neutrals. These override LiveKit's own tokens rather  */
+/*  than forking its components, so upgrades keep working.                     */
+/* -------------------------------------------------------------------------- */
+
+.live-room {
+  --lk-bg: #17181b;
+  --lk-bg2: #26282c;
+  --lk-bg3: #303236;
+  --lk-border-color: rgb(255 255 255 / 10%);
+  --lk-border-radius: 10px;
+  /* The ring around whoever is talking. */
+  --lk-accent-bg: #5b9dff;
+  --lk-accent-fg: #ffffff;
+}
+
+/* Room for the tiles to breathe, so the stage does not read as one slab. */
+.live-room .lk-grid-layout,
+.live-room .lk-focus-layout { gap: .5rem; padding: .5rem; }
+
+.live-room .lk-participant-tile { border-radius: 10px; overflow: hidden; background: #26282c; }
+.live-room .lk-participant-placeholder { background: #26282c; }
+
+/* The name as a chip in the corner, legible over any frame of video. */
+.live-room .lk-participant-name {
+  background: rgb(0 0 0 / 55%);
+  border-radius: 6px;
+  padding: .1rem .4rem;
+  font-size: .78rem;
+}
+
+/*
+ * The control strip. In flow along the bottom rather than floating over the
+ * video: the prefab lays the room out as a grid with a row for this, and
+ * lifting it out would leave an empty band under the class.
+ */
+.live-room .lk-control-bar {
+  justify-content: center;
+  gap: .4rem;
+  padding: .55rem;
+  background: #17181b;
+  border-top: 1px solid rgb(255 255 255 / 8%);
+}
+
+.live-room .lk-control-bar .lk-button {
+  border-radius: 999px;
+  border: 0;
+  background: rgb(255 255 255 / 10%);
+  color: #e8eaed;
+  padding: .5rem .9rem;
+}
+.live-room .lk-control-bar .lk-button:hover { background: rgb(255 255 255 / 18%); }
+/* A control that is ON says so by being filled, not by a subtle outline —
+   "am I muted?" must be answerable at a glance, mid-sentence. */
+.live-room .lk-control-bar .lk-button[aria-pressed="true"] {
+  background: var(--lk-accent-bg);
+  color: var(--lk-accent-fg);
+}
+
+/* Leaving is the one irreversible control here, and the only red thing. */
+.live-room .lk-disconnect-button {
+  background: #d93025;
+  color: #ffffff;
+}
+.live-room .lk-disconnect-button:hover { background: #b3261e; }
+
+/* The chat drawer, matched to the people panel beside it. */
+.live-room .lk-chat {
+  background: #17181b;
+  border-left: 1px solid rgb(255 255 255 / 10%);
+}
+.live-room .lk-chat-form-input {
+  background: rgb(255 255 255 / 8%);
+  border: 1px solid rgb(255 255 255 / 15%);
+  border-radius: 999px;
+  color: #e8eaed;
+}
 /* The button is positioned against the room, so the room has to be the
    containing block — without this it anchors to the page and drifts. */
 .live-room { position: relative; }

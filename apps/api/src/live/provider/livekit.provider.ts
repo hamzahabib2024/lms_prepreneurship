@@ -484,7 +484,19 @@ export class LiveKitProvider implements LiveClassroomProvider {
         : [TrackSource.CAMERA, TrackSource.MICROPHONE],
       // Mute and remove, for the person running the class.
       roomAdmin: user.isHost,
-      canUpdateOwnMetadata: false,
+      /*
+       * TRUE, so a student can raise their hand.
+       *
+       * It lets a participant set attributes on THEMSELVES and nobody else —
+       * that is the whole of the grant. Raising a hand is the one thing in a
+       * classroom a student must be able to do without a microphone, and
+       * routing it through our API instead would mean a round trip for a
+       * gesture that has to feel instant.
+       *
+       * Their display name is NOT an attribute: it is a claim in this token,
+       * signed here, and remains unreachable from the browser.
+       */
+      canUpdateOwnMetadata: true,
     });
 
     return {
