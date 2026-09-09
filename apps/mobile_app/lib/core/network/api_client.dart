@@ -34,10 +34,20 @@ class ApiClient {
         },
       ),
     );
+
+    // Public client — no auth interceptor, same timeouts, shared error mapping.
+    _publicDio = Dio(
+      BaseOptions(
+        baseUrl: AppConstants.apiBaseUrl,
+        connectTimeout: const Duration(seconds: 15),
+        receiveTimeout: const Duration(seconds: 30),
+      ),
+    );
   }
 
   final TokenStore _tokenStore;
   final Dio _dio;
+  late final Dio _publicDio;
 
   /// Called when refresh fails, so the app can route back to sign-in.
   void Function()? onUnauthenticated;
@@ -128,6 +138,22 @@ class ApiClient {
   /// paged endpoints (§9.2 Figures 9-1/9-2). Plain [get] returns only the
   /// `data` payload, which loses the pagination block.
   Future<Map<String, dynamic>> getEnvelope(String path) => _requestRaw(path);
+
+  /// Public GET — no auth headers. Used for certificate verification and
+  /// other unauthenticated endpoints.
+  Future<T> getPublic<T>(String path) async {
+    try {
+      final response = await _publicDio.get<dynamic>(
+        path,
+        options: Options(headers: {'Accept': 'application/json'}),
+      );
+      if (response.statusCode == 204) return const {} as T;
+      final envelope = response.data as Map<String, dynamic>? ?? const {};
+      return (envelope['data'] as T);
+    } on DioException catch (error) {
+      throw _mapError(error);
+    }
+  }
 
   Future<T> _request<T>(
     String path, {
