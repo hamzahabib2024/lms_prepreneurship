@@ -87,7 +87,7 @@ class _StudentFeesViewState extends State<_StudentFeesView> {
           listener: (context, state) {
             if (state.error != null) {
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(state.error!)),
+                SnackBar(content: Text(state.error!.message)),
               );
             }
           },
@@ -308,7 +308,7 @@ class _DebtorListView extends StatelessWidget {
       listener: (context, state) {
         if (state.error != null) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(state.error!)),
+            SnackBar(content: Text(state.error!.message)),
           );
         }
       },
@@ -451,7 +451,7 @@ class _VerificationQueueView extends StatelessWidget {
       listener: (context, state) {
         if (state.error != null) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(state.error!)),
+            SnackBar(content: Text(state.error!.message)),
           );
         }
       },
@@ -568,7 +568,7 @@ class _StudentStatementPageState extends State<_StudentStatementPage> {
           listener: (context, state) {
             if (state.error != null) {
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(state.error!)),
+                SnackBar(content: Text(state.error!.message)),
               );
             }
           },

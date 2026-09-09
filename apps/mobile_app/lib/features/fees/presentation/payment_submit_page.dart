@@ -91,7 +91,7 @@ class _PaymentSubmitPageState extends State<PaymentSubmitPage> {
             }
             if (state.error != null) {
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(state.error!)),
+                SnackBar(content: Text(state.error!.message)),
               );
             }
           },
