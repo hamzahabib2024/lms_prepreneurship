@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../core/network/api_exception.dart';
 import '../data/assignment_builder_repository.dart';
 import '../data/models/assignment_builder_models.dart';
 
@@ -59,7 +60,7 @@ class AssignmentBuilderState extends Equatable {
   final String? rubricId;
   final List<RubricSummary> rubrics;
   final bool? saving;
-  final String? error;
+  final ApiException? error;
   final bool hasBriefAudio;
   final bool uploadingBrief;
 
@@ -98,7 +99,8 @@ class AssignmentBuilderState extends Equatable {
     String? rubricId,
     List<RubricSummary>? rubrics,
     bool? saving,
-    String? error,
+    ApiException? error,
+    bool clearError = false,
     bool? hasBriefAudio,
     bool? uploadingBrief,
   }) {
@@ -126,7 +128,7 @@ class AssignmentBuilderState extends Equatable {
       rubricId: rubricId ?? this.rubricId,
       rubrics: rubrics ?? this.rubrics,
       saving: saving ?? this.saving,
-      error: error ?? this.error,
+      error: clearError ? null : (error ?? this.error),
       hasBriefAudio: hasBriefAudio ?? this.hasBriefAudio,
       uploadingBrief: uploadingBrief ?? this.uploadingBrief,
     );
@@ -142,7 +144,7 @@ class AssignmentBuilderCubit extends Cubit<AssignmentBuilderState> {
   final String? assignmentId;
 
   Future<void> loadSectionSubjects() async {
-    emit(state.copyWith(status: AssignmentBuilderStatus.loading));
+    emit(state.copyWith(status: AssignmentBuilderStatus.loading, clearError: true));
     try {
       final results = await Future.wait([
         _repo.getSectionSubjects(),
@@ -150,15 +152,17 @@ class AssignmentBuilderCubit extends Cubit<AssignmentBuilderState> {
       ]);
       final sections = results[0] as List<SectionSubject>;
       final rubrics = results[1] as List<RubricSummary>;
+      if (isClosed) return;
       emit(state.copyWith(
         status: AssignmentBuilderStatus.loaded,
         sectionSubjects: sections,
         rubrics: rubrics,
       ));
-    } catch (e) {
+    } on ApiException catch (e) {
+      if (isClosed) return;
       emit(state.copyWith(
         status: AssignmentBuilderStatus.failure,
-        error: 'Failed to load sections: $e',
+        error: e,
       ));
     }
   }
@@ -195,15 +199,15 @@ class AssignmentBuilderCubit extends Cubit<AssignmentBuilderState> {
 
   Future<void> save() async {
     if (state.title.isEmpty) {
-      emit(state.copyWith(error: 'Title is required'));
+      emit(state.copyWith(error: ApiException(status: 422, code: 'VALIDATION', message: 'Title is required')));
       return;
     }
     if (state.selectedSectionSubject == null) {
-      emit(state.copyWith(error: 'Select a section/subject'));
+      emit(state.copyWith(error: ApiException(status: 422, code: 'VALIDATION', message: 'Select a section/subject')));
       return;
     }
 
-    emit(state.copyWith(saving: true, error: null));
+    emit(state.copyWith(saving: true, clearError: true));
     try {
       final draft = AssignmentDraft(
         id: assignmentId,
@@ -238,35 +242,39 @@ class AssignmentBuilderCubit extends Cubit<AssignmentBuilderState> {
         await _repo.createAssignment(draft);
       }
 
+      if (isClosed) return;
       emit(state.copyWith(
         status: AssignmentBuilderStatus.saved,
         saving: false,
       ));
-    } catch (e) {
+    } on ApiException catch (e) {
+      if (isClosed) return;
       emit(state.copyWith(
         saving: false,
-        error: 'Failed to save assignment: $e',
+        error: e,
       ));
     }
   }
 
   Future<void> publish() async {
     if (assignmentId == null) {
-      emit(state.copyWith(error: 'Save the assignment first'));
+      emit(state.copyWith(error: ApiException(status: 422, code: 'VALIDATION', message: 'Save the assignment first')));
       return;
     }
-    emit(state.copyWith(saving: true));
+    emit(state.copyWith(saving: true, clearError: true));
     try {
       await _repo.publishAssignment(assignmentId!);
+      if (isClosed) return;
       emit(state.copyWith(
         status: AssignmentBuilderStatus.saved,
         publicationStatus: 'PUBLISHED',
         saving: false,
       ));
-    } catch (e) {
+    } on ApiException catch (e) {
+      if (isClosed) return;
       emit(state.copyWith(
         saving: false,
-        error: 'Failed to publish: $e',
+        error: e,
       ));
     }
   }
@@ -275,34 +283,38 @@ class AssignmentBuilderCubit extends Cubit<AssignmentBuilderState> {
 
   Future<void> uploadBriefAudio(File audioFile) async {
     if (assignmentId == null) {
-      emit(state.copyWith(error: 'Save the assignment first'));
+      emit(state.copyWith(error: ApiException(status: 422, code: 'VALIDATION', message: 'Save the assignment first')));
       return;
     }
-    emit(state.copyWith(uploadingBrief: true, error: null));
+    emit(state.copyWith(uploadingBrief: true, clearError: true));
     try {
       await _repo.uploadBriefAudio(
         assignmentId: assignmentId!,
         audioFile: audioFile,
       );
+      if (isClosed) return;
       emit(state.copyWith(uploadingBrief: false, hasBriefAudio: true));
-    } catch (e) {
+    } on ApiException catch (e) {
+      if (isClosed) return;
       emit(state.copyWith(
         uploadingBrief: false,
-        error: 'Failed to upload audio: $e',
+        error: e,
       ));
     }
   }
 
   Future<void> deleteBriefAudio() async {
     if (assignmentId == null) return;
-    emit(state.copyWith(uploadingBrief: true, error: null));
+    emit(state.copyWith(uploadingBrief: true, clearError: true));
     try {
       await _repo.deleteBriefAudio(assignmentId: assignmentId!);
+      if (isClosed) return;
       emit(state.copyWith(uploadingBrief: false, hasBriefAudio: false));
-    } catch (e) {
+    } on ApiException catch (e) {
+      if (isClosed) return;
       emit(state.copyWith(
         uploadingBrief: false,
-        error: 'Failed to remove audio: $e',
+        error: e,
       ));
     }
   }

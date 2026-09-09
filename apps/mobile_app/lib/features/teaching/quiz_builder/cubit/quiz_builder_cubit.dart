@@ -1,6 +1,7 @@
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../core/network/api_exception.dart';
 import '../data/quiz_builder_repository.dart';
 import '../data/models/quiz_builder_models.dart';
 
@@ -31,7 +32,7 @@ class QuizBuilderState extends Equatable {
   final String publicationStatus;
   final List<QuizQuestion> questions;
   final bool? saving;
-  final String? error;
+  final ApiException? error;
 
   @override
   List<Object?> get props => [
@@ -52,7 +53,8 @@ class QuizBuilderState extends Equatable {
     String? publicationStatus,
     List<QuizQuestion>? questions,
     bool? saving,
-    String? error,
+    ApiException? error,
+    bool clearError = false,
   }) {
     return QuizBuilderState(
       status: status ?? this.status,
@@ -66,7 +68,7 @@ class QuizBuilderState extends Equatable {
       publicationStatus: publicationStatus ?? this.publicationStatus,
       questions: questions ?? this.questions,
       saving: saving ?? this.saving,
-      error: error ?? this.error,
+      error: clearError ? null : (error ?? this.error),
     );
   }
 }
@@ -85,17 +87,20 @@ class QuizBuilderCubit extends Cubit<QuizBuilderState> {
     emit(state.copyWith(
       status: QuizBuilderStatus.loading,
       sectionSubjectId: sectionSubjectId,
+      clearError: true,
     ));
     try {
       final quizzes = await _repo.getQuizzes(sectionSubjectId);
+      if (isClosed) return;
       emit(state.copyWith(
         status: QuizBuilderStatus.loaded,
         quizzes: quizzes,
       ));
-    } catch (e) {
+    } on ApiException catch (e) {
+      if (isClosed) return;
       emit(state.copyWith(
         status: QuizBuilderStatus.failure,
-        error: 'Failed to load quizzes: $e',
+        error: e,
       ));
     }
   }
@@ -270,15 +275,15 @@ class QuizBuilderCubit extends Cubit<QuizBuilderState> {
 
   Future<void> save() async {
     if (state.title.isEmpty) {
-      emit(state.copyWith(error: 'Title is required'));
+      emit(state.copyWith(error: ApiException(status: 422, code: 'VALIDATION', message: 'Title is required')));
       return;
     }
     if (state.sectionSubjectId.isEmpty) {
-      emit(state.copyWith(error: 'Select a section/subject'));
+      emit(state.copyWith(error: ApiException(status: 422, code: 'VALIDATION', message: 'Select a section/subject')));
       return;
     }
 
-    emit(state.copyWith(saving: true, error: null));
+    emit(state.copyWith(saving: true, clearError: true));
     try {
       final draft = QuizDraft(
         id: quizId,
@@ -298,35 +303,39 @@ class QuizBuilderCubit extends Cubit<QuizBuilderState> {
         await _repo.createQuiz(draft);
       }
 
+      if (isClosed) return;
       emit(state.copyWith(
         status: QuizBuilderStatus.saved,
         saving: false,
       ));
-    } catch (e) {
+    } on ApiException catch (e) {
+      if (isClosed) return;
       emit(state.copyWith(
         saving: false,
-        error: 'Failed to save quiz: $e',
+        error: e,
       ));
     }
   }
 
   Future<void> publish() async {
     if (quizId == null) {
-      emit(state.copyWith(error: 'Save the quiz first'));
+      emit(state.copyWith(error: ApiException(status: 422, code: 'VALIDATION', message: 'Save the quiz first')));
       return;
     }
-    emit(state.copyWith(saving: true));
+    emit(state.copyWith(saving: true, clearError: true));
     try {
       await _repo.publishQuiz(quizId!);
+      if (isClosed) return;
       emit(state.copyWith(
         status: QuizBuilderStatus.saved,
         publicationStatus: 'PUBLISHED',
         saving: false,
       ));
-    } catch (e) {
+    } on ApiException catch (e) {
+      if (isClosed) return;
       emit(state.copyWith(
         saving: false,
-        error: 'Failed to publish: $e',
+        error: e,
       ));
     }
   }
