@@ -1,6 +1,7 @@
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../core/network/api_exception.dart';
 import '../data/fees_repository.dart';
 import '../data/models/fees_models.dart';
 
@@ -19,7 +20,7 @@ class StudentFeesState extends Equatable {
   final FeeSummary? summary;
   final BankDetails? bankDetails;
   final List<PaymentSubmission> submissions;
-  final String? error;
+  final ApiException? error;
 
   @override
   List<Object?> get props =>
@@ -30,14 +31,15 @@ class StudentFeesState extends Equatable {
     FeeSummary? summary,
     BankDetails? bankDetails,
     List<PaymentSubmission>? submissions,
-    String? error,
+    ApiException? error,
+    bool clearError = false,
   }) {
     return StudentFeesState(
       status: status ?? this.status,
       summary: summary ?? this.summary,
       bankDetails: bankDetails ?? this.bankDetails,
       submissions: submissions ?? this.submissions,
-      error: error ?? this.error,
+      error: clearError ? null : (error ?? this.error),
     );
   }
 }
@@ -49,12 +51,13 @@ class StudentFeesCubit extends Cubit<StudentFeesState> {
   final FeesRepository _repo;
 
   Future<void> load() async {
-    emit(state.copyWith(status: StudentFeesStatus.loading));
+    emit(state.copyWith(status: StudentFeesStatus.loading, clearError: true));
     try {
       final results = await Future.wait([
         _repo.getMyFeeSummary(),
         _repo.getMySubmissions(),
       ]);
+      if (isClosed) return;
       final summary = results[0] as FeeSummary;
       final submissions = results[1] as List<PaymentSubmission>;
       emit(state.copyWith(
@@ -62,10 +65,14 @@ class StudentFeesCubit extends Cubit<StudentFeesState> {
         summary: summary,
         submissions: submissions,
       ));
-    } catch (e) {
+    } on ApiException catch (e) {
+      if (isClosed) return;
+      emit(state.copyWith(status: StudentFeesStatus.failure, error: e));
+    } on Exception catch (e) {
+      if (isClosed) return;
       emit(state.copyWith(
         status: StudentFeesStatus.failure,
-        error: 'Failed to load fees: $e',
+        error: ApiException(status: 0, message: 'Failed to load fees: $e'),
       ));
     }
   }
@@ -74,8 +81,9 @@ class StudentFeesCubit extends Cubit<StudentFeesState> {
     try {
       await _repo.withdrawSubmission(submissionId);
       await load();
-    } catch (e) {
-      emit(state.copyWith(error: 'Failed to withdraw: $e'));
+    } on ApiException catch (e) {
+      if (isClosed) return;
+      emit(state.copyWith(error: e));
     }
   }
 }
@@ -105,7 +113,7 @@ class PaymentSubmitState extends Equatable {
   final String bankReference;
   final String studentNote;
   final bool? submitting;
-  final String? error;
+  final ApiException? error;
 
   @override
   List<Object?> get props => [
@@ -123,7 +131,8 @@ class PaymentSubmitState extends Equatable {
     String? bankReference,
     String? studentNote,
     bool? submitting,
-    String? error,
+    ApiException? error,
+    bool clearError = false,
   }) {
     return PaymentSubmitState(
       status: status ?? this.status,
@@ -135,7 +144,7 @@ class PaymentSubmitState extends Equatable {
       bankReference: bankReference ?? this.bankReference,
       studentNote: studentNote ?? this.studentNote,
       submitting: submitting ?? this.submitting,
-      error: error ?? this.error,
+      error: clearError ? null : (error ?? this.error),
     );
   }
 }
@@ -147,26 +156,26 @@ class PaymentSubmitCubit extends Cubit<PaymentSubmitState> {
   final FeesRepository _repo;
 
   Future<void> loadBankDetails() async {
-    emit(state.copyWith(status: PaymentSubmitStatus.loading));
+    emit(state.copyWith(status: PaymentSubmitStatus.loading, clearError: true));
     try {
       final bankDetails = await _repo.getBankDetails();
+      if (isClosed) return;
       emit(state.copyWith(
         status: PaymentSubmitStatus.loaded,
         bankDetails: bankDetails,
       ));
-    } catch (e) {
-      emit(state.copyWith(
-        status: PaymentSubmitStatus.failure,
-        error: 'Failed to load bank details: $e',
-      ));
+    } on ApiException catch (e) {
+      if (isClosed) return;
+      emit(state.copyWith(status: PaymentSubmitStatus.failure, error: e));
     }
   }
 
   Future<void> loadFeeSummary() async {
     try {
       final summary = await _repo.getMyFeeSummary();
+      if (isClosed) return;
       emit(state.copyWith(feeSummary: summary));
-    } catch (e) {
+    } on Exception {
       // Fee summary is non-critical — don't block the form.
     }
   }
@@ -179,15 +188,23 @@ class PaymentSubmitCubit extends Cubit<PaymentSubmitState> {
 
   Future<void> submit() async {
     if (state.amount <= 0) {
-      emit(state.copyWith(error: 'Enter a valid amount'));
+      emit(state.copyWith(error: const ApiException(
+        status: 0,
+        code: 'VALIDATION_ERROR',
+        message: 'Enter a valid amount',
+      )));
       return;
     }
     if (state.paidOn.isEmpty) {
-      emit(state.copyWith(error: 'Select payment date'));
+      emit(state.copyWith(error: const ApiException(
+        status: 0,
+        code: 'VALIDATION_ERROR',
+        message: 'Select payment date',
+      )));
       return;
     }
 
-    emit(state.copyWith(submitting: true, error: null));
+    emit(state.copyWith(submitting: true, clearError: true));
     try {
       await _repo.submitPayment(
         amount: state.amount,
@@ -196,9 +213,11 @@ class PaymentSubmitCubit extends Cubit<PaymentSubmitState> {
         bankReference: state.bankReference.isNotEmpty ? state.bankReference : null,
         studentNote: state.studentNote.isNotEmpty ? state.studentNote : null,
       );
+      if (isClosed) return;
       emit(state.copyWith(status: PaymentSubmitStatus.submitted, submitting: false));
-    } catch (e) {
-      emit(state.copyWith(submitting: false, error: 'Failed to submit: $e'));
+    } on ApiException catch (e) {
+      if (isClosed) return;
+      emit(state.copyWith(submitting: false, error: e));
     }
   }
 }
@@ -220,7 +239,7 @@ class VerificationQueueState extends Equatable {
   final List<VerificationQueueRow> rows;
   final String filterStatus;
   final String filterQuery;
-  final String? error;
+  final ApiException? error;
 
   @override
   List<Object?> get props =>
@@ -232,7 +251,8 @@ class VerificationQueueState extends Equatable {
     List<VerificationQueueRow>? rows,
     String? filterStatus,
     String? filterQuery,
-    String? error,
+    ApiException? error,
+    bool clearError = false,
   }) {
     return VerificationQueueState(
       status: status ?? this.status,
@@ -240,7 +260,7 @@ class VerificationQueueState extends Equatable {
       rows: rows ?? this.rows,
       filterStatus: filterStatus ?? this.filterStatus,
       filterQuery: filterQuery ?? this.filterQuery,
-      error: error ?? this.error,
+      error: clearError ? null : (error ?? this.error),
     );
   }
 }
@@ -252,7 +272,7 @@ class VerificationQueueCubit extends Cubit<VerificationQueueState> {
   final FeesRepository _repo;
 
   Future<void> load() async {
-    emit(state.copyWith(status: VerificationQueueStatus.loading));
+    emit(state.copyWith(status: VerificationQueueStatus.loading, clearError: true));
     try {
       final results = await Future.wait([
         _repo.getVerificationStats(),
@@ -261,16 +281,15 @@ class VerificationQueueCubit extends Cubit<VerificationQueueState> {
           query: state.filterQuery.isNotEmpty ? state.filterQuery : null,
         ),
       ]);
+      if (isClosed) return;
       emit(state.copyWith(
         status: VerificationQueueStatus.loaded,
         stats: results[0] as VerificationStats,
         rows: results[1] as List<VerificationQueueRow>,
       ));
-    } catch (e) {
-      emit(state.copyWith(
-        status: VerificationQueueStatus.failure,
-        error: 'Failed to load queue: $e',
-      ));
+    } on ApiException catch (e) {
+      if (isClosed) return;
+      emit(state.copyWith(status: VerificationQueueStatus.failure, error: e));
     }
   }
 
@@ -296,8 +315,9 @@ class VerificationQueueCubit extends Cubit<VerificationQueueState> {
         note: note,
       );
       await load();
-    } catch (e) {
-      emit(state.copyWith(error: 'Failed to verify: $e'));
+    } on ApiException catch (e) {
+      if (isClosed) return;
+      emit(state.copyWith(error: e));
     }
   }
 
@@ -311,8 +331,9 @@ class VerificationQueueCubit extends Cubit<VerificationQueueState> {
         reason: reason,
       );
       await load();
-    } catch (e) {
-      emit(state.copyWith(error: 'Failed to reject: $e'));
+    } on ApiException catch (e) {
+      if (isClosed) return;
+      emit(state.copyWith(error: e));
     }
   }
 }
@@ -323,21 +344,26 @@ class FeesState extends Equatable {
   const FeesState({
     this.loadingReceipt = false,
     this.receipt,
+    this.error,
   });
 
   final bool loadingReceipt;
   final Receipt? receipt;
+  final ApiException? error;
 
   @override
-  List<Object?> get props => [loadingReceipt, receipt];
+  List<Object?> get props => [loadingReceipt, receipt, error];
 
   FeesState copyWith({
     bool? loadingReceipt,
     Receipt? receipt,
+    ApiException? error,
+    bool clearError = false,
   }) {
     return FeesState(
       loadingReceipt: loadingReceipt ?? this.loadingReceipt,
       receipt: receipt ?? this.receipt,
+      error: clearError ? null : (error ?? this.error),
     );
   }
 }
@@ -347,12 +373,14 @@ class FeesCubit extends Cubit<FeesState> {
   final FeesRepository repository;
 
   Future<void> loadReceipt(String paymentId) async {
-    emit(state.copyWith(loadingReceipt: true));
+    emit(state.copyWith(loadingReceipt: true, clearError: true));
     try {
       final receipt = await repository.getReceipt(paymentId);
+      if (isClosed) return;
       emit(state.copyWith(loadingReceipt: false, receipt: receipt));
-    } catch (e) {
-      emit(state.copyWith(loadingReceipt: false));
+    } on ApiException catch (e) {
+      if (isClosed) return;
+      emit(state.copyWith(loadingReceipt: false, error: e));
     }
   }
 }
@@ -368,7 +396,7 @@ class StaffFeesState extends Equatable {
 
   final StaffFeesStatus status;
   final List<DebtorRow> debtors;
-  final String? error;
+  final ApiException? error;
 
   @override
   List<Object?> get props => [status, debtors, error];
@@ -376,12 +404,13 @@ class StaffFeesState extends Equatable {
   StaffFeesState copyWith({
     StaffFeesStatus? status,
     List<DebtorRow>? debtors,
-    String? error,
+    ApiException? error,
+    bool clearError = false,
   }) {
     return StaffFeesState(
       status: status ?? this.status,
       debtors: debtors ?? this.debtors,
-      error: error,
+      error: clearError ? null : (error ?? this.error),
     );
   }
 }
@@ -393,18 +422,17 @@ class StaffFeesCubit extends Cubit<StaffFeesState> {
   final FeesRepository _repo;
 
   Future<void> load() async {
-    emit(state.copyWith(status: StaffFeesStatus.loading));
+    emit(state.copyWith(status: StaffFeesStatus.loading, clearError: true));
     try {
       final debtors = await _repo.getDebtors();
+      if (isClosed) return;
       emit(state.copyWith(
         status: StaffFeesStatus.loaded,
         debtors: debtors,
       ));
-    } catch (e) {
-      emit(state.copyWith(
-        status: StaffFeesStatus.failure,
-        error: 'Failed to load debtors: $e',
-      ));
+    } on ApiException catch (e) {
+      if (isClosed) return;
+      emit(state.copyWith(status: StaffFeesStatus.failure, error: e));
     }
   }
 }
@@ -426,7 +454,7 @@ class StaffStatementState extends Equatable {
   final bool busy;
   final InstalmentPlanPreview? planPreview;
   final bool planLoading;
-  final String? error;
+  final ApiException? error;
 
   @override
   List<Object?> get props => [status, statement, busy, planPreview, planLoading, error];
@@ -437,7 +465,8 @@ class StaffStatementState extends Equatable {
     bool? busy,
     InstalmentPlanPreview? planPreview,
     bool? planLoading,
-    String? error,
+    ApiException? error,
+    bool clearError = false,
   }) {
     return StaffStatementState(
       status: status ?? this.status,
@@ -445,7 +474,7 @@ class StaffStatementState extends Equatable {
       busy: busy ?? this.busy,
       planPreview: planPreview,
       planLoading: planLoading ?? this.planLoading,
-      error: error,
+      error: clearError ? null : (error ?? this.error),
     );
   }
 }
@@ -459,18 +488,17 @@ class StaffStatementCubit extends Cubit<StaffStatementState> {
 
   Future<void> load(String studentId) async {
     _studentId = studentId;
-    emit(state.copyWith(status: StaffStatementStatus.loading));
+    emit(state.copyWith(status: StaffStatementStatus.loading, clearError: true));
     try {
       final statement = await _repo.getStudentStatement(studentId);
+      if (isClosed) return;
       emit(state.copyWith(
         status: StaffStatementStatus.loaded,
         statement: statement,
       ));
-    } catch (e) {
-      emit(state.copyWith(
-        status: StaffStatementStatus.failure,
-        error: 'Failed to load statement: $e',
-      ));
+    } on ApiException catch (e) {
+      if (isClosed) return;
+      emit(state.copyWith(status: StaffStatementStatus.failure, error: e));
     }
   }
 
@@ -480,7 +508,7 @@ class StaffStatementCubit extends Cubit<StaffStatementState> {
     required String dueDate,
   }) async {
     if (_studentId == null) return;
-    emit(state.copyWith(busy: true, error: null));
+    emit(state.copyWith(busy: true, clearError: true));
     try {
       await _repo.addCharge(
         studentId: _studentId!,
@@ -489,8 +517,9 @@ class StaffStatementCubit extends Cubit<StaffStatementState> {
         dueDate: dueDate,
       );
       await load(_studentId!);
-    } catch (e) {
-      emit(state.copyWith(busy: false, error: 'Failed to add charge: $e'));
+    } on ApiException catch (e) {
+      if (isClosed) return;
+      emit(state.copyWith(busy: false, error: e));
     }
   }
 
@@ -499,12 +528,13 @@ class StaffStatementCubit extends Cubit<StaffStatementState> {
     required String reason,
   }) async {
     if (_studentId == null) return;
-    emit(state.copyWith(busy: true, error: null));
+    emit(state.copyWith(busy: true, clearError: true));
     try {
       await _repo.waiveCharge(chargeId: chargeId, reason: reason);
       await load(_studentId!);
-    } catch (e) {
-      emit(state.copyWith(busy: false, error: 'Failed to waive charge: $e'));
+    } on ApiException catch (e) {
+      if (isClosed) return;
+      emit(state.copyWith(busy: false, error: e));
     }
   }
 
@@ -515,7 +545,7 @@ class StaffStatementCubit extends Cubit<StaffStatementState> {
     String? bankReference,
   }) async {
     if (_studentId == null) return;
-    emit(state.copyWith(busy: true, error: null));
+    emit(state.copyWith(busy: true, clearError: true));
     try {
       await _repo.recordPayment(
         studentId: _studentId!,
@@ -525,8 +555,9 @@ class StaffStatementCubit extends Cubit<StaffStatementState> {
         bankReference: bankReference,
       );
       await load(_studentId!);
-    } catch (e) {
-      emit(state.copyWith(busy: false, error: 'Failed to record payment: $e'));
+    } on ApiException catch (e) {
+      if (isClosed) return;
+      emit(state.copyWith(busy: false, error: e));
     }
   }
 
@@ -535,12 +566,13 @@ class StaffStatementCubit extends Cubit<StaffStatementState> {
     required String reason,
   }) async {
     if (_studentId == null) return;
-    emit(state.copyWith(busy: true, error: null));
+    emit(state.copyWith(busy: true, clearError: true));
     try {
       await _repo.reversePayment(paymentId: paymentId, reason: reason);
       await load(_studentId!);
-    } catch (e) {
-      emit(state.copyWith(busy: false, error: 'Failed to reverse payment: $e'));
+    } on ApiException catch (e) {
+      if (isClosed) return;
+      emit(state.copyWith(busy: false, error: e));
     }
   }
 
@@ -551,7 +583,7 @@ class StaffStatementCubit extends Cubit<StaffStatementState> {
     required String cadence,
     required String label,
   }) async {
-    emit(state.copyWith(planLoading: true, error: null));
+    emit(state.copyWith(planLoading: true, clearError: true));
     try {
       final result = await _repo.previewInstalmentPlan(
         totalRupees: totalRupees,
@@ -560,10 +592,12 @@ class StaffStatementCubit extends Cubit<StaffStatementState> {
         cadence: cadence,
         label: label,
       );
+      if (isClosed) return;
       final preview = InstalmentPlanPreview.fromJson(result);
       emit(state.copyWith(planLoading: false, planPreview: preview));
-    } catch (e) {
-      emit(state.copyWith(planLoading: false, error: 'Could not work out the schedule: $e'));
+    } on ApiException catch (e) {
+      if (isClosed) return;
+      emit(state.copyWith(planLoading: false, error: e));
     }
   }
 
@@ -575,7 +609,7 @@ class StaffStatementCubit extends Cubit<StaffStatementState> {
     required String label,
   }) async {
     if (_studentId == null) return;
-    emit(state.copyWith(busy: true, error: null));
+    emit(state.copyWith(busy: true, clearError: true));
     try {
       await _repo.createInstalmentPlan(
         studentId: _studentId!,
@@ -587,8 +621,9 @@ class StaffStatementCubit extends Cubit<StaffStatementState> {
       );
       emit(state.copyWith(planPreview: null));
       await load(_studentId!);
-    } catch (e) {
-      emit(state.copyWith(busy: false, error: 'Failed to create plan: $e'));
+    } on ApiException catch (e) {
+      if (isClosed) return;
+      emit(state.copyWith(busy: false, error: e));
     }
   }
 }
