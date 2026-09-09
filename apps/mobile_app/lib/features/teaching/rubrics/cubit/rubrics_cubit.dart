@@ -1,6 +1,7 @@
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../core/network/api_exception.dart';
 import '../data/rubrics_repository.dart';
 import '../data/models/rubric_models.dart';
 
@@ -15,7 +16,7 @@ class RubricsState extends Equatable {
   final RubricsStatus status;
   final List<Rubric> rubrics;
   final Rubric? selectedRubric;
-  final String? error;
+  final ApiException? error;
 
   @override
   List<Object?> get props => [status, rubrics, selectedRubric, error];
@@ -24,13 +25,14 @@ class RubricsState extends Equatable {
     RubricsStatus? status,
     List<Rubric>? rubrics,
     Rubric? selectedRubric,
-    String? error,
+    ApiException? error,
+    bool clearError = false,
   }) {
     return RubricsState(
       status: status ?? this.status,
       rubrics: rubrics ?? this.rubrics,
       selectedRubric: selectedRubric ?? this.selectedRubric,
-      error: error ?? this.error,
+      error: clearError ? null : (error ?? this.error),
     );
   }
 }
@@ -42,33 +44,37 @@ class RubricsCubit extends Cubit<RubricsState> {
   final RubricsRepository _repo;
 
   Future<void> loadRubrics() async {
-    emit(state.copyWith(status: RubricsStatus.loading));
+    emit(state.copyWith(status: RubricsStatus.loading, clearError: true));
     try {
       final rubrics = await _repo.getRubrics();
+      if (isClosed) return;
       emit(state.copyWith(
         status: RubricsStatus.loaded,
         rubrics: rubrics,
       ));
-    } catch (e) {
+    } on ApiException catch (e) {
+      if (isClosed) return;
       emit(state.copyWith(
         status: RubricsStatus.failure,
-        error: 'Failed to load rubrics: $e',
+        error: e,
       ));
     }
   }
 
   Future<void> loadRubric(String id) async {
-    emit(state.copyWith(status: RubricsStatus.loading));
+    emit(state.copyWith(status: RubricsStatus.loading, clearError: true));
     try {
       final rubric = await _repo.getRubric(id);
+      if (isClosed) return;
       emit(state.copyWith(
         status: RubricsStatus.loaded,
         selectedRubric: rubric,
       ));
-    } catch (e) {
+    } on ApiException catch (e) {
+      if (isClosed) return;
       emit(state.copyWith(
         status: RubricsStatus.failure,
-        error: 'Failed to load rubric: $e',
+        error: e,
       ));
     }
   }
@@ -78,27 +84,29 @@ class RubricsCubit extends Cubit<RubricsState> {
     required String type,
     required List<RubricCriterion> criteria,
   }) async {
-    emit(state.copyWith(status: RubricsStatus.loading));
+    emit(state.copyWith(status: RubricsStatus.loading, clearError: true));
     try {
       await _repo.createRubric(title: title, type: type, criteria: criteria);
       await loadRubrics();
-    } catch (e) {
+    } on ApiException catch (e) {
+      if (isClosed) return;
       emit(state.copyWith(
         status: RubricsStatus.failure,
-        error: 'Failed to create rubric: $e',
+        error: e,
       ));
     }
   }
 
   Future<void> deleteRubric(String id) async {
-    emit(state.copyWith(status: RubricsStatus.loading));
+    emit(state.copyWith(status: RubricsStatus.loading, clearError: true));
     try {
       await _repo.deleteRubric(id);
       await loadRubrics();
-    } catch (e) {
+    } on ApiException catch (e) {
+      if (isClosed) return;
       emit(state.copyWith(
         status: RubricsStatus.failure,
-        error: 'Failed to delete rubric: $e',
+        error: e,
       ));
     }
   }

@@ -49,7 +49,7 @@ class _CohortImportPageState extends State<CohortImportPage> {
         listener: (context, state) {
           if (state.error != null) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(state.error!)),
+              SnackBar(content: Text(state.error!.message)),
             );
             _cubit.clearError();
           }

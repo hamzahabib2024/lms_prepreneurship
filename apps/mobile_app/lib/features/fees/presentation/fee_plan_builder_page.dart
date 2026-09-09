@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/network/api_client.dart';
+import '../../../../core/network/api_exception.dart';
 import '../../../../core/theme/app_theme.dart';
 
 class FeePlanBuilderPage extends StatefulWidget {
@@ -176,10 +177,16 @@ class _FeePlanBuilderPageState extends State<FeePlanBuilderPage> {
         );
         Navigator.of(context).pop();
       }
-    } catch (e) {
+    } on ApiException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to save: $e')),
+          SnackBar(content: Text(e.message)),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('An unexpected error occurred')),
         );
       }
     }

@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:dio/dio.dart';
 
 import '../constants.dart';
@@ -25,6 +27,7 @@ class ApiClient {
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {
+          developer.log('REQUEST: ${options.method} ${options.uri}', name: 'ApiClient');
           final token = _tokenStore.accessToken;
           if (token != null && token.isNotEmpty) {
             options.headers['Authorization'] = 'Bearer $token';
@@ -32,12 +35,46 @@ class ApiClient {
           options.headers['Accept'] = 'application/json';
           handler.next(options);
         },
+        onResponse: (response, handler) {
+          developer.log('RESPONSE: ${response.statusCode} ${response.requestOptions.uri}', name: 'ApiClient');
+          handler.next(response);
+        },
+        onError: (error, handler) {
+          developer.log('ERROR: ${error.response?.statusCode} ${error.requestOptions.uri} ${error.message}', name: 'ApiClient');
+          handler.next(error);
+        },
+      ),
+    );
+
+    // Public client — no auth interceptor, same timeouts, shared error mapping.
+    _publicDio = Dio(
+      BaseOptions(
+        baseUrl: AppConstants.apiBaseUrl,
+        connectTimeout: const Duration(seconds: 15),
+        receiveTimeout: const Duration(seconds: 30),
+      ),
+    );
+    _publicDio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) {
+          developer.log('PUBLIC REQUEST: ${options.method} ${options.uri}', name: 'ApiClient');
+          handler.next(options);
+        },
+        onResponse: (response, handler) {
+          developer.log('PUBLIC RESPONSE: ${response.statusCode} ${response.requestOptions.uri}', name: 'ApiClient');
+          handler.next(response);
+        },
+        onError: (error, handler) {
+          developer.log('PUBLIC ERROR: ${error.response?.statusCode} ${error.requestOptions.uri} ${error.message}', name: 'ApiClient');
+          handler.next(error);
+        },
       ),
     );
   }
 
   final TokenStore _tokenStore;
   final Dio _dio;
+  late final Dio _publicDio;
 
   /// Called when refresh fails, so the app can route back to sign-in.
   void Function()? onUnauthenticated;
@@ -129,6 +166,22 @@ class ApiClient {
   /// `data` payload, which loses the pagination block.
   Future<Map<String, dynamic>> getEnvelope(String path) => _requestRaw(path);
 
+  /// Public GET — no auth headers. Used for certificate verification and
+  /// other unauthenticated endpoints.
+  Future<T> getPublic<T>(String path) async {
+    try {
+      final response = await _publicDio.get<dynamic>(
+        path,
+        options: Options(headers: {'Accept': 'application/json'}),
+      );
+      if (response.statusCode == 204) return const {} as T;
+      final envelope = response.data as Map<String, dynamic>? ?? const {};
+      return (envelope['data'] as T);
+    } on DioException catch (error) {
+      throw _mapError(error);
+    }
+  }
+
   Future<T> _request<T>(
     String path, {
     String method = 'GET',
@@ -167,6 +220,17 @@ class ApiClient {
       }
       if (apiError.status == 401 && retried) onUnauthenticated?.call();
 
+      // Retry once on transient network errors (connection timeout,
+      // receive timeout, connection refused) so the user gets a better
+      // experience on flaky mobile networks.
+      if (!retried &&
+          (error.type == DioExceptionType.connectionTimeout ||
+           error.type == DioExceptionType.receiveTimeout ||
+           error.type == DioExceptionType.connectionError)) {
+        await Future<void>.delayed(const Duration(milliseconds: 500));
+        return _requestRaw(path, method: method, body: body, retried: true);
+      }
+
       throw apiError;
     }
   }
@@ -181,22 +245,32 @@ class ApiClient {
       case DioExceptionType.connectionTimeout:
         return const ApiException(
           status: 0,
-          message: 'Connection timed out. Please try again.',
+          code: 'CONNECTION_TIMEOUT',
+          message: 'Connection timed out. Please check your network and try again.',
         );
       case DioExceptionType.receiveTimeout:
         return const ApiException(
           status: 0,
+          code: 'RECEIVE_TIMEOUT',
           message: 'Server response timed out. Please try again.',
         );
       case DioExceptionType.connectionError:
         return const ApiException(
           status: 0,
-          message: 'Unable to reach the server.',
+          code: 'CONNECTION_ERROR',
+          message: 'Unable to reach the server. Please check your network connection.',
+        );
+      case DioExceptionType.cancel:
+        return const ApiException(
+          status: 0,
+          code: 'REQUEST_CANCELLED',
+          message: 'Request was cancelled.',
         );
       default:
         return ApiException(
           status: error.response?.statusCode ?? 0,
-          message: error.message ?? 'Something went wrong.',
+          code: 'NETWORK_ERROR',
+          message: error.message ?? 'A network error occurred. Please try again.',
         );
     }
   }

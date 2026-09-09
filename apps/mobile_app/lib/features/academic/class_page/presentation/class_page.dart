@@ -48,7 +48,7 @@ class _ClassPageState extends State<ClassPage> {
           listener: (context, state) {
             if (state.error != null) {
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(state.error!)),
+                SnackBar(content: Text(state.error!.message)),
               );
             }
           },
@@ -65,7 +65,7 @@ class _ClassPageState extends State<ClassPage> {
                     Icon(Icons.error_outline, size: 64, color: AppColors.error),
                     const SizedBox(height: 16),
                     Text(
-                      state.error ?? 'Failed to load class',
+                      state.error?.message ?? 'Failed to load class',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: dark ? AppColorsDark.ink : AppColors.ink,

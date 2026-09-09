@@ -1,6 +1,7 @@
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../core/network/api_exception.dart';
 import '../data/marking_repository.dart';
 import '../data/models/marking_models.dart';
 
@@ -21,7 +22,7 @@ class MarkingQueueState extends Equatable {
   final TeacherSection? selectedSection;
   final List<TeacherAssignment> assignments;
   final List<TeacherQuiz> quizzes;
-  final String? error;
+  final ApiException? error;
 
   @override
   List<Object?> get props =>
@@ -33,7 +34,8 @@ class MarkingQueueState extends Equatable {
     TeacherSection? selectedSection,
     List<TeacherAssignment>? assignments,
     List<TeacherQuiz>? quizzes,
-    String? error,
+    ApiException? error,
+    bool clearError = false,
   }) {
     return MarkingQueueState(
       status: status ?? this.status,
@@ -41,7 +43,7 @@ class MarkingQueueState extends Equatable {
       selectedSection: selectedSection ?? this.selectedSection,
       assignments: assignments ?? this.assignments,
       quizzes: quizzes ?? this.quizzes,
-      error: error ?? this.error,
+      error: clearError ? null : (error ?? this.error),
     );
   }
 }
@@ -53,18 +55,17 @@ class MarkingQueueCubit extends Cubit<MarkingQueueState> {
   final MarkingRepository _repo;
 
   Future<void> loadSections() async {
-    emit(state.copyWith(status: MarkingQueueStatus.loading));
+    emit(state.copyWith(status: MarkingQueueStatus.loading, clearError: true));
     try {
       final sections = await _repo.getTeacherSections();
+      if (isClosed) return;
       emit(state.copyWith(
         status: MarkingQueueStatus.loaded,
         sections: sections,
       ));
-    } catch (e) {
-      emit(state.copyWith(
-        status: MarkingQueueStatus.failure,
-        error: 'Failed to load sections: $e',
-      ));
+    } on ApiException catch (e) {
+      if (isClosed) return;
+      emit(state.copyWith(status: MarkingQueueStatus.failure, error: e));
     }
   }
 
@@ -72,22 +73,22 @@ class MarkingQueueCubit extends Cubit<MarkingQueueState> {
     emit(state.copyWith(
       status: MarkingQueueStatus.loading,
       selectedSection: section,
+      clearError: true,
     ));
     try {
       final results = await Future.wait([
         _repo.getAssignmentQueue(sectionSubjectId: section.sectionSubjectId),
         _repo.getQuizQueue(sectionSubjectId: section.sectionSubjectId),
       ]);
+      if (isClosed) return;
       emit(state.copyWith(
         status: MarkingQueueStatus.loaded,
         assignments: results[0] as List<TeacherAssignment>,
         quizzes: results[1] as List<TeacherQuiz>,
       ));
-    } catch (e) {
-      emit(state.copyWith(
-        status: MarkingQueueStatus.failure,
-        error: 'Failed to load queue: $e',
-      ));
+    } on ApiException catch (e) {
+      if (isClosed) return;
+      emit(state.copyWith(status: MarkingQueueStatus.failure, error: e));
     }
   }
 }
@@ -107,7 +108,7 @@ class GradingState extends Equatable {
   final GradingRoster? roster;
   final int? selectedStudentIndex;
   final bool grading;
-  final String? error;
+  final ApiException? error;
 
   RosterStudent? get selectedStudent =>
       roster != null && selectedStudentIndex != null
@@ -123,14 +124,15 @@ class GradingState extends Equatable {
     GradingRoster? roster,
     int? selectedStudentIndex,
     bool? grading,
-    String? error,
+    ApiException? error,
+    bool clearError = false,
   }) {
     return GradingState(
       status: status ?? this.status,
       roster: roster ?? this.roster,
       selectedStudentIndex: selectedStudentIndex ?? this.selectedStudentIndex,
       grading: grading ?? this.grading,
-      error: error ?? this.error,
+      error: clearError ? null : (error ?? this.error),
     );
   }
 }
@@ -142,19 +144,18 @@ class GradingCubit extends Cubit<GradingState> {
   final MarkingRepository _repo;
 
   Future<void> loadRoster(String assignmentId) async {
-    emit(state.copyWith(status: GradingStatus.loading));
+    emit(state.copyWith(status: GradingStatus.loading, clearError: true));
     try {
       final roster = await _repo.getGradingRoster(assignmentId: assignmentId);
+      if (isClosed) return;
       emit(state.copyWith(
         status: GradingStatus.loaded,
         roster: roster,
         selectedStudentIndex: null,
       ));
-    } catch (e) {
-      emit(state.copyWith(
-        status: GradingStatus.failure,
-        error: 'Failed to load roster: $e',
-      ));
+    } on ApiException catch (e) {
+      if (isClosed) return;
+      emit(state.copyWith(status: GradingStatus.failure, error: e));
     }
   }
 
@@ -190,7 +191,7 @@ class GradingCubit extends Cubit<GradingState> {
     String? feedback,
     String? internalNotes,
   }) async {
-    emit(state.copyWith(grading: true));
+    emit(state.copyWith(grading: true, clearError: true));
     try {
       await _repo.gradeStudent(
         assignmentId: assignmentId,
@@ -201,34 +202,32 @@ class GradingCubit extends Cubit<GradingState> {
         internalNotes: internalNotes,
       );
       final roster = await _repo.getGradingRoster(assignmentId: assignmentId);
+      if (isClosed) return;
       emit(state.copyWith(
         status: GradingStatus.loaded,
         roster: roster,
         grading: false,
       ));
-    } catch (e) {
-      emit(state.copyWith(
-        grading: false,
-        error: 'Failed to save grade: $e',
-      ));
+    } on ApiException catch (e) {
+      if (isClosed) return;
+      emit(state.copyWith(grading: false, error: e));
     }
   }
 
   Future<void> releaseGrades(String assignmentId) async {
-    emit(state.copyWith(grading: true));
+    emit(state.copyWith(grading: true, clearError: true));
     try {
       await _repo.releaseGrades(assignmentId: assignmentId);
       final roster = await _repo.getGradingRoster(assignmentId: assignmentId);
+      if (isClosed) return;
       emit(state.copyWith(
         status: GradingStatus.loaded,
         roster: roster,
         grading: false,
       ));
-    } catch (e) {
-      emit(state.copyWith(
-        grading: false,
-        error: 'Failed to release grades: $e',
-      ));
+    } on ApiException catch (e) {
+      if (isClosed) return;
+      emit(state.copyWith(grading: false, error: e));
     }
   }
 }
@@ -248,7 +247,7 @@ class QuizMarkingState extends Equatable {
   final MarkingQueue? queue;
   final int currentIndex;
   final bool marking;
-  final String? error;
+  final ApiException? error;
 
   MarkableAnswer? get currentAnswer =>
       queue != null && currentIndex < queue!.answers.length
@@ -265,14 +264,15 @@ class QuizMarkingState extends Equatable {
     MarkingQueue? queue,
     int? currentIndex,
     bool? marking,
-    String? error,
+    ApiException? error,
+    bool clearError = false,
   }) {
     return QuizMarkingState(
       status: status ?? this.status,
       queue: queue ?? this.queue,
       currentIndex: currentIndex ?? this.currentIndex,
       marking: marking ?? this.marking,
-      error: error ?? this.error,
+      error: clearError ? null : (error ?? this.error),
     );
   }
 }
@@ -284,19 +284,18 @@ class QuizMarkingCubit extends Cubit<QuizMarkingState> {
   final MarkingRepository _repo;
 
   Future<void> loadQueue(String quizId) async {
-    emit(state.copyWith(status: QuizMarkingStatus.loading));
+    emit(state.copyWith(status: QuizMarkingStatus.loading, clearError: true));
     try {
       final queue = await _repo.getMarkingQueue(quizId: quizId);
+      if (isClosed) return;
       emit(state.copyWith(
         status: QuizMarkingStatus.loaded,
         queue: queue,
         currentIndex: 0,
       ));
-    } catch (e) {
-      emit(state.copyWith(
-        status: QuizMarkingStatus.failure,
-        error: 'Failed to load marking queue: $e',
-      ));
+    } on ApiException catch (e) {
+      if (isClosed) return;
+      emit(state.copyWith(status: QuizMarkingStatus.failure, error: e));
     }
   }
 
@@ -306,7 +305,7 @@ class QuizMarkingCubit extends Cubit<QuizMarkingState> {
     String? graderComment,
     String? quizId,
   }) async {
-    emit(state.copyWith(marking: true));
+    emit(state.copyWith(marking: true, clearError: true));
     try {
       await _repo.saveQuizMark(
         answerId: answerId,
@@ -320,6 +319,7 @@ class QuizMarkingCubit extends Cubit<QuizMarkingState> {
         ));
       } else if (quizId != null) {
         final queue = await _repo.getMarkingQueue(quizId: quizId);
+        if (isClosed) return;
         emit(state.copyWith(
           status: QuizMarkingStatus.loaded,
           queue: queue,
@@ -329,11 +329,9 @@ class QuizMarkingCubit extends Cubit<QuizMarkingState> {
       } else {
         emit(state.copyWith(marking: false));
       }
-    } catch (e) {
-      emit(state.copyWith(
-        marking: false,
-        error: 'Failed to save mark: $e',
-      ));
+    } on ApiException catch (e) {
+      if (isClosed) return;
+      emit(state.copyWith(marking: false, error: e));
     }
   }
 
@@ -344,21 +342,20 @@ class QuizMarkingCubit extends Cubit<QuizMarkingState> {
   }
 
   Future<void> releaseQuizGrades(String quizId) async {
-    emit(state.copyWith(marking: true));
+    emit(state.copyWith(marking: true, clearError: true));
     try {
       await _repo.releaseQuizGrades(quizId: quizId);
       final queue = await _repo.getMarkingQueue(quizId: quizId);
+      if (isClosed) return;
       emit(state.copyWith(
         status: QuizMarkingStatus.loaded,
         queue: queue,
         currentIndex: 0,
         marking: false,
       ));
-    } catch (e) {
-      emit(state.copyWith(
-        marking: false,
-        error: 'Failed to release grades: $e',
-      ));
+    } on ApiException catch (e) {
+      if (isClosed) return;
+      emit(state.copyWith(marking: false, error: e));
     }
   }
 }

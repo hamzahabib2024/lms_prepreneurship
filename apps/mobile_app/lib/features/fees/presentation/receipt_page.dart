@@ -53,7 +53,8 @@ class _ReceiptView extends StatelessWidget {
 
           final receipt = state.receipt;
           if (receipt == null) {
-            return const Center(child: Text('Receipt not found'));
+            final errorMsg = state.error?.message ?? 'Receipt not found';
+            return Center(child: Text(errorMsg));
           }
 
           return SingleChildScrollView(

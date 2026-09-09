@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../core/network/api_exception.dart';
 import '../data/course_admin_repository.dart';
 import '../data/models/course_admin_models.dart';
 
@@ -19,13 +20,13 @@ class CourseAdminState extends Equatable {
   final List<Programme> programmes;
   final List<Subject> subjects;
   final bool loading;
-  final String? error;
+  final ApiException? error;
 
   CourseAdminState copyWith({
     List<Programme>? programmes,
     List<Subject>? subjects,
     bool? loading,
-    String? error,
+    ApiException? error,
     bool clearError = false,
   }) {
     return CourseAdminState(
@@ -54,13 +55,15 @@ class CourseAdminCubit extends Cubit<CourseAdminState> {
         _repo.getCourseTree(),
         _repo.getSubjects(),
       ]);
+      if (isClosed) return;
       emit(state.copyWith(
         programmes: results[0] as List<Programme>,
         subjects: results[1] as List<Subject>,
         loading: false,
       ));
-    } catch (e) {
-      emit(state.copyWith(loading: false, error: 'Failed to load: $e'));
+    } on ApiException catch (e) {
+      if (isClosed) return;
+      emit(state.copyWith(loading: false, error: e));
     }
   }
 
@@ -77,10 +80,12 @@ class CourseAdminCubit extends Cubit<CourseAdminState> {
         description: description,
         credits: credits,
       );
+      if (isClosed) return null;
       emit(state.copyWith(subjects: [...state.subjects, subject]));
       return subject;
-    } catch (e) {
-      emit(state.copyWith(error: 'Failed to create subject: $e'));
+    } on ApiException catch (e) {
+      if (isClosed) return null;
+      emit(state.copyWith(error: e));
       return null;
     }
   }
@@ -98,10 +103,12 @@ class CourseAdminCubit extends Cubit<CourseAdminState> {
         description: description,
         durationWeeks: durationWeeks,
       );
+      if (isClosed) return null;
       emit(state.copyWith(programmes: [...state.programmes, programme]));
       return programme;
-    } catch (e) {
-      emit(state.copyWith(error: 'Failed to create course: $e'));
+    } on ApiException catch (e) {
+      if (isClosed) return null;
+      emit(state.copyWith(error: e));
       return null;
     }
   }
@@ -132,8 +139,9 @@ class CourseAdminCubit extends Cubit<CourseAdminState> {
         whatsappGroupUrl: whatsappGroupUrl,
       );
       await load(); // refresh
-    } catch (e) {
-      emit(state.copyWith(error: 'Failed to create batch: $e'));
+    } on ApiException catch (e) {
+      if (isClosed) return;
+      emit(state.copyWith(error: e));
     }
   }
 }

@@ -60,7 +60,32 @@ class _CourseAdminPageState extends State<CourseAdminPage> {
               return const Center(child: CircularProgressIndicator());
             }
             if (state.error != null) {
-              return Center(child: Text(state.error!));
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.error_outline, size: 48, color: AppColors.error),
+                      const SizedBox(height: 16),
+                      Text(
+                        state.error!.message,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: dark ? AppColorsDark.ink : AppColors.ink,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      FilledButton.icon(
+                        onPressed: () => _cubit.load(),
+                        icon: const Icon(Icons.refresh, size: 16),
+                        label: const Text('Retry'),
+                      ),
+                    ],
+                  ),
+                ),
+              );
             }
 
             return RefreshIndicator(

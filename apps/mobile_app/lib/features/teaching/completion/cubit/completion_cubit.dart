@@ -1,6 +1,7 @@
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../core/network/api_exception.dart';
 import '../data/completion_repository.dart';
 import '../data/models/completion_models.dart';
 
@@ -15,7 +16,7 @@ class CompletionState extends Equatable {
   final CompletionStatus status;
   final CompletionRoster? roster;
   final bool saving;
-  final String? error;
+  final ApiException? error;
 
   @override
   List<Object?> get props => [status, roster, saving, error];
@@ -24,13 +25,14 @@ class CompletionState extends Equatable {
     CompletionStatus? status,
     CompletionRoster? roster,
     bool? saving,
-    String? error,
+    ApiException? error,
+    bool clearError = false,
   }) {
     return CompletionState(
       status: status ?? this.status,
       roster: roster ?? this.roster,
       saving: saving ?? this.saving,
-      error: error ?? this.error,
+      error: clearError ? null : (error ?? this.error),
     );
   }
 }
@@ -44,17 +46,19 @@ class CompletionCubit extends Cubit<CompletionState> {
 
   Future<void> load(String sectionSubjectId) async {
     _sectionSubjectId = sectionSubjectId;
-    emit(state.copyWith(status: CompletionStatus.loading));
+    emit(state.copyWith(status: CompletionStatus.loading, clearError: true));
     try {
       final roster = await _repo.getRoster(sectionSubjectId);
+      if (isClosed) return;
       emit(state.copyWith(
         status: CompletionStatus.loaded,
         roster: roster,
       ));
-    } catch (e) {
+    } on ApiException catch (e) {
+      if (isClosed) return;
       emit(state.copyWith(
         status: CompletionStatus.failure,
-        error: 'Failed to load roster: $e',
+        error: e,
       ));
     }
   }
@@ -66,7 +70,7 @@ class CompletionCubit extends Cubit<CompletionState> {
   }) async {
     if (_sectionSubjectId == null) return;
 
-    emit(state.copyWith(saving: true));
+    emit(state.copyWith(saving: true, clearError: true));
     try {
       await _repo.saveDecision(
         sectionSubjectId: _sectionSubjectId!,
@@ -76,15 +80,17 @@ class CompletionCubit extends Cubit<CompletionState> {
       );
       // Reload roster
       final roster = await _repo.getRoster(_sectionSubjectId!);
+      if (isClosed) return;
       emit(state.copyWith(
         status: CompletionStatus.loaded,
         roster: roster,
         saving: false,
       ));
-    } catch (e) {
+    } on ApiException catch (e) {
+      if (isClosed) return;
       emit(state.copyWith(
         saving: false,
-        error: 'Failed to save: $e',
+        error: e,
       ));
     }
   }

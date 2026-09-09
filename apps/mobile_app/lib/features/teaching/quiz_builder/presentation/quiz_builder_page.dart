@@ -62,7 +62,7 @@ class _QuizBuilderPageState extends State<QuizBuilderPage> {
                 }
                 if (state.error != null) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(state.error!)),
+                    SnackBar(content: Text(state.error!.message)),
                   );
                 }
               },

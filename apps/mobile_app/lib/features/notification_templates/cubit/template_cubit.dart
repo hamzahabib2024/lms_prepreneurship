@@ -1,6 +1,7 @@
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../core/network/api_exception.dart';
 import '../data/template_repository.dart';
 import '../data/models/template_models.dart';
 
@@ -16,7 +17,7 @@ class TemplateState extends Equatable {
 
   final List<NotificationTemplate> templates;
   final bool loading;
-  final String? error;
+  final ApiException? error;
   final String? success;
 
   int get customizedCount =>
@@ -25,7 +26,7 @@ class TemplateState extends Equatable {
   TemplateState copyWith({
     List<NotificationTemplate>? templates,
     bool? loading,
-    String? error,
+    ApiException? error,
     String? success,
     bool clearError = false,
     bool clearSuccess = false,
@@ -53,9 +54,11 @@ class TemplateCubit extends Cubit<TemplateState> {
     emit(state.copyWith(loading: true, clearError: true, clearSuccess: true));
     try {
       final templates = await _repo.getAll();
+      if (isClosed) return;
       emit(state.copyWith(templates: templates, loading: false));
-    } catch (e) {
-      emit(state.copyWith(loading: false, error: 'Failed to load: $e'));
+    } on ApiException catch (e) {
+      if (isClosed) return;
+      emit(state.copyWith(loading: false, error: e));
     }
   }
 
@@ -67,10 +70,12 @@ class TemplateCubit extends Cubit<TemplateState> {
     emit(state.copyWith(clearError: true, clearSuccess: true));
     try {
       await _repo.save(kind: kind, title: title, body: body);
+      if (isClosed) return;
       emit(state.copyWith(success: 'Template saved'));
       await load();
-    } catch (e) {
-      emit(state.copyWith(error: 'Save failed: $e'));
+    } on ApiException catch (e) {
+      if (isClosed) return;
+      emit(state.copyWith(error: e));
     }
   }
 
@@ -78,10 +83,12 @@ class TemplateCubit extends Cubit<TemplateState> {
     emit(state.copyWith(clearError: true, clearSuccess: true));
     try {
       await _repo.reset(kind);
+      if (isClosed) return;
       emit(state.copyWith(success: 'Template reset to default'));
       await load();
-    } catch (e) {
-      emit(state.copyWith(error: 'Reset failed: $e'));
+    } on ApiException catch (e) {
+      if (isClosed) return;
+      emit(state.copyWith(error: e));
     }
   }
 }

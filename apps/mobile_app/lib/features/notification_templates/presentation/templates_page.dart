@@ -44,7 +44,7 @@ class _TemplatesPageState extends State<TemplatesPage> {
           listener: (context, state) {
             if (state.error != null) {
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(state.error!)),
+                SnackBar(content: Text(state.error!.message)),
               );
             }
             if (state.success != null) {
