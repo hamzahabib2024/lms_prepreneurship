@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/network/api_client.dart';
+import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_theme.dart';
 import '../data/course_admin_repository.dart';
 import '../data/models/course_admin_models.dart';
@@ -97,10 +98,16 @@ class _CourseEditPageState extends State<CourseEditPage> {
         );
       }
       if (mounted) Navigator.pop(context);
-    } catch (e) {
+    } on ApiException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+          SnackBar(content: Text(e.message)),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('An unexpected error occurred')),
         );
       }
     } finally {
