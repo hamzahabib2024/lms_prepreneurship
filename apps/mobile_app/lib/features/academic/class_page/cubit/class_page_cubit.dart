@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../core/network/api_exception.dart';
 import '../data/class_page_repository.dart';
 import '../data/models/class_page_models.dart';
 
@@ -18,7 +19,7 @@ class ClassPageState extends Equatable {
   final ClassPageStatus status;
   final JoinRoute? joinRoute;
   final bool checkedIn;
-  final String? error;
+  final ApiException? error;
   final Duration? countdown;
 
   @override
@@ -29,14 +30,15 @@ class ClassPageState extends Equatable {
     ClassPageStatus? status,
     JoinRoute? joinRoute,
     bool? checkedIn,
-    String? error,
+    ApiException? error,
     Duration? countdown,
+    bool clearError = false,
   }) {
     return ClassPageState(
       status: status ?? this.status,
       joinRoute: joinRoute ?? this.joinRoute,
       checkedIn: checkedIn ?? this.checkedIn,
-      error: error ?? this.error,
+      error: clearError ? null : (error ?? this.error),
       countdown: countdown ?? this.countdown,
     );
   }
@@ -50,19 +52,18 @@ class ClassPageCubit extends Cubit<ClassPageState> {
   Timer? _countdownTimer;
 
   Future<void> loadJoinRoute(String sessionId) async {
-    emit(state.copyWith(status: ClassPageStatus.loading));
+    emit(state.copyWith(status: ClassPageStatus.loading, clearError: true));
     try {
       final joinRoute = await _repo.getJoinRoute(sessionId);
+      if (isClosed) return;
       emit(state.copyWith(
         status: ClassPageStatus.loaded,
         joinRoute: joinRoute,
       ));
       _startCountdownIfNeeded(joinRoute);
-    } catch (e) {
-      emit(state.copyWith(
-        status: ClassPageStatus.failure,
-        error: 'Failed to load class: $e',
-      ));
+    } on ApiException catch (e) {
+      if (isClosed) return;
+      emit(state.copyWith(status: ClassPageStatus.failure, error: e));
     }
   }
 
@@ -97,9 +98,11 @@ class ClassPageCubit extends Cubit<ClassPageState> {
   Future<void> checkIn(String sessionId) async {
     try {
       await _repo.checkIn(sessionId);
+      if (isClosed) return;
       emit(state.copyWith(checkedIn: true));
-    } catch (e) {
-      emit(state.copyWith(error: 'Check-in failed: $e'));
+    } on ApiException catch (e) {
+      if (isClosed) return;
+      emit(state.copyWith(error: e));
     }
   }
 
