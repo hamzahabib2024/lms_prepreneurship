@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:dio/dio.dart';
 
 import '../constants.dart';
@@ -25,12 +27,21 @@ class ApiClient {
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {
+          developer.log('REQUEST: ${options.method} ${options.uri}', name: 'ApiClient');
           final token = _tokenStore.accessToken;
           if (token != null && token.isNotEmpty) {
             options.headers['Authorization'] = 'Bearer $token';
           }
           options.headers['Accept'] = 'application/json';
           handler.next(options);
+        },
+        onResponse: (response, handler) {
+          developer.log('RESPONSE: ${response.statusCode} ${response.requestOptions.uri}', name: 'ApiClient');
+          handler.next(response);
+        },
+        onError: (error, handler) {
+          developer.log('ERROR: ${error.response?.statusCode} ${error.requestOptions.uri} ${error.message}', name: 'ApiClient');
+          handler.next(error);
         },
       ),
     );
@@ -41,6 +52,22 @@ class ApiClient {
         baseUrl: AppConstants.apiBaseUrl,
         connectTimeout: const Duration(seconds: 15),
         receiveTimeout: const Duration(seconds: 30),
+      ),
+    );
+    _publicDio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) {
+          developer.log('PUBLIC REQUEST: ${options.method} ${options.uri}', name: 'ApiClient');
+          handler.next(options);
+        },
+        onResponse: (response, handler) {
+          developer.log('PUBLIC RESPONSE: ${response.statusCode} ${response.requestOptions.uri}', name: 'ApiClient');
+          handler.next(response);
+        },
+        onError: (error, handler) {
+          developer.log('PUBLIC ERROR: ${error.response?.statusCode} ${error.requestOptions.uri} ${error.message}', name: 'ApiClient');
+          handler.next(error);
+        },
       ),
     );
   }
