@@ -1,7 +1,7 @@
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../../core/network/api_exception.dart';
+import '../../../../core/network/api_exception.dart';
 import '../data/quiz_builder_repository.dart';
 import '../data/models/quiz_builder_models.dart';
 

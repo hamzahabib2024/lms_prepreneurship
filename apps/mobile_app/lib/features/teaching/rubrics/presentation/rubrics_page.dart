@@ -50,7 +50,7 @@ class _RubricsPageState extends State<RubricsPage> {
           listener: (context, state) {
             if (state.status == RubricsStatus.failure && state.error != null) {
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(state.error!)),
+                SnackBar(content: Text(state.error!.message)),
               );
             }
           },

@@ -1,7 +1,7 @@
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../../core/network/api_exception.dart';
+import '../../../../core/network/api_exception.dart';
 import '../data/rubrics_repository.dart';
 import '../data/models/rubric_models.dart';
 

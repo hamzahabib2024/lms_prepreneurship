@@ -48,7 +48,7 @@ class _MarkingQueuePageState extends State<MarkingQueuePage> {
           listener: (context, state) {
             if (state.status == MarkingQueueStatus.failure && state.error != null) {
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(state.error!)),
+                SnackBar(content: Text(state.error!.message)),
               );
             }
           },

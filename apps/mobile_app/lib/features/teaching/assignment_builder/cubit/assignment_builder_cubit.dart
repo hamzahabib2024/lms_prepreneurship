@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../../core/network/api_exception.dart';
+import '../../../../core/network/api_exception.dart';
 import '../data/assignment_builder_repository.dart';
 import '../data/models/assignment_builder_models.dart';
 
