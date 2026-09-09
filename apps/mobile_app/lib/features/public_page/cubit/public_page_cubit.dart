@@ -1,6 +1,7 @@
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../core/network/api_exception.dart';
 import '../data/public_page_repository.dart';
 import '../data/models/public_page_models.dart';
 
@@ -21,7 +22,7 @@ class PublicPageState extends Equatable {
   final Map<String, dynamic> draft;
   final bool loading;
   final bool saving;
-  final String? error;
+  final ApiException? error;
   final String? success;
   final Map<String, String> fieldErrors;
 
@@ -50,7 +51,7 @@ class PublicPageState extends Equatable {
     Map<String, dynamic>? draft,
     bool? loading,
     bool? saving,
-    String? error,
+    ApiException? error,
     String? success,
     Map<String, String>? fieldErrors,
     bool clearError = false,
@@ -83,9 +84,11 @@ class PublicPageCubit extends Cubit<PublicPageState> {
     emit(state.copyWith(loading: true, clearError: true));
     try {
       final doc = await _repo.getDocument();
+      if (isClosed) return;
       emit(state.copyWith(doc: doc, loading: false));
-    } catch (e) {
-      emit(state.copyWith(loading: false, error: 'Failed to load: $e'));
+    } on ApiException catch (e) {
+      if (isClosed) return;
+      emit(state.copyWith(loading: false, error: e));
     }
   }
 
@@ -141,13 +144,15 @@ class PublicPageCubit extends Cubit<PublicPageState> {
 
     try {
       final result = await _repo.save(values);
+      if (isClosed) return;
       final note = result.changed.isEmpty && result.restored.isEmpty
           ? 'No changes'
           : '${result.changed.length} updated, ${result.restored.length} restored';
       emit(state.copyWith(saving: false, success: note, clearDraft: true));
       await load(); // refresh from server
-    } catch (e) {
-      emit(state.copyWith(saving: false, error: 'Save failed: $e'));
+    } on ApiException catch (e) {
+      if (isClosed) return;
+      emit(state.copyWith(saving: false, error: e));
     }
   }
 }
