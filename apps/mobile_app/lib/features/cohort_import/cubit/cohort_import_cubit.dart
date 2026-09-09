@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../core/network/api_exception.dart';
 import '../data/cohort_import_repository.dart';
 import '../data/models/cohort_import_models.dart';
 
@@ -37,7 +38,7 @@ class CohortImportState extends Equatable {
   final bool consent;
   final bool capacityOverride;
   final bool loading;
-  final String? error;
+  final ApiException? error;
 
   bool get canPreview => csv.isNotEmpty && sectionId.isNotEmpty && !loading;
   bool get canCommit =>
@@ -60,7 +61,7 @@ class CohortImportState extends Equatable {
     bool? consent,
     bool? capacityOverride,
     bool? loading,
-    String? error,
+    ApiException? error,
     bool clearPreview = false,
     bool clearResult = false,
     bool clearError = false,
@@ -109,9 +110,11 @@ class CohortImportCubit extends Cubit<CohortImportState> {
   Future<void> init() async {
     try {
       final sections = await _repo.getSections();
+      if (isClosed) return;
       emit(state.copyWith(sections: sections));
-    } catch (e) {
-      emit(state.copyWith(error: 'Failed to load sections: $e'));
+    } on ApiException catch (e) {
+      if (isClosed) return;
+      emit(state.copyWith(error: e));
     }
   }
 
@@ -148,13 +151,15 @@ class CohortImportCubit extends Cubit<CohortImportState> {
         csv: state.csv,
         sectionId: state.sectionId,
       );
+      if (isClosed) return;
       emit(state.copyWith(
         loading: false,
         preview: preview,
         step: CohortImportStep.preview,
       ));
-    } catch (e) {
-      emit(state.copyWith(loading: false, error: 'Preview failed: $e'));
+    } on ApiException catch (e) {
+      if (isClosed) return;
+      emit(state.copyWith(loading: false, error: e));
     }
   }
 
@@ -169,13 +174,15 @@ class CohortImportCubit extends Cubit<CohortImportState> {
         capacityOverride: state.capacityOverride,
         note: state.note,
       );
+      if (isClosed) return;
       emit(state.copyWith(
         loading: false,
         result: result,
         step: CohortImportStep.result,
       ));
-    } catch (e) {
-      emit(state.copyWith(loading: false, error: 'Import failed: $e'));
+    } on ApiException catch (e) {
+      if (isClosed) return;
+      emit(state.copyWith(loading: false, error: e));
     }
   }
 
