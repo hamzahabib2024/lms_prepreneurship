@@ -167,6 +167,17 @@ class ApiClient {
       }
       if (apiError.status == 401 && retried) onUnauthenticated?.call();
 
+      // Retry once on transient network errors (connection timeout,
+      // receive timeout, connection refused) so the user gets a better
+      // experience on flaky mobile networks.
+      if (!retried &&
+          (error.type == DioExceptionType.connectionTimeout ||
+           error.type == DioExceptionType.receiveTimeout ||
+           error.type == DioExceptionType.connectionError)) {
+        await Future<void>.delayed(const Duration(milliseconds: 500));
+        return _requestRaw(path, method: method, body: body, retried: true);
+      }
+
       throw apiError;
     }
   }
@@ -181,22 +192,32 @@ class ApiClient {
       case DioExceptionType.connectionTimeout:
         return const ApiException(
           status: 0,
-          message: 'Connection timed out. Please try again.',
+          code: 'CONNECTION_TIMEOUT',
+          message: 'Connection timed out. Please check your network and try again.',
         );
       case DioExceptionType.receiveTimeout:
         return const ApiException(
           status: 0,
+          code: 'RECEIVE_TIMEOUT',
           message: 'Server response timed out. Please try again.',
         );
       case DioExceptionType.connectionError:
         return const ApiException(
           status: 0,
-          message: 'Unable to reach the server.',
+          code: 'CONNECTION_ERROR',
+          message: 'Unable to reach the server. Please check your network connection.',
+        );
+      case DioExceptionType.cancel:
+        return const ApiException(
+          status: 0,
+          code: 'REQUEST_CANCELLED',
+          message: 'Request was cancelled.',
         );
       default:
         return ApiException(
           status: error.response?.statusCode ?? 0,
-          message: error.message ?? 'Something went wrong.',
+          code: 'NETWORK_ERROR',
+          message: error.message ?? 'A network error occurred. Please try again.',
         );
     }
   }
