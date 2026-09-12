@@ -1,5 +1,7 @@
 import '../../../core/network/api_client.dart';
 import 'models/certificate.dart';
+import 'models/batch_issue_result.dart';
+import 'models/certificate_register.dart';
 import 'models/certificate_candidate.dart';
 import 'models/programme_standing.dart';
 
@@ -95,6 +97,69 @@ class CertificatesRepository {
     );
     return VerifyResult.fromJson(data);
   }
+
+  // ------------------------------------------------------- the register ---
+
+  /// FR-CRT — every certificate the Institute has issued.
+  ///
+  /// Guarded by `certificate:create` on the server, not `read`: this is the
+  /// whole roll, and a student holds read at OWN scope for their own copies.
+  Future<RegisterPage> register({
+    String? query,
+    String? status,
+    String? type,
+    int page = 1,
+  }) async {
+    final params = <String, String>{
+      if (query != null && query.trim().isNotEmpty) 'q': query.trim(),
+      'status': ?status,
+      'type': ?type,
+      'page': '$page',
+    };
+    final qs = params.entries
+        .map((e) =>
+            '${e.key}=${Uri.encodeQueryComponent(e.value)}')
+        .join('&');
+    final envelope = await api.getEnvelope('/certificates?$qs');
+    return RegisterPage.fromEnvelope(envelope);
+  }
+
+  /// The four figures at the head of the register.
+  Future<RegisterSummary> registerSummary() async {
+    final data = await api.get<Map<String, dynamic>>('/certificates/summary');
+    return RegisterSummary.fromJson(data);
+  }
+
+  /// Students a manual certificate can be attached to.
+  Future<List<StudentLookupResult>> studentLookup(String query) async {
+    final data = await api.get<List<dynamic>>(
+      '/certificates/students?q=${Uri.encodeQueryComponent(query)}',
+    );
+    return data
+        .whereType<Map<String, dynamic>>()
+        .map(StudentLookupResult.fromJson)
+        .toList();
+  }
+
+  /// FR-CRT — issue to everybody in one class who has earned it.
+  ///
+  /// `everyone` is the office overruling the requirements check; the reason
+  /// is recorded but not demanded, because a required field here would be the
+  /// software insisting on an explanation from the person it works for.
+  Future<BatchIssueResult> issueAll({
+    required String sectionSubjectId,
+    bool everyone = false,
+    String? reason,
+  }) async {
+    final data = await api.post<Map<String, dynamic>>(
+      '/section-subjects/$sectionSubjectId/certificates/issue-all',
+      {
+        'everyone': everyone,
+        'reason': ?reason,
+      },
+    );
+    return BatchIssueResult.fromJson(data);
+  }
 }
 
 /// The issuance view response — students + summary counts.
@@ -157,3 +222,4 @@ class VerifyResult {
         message: json['message'] as String? ?? '',
       );
 }
+

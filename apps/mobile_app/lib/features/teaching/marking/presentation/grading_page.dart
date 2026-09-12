@@ -538,7 +538,10 @@ class _StudentDetailState extends State<_StudentDetail> {
   late final TextEditingController _marksController;
   late final TextEditingController _feedbackController;
   late final TextEditingController _notesController;
-  late final TextEditingController _penaltyController;
+
+  /// BR-ASG-11 — required once the grade has been released. Nothing is
+  /// asked for before that, because most marking happens before release.
+  late final TextEditingController _revisionController;
 
   @override
   void initState() {
@@ -552,9 +555,7 @@ class _StudentDetailState extends State<_StudentDetail> {
     _notesController = TextEditingController(
       text: widget.student.internalNotes ?? '',
     );
-    _penaltyController = TextEditingController(
-      text: widget.student.penaltyApplied?.toString() ?? '',
-    );
+    _revisionController = TextEditingController();
   }
 
   @override
@@ -562,7 +563,7 @@ class _StudentDetailState extends State<_StudentDetail> {
     _marksController.dispose();
     _feedbackController.dispose();
     _notesController.dispose();
-    _penaltyController.dispose();
+    _revisionController.dispose();
     super.dispose();
   }
 
@@ -679,13 +680,34 @@ class _StudentDetailState extends State<_StudentDetail> {
             dark: widget.dark,
             keyboardType: TextInputType.number,
           ),
-          const SizedBox(height: 8),
-          _GradingField(
-            controller: _penaltyController,
-            label: 'Penalty (points deducted)',
-            dark: widget.dark,
-            keyboardType: TextInputType.number,
-          ),
+          // THE PENALTY IS THE SERVER'S ARITHMETIC, not a box.
+          //
+          // It is derived from the assignment's late policy and how late the
+          // work actually was (late-penalty.ts); the grade endpoint accepts no
+          // penalty field at all. A box here invited a teacher to type a
+          // number that was silently discarded, and to believe they had
+          // applied it.
+          if ((s.penaltyApplied ?? 0) > 0) ...[
+            const SizedBox(height: 8),
+            Text(
+              '${s.penaltyApplied} deducted for being '
+              '${s.minutesLate} minute${s.minutesLate == 1 ? '' : 's'} late '
+              '— applied automatically from the late policy.',
+              style: TextStyle(
+                fontSize: 12.5,
+                color: widget.dark ? AppColorsDark.warn : AppColors.warn,
+              ),
+            ),
+          ],
+          if (s.releasedAt != null) ...[
+            const SizedBox(height: 8),
+            _GradingField(
+              controller: _revisionController,
+              label: 'Why are you changing a released mark?',
+              dark: widget.dark,
+              maxLines: 2,
+            ),
+          ],
           const SizedBox(height: 8),
           _GradingField(
             controller: _feedbackController,
@@ -765,20 +787,42 @@ class _StudentDetailState extends State<_StudentDetail> {
       return;
     }
 
-    final penalty = num.tryParse(_penaltyController.text);
+    // Nothing to mark for somebody who has not submitted, and the grade
+    // endpoint is keyed by submission — so the button is not offered at all
+    // rather than failing here.
+    final submissionId = widget.student.submissionId;
+    if (submissionId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('This student has not submitted yet.')),
+      );
+      return;
+    }
+
     final feedback = _feedbackController.text.isNotEmpty
         ? _feedbackController.text
         : null;
     final notes =
         _notesController.text.isNotEmpty ? _notesController.text : null;
+    final revision = _revisionController.text.trim();
+
+    if (widget.student.releasedAt != null && revision.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'This mark has been released. Say why you are changing it.',
+          ),
+        ),
+      );
+      return;
+    }
 
     widget.cubit.gradeStudent(
       assignmentId: widget.assignment.id,
-      studentId: widget.student.studentId,
+      submissionId: submissionId,
       rawMarks: marks,
-      penaltyApplied: penalty,
       feedback: feedback,
       internalNotes: notes,
+      revisionReason: revision.isEmpty ? null : revision,
     );
   }
 }

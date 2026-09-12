@@ -246,4 +246,42 @@ class FeesRepository {
       {'reason': reason},
     );
   }
+
+  /// One submission in full, including the proofs attached to it.
+  ///
+  /// The queue rows carry only a COUNT of attachments, which is enough to
+  /// know that evidence exists and not enough to decide anything by.
+  Future<PaymentSubmission> submissionDetail(String submissionId) async {
+    final data = await _api.get<Map<String, dynamic>>(
+      '/fees/submissions/$submissionId',
+    );
+    return PaymentSubmission.fromJson(data);
+  }
+
+  /// FR-REG-024 — the bytes of one payment proof.
+  ///
+  /// FETCHED WITH THE SESSION, never linked. The object is somebody's bank
+  /// record and must not be reachable without one (SEC-FIL-009), so there is
+  /// no URL to hand an Image widget — the bytes come through the client and
+  /// are drawn from memory.
+  Future<List<int>> proofBytes({
+    required String submissionId,
+    required String documentId,
+  }) {
+    return _api.bytes('/fees/submissions/$submissionId/proof/$documentId');
+  }
+
+  /// One student's own submission history — FR-FEE.
+  ///
+  /// The office view of what a student has sent in, which is the question
+  /// asked when somebody rings up about a payment that has not appeared.
+  Future<List<VerificationQueueRow>> studentSubmissions(String studentId) async {
+    final data = await _api.get<List<dynamic>>(
+      '/students/$studentId/fees/submissions',
+    );
+    return data
+        .whereType<Map<String, dynamic>>()
+        .map(VerificationQueueRow.fromJson)
+        .toList();
+  }
 }

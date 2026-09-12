@@ -9,6 +9,9 @@ import '../../../../core/theme/app_theme.dart';
 import '../cubit/fees_cubit.dart';
 import '../data/fees_repository.dart';
 import '../data/models/fees_models.dart';
+import 'widgets/proof_viewer.dart';
+import '../../../core/network/api_exception.dart';
+import '../../../core/widgets/ui.dart';
 
 class PaymentVerificationPage extends StatefulWidget {
   const PaymentVerificationPage({super.key});
@@ -394,6 +397,11 @@ class _ReviewSheetState extends State<_ReviewSheet> {
   late final TextEditingController _reasonController;
   bool _isVerifying = true;
 
+  /// The proofs, fetched when the sheet opens. The queue row carries only a
+  /// count, and a count is not evidence.
+  List<ProofFile>? _proofs;
+  bool _proofsFailed = false;
+
   @override
   void initState() {
     super.initState();
@@ -401,6 +409,20 @@ class _ReviewSheetState extends State<_ReviewSheet> {
       text: widget.row.amount.toString(),
     );
     _reasonController = TextEditingController();
+    _loadProofs();
+  }
+
+  Future<void> _loadProofs() async {
+    try {
+      final detail = await context
+          .read<FeesRepository>()
+          .submissionDetail(widget.row.id);
+      if (!mounted) return;
+      setState(() => _proofs = detail.proof);
+    } on ApiException {
+      if (!mounted) return;
+      setState(() => _proofsFailed = true);
+    }
   }
 
   @override
@@ -449,6 +471,39 @@ class _ReviewSheetState extends State<_ReviewSheet> {
                 fontSize: 12,
               ),
             ),
+            const SizedBox(height: 16),
+
+            // THE EVIDENCE, before the decision. A clerk verifying a payment
+            // is saying the money arrived; the slip is what says so.
+            Text(
+              'Proof of payment',
+              style: TextStyle(
+                color: dark ? AppColorsDark.muted : AppColors.muted,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 6),
+            if (_proofsFailed)
+              const AppAlert(
+                title: 'The proof could not be loaded',
+                message:
+                    'Check the bank record yourself before verifying this.',
+                warn: true,
+              )
+            else if (_proofs == null)
+              const SizedBox(
+                height: 120,
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else
+              ProofViewer(
+                proofs: _proofs!,
+                load: (proof) => context.read<FeesRepository>().proofBytes(
+                      submissionId: widget.row.id,
+                      documentId: proof.id,
+                    ),
+              ),
             const SizedBox(height: 16),
 
             // Verify/Reject toggle

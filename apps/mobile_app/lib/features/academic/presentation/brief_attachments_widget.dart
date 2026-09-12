@@ -4,6 +4,8 @@ import 'package:file_picker/file_picker.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../cubit/brief_attachments_cubit.dart';
+import '../../../core/network/api_exception.dart';
+import '../../../core/network/file_download.dart';
 
 class BriefAttachmentsWidget extends StatelessWidget {
   const BriefAttachmentsWidget({
@@ -191,10 +193,39 @@ class _BriefAttachmentsView extends StatelessWidget {
     }
   }
 
+  /// FR-ASG — a file the teacher attached to the brief.
+  ///
+  /// The endpoint needs a bearer token, so there is no address to hand the
+  /// system's browser: the bytes come through the client and are written to
+  /// the app's documents directory.
   Future<void> _download(BuildContext context, BriefAttachment file) async {
-    ScaffoldMessenger.of(context).showSnackBar(
+    final cubit = context.read<BriefAttachmentsCubit>();
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
       SnackBar(content: Text('Downloading ${file.filename}\u2026')),
     );
+    try {
+      final saved = await FileDownload.save(
+        cubit.api,
+        path: '/assignment-attachments/${file.id}/download',
+        filename: file.filename,
+      );
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(
+        SnackBar(content: Text('Saved to ${saved.path}')),
+      );
+    } on ApiException {
+      messenger.hideCurrentSnackBar();
+      // ARC-045 — a file the System has lost is the Institute's problem, and
+      // saying so is more useful than a status code.
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'That file could not be downloaded. Please tell your teacher.',
+          ),
+        ),
+      );
+    }
   }
 
   void _remove(BuildContext context, String id) {

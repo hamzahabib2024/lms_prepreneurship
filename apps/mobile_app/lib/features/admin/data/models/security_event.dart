@@ -105,3 +105,26 @@ class SecurityOverview {
     );
   }
 }
+
+/// One kind of security event, and how many of them the log holds.
+///
+/// The filter is built from this rather than from a list in the client: a
+/// type the server has started writing appears on its own, and one that has
+/// never occurred is never offered.
+class SecurityEventType {
+  const SecurityEventType({required this.eventType, required this.count});
+
+  final String eventType;
+  final int count;
+
+  /// "login_failed" is how it is stored; this is how it reads.
+  String get label =>
+      eventType.replaceAll('_', ' ').replaceAll('.', ' ');
+
+  factory SecurityEventType.fromJson(Map<String, dynamic> json) {
+    return SecurityEventType(
+      eventType: json['eventType'] as String? ?? '',
+      count: (json['count'] as num?)?.toInt() ?? 0,
+    );
+  }
+}

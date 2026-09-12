@@ -9,6 +9,7 @@ import '../data/models/course_admin_models.dart';
 import 'course_edit_page.dart';
 import 'subject_edit_page.dart';
 import 'batch_edit_page.dart';
+import 'fee_structures_sheet.dart';
 
 class CourseAdminPage extends StatefulWidget {
   const CourseAdminPage({super.key, required this.api});
@@ -31,6 +32,22 @@ class _CourseAdminPageState extends State<CourseAdminPage> {
   void dispose() {
     _cubit.close();
     super.dispose();
+  }
+
+  Future<void> _openFees(Programme programme) async {
+    final changed = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => FeeStructuresSheet(
+        api: widget.api,
+        programmeId: programme.id,
+        programmeName: programme.name,
+      ),
+    );
+    // Only when something actually changed: the chip is computed server-side
+    // from the structures, so a reload after a plain look is a wasted request.
+    if (changed == true) _cubit.load();
   }
 
   @override
@@ -130,6 +147,7 @@ class _CourseAdminPageState extends State<CourseAdminPage> {
                               ),
                             ),
                           ),
+                          onOpenFees: () => _openFees(p),
                         )),
 
                   const SizedBox(height: 32),
@@ -224,12 +242,14 @@ class _ProgrammeCard extends StatelessWidget {
     required this.dark,
     required this.onEdit,
     required this.onAddBatch,
+    required this.onOpenFees,
   });
 
   final Programme programme;
   final bool dark;
   final VoidCallback onEdit;
   final VoidCallback onAddBatch;
+  final VoidCallback onOpenFees;
 
   @override
   Widget build(BuildContext context) {
@@ -359,14 +379,26 @@ class _ProgrammeCard extends StatelessWidget {
                     label: '${totals.enrolled}/${totals.seats} seats',
                     dark: dark,
                   ),
-                  if (fee != null) ...[
-                    const SizedBox(width: 8),
-                    _StatChip(
-                      label: fee.published ? 'Fee: Published' : 'Fee: Draft',
-                      color: fee.published ? AppColors.ok : AppColors.warn,
+                  // The chip was decoration: it said a price existed and gave
+                  // nobody a way to read it, publish a draft or take a live
+                  // one down. It opens the prices now.
+                  const SizedBox(width: 8),
+                  InkWell(
+                    onTap: onOpenFees,
+                    child: _StatChip(
+                      label: fee == null
+                          ? 'Fees: none'
+                          : fee.published
+                              ? 'Fee: Published'
+                              : 'Fee: Draft',
+                      color: fee == null
+                          ? null
+                          : fee.published
+                              ? AppColors.ok
+                              : AppColors.warn,
                       dark: dark,
                     ),
-                  ],
+                  ),
                 ],
               ),
             ],

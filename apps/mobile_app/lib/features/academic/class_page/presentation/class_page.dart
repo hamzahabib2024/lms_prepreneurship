@@ -6,14 +6,22 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/formats.dart';
+import '../../../../core/network/api_client.dart';
+import '../../../../core/network/api_exception.dart';
+import '../../../teaching/live_class/data/live_class_repository.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../cubit/class_page_cubit.dart';
 import '../data/class_page_repository.dart';
 import '../data/models/class_page_models.dart';
 
 class ClassPage extends StatefulWidget {
-  const ClassPage({super.key, required this.sessionId});
+  const ClassPage({super.key, required this.sessionId, this.canEnd = false});
+
   final String sessionId;
+
+  /// Whether to offer "End the class". True for the teacher who opened
+  /// it; a student sees no such button because the server would refuse it.
+  final bool canEnd;
 
   @override
   State<ClassPage> createState() => _ClassPageState();
@@ -21,6 +29,7 @@ class ClassPage extends StatefulWidget {
 
 class _ClassPageState extends State<ClassPage> {
   late final ClassPageCubit _cubit;
+  bool _ending = false;
 
   @override
   void initState() {
@@ -43,6 +52,13 @@ class _ClassPageState extends State<ClassPage> {
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Class'),
+          actions: [
+            if (widget.canEnd)
+              TextButton(
+                onPressed: _ending ? null : _confirmEnd,
+                child: Text(_ending ? 'Ending…' : 'End the class'),
+              ),
+          ],
         ),
         body: BlocConsumer<ClassPageCubit, ClassPageState>(
           listener: (context, state) {
@@ -98,6 +114,47 @@ class _ClassPageState extends State<ClassPage> {
         ),
       ),
     );
+  }
+
+  /// FR-LIV — the class is over.
+  ///
+  /// Confirmed, because it is not undoable and because a teacher who ends a
+  /// class by accident has to book a new one to get the room back. The
+  /// register survives: attendance was recorded as people joined.
+  Future<void> _confirmEnd() async {
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('End this class?'),
+        content: const Text(
+          'The room closes for everyone. Attendance already taken is kept.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Keep it open'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('End the class'),
+          ),
+        ],
+      ),
+    );
+    if (go != true || !mounted) return;
+
+    setState(() => _ending = true);
+    try {
+      await LiveClassRepository(context.read<ApiClient>()).end(widget.sessionId);
+      if (!mounted) return;
+      Navigator.of(context).pop();
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() => _ending = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message)),
+      );
+    }
   }
 
   Future<void> _joinClass(JoinRoute joinRoute) async {

@@ -252,6 +252,20 @@ class AdminRepository {
     return SecurityOverview.fromJson(data);
   }
 
+  /// The event types actually present in the log, with how many of each.
+  ///
+  /// Read from the log rather than hard-coded: a filter offering types that
+  /// have never occurred sends an administrator hunting for events that do
+  /// not exist, and one missing a type the server has started writing hides
+  /// those events entirely.
+  Future<List<SecurityEventType>> securityEventTypes() async {
+    final data = await api.get<List<dynamic>>('/admin/security/event-types');
+    return data
+        .whereType<Map<String, dynamic>>()
+        .map(SecurityEventType.fromJson)
+        .toList();
+  }
+
   Future<Map<String, dynamic>> listSecurityEvents({
     String? eventType,
     String? userId,

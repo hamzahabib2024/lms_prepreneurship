@@ -5,6 +5,7 @@ import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_theme.dart';
 import '../data/course_admin_repository.dart';
 import '../data/models/course_admin_models.dart';
+import '../../../core/widgets/thumbnail_upload.dart';
 
 class CourseEditPage extends StatefulWidget {
   const CourseEditPage({super.key, required this.api, this.programmeId});
@@ -26,6 +27,11 @@ class _CourseEditPageState extends State<CourseEditPage> {
   bool _isActive = true;
   bool _busy = false;
   Programme? _programme;
+
+  /// The course cover, as it appears on the public page and the
+  /// application form. Uploaded on selection; saved with the rest.
+  String? _thumbnailAssetId;
+  bool _thumbnailCleared = false;
 
   @override
   void initState() {
@@ -53,6 +59,7 @@ class _CourseEditPageState extends State<CourseEditPage> {
           _descCtrl.text = p.description ?? '';
           _weeksCtrl.text = p.durationWeeks?.toString() ?? '';
           _isActive = p.isActive;
+          _thumbnailAssetId = p.thumbnailAssetId;
         });
       }
     } catch (_) {}
@@ -84,6 +91,8 @@ class _CourseEditPageState extends State<CourseEditPage> {
               ? null
               : int.tryParse(_weeksCtrl.text.trim()),
           isActive: _isActive,
+          thumbnailAssetId: _thumbnailAssetId,
+          clearThumbnail: _thumbnailCleared,
         );
       } else {
         await repo.createProgramme(
@@ -95,6 +104,7 @@ class _CourseEditPageState extends State<CourseEditPage> {
           durationWeeks: _weeksCtrl.text.trim().isEmpty
               ? null
               : int.tryParse(_weeksCtrl.text.trim()),
+          thumbnailAssetId: _thumbnailAssetId,
         );
       }
       if (mounted) Navigator.pop(context);
@@ -205,6 +215,18 @@ class _CourseEditPageState extends State<CourseEditPage> {
                     borderRadius: BorderRadius.circular(AppRadius.sm),
                   ),
                 ),
+              ),
+
+              const SizedBox(height: 16),
+              ThumbnailUploadWidget(
+                api: widget.api,
+                assetId: _thumbnailAssetId,
+                hint: 'A wide picture works best — the card crops it to a '
+                    'banner.',
+                onChanged: (id) => setState(() {
+                  _thumbnailAssetId = id;
+                  _thumbnailCleared = id == null;
+                }),
               ),
 
               if (widget.isEditing) ...[

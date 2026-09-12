@@ -5,13 +5,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/formats.dart';
+import '../../../../core/network/api_client.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../cubit/quiz_builder_cubit.dart';
 import '../data/quiz_builder_repository.dart';
 import '../data/models/quiz_builder_models.dart';
+import '../../quiz_paper/presentation/quiz_paper_page.dart';
 
 class QuizBuilderPage extends StatefulWidget {
-  const QuizBuilderPage({super.key, this.quizId, this.sectionSubjectId});
+  const QuizBuilderPage({
+    super.key,
+    required this.api,
+    this.quizId,
+    this.sectionSubjectId,
+  });
+
+  final ApiClient api;
   final String? quizId;
   final String? sectionSubjectId;
 
@@ -55,10 +64,25 @@ class _QuizBuilderPageState extends State<QuizBuilderPage> {
             BlocConsumer<QuizBuilderCubit, QuizBuilderState>(
               listener: (context, state) {
                 if (state.status == QuizBuilderStatus.saved) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Quiz saved')),
+                  final created = state.createdQuizId;
+                  if (created == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Quiz saved')),
+                    );
+                    Navigator.of(context).pop(true);
+                    return;
+                  }
+                  // Settings first, then the paper — the two phases the web
+                  // keeps apart, and the reason the quiz is created before a
+                  // single question is attached to it (FR-QIZ-014).
+                  Navigator.of(context).pushReplacement(
+                    MaterialPageRoute<void>(
+                      builder: (_) => QuizPaperPage(
+                        api: widget.api,
+                        quizId: created,
+                      ),
+                    ),
                   );
-                  Navigator.of(context).pop(true);
                 }
                 if (state.error != null) {
                   ScaffoldMessenger.of(context).showSnackBar(

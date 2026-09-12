@@ -3,6 +3,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../auth/data/models/auth_session.dart';
+import '../quizzes/presentation/quiz_panel.dart';
+import 'assignment_panel.dart';
 import '../cubit/subject_detail_cubit.dart';
 import '../data/learning_repository.dart';
 
@@ -14,11 +17,13 @@ class SubjectDetailPage extends StatelessWidget {
   const SubjectDetailPage({
     super.key,
     required this.api,
+    required this.user,
     required this.sectionSubjectId,
     required this.subjectName,
   });
 
   final ApiClient api;
+  final AuthUser user;
   final String sectionSubjectId;
   final String subjectName;
 
@@ -32,6 +37,7 @@ class SubjectDetailPage extends StatelessWidget {
         sectionSubjectId: sectionSubjectId,
         subjectName: subjectName,
         api: api,
+        user: user,
       ),
     );
   }
@@ -42,11 +48,13 @@ class _SubjectDetailView extends StatelessWidget {
     required this.sectionSubjectId,
     required this.subjectName,
     required this.api,
+    required this.user,
   });
 
   final String sectionSubjectId;
   final String subjectName;
   final ApiClient api;
+  final AuthUser user;
 
   @override
   Widget build(BuildContext context) {
@@ -161,6 +169,16 @@ class _SubjectDetailView extends StatelessWidget {
                     dark: dark,
                     api: api,
                   ),
+
+                // The work set for this subject. Both panels ask the server
+                // themselves and render nothing when there is nothing set, so
+                // a subject with neither shows neither heading.
+                AssignmentPanel(
+                  api: api,
+                  user: user,
+                  sectionSubjectId: sectionSubjectId,
+                ),
+                QuizPanel(api: api, sectionSubjectId: sectionSubjectId),
               ],
             ),
           );

@@ -24,16 +24,21 @@ class QuizDraft {
   final String publicationStatus;
   final List<QuizQuestion> questions;
 
+  /// The body POST /quizzes accepts, and only that.
+  ///
+  /// `totalMarks` is NOT sent: the server computes it from the questions
+  /// actually on the paper, and a figure sent from here would be a second
+  /// opinion that goes stale the moment a question is added or removed.
+  /// Questions are not sent either — they are attached one at a time to a
+  /// quiz that already exists (FR-QIZ-014), which is what QuizPaperPage does.
+  /// The quiz is created as a DRAFT (BR-CNT-01) and leaves that state only
+  /// through POST /quizzes/:id/publish.
   Map<String, dynamic> toJson() => {
-    if (id != null) 'id': id,
     'title': title,
     'sectionSubjectId': sectionSubjectId,
-    'totalMarks': totalMarks,
     'opensAt': opensAt,
     'closesAt': closesAt,
-    'durationMinutes': durationMinutes,
-    'publicationStatus': publicationStatus,
-    'questions': questions.map((q) => q.toJson()).toList(),
+    'timeLimitMinutes': durationMinutes > 0 ? durationMinutes : null,
   };
 }
 

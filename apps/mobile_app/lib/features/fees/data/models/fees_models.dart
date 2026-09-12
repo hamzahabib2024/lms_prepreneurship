@@ -104,22 +104,38 @@ class PaymentSubmission {
   }
 }
 
+/// A photographed bank receipt attached to a payment submission.
+///
+/// The same kind of object as an applicant's admission slip, at a different
+/// address: behind a bearer token, never a public URL (SEC-FIL-009).
 class ProofFile {
   const ProofFile({
     required this.id,
     required this.filename,
     this.contentType,
+    this.sizeBytes,
+    this.scanStatus,
   });
 
   final String id;
   final String filename;
   final String? contentType;
+  final int? sizeBytes;
+
+  /// SEC-FIL-004. No scanner is wired up yet, so anything but CLEAN is worth
+  /// saying plainly to somebody about to open a stranger's attachment.
+  final String? scanStatus;
+
+  bool get isPdf => contentType == 'application/pdf';
+  bool get isImage => contentType?.startsWith('image/') ?? false;
 
   factory ProofFile.fromJson(Map<String, dynamic> json) {
     return ProofFile(
       id: json['id'] as String? ?? '',
       filename: json['filename'] as String? ?? '',
       contentType: json['contentType'] as String?,
+      sizeBytes: (json['sizeBytes'] as num?)?.toInt(),
+      scanStatus: json['scanStatus'] as String?,
     );
   }
 }

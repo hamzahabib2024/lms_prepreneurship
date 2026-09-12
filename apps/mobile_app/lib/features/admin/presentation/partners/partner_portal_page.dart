@@ -6,6 +6,7 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/ui.dart';
 import '../../cubit/partner_portal_cubit.dart';
 import '../../data/partner_portal_repository.dart';
+import 'partner_invoices_page.dart';
 
 class PartnerPortalPage extends StatelessWidget {
   const PartnerPortalPage({super.key, required this.api});
@@ -18,13 +19,15 @@ class PartnerPortalPage extends StatelessWidget {
       create: (_) => PartnerPortalCubit(
         repository: PartnerPortalRepository(api: api),
       )..load(),
-      child: const _PartnerPortalView(),
+      child: _PartnerPortalView(api: api),
     );
   }
 }
 
 class _PartnerPortalView extends StatelessWidget {
-  const _PartnerPortalView();
+  const _PartnerPortalView({required this.api});
+
+  final ApiClient api;
 
   @override
   Widget build(BuildContext context) {
@@ -33,6 +36,17 @@ class _PartnerPortalView extends StatelessWidget {
         title: const Text('Partner portal'),
         backgroundColor: Theme.of(context).colorScheme.surface,
         surfaceTintColor: Colors.transparent,
+        actions: [
+          IconButton(
+            tooltip: 'Invoices',
+            icon: const Icon(Icons.receipt_long_outlined),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => PartnerInvoicesPage(api: api),
+              ),
+            ),
+          ),
+        ],
       ),
       body: BlocBuilder<PartnerPortalCubit, PartnerPortalState>(
         builder: (context, state) {

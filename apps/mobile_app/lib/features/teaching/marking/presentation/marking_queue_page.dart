@@ -11,9 +11,13 @@ import '../data/marking_repository.dart';
 import '../data/models/marking_models.dart';
 import 'grading_page.dart';
 import 'quiz_marking_page.dart';
+import '../../../../core/network/api_client.dart';
+import '../../../academic/at_risk/presentation/at_risk_panel.dart';
 
 class MarkingQueuePage extends StatefulWidget {
-  const MarkingQueuePage({super.key});
+  const MarkingQueuePage({super.key, required this.api});
+
+  final ApiClient api;
 
   @override
   State<MarkingQueuePage> createState() => _MarkingQueuePageState();
@@ -78,10 +82,28 @@ class _MarkingQueuePageState extends State<MarkingQueuePage> {
                   )
                 else
                   Expanded(
-                    child: _QueueTabs(
-                      assignments: state.assignments,
-                      quizzes: state.quizzes,
-                      dark: dark,
+                    child: Column(
+                      children: [
+                        // The early-warning signal, where the teacher already
+                        // is. It renders as nothing when nobody is at risk.
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(14, 8, 14, 0),
+                          child: AtRiskPanel(
+                            key: ValueKey(
+                                state.selectedSection!.sectionSubjectId),
+                            api: widget.api,
+                            sectionSubjectId:
+                                state.selectedSection!.sectionSubjectId,
+                          ),
+                        ),
+                        Expanded(
+                          child: _QueueTabs(
+                            assignments: state.assignments,
+                            quizzes: state.quizzes,
+                            dark: dark,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
               ],

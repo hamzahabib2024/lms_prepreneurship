@@ -8,6 +8,9 @@ import '../../auth/data/models/auth_session.dart';
 import '../cubit/course_detail_cubit.dart';
 import '../data/courses_repository.dart';
 import '../data/models/course_lectures.dart';
+import '../../../core/network/api_exception.dart';
+import '../presentation/widgets/class_room_widget.dart';
+import '../presentation/widgets/lecture_source_panel.dart';
 import '../presentation/widgets/lecture_card.dart';
 import 'watch_page.dart';
 
@@ -111,7 +114,11 @@ class _CourseDetailView extends StatelessWidget {
               );
             case CourseDetailStatus.loaded:
               final data = state.data;
-              if (data == null || data.lectures.isEmpty) {
+              // A class with no recordings still has a room, and that is
+              // exactly when the link matters most — a live class nobody has
+              // recorded yet. So the empty state lives inside the list rather
+              // than replacing it.
+              if (data == null) {
                 return Center(
                   child: Padding(
                     padding: const EdgeInsets.all(24),
@@ -153,7 +160,7 @@ class _CourseDetailView extends StatelessWidget {
   }
 }
 
-class _LectureList extends StatelessWidget {
+class _LectureList extends StatefulWidget {
   const _LectureList({
     required this.data,
     required this.state,
@@ -169,10 +176,42 @@ class _LectureList extends StatelessWidget {
   final ApiClient api;
 
   @override
+  State<_LectureList> createState() => _LectureListState();
+}
+
+class _LectureListState extends State<_LectureList> {
+  /// Recording ids whose publication is in flight, so only that card shows a
+  /// spinner rather than the whole list going quiet.
+  final _publishing = <String>{};
+
+  Future<void> _setPublication(String lectureId, bool publish) async {
+    setState(() => _publishing.add(lectureId));
+    try {
+      await CoursesRepository(api: widget.api).setLecturePublication(
+        lectureId: lectureId,
+        published: publish,
+      );
+      if (!mounted) return;
+      await context.read<CourseDetailCubit>().load();
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message)),
+      );
+    } finally {
+      if (mounted) setState(() => _publishing.remove(lectureId));
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final data = widget.data;
+    final api = widget.api;
+    final user = widget.user;
+    final sectionSubjectId = widget.sectionSubjectId;
     final dark = Theme.of(context).brightness == Brightness.dark;
     final muted = dark ? AppColorsDark.muted : AppColors.muted;
-    final playable = state.playable;
+    final playable = widget.state.playable;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
@@ -190,6 +229,42 @@ class _LectureList extends StatelessWidget {
         ),
         const SizedBox(height: 16),
 
+        // The room. Renders as nothing for a student on a class that has no
+        // link set, so it costs an in-person class no space.
+        ClassRoomWidget(
+          api: api,
+          sectionSubjectId: sectionSubjectId,
+          meetingUrl: data.meetingUrl,
+          meetingNote: data.meetingNote,
+          canManage: data.canManage,
+          onSaved: () => context.read<CourseDetailCubit>().load(),
+        ),
+
+        // Staff only. A student is not sent the folder reference at all, so
+        // there is nothing here for them to see.
+        if (data.canManage)
+          LectureSourcePanel(
+            repository: CoursesRepository(api: api),
+            sectionSubjectId: sectionSubjectId,
+            folderRef: data.lectureFolderRef,
+            onChanged: () => context.read<CourseDetailCubit>().load(),
+          ),
+
+        if (data.lectures.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 24),
+            child: Column(
+              children: [
+                Icon(Icons.video_library_outlined, size: 44, color: muted),
+                const SizedBox(height: 10),
+                Text(
+                  'No recordings available yet.',
+                  style: TextStyle(color: muted, fontSize: 14),
+                ),
+              ],
+            ),
+          ),
+
         // Lecture list
         for (int i = 0; i < data.lectures.length; i++)
           Padding(
@@ -197,6 +272,10 @@ class _LectureList extends StatelessWidget {
             child: LectureCard(
               lecture: data.lectures[i],
               index: i + 1,
+              publishBusy: _publishing.contains(data.lectures[i].id),
+              onTogglePublication: data.canManage
+                  ? (publish) => _setPublication(data.lectures[i].id, publish)
+                  : null,
               onTap: data.lectures[i].isAvailable
                   ? () => Navigator.of(context).push(
                         MaterialPageRoute<void>(

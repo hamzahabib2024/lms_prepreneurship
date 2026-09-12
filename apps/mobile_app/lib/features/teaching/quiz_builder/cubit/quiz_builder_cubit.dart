@@ -19,6 +19,7 @@ class QuizBuilderState extends Equatable {
     this.questions = const [],
     this.saving,
     this.error,
+    this.createdQuizId,
   });
 
   final QuizBuilderStatus status;
@@ -34,11 +35,15 @@ class QuizBuilderState extends Equatable {
   final bool? saving;
   final ApiException? error;
 
+  /// Set once the server has created the quiz. The paper is composed against
+  /// a quiz that exists (FR-QIZ-014), so this is what the next screen needs.
+  final String? createdQuizId;
+
   @override
   List<Object?> get props => [
     status, quizzes, title, sectionSubjectId,
     totalMarks, opensAt, closesAt, durationMinutes,
-    publicationStatus, questions, saving, error,
+    publicationStatus, questions, saving, error, createdQuizId,
   ];
 
   QuizBuilderState copyWith({
@@ -54,6 +59,7 @@ class QuizBuilderState extends Equatable {
     List<QuizQuestion>? questions,
     bool? saving,
     ApiException? error,
+    String? createdQuizId,
     bool clearError = false,
   }) {
     return QuizBuilderState(
@@ -69,6 +75,7 @@ class QuizBuilderState extends Equatable {
       questions: questions ?? this.questions,
       saving: saving ?? this.saving,
       error: clearError ? null : (error ?? this.error),
+      createdQuizId: createdQuizId ?? this.createdQuizId,
     );
   }
 }
@@ -297,16 +304,18 @@ class QuizBuilderCubit extends Cubit<QuizBuilderState> {
         questions: state.questions,
       );
 
+      String? created;
       if (quizId != null) {
         await _repo.updateQuiz(draft);
       } else {
-        await _repo.createQuiz(draft);
+        created = await _repo.createQuiz(draft);
       }
 
       if (isClosed) return;
       emit(state.copyWith(
         status: QuizBuilderStatus.saved,
         saving: false,
+        createdQuizId: created,
       ));
     } on ApiException catch (e) {
       if (isClosed) return;

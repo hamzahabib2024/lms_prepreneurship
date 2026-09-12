@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/ui.dart';
 import '../../data/models/course_lectures.dart';
 
 /// A card showing a lecture's title, duration, availability, and watch
@@ -11,11 +12,18 @@ class LectureCard extends StatelessWidget {
     required this.lecture,
     required this.index,
     this.onTap,
+    this.onTogglePublication,
+    this.publishBusy = false,
   });
 
   final CourseLecture lecture;
   final int index;
   final VoidCallback? onTap;
+
+  /// Staff only. Null for a student, who never sees the control and for whom
+  /// an unpublished lecture does not appear at all.
+  final void Function(bool publish)? onTogglePublication;
+  final bool publishBusy;
 
   @override
   Widget build(BuildContext context) {
@@ -153,6 +161,18 @@ class LectureCard extends StatelessWidget {
                 const SizedBox(width: 8),
                 Column(
                   children: [
+                    // FR-CNT-016 — a recording arrives from a sync as a DRAFT
+                    // and is invisible to students until somebody publishes
+                    // it. Cataloguing without publishing is half a feature, so
+                    // the control lives on the card rather than a screen away.
+                    if (onTogglePublication != null) ...[
+                      _PublicationControl(
+                        status: lecture.publicationStatus,
+                        busy: publishBusy,
+                        onToggle: onTogglePublication!,
+                      ),
+                      const SizedBox(height: 4),
+                    ],
                     if (watch?.isComplete == true)
                       Container(
                         padding: const EdgeInsets.symmetric(
@@ -195,5 +215,48 @@ class LectureCard extends StatelessWidget {
     if (h > 0) return '${h}h ${m}m';
     if (m > 0) return '${m}m ${s}s';
     return '${s}s';
+  }
+}
+
+/// Published or not, as a word and a switch — never colour alone
+/// (NFR-ACC-003).
+class _PublicationControl extends StatelessWidget {
+  const _PublicationControl({
+    required this.status,
+    required this.busy,
+    required this.onToggle,
+  });
+
+  final String status;
+  final bool busy;
+  final void Function(bool publish) onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final published = status == 'PUBLISHED';
+    if (busy) {
+      return const SizedBox(
+        width: 18,
+        height: 18,
+        child: CircularProgressIndicator(strokeWidth: 2),
+      );
+    }
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Pill(
+          text: published ? 'Published' : 'Draft',
+          kind: published ? PillKind.ok : PillKind.neutral,
+        ),
+        SizedBox(
+          height: 30,
+          child: Switch(
+            value: published,
+            onChanged: onToggle,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+        ),
+      ],
+    );
   }
 }

@@ -69,6 +69,7 @@ class CourseAdminRepository {
     required String code,
     String? description,
     int? durationWeeks,
+    String? thumbnailAssetId,
   }) async {
     final map = await _api.post<Map<String, dynamic>>(
       '/programmes',
@@ -77,6 +78,7 @@ class CourseAdminRepository {
         'code': code,
         'description': ?description,
         'durationWeeks': ?durationWeeks,
+        'thumbnailAssetId': ?thumbnailAssetId,
       },
     );
     return Programme.fromJson(map);
@@ -89,6 +91,11 @@ class CourseAdminRepository {
     String? description,
     int? durationWeeks,
     bool? isActive,
+    String? thumbnailAssetId,
+    // A null thumbnailAssetId means "unchanged" everywhere else in this body,
+    // so removing the picture needs its own flag: PATCH cannot tell "leave it"
+    // from "clear it" with one nullable field.
+    bool clearThumbnail = false,
   }) async {
     final map = await _api.patch<Map<String, dynamic>>(
       '/programmes/$id',
@@ -97,6 +104,10 @@ class CourseAdminRepository {
         'description': ?description,
         'durationWeeks': ?durationWeeks,
         'isActive': ?isActive,
+        if (clearThumbnail)
+          'thumbnailAssetId': null
+        else
+          'thumbnailAssetId': ?thumbnailAssetId,
       },
     );
     return Programme.fromJson(map);
@@ -185,6 +196,16 @@ class CourseAdminRepository {
   /// POST /fee-structures/:id/publish – publish fee.
   Future<void> publishFeeStructure(String id) async {
     await _api.post<dynamic>('/fee-structures/$id/publish');
+  }
+
+  /// POST /fee-structures/:id/archive – withdraw a published fee.
+  ///
+  /// Withdrawn, NOT deleted. A published structure has been quoted to
+  /// applicants and may already be charged against; archiving stops it being
+  /// offered from now on and leaves what it priced alone. Deleting is for a
+  /// draft nobody has seen.
+  Future<void> archiveFeeStructure(String id) async {
+    await _api.post<dynamic>('/fee-structures/$id/archive');
   }
 
   /// DELETE /fee-structures/:id – delete draft fee.

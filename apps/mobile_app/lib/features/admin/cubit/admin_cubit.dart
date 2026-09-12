@@ -365,11 +365,33 @@ class AdminCubit extends Cubit<AdminState> {
     }
   }
 
-  Future<void> loadSecurityEvents({int page = 1}) async {
-    if (state.loadingSecurityEvents) return;
-    emit(state.copyWith(loadingSecurityEvents: true));
+  /// The types present in the log, for the filter.
+  ///
+  /// A failure here is not worth reporting: the filter simply offers nothing
+  /// and the unfiltered list still works, which is the screen's actual job.
+  Future<void> loadSecurityEventTypes() async {
     try {
-      final result = await repository.listSecurityEvents(page: page);
+      final types = await repository.securityEventTypes();
+      if (isClosed) return;
+      emit(state.copyWith(securityEventTypes: types));
+    } on ApiException {
+      if (isClosed) return;
+      emit(state.copyWith(securityEventTypes: const []));
+    }
+  }
+
+  Future<void> loadSecurityEvents({int page = 1, String? eventType}) async {
+    if (state.loadingSecurityEvents) return;
+    emit(state.copyWith(
+      loadingSecurityEvents: true,
+      securityEventType: eventType,
+      clearSecurityEventType: eventType == null,
+    ));
+    try {
+      final result = await repository.listSecurityEvents(
+        page: page,
+        eventType: eventType,
+      );
       if (isClosed) return;
       final events = result['events'] as List<SecurityEvent>;
       final pag = result['pagination'] as Map<String, dynamic>;
@@ -522,6 +544,8 @@ class AdminState extends Equatable {
     this.auditTotalItems = 0,
     this.securityOverview,
     this.securityEvents = const [],
+    this.securityEventTypes = const [],
+    this.securityEventType,
     this.loadingSecurity = false,
     this.loadingSecurityEvents = false,
     this.securityError,
@@ -572,6 +596,12 @@ class AdminState extends Equatable {
 
   final SecurityOverview? securityOverview;
   final List<SecurityEvent> securityEvents;
+
+  /// The types the log actually holds, and how many of each.
+  final List<SecurityEventType> securityEventTypes;
+
+  /// The type currently filtered on, or null for all of them.
+  final String? securityEventType;
   final bool loadingSecurity;
   final bool loadingSecurityEvents;
   final ApiException? securityError;
@@ -628,6 +658,9 @@ class AdminState extends Equatable {
     int? auditTotalItems,
     SecurityOverview? securityOverview,
     List<SecurityEvent>? securityEvents,
+    List<SecurityEventType>? securityEventTypes,
+    String? securityEventType,
+    bool clearSecurityEventType = false,
     bool? loadingSecurity,
     bool? loadingSecurityEvents,
     ApiException? securityError,
@@ -677,6 +710,10 @@ class AdminState extends Equatable {
       auditTotalItems: auditTotalItems ?? this.auditTotalItems,
       securityOverview: securityOverview ?? this.securityOverview,
       securityEvents: securityEvents ?? this.securityEvents,
+      securityEventTypes: securityEventTypes ?? this.securityEventTypes,
+      securityEventType: clearSecurityEventType
+          ? null
+          : (securityEventType ?? this.securityEventType),
       loadingSecurity: loadingSecurity ?? this.loadingSecurity,
       loadingSecurityEvents: loadingSecurityEvents ?? this.loadingSecurityEvents,
       securityError: securityError,
@@ -697,7 +734,8 @@ class AdminState extends Equatable {
         auditActions, auditActionFilter, auditEntityFilter, auditFromDate, auditToDate,
         backups, loadingBackups, backupsError,
         auditEntries, loadingAudit, auditError, auditPage, auditTotalPages, auditTotalItems,
-        securityOverview, securityEvents, loadingSecurity, loadingSecurityEvents,
+        securityOverview, securityEvents, securityEventTypes,
+        securityEventType, loadingSecurity, loadingSecurityEvents,
         securityError, securityPage, securityTotalPages,
         maintenanceEnabled, personalDataExport, erasurePlan,
       ];

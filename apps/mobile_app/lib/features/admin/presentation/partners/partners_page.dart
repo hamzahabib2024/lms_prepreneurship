@@ -7,6 +7,7 @@ import '../../../../core/widgets/ui.dart';
 import '../../cubit/partners_cubit.dart';
 import '../../data/models/partner.dart';
 import '../../data/partner_repository.dart';
+import 'partner_billing_page.dart';
 
 class PartnersPage extends StatelessWidget {
   const PartnersPage({super.key, required this.api});
@@ -19,13 +20,15 @@ class PartnersPage extends StatelessWidget {
       create: (_) => PartnersCubit(
         repository: PartnerRepository(api: api),
       )..load(),
-      child: const _PartnersView(),
+      child: _PartnersView(api: api),
     );
   }
 }
 
 class _PartnersView extends StatelessWidget {
-  const _PartnersView();
+  const _PartnersView({required this.api});
+
+  final ApiClient api;
 
   @override
   Widget build(BuildContext context) {
@@ -135,7 +138,7 @@ class _PartnersView extends StatelessWidget {
                   )
                 else
                   for (final p in state.partners)
-                    _PartnerCard(partner: p),
+                    _PartnerCard(partner: p, api: api),
               ],
             ),
           );
@@ -219,9 +222,10 @@ class _PartnersView extends StatelessWidget {
 }
 
 class _PartnerCard extends StatelessWidget {
-  const _PartnerCard({required this.partner});
+  const _PartnerCard({required this.partner, required this.api});
 
   final Partner partner;
+  final ApiClient api;
 
   @override
   Widget build(BuildContext context) {
@@ -295,6 +299,29 @@ class _PartnerCard extends StatelessWidget {
                 ),
                 child: const Text('Give account'),
               ),
+              // Only for the partners who actually pay. Offering to bill an
+              // institute whose students pay for themselves is offering to
+              // raise an invoice with nothing on it.
+              if (partner.billingMode == 'PARTNER_PAYS') ...[
+                const SizedBox(width: 8),
+                OutlinedButton(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => PartnerBillingPage(
+                        api: api,
+                        partnerId: partner.id,
+                        partnerName: partner.name,
+                      ),
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    textStyle: const TextStyle(fontSize: 12),
+                  ),
+                  child: const Text('Billing'),
+                ),
+              ],
               const SizedBox(width: 8),
               OutlinedButton(
                 onPressed: () {
