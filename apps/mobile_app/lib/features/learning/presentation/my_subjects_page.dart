@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/network/api_client.dart';
+import '../../auth/data/models/auth_session.dart';
 import '../../../core/theme/app_theme.dart';
 import '../cubit/my_subjects_cubit.dart';
 import '../data/learning_repository.dart';
@@ -13,9 +14,10 @@ import 'subject_detail_page.dart';
 /// The student's enrolled subjects with progress, outstanding work, and
 /// completion status. Corresponds to the web's MySubjectsPage.
 class MySubjectsPage extends StatelessWidget {
-  const MySubjectsPage({super.key, required this.api});
+  const MySubjectsPage({super.key, required this.api, required this.user});
 
   final ApiClient api;
+  final AuthUser user;
 
   @override
   Widget build(BuildContext context) {
@@ -23,15 +25,16 @@ class MySubjectsPage extends StatelessWidget {
       create: (_) => MySubjectsCubit(
         repository: LearningRepository(api: api),
       )..load(),
-      child: _MySubjectsView(api: api),
+      child: _MySubjectsView(api: api, user: user),
     );
   }
 }
 
 class _MySubjectsView extends StatelessWidget {
-  const _MySubjectsView({required this.api});
+  const _MySubjectsView({required this.api, required this.user});
 
   final ApiClient api;
+  final AuthUser user;
 
   @override
   Widget build(BuildContext context) {
@@ -142,6 +145,7 @@ class _MySubjectsView extends StatelessWidget {
                       MaterialPageRoute<void>(
                         builder: (_) => SubjectDetailPage(
                           api: api,
+                          user: user,
                           sectionSubjectId: subject.sectionSubjectId,
                           subjectName: subject.subjectName,
                         ),

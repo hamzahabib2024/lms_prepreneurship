@@ -66,7 +66,7 @@ class _AppShellState extends State<AppShell> {
             icon: Icons.menu_book_outlined,
             activeIcon: Icons.menu_book,
             label: 'Learning',
-            page: MySubjectsPage(api: widget.api),
+            page: MySubjectsPage(api: widget.api, user: widget.user),
           ),
         if (_isAdmin)
           _TabEntry(
