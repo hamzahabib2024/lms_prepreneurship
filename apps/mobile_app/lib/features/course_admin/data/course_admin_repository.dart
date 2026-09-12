@@ -69,6 +69,7 @@ class CourseAdminRepository {
     required String code,
     String? description,
     int? durationWeeks,
+    String? thumbnailAssetId,
   }) async {
     final map = await _api.post<Map<String, dynamic>>(
       '/programmes',
@@ -77,6 +78,7 @@ class CourseAdminRepository {
         'code': code,
         'description': ?description,
         'durationWeeks': ?durationWeeks,
+        'thumbnailAssetId': ?thumbnailAssetId,
       },
     );
     return Programme.fromJson(map);
@@ -89,6 +91,11 @@ class CourseAdminRepository {
     String? description,
     int? durationWeeks,
     bool? isActive,
+    String? thumbnailAssetId,
+    // A null thumbnailAssetId means "unchanged" everywhere else in this body,
+    // so removing the picture needs its own flag: PATCH cannot tell "leave it"
+    // from "clear it" with one nullable field.
+    bool clearThumbnail = false,
   }) async {
     final map = await _api.patch<Map<String, dynamic>>(
       '/programmes/$id',
@@ -97,6 +104,10 @@ class CourseAdminRepository {
         'description': ?description,
         'durationWeeks': ?durationWeeks,
         'isActive': ?isActive,
+        if (clearThumbnail)
+          'thumbnailAssetId': null
+        else
+          'thumbnailAssetId': ?thumbnailAssetId,
       },
     );
     return Programme.fromJson(map);
