@@ -1,5 +1,6 @@
 import '../../../core/network/api_client.dart';
 import 'models/certificate.dart';
+import 'models/batch_issue_result.dart';
 import 'models/certificate_register.dart';
 import 'models/certificate_candidate.dart';
 import 'models/programme_standing.dart';
@@ -145,18 +146,19 @@ class CertificatesRepository {
   /// `everyone` is the office overruling the requirements check; the reason
   /// is recorded but not demanded, because a required field here would be the
   /// software insisting on an explanation from the person it works for.
-  Future<Map<String, dynamic>> issueAll({
+  Future<BatchIssueResult> issueAll({
     required String sectionSubjectId,
     bool everyone = false,
     String? reason,
   }) async {
-    return api.post<Map<String, dynamic>>(
+    final data = await api.post<Map<String, dynamic>>(
       '/section-subjects/$sectionSubjectId/certificates/issue-all',
       {
         'everyone': everyone,
         'reason': ?reason,
       },
     );
+    return BatchIssueResult.fromJson(data);
   }
 }
 

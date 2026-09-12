@@ -9,6 +9,7 @@ import '../../academic/data/models/section.dart';
 import '../../auth/data/models/auth_session.dart';
 import '../cubit/issuance_cubit.dart';
 import '../data/certificates_repository.dart';
+import '../data/models/batch_issue_result.dart';
 import '../data/models/certificate_candidate.dart';
 import 'certificate_register_page.dart';
 
@@ -284,6 +285,7 @@ class _IssuanceViewState extends State<_IssuanceView> {
                       return _WorklistBody(
                         state: state,
                         user: widget.user,
+                        sectionSubjectId: _selectedSectionSubjectId,
                         onIssue: (studentId) => context
                             .read<IssuanceCubit>()
                             .issueSubject(studentId),
@@ -365,12 +367,14 @@ class _WorklistBody extends StatelessWidget {
   const _WorklistBody({
     required this.state,
     required this.user,
+    required this.sectionSubjectId,
     required this.onIssue,
     required this.onRevoke,
   });
 
   final IssuanceState state;
   final AuthUser user;
+  final String sectionSubjectId;
   final void Function(String studentId) onIssue;
   final void Function(String certificateId) onRevoke;
 
@@ -425,6 +429,18 @@ class _WorklistBody extends StatelessWidget {
               ],
             ),
           ),
+          // Issuing to the whole batch, above the list rather than at the
+          // bottom of it: it is the thing an administrator came to do at the
+          // end of a term, and it should not be found by scrolling past forty
+          // rows to reach.
+          _BatchIssue(
+            sectionSubjectId: sectionSubjectId,
+            eligible: state.eligible,
+            total: students.length,
+            busy: state.batchBusy,
+            result: state.batchResult,
+          ),
+
           // Student list
           for (final student in sorted)
             Padding(
@@ -632,6 +648,199 @@ class _SummaryPill extends StatelessWidget {
           fontWeight: FontWeight.w600,
           color: color,
         ),
+      ),
+    );
+  }
+}
+
+/// Issuing to everybody on the batch — FR-CRT.
+///
+/// TWO BUTTONS, NOT ONE WITH A CHECKBOX. "Issue to the ones who qualify" and
+/// "issue to all of them regardless" are different decisions with different
+/// consequences, and a checkbox makes the second one reachable by accident.
+/// The second is confirmed, and the confirmation says how many people have
+/// not met the requirements — because that number is the decision.
+class _BatchIssue extends StatefulWidget {
+  const _BatchIssue({
+    required this.sectionSubjectId,
+    required this.eligible,
+    required this.total,
+    required this.busy,
+    required this.result,
+  });
+
+  final String sectionSubjectId;
+  final int eligible;
+  final int total;
+  final String? busy;
+  final BatchIssueResult? result;
+
+  @override
+  State<_BatchIssue> createState() => _BatchIssueState();
+}
+
+class _BatchIssueState extends State<_BatchIssue> {
+  final _reason = TextEditingController();
+
+  @override
+  void dispose() {
+    _reason.dispose();
+    super.dispose();
+  }
+
+  Future<void> _run(bool everyone) async {
+    final cubit = context.read<IssuanceCubit>();
+    final shortfall = widget.total - widget.eligible;
+
+    if (everyone) {
+      final go = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('Issue to all ${widget.total} students?'),
+          content: Text(
+            shortfall == 0
+                ? 'Everybody on this batch has met the requirements.'
+                : '$shortfall of them have not met the requirements. They will '
+                    'be issued anyway, and each certificate will record that it '
+                    'was issued over the requirements and by whom.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Issue to all'),
+            ),
+          ],
+        ),
+      );
+      if (go != true) return;
+    }
+
+    await cubit.issueAll(
+      widget.sectionSubjectId,
+      everyone: everyone,
+      reason: _reason.text,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final muted = dark ? AppColorsDark.muted : AppColors.muted;
+    final busy = widget.busy;
+    final result = widget.result;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: dark ? AppColorsDark.line : AppColors.line),
+        boxShadow: AppShadow.soft,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Issue to the whole batch',
+            style: TextStyle(
+              fontFamily: AppFonts.display,
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            'Anybody who already holds one is left alone. Nothing is issued '
+            'twice.',
+            style: TextStyle(fontSize: 12.5, color: muted),
+          ),
+          const SizedBox(height: 12),
+
+          OutlinedButton(
+            onPressed: busy != null || widget.eligible == 0
+                ? null
+                : () => _run(false),
+            child: Text(
+              busy == 'ready'
+                  ? 'Issuing…'
+                  : 'Issue to the ${widget.eligible} who qualify',
+            ),
+          ),
+          const SizedBox(height: 8),
+          FilledButton(
+            onPressed:
+                busy != null || widget.total == 0 ? null : () => _run(true),
+            child: Text(
+              busy == 'everyone'
+                  ? 'Issuing…'
+                  : 'Issue to all ${widget.total}, regardless',
+            ),
+          ),
+
+          const SizedBox(height: 12),
+          TextField(
+            controller: _reason,
+            decoration: const InputDecoration(
+              labelText: 'Why, if you are issuing regardless (optional)',
+              hintText: 'End of term — assessed by viva.',
+              border: OutlineInputBorder(),
+              isDense: true,
+            ),
+          ),
+
+          if (result != null) ...[
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: dark ? AppColorsDark.okBg : AppColors.okBg,
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+                border: Border.all(
+                  color: (dark ? AppColorsDark.ok : AppColors.ok)
+                      .withValues(alpha: 0.3),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${result.total} issued',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: dark ? AppColorsDark.ok : AppColors.ok,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    result.describe(),
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      color: dark ? AppColorsDark.ok : AppColors.ok,
+                    ),
+                  ),
+                  // NAMED, NOT COUNTED. "3 skipped" tells the office to go
+                  // looking; this tells them where.
+                  for (final student in result.skippedStudents)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        '• ${student.name} — ${student.message ?? 'Skipped'}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: dark ? AppColorsDark.ok : AppColors.ok,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }

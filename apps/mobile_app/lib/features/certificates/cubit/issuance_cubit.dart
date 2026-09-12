@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../data/certificates_repository.dart';
+import '../data/models/batch_issue_result.dart';
 import '../data/models/certificate_candidate.dart';
 import '../data/models/programme_standing.dart';
 
@@ -17,6 +18,8 @@ class IssuanceState extends Equatable {
     this.error,
     this.busyStudentId,
     this.successMessage,
+    this.batchBusy,
+    this.batchResult,
   });
 
   final IssuanceStatus status;
@@ -28,6 +31,11 @@ class IssuanceState extends Equatable {
   final String? busyStudentId;
   final String? successMessage;
 
+  /// 'ready' or 'everyone' while a batch issue is in flight — the two buttons
+  /// mean different things and only the pressed one should say so.
+  final String? batchBusy;
+  final BatchIssueResult? batchResult;
+
   IssuanceState copyWith({
     IssuanceStatus? status,
     List<CertificateCandidate>? students,
@@ -37,9 +45,13 @@ class IssuanceState extends Equatable {
     ApiException? error,
     String? busyStudentId,
     String? successMessage,
+    String? batchBusy,
+    BatchIssueResult? batchResult,
     bool clearError = false,
     bool clearBusy = false,
     bool clearSuccess = false,
+    bool clearBatchBusy = false,
+    bool clearBatchResult = false,
   }) =>
       IssuanceState(
         status: status ?? this.status,
@@ -51,6 +63,9 @@ class IssuanceState extends Equatable {
         busyStudentId: clearBusy ? null : (busyStudentId ?? this.busyStudentId),
         successMessage:
             clearSuccess ? null : (successMessage ?? this.successMessage),
+        batchBusy: clearBatchBusy ? null : (batchBusy ?? this.batchBusy),
+        batchResult:
+            clearBatchResult ? null : (batchResult ?? this.batchResult),
       );
 
   @override
@@ -63,6 +78,8 @@ class IssuanceState extends Equatable {
         error,
         busyStudentId,
         successMessage,
+        batchBusy,
+        batchResult,
       ];
 }
 
@@ -194,4 +211,42 @@ class IssuanceCubit extends Cubit<IssuanceState> {
       }
     }
   }
+
+  /// FR-CRT — issue to everybody on the batch at once.
+  ///
+  /// Two acts, not one with a checkbox. [everyone] false issues to the
+  /// students who qualify; [everyone] true is the office overruling the
+  /// requirements, and each certificate then records that it was issued over
+  /// them and by whom.
+  ///
+  /// [reason] is recorded, not demanded. A required field here would be the
+  /// software insisting on an explanation from the people it works for, and
+  /// what it would actually produce is the word "yes" in a box.
+  Future<void> issueAll(
+    String sectionSubjectId, {
+    required bool everyone,
+    String? reason,
+  }) async {
+    emit(state.copyWith(
+      batchBusy: everyone ? 'everyone' : 'ready',
+      clearError: true,
+      clearBatchResult: true,
+    ));
+    try {
+      final result = await repository.issueAll(
+        sectionSubjectId: sectionSubjectId,
+        everyone: everyone,
+        reason: reason == null || reason.trim().isEmpty ? null : reason.trim(),
+      );
+      if (isClosed) return;
+      emit(state.copyWith(clearBatchBusy: true, batchResult: result));
+      // The eligibility counts and every row's state have moved.
+      await load(sectionSubjectId);
+    } on ApiException catch (e) {
+      if (isClosed) return;
+      emit(state.copyWith(clearBatchBusy: true, error: e));
+    }
+  }
+
+  void dismissBatchResult() => emit(state.copyWith(clearBatchResult: true));
 }
