@@ -131,7 +131,7 @@ class AcademicPanel extends StatelessWidget {
         subtitle: 'Create quizzes with multiple question types',
         builder: (context) => RepositoryProvider(
           create: (_) => QuizBuilderRepository(api),
-          child: const QuizBuilderPage(),
+          child: QuizBuilderPage(api: api),
         ),
         staffOnly: true,
       ),

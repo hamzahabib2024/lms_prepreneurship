@@ -18,39 +18,14 @@ class QuizBuilderRepository {
         .toList();
   }
 
-  Future<QuizDraft> createQuiz(QuizDraft draft) async {
+  /// Returns the id of the quiz that was created, which is the only thing
+  /// the caller needs: the next step is composing its paper.
+  Future<String> createQuiz(QuizDraft draft) async {
     final result = await _api.post<Map<String, dynamic>>(
       '/quizzes',
       draft.toJson(),
     );
-    return QuizDraft(
-      id: result['id'] as String?,
-      title: result['title'] as String? ?? '',
-      sectionSubjectId: result['sectionSubjectId'] as String? ?? '',
-      totalMarks: (result['totalMarks'] as num?)?.toInt() ?? 0,
-      opensAt: result['opensAt'] as String? ?? '',
-      closesAt: result['closesAt'] as String? ?? '',
-      durationMinutes: (result['durationMinutes'] as num?)?.toInt() ?? 0,
-      publicationStatus: result['publicationStatus'] as String? ?? 'DRAFT',
-      questions: (result['questions'] as List<dynamic>? ?? const [])
-          .whereType<Map<String, dynamic>>()
-          .map((q) => QuizQuestion(
-                id: q['id'] as String? ?? '',
-                type: q['type'] as String? ?? 'MCQ',
-                stem: q['stem'] as String? ?? '',
-                marks: (q['marks'] as num?)?.toInt() ?? 1,
-                options: (q['options'] as List<dynamic>? ?? const [])
-                    .whereType<Map<String, dynamic>>()
-                    .map((o) => QuizOption(
-                          id: o['id'] as String? ?? '',
-                          text: o['text'] as String? ?? '',
-                          isCorrect: o['isCorrect'] as bool? ?? false,
-                        ))
-                    .toList(),
-                correctAnswer: q['correctAnswer'] as String?,
-              ))
-          .toList(),
-    );
+    return result['id'] as String;
   }
 
   Future<QuizDraft> updateQuiz(QuizDraft draft) async {
