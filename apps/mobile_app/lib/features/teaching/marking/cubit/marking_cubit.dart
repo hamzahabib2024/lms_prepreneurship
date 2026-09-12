@@ -183,23 +183,32 @@ class GradingCubit extends Cubit<GradingState> {
     emit(state.copyWith(selectedStudentIndex: null));
   }
 
+  /// Marks one submission.
+  ///
+  /// [submissionId] rather than a student: a mark belongs to a piece of work,
+  /// and a resubmission is a new piece of work. The roster carries the id,
+  /// and it is null for anybody who has not submitted — there is nothing to
+  /// grade there.
+  ///
+  /// [revisionReason] is required by the server once the grade has been
+  /// released (BR-ASG-11); the roster's releasedAt is how the screen knows to
+  /// ask for one before the teacher starts typing.
   Future<void> gradeStudent({
     required String assignmentId,
-    required String studentId,
+    required String submissionId,
     required num rawMarks,
-    num? penaltyApplied,
     String? feedback,
     String? internalNotes,
+    String? revisionReason,
   }) async {
     emit(state.copyWith(grading: true, clearError: true));
     try {
-      await _repo.gradeStudent(
-        assignmentId: assignmentId,
-        studentId: studentId,
+      await _repo.gradeSubmission(
+        submissionId: submissionId,
         rawMarks: rawMarks,
-        penaltyApplied: penaltyApplied,
         feedback: feedback,
         internalNotes: internalNotes,
+        revisionReason: revisionReason,
       );
       final roster = await _repo.getGradingRoster(assignmentId: assignmentId);
       if (isClosed) return;

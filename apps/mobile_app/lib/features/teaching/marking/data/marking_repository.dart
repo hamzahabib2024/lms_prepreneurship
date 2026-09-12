@@ -46,69 +46,83 @@ class MarkingRepository {
 
   // ── Grading (per-assignment roster + grade/release) ──
 
+  /// FR-TCH-019 — submitted, not submitted, late, ungraded, at a glance.
   Future<GradingRoster> getGradingRoster(
       {required String assignmentId}) async {
     final result = await _api.get<Map<String, dynamic>>(
-      '/assignments/$assignmentId/roster',
+      '/assignments/$assignmentId/submissions',
     );
     return GradingRoster.fromJson(result);
   }
 
-  Future<void> gradeStudent({
-    required String assignmentId,
-    required String studentId,
+  /// KEYED BY SUBMISSION, not by student and assignment.
+  ///
+  /// A mark is a mark on a piece of work: a resubmission is a new submission
+  /// and the roster carries its id for exactly this call. There is nothing to
+  /// grade for a student who has not submitted, which is why the roster's
+  /// submissionId is nullable and this takes a non-null one.
+  Future<void> gradeSubmission({
+    required String submissionId,
     required num rawMarks,
-    num? penaltyApplied,
+    Map<String, num>? rubricScores,
     String? feedback,
     String? internalNotes,
+    String? revisionReason,
   }) async {
-    final body = <String, dynamic>{
-      'rawMarks': rawMarks,
-    };
-    if (penaltyApplied != null) body['penaltyApplied'] = penaltyApplied;
-    if (feedback != null) body['feedback'] = feedback;
-    if (internalNotes != null) body['internalNotes'] = internalNotes;
-
     await _api.post<dynamic>(
-      '/assignments/$assignmentId/grade/$studentId',
-      body,
+      '/submissions/$submissionId/grade',
+      <String, dynamic>{
+        'rawMarks': rawMarks,
+        'rubricScores': ?rubricScores,
+        'feedback': ?feedback,
+        'internalNotes': ?internalNotes,
+        // BR-ASG-11 — a released grade cannot be changed without a reason.
+        'revisionReason': ?revisionReason,
+      },
     );
   }
 
+  /// FR-ASG-028 — release the cohort together, so nobody sees a mark first.
   Future<void> releaseGrades({required String assignmentId}) async {
     await _api.post<dynamic>(
-      '/assignments/$assignmentId/release',
+      '/assignments/$assignmentId/release-grades',
     );
   }
 
   // ── Quiz Marking ──
 
+  /// FR-QIZ-031 — the written answers waiting on a human.
   Future<MarkingQueue> getMarkingQueue({required String quizId}) async {
     final result = await _api.get<Map<String, dynamic>>(
-      '/quizzes/$quizId/marking-queue',
+      '/quizzes/$quizId/marking',
     );
     return MarkingQueue.fromJson(result);
   }
 
+  /// FR-QIZ-031 — marks for one written answer.
+  ///
+  /// `quiz_answer_grade`, not `quiz_attempt`. A student holds
+  /// quiz_attempt:update so they can save answers while sitting the quiz;
+  /// that must never be the permission deciding what an answer is worth.
   Future<void> saveQuizMark({
     required String answerId,
     required num marksAwarded,
     String? graderComment,
   }) async {
-    final body = <String, dynamic>{
-      'marksAwarded': marksAwarded,
-    };
-    if (graderComment != null) body['graderComment'] = graderComment;
-
     await _api.post<dynamic>(
-      '/quizzes/answers/$answerId/mark',
-      body,
+      '/quiz-answers/$answerId/grade',
+      <String, dynamic>{
+        'marks': marksAwarded,
+        'comment': ?graderComment,
+      },
     );
   }
 
+  /// FR-QIZ-021 — release every fully-marked attempt together, so nobody
+  /// learns their score before their classmates.
   Future<void> releaseQuizGrades({required String quizId}) async {
     await _api.post<dynamic>(
-      '/quizzes/$quizId/release',
+      '/quizzes/$quizId/release-results',
     );
   }
 
@@ -162,7 +176,7 @@ class MarkingRepository {
     required String body,
   }) async {
     final result = await _api.put<Map<String, dynamic>>(
-      '/submissions/$submissionId/comments/$commentId',
+      '/submission-comments/$commentId',
       {'body': body},
     );
     return SubmissionComment.fromJson(result);
@@ -173,7 +187,7 @@ class MarkingRepository {
     required String commentId,
   }) async {
     await _api.delete<dynamic>(
-      '/submissions/$submissionId/comments/$commentId',
+      '/submission-comments/$commentId',
     );
   }
 }
