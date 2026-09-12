@@ -44,4 +44,11 @@ class CohortImportRepository {
     );
     return ImportResult.fromJson(map);
   }
+
+  /// The CSV every import is checked against.
+  ///
+  /// Downloaded rather than described, because a column list in prose is a
+  /// column list somebody retypes with a spelling of their own — and the
+  /// import then rejects a file whose only fault is a header.
+  Future<List<int>> template() => _api.bytes('/admin/cohort-import/template.csv');
 }

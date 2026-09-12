@@ -18,6 +18,7 @@ class SecurityPage extends StatelessWidget {
     return BlocProvider(
       create: (_) => AdminCubit(repository: AdminRepository(api: api))
         ..loadSecurityOverview()
+        ..loadSecurityEventTypes()
         ..loadSecurityEvents(),
       child: const _SecurityView(),
     );
@@ -81,7 +82,45 @@ class _SecurityView extends StatelessWidget {
                   const SizedBox(height: 16),
                 ],
                 Text('Recent events', style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
+                // Built from what the log actually holds. A filter offering
+                // types that have never occurred sends an administrator
+                // hunting for events that do not exist, and one missing a type
+                // the server has started writing hides those events entirely.
+                if (state.securityEventTypes.isNotEmpty) ...[
+                  SizedBox(
+                    height: 36,
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(right: 6),
+                          child: ChoiceChip(
+                            label: const Text('All'),
+                            selected: state.securityEventType == null,
+                            onSelected: (_) => context
+                                .read<AdminCubit>()
+                                .loadSecurityEvents(),
+                          ),
+                        ),
+                        for (final type in state.securityEventTypes)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 6),
+                            child: ChoiceChip(
+                              label: Text('${type.label} (${type.count})'),
+                              selected:
+                                  state.securityEventType == type.eventType,
+                              onSelected: (_) => context
+                                  .read<AdminCubit>()
+                                  .loadSecurityEvents(
+                                      eventType: type.eventType),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
                 if (state.loadingSecurityEvents)
                   const SkeletonCards(count: 3)
                 else if (state.securityEvents.isEmpty)

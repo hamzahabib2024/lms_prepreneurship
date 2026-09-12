@@ -8,6 +8,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../core/theme/app_theme.dart';
 import '../cubit/cohort_import_cubit.dart';
 import '../data/models/cohort_import_models.dart';
+import '../../../core/network/file_download.dart';
+import '../../../core/network/api_exception.dart';
+import '../../../core/network/api_client.dart';
 
 class CohortImportPage extends StatefulWidget {
   const CohortImportPage({super.key});
@@ -25,6 +28,20 @@ class _CohortImportPageState extends State<CohortImportPage> {
     _cubit = context.read<CohortImportCubit>()..init();
   }
 
+  Future<void> _downloadTemplate() async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final saved = await FileDownload.save(
+        context.read<ApiClient>(),
+        path: '/admin/cohort-import/template.csv',
+        filename: 'cohort-import-template.csv',
+      );
+      messenger.showSnackBar(SnackBar(content: Text('Saved to ${saved.path}')));
+    } on ApiException catch (error) {
+      messenger.showSnackBar(SnackBar(content: Text(error.message)));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
@@ -33,6 +50,11 @@ class _CohortImportPageState extends State<CohortImportPage> {
       appBar: AppBar(
         title: const Text('Cohort Import'),
         actions: [
+          IconButton(
+            tooltip: 'Download the template',
+            icon: const Icon(Icons.download_outlined),
+            onPressed: _downloadTemplate,
+          ),
           BlocBuilder<CohortImportCubit, CohortImportState>(
             buildWhen: (p, c) => c.result != null,
             builder: (context, state) {

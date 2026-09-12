@@ -198,6 +198,16 @@ class CourseAdminRepository {
     await _api.post<dynamic>('/fee-structures/$id/publish');
   }
 
+  /// POST /fee-structures/:id/archive – withdraw a published fee.
+  ///
+  /// Withdrawn, NOT deleted. A published structure has been quoted to
+  /// applicants and may already be charged against; archiving stops it being
+  /// offered from now on and leaves what it priced alone. Deleting is for a
+  /// draft nobody has seen.
+  Future<void> archiveFeeStructure(String id) async {
+    await _api.post<dynamic>('/fee-structures/$id/archive');
+  }
+
   /// DELETE /fee-structures/:id – delete draft fee.
   Future<void> deleteFeeStructure(String id) async {
     await _api.delete<dynamic>('/fee-structures/$id');
