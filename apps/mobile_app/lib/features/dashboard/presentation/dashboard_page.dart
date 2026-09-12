@@ -11,6 +11,7 @@ import '../bloc/dashboard_bloc.dart';
 import '../data/dashboard_repository.dart';
 import '../../teaching/live_class/presentation/start_class_card.dart';
 import 'widgets/dashboard_widgets.dart';
+import '../../../core/theme/theme_controller.dart';
 
 /// The dashboard — SRS §5.18.
 ///
@@ -108,7 +109,12 @@ class _Header extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 4),
+              // Beside the profile button rather than inside it. "This screen
+              // is too bright" is not something anybody goes looking for in a
+              // menu labelled with their own name.
+              const ThemeToggle(),
+              const SizedBox(width: 4),
               _ProfileButton(user: user),
             ],
           ),

@@ -12,6 +12,7 @@ import '../../admission/data/models/prospectus.dart';
 import '../../certificates/presentation/verify_page.dart';
 import '../data/models/showcase.dart';
 import '../data/public_page_repository.dart';
+import '../../../core/theme/theme_controller.dart';
 
 /// THE PUBLIC FRONT OF THE INSTITUTE — SRS §13.2, FR-REG-002.
 ///
@@ -103,6 +104,7 @@ class _ShowcasePageState extends State<ShowcasePage> {
         title: Text(showcase?.instituteName ?? 'Prepreneurship'),
         backgroundColor: Theme.of(context).colorScheme.surface,
         surfaceTintColor: Colors.transparent,
+        actions: const [ThemeToggle()],
       ),
       body: _loading
           ? const Padding(padding: EdgeInsets.all(20), child: SkeletonCards())
