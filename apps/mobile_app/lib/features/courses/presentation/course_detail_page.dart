@@ -8,6 +8,7 @@ import '../../auth/data/models/auth_session.dart';
 import '../cubit/course_detail_cubit.dart';
 import '../data/courses_repository.dart';
 import '../data/models/course_lectures.dart';
+import '../presentation/widgets/class_room_widget.dart';
 import '../presentation/widgets/lecture_card.dart';
 import 'watch_page.dart';
 
@@ -111,7 +112,11 @@ class _CourseDetailView extends StatelessWidget {
               );
             case CourseDetailStatus.loaded:
               final data = state.data;
-              if (data == null || data.lectures.isEmpty) {
+              // A class with no recordings still has a room, and that is
+              // exactly when the link matters most — a live class nobody has
+              // recorded yet. So the empty state lives inside the list rather
+              // than replacing it.
+              if (data == null) {
                 return Center(
                   child: Padding(
                     padding: const EdgeInsets.all(24),
@@ -189,6 +194,32 @@ class _LectureList extends StatelessWidget {
           style: TextStyle(fontSize: 12.5, color: muted),
         ),
         const SizedBox(height: 16),
+
+        // The room. Renders as nothing for a student on a class that has no
+        // link set, so it costs an in-person class no space.
+        ClassRoomWidget(
+          api: api,
+          sectionSubjectId: sectionSubjectId,
+          meetingUrl: data.meetingUrl,
+          meetingNote: data.meetingNote,
+          canManage: data.canManage,
+          onSaved: () => context.read<CourseDetailCubit>().load(),
+        ),
+
+        if (data.lectures.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 24),
+            child: Column(
+              children: [
+                Icon(Icons.video_library_outlined, size: 44, color: muted),
+                const SizedBox(height: 10),
+                Text(
+                  'No recordings available yet.',
+                  style: TextStyle(color: muted, fontSize: 14),
+                ),
+              ],
+            ),
+          ),
 
         // Lecture list
         for (int i = 0; i < data.lectures.length; i++)

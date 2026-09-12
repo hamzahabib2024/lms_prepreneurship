@@ -6,12 +6,27 @@ class CourseLectures {
     required this.section,
     this.canManage = false,
     this.lectures = const [],
+    this.meetingUrl,
+    this.meetingNote,
+    this.lectureFolderRef,
   });
 
   final CourseLectureSubject subject;
   final CourseLectureSection section;
   final bool canManage;
   final List<CourseLecture> lectures;
+
+  /// THE CLASS'S ROOM — one link, used every week (FR-LIV).
+  ///
+  /// It belongs to the subject INSIDE the section: two sections of the same
+  /// course are two classes meeting at two different times, and a link on the
+  /// course would send both to the same room. The server has always sent
+  /// these two fields; the model simply did not read them.
+  final String? meetingUrl;
+  final String? meetingNote;
+
+  /// Staff only — a student has no business knowing where the files live.
+  final String? lectureFolderRef;
 
   factory CourseLectures.fromJson(Map<String, dynamic> json) =>
       CourseLectures(
@@ -24,6 +39,9 @@ class CourseLectures {
             .whereType<Map<String, dynamic>>()
             .map(CourseLecture.fromJson)
             .toList(),
+        meetingUrl: json['meetingUrl'] as String?,
+        meetingNote: json['meetingNote'] as String?,
+        lectureFolderRef: json['lectureFolderRef'] as String?,
       );
 }
 
