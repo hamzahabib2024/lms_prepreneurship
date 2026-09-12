@@ -19,6 +19,7 @@ import '../teaching/rubrics/data/rubrics_repository.dart';
 import '../teaching/rubrics/presentation/rubrics_page.dart';
 import '../teaching/assignment_builder/data/assignment_builder_repository.dart';
 import '../teaching/assignment_builder/presentation/assignment_builder_page.dart';
+import '../teaching/question_bank/presentation/question_bank_page.dart';
 import '../teaching/quiz_builder/data/quiz_builder_repository.dart';
 import '../teaching/quiz_builder/presentation/quiz_builder_page.dart';
 import '../teaching/completion/data/completion_repository.dart';
@@ -132,6 +133,13 @@ class AcademicPanel extends StatelessWidget {
           create: (_) => QuizBuilderRepository(api),
           child: const QuizBuilderPage(),
         ),
+        staffOnly: true,
+      ),
+      _Entry(
+        icon: Icons.inventory_2_outlined,
+        title: 'Question banks',
+        subtitle: 'Write questions once and reuse them across quizzes',
+        builder: (context) => QuestionBankPage(api: api),
         staffOnly: true,
       ),
       _Entry(
