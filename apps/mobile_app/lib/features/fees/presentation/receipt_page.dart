@@ -5,6 +5,8 @@ import '../../../../core/network/api_client.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../cubit/fees_cubit.dart';
 import '../data/fees_repository.dart';
+import '../../../../core/network/api_exception.dart';
+import '../../../../core/network/file_download.dart';
 
 class ReceiptPage extends StatelessWidget {
   const ReceiptPage({
@@ -24,15 +26,50 @@ class ReceiptPage extends StatelessWidget {
       create: (_) => FeesCubit(
         repository: FeesRepository(api),
       )..loadReceipt(paymentId),
-      child: _ReceiptView(receiptNo: receiptNo),
+      child: _ReceiptView(
+        api: api,
+        paymentId: paymentId,
+        receiptNo: receiptNo,
+      ),
     );
   }
 }
 
 class _ReceiptView extends StatelessWidget {
-  const _ReceiptView({required this.receiptNo});
+  const _ReceiptView({
+    required this.api,
+    required this.paymentId,
+    required this.receiptNo,
+  });
 
+  final ApiClient api;
+  final String paymentId;
   final String receiptNo;
+
+  /// FR-FEE — the receipt as a document, not as a screen.
+  ///
+  /// The drawn receipt above is enough to read; this is the one somebody
+  /// forwards to an employer or files with their own records, which is what a
+  /// receipt is actually for. It is rendered by the server, so the phone and
+  /// the web produce the same paper.
+  Future<void> _downloadPdf(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Preparing the receipt\u2026')),
+    );
+    try {
+      final saved = await FileDownload.save(
+        api,
+        path: '/payments/$paymentId/receipt.pdf',
+        filename: '$receiptNo.pdf',
+      );
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(SnackBar(content: Text('Saved to ${saved.path}')));
+    } on ApiException catch (error) {
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(SnackBar(content: Text(error.message)));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -44,6 +81,13 @@ class _ReceiptView extends StatelessWidget {
         title: Text('Receipt $receiptNo'),
         backgroundColor: theme.colorScheme.surface,
         surfaceTintColor: Colors.transparent,
+        actions: [
+          IconButton(
+            tooltip: 'Download as PDF',
+            icon: const Icon(Icons.picture_as_pdf_outlined),
+            onPressed: () => _downloadPdf(context),
+          ),
+        ],
       ),
       body: BlocBuilder<FeesCubit, FeesState>(
         builder: (context, state) {
