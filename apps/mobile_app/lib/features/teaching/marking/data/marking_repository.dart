@@ -12,33 +12,43 @@ class MarkingRepository {
 
   // ── Marking Queue (teacher's sections & assignments) ──
 
+  /// The classes this teacher marks for.
+  ///
+  /// From the dashboard's own mySections widget, which is where the web reads
+  /// it: the server already computes "what am I assigned to" for the home
+  /// screen, and a second endpoint answering the same question is a second
+  /// place for the scope rule to be wrong.
   Future<List<TeacherSection>> getTeacherSections() async {
-    final result = await _api.get<Map<String, dynamic>>(
-      '/marking/sections',
-    );
-    return (result['sections'] as List<dynamic>? ?? const [])
+    final result = await _api.get<Map<String, dynamic>>('/dashboards/me');
+    final widgets = (result['widgets'] as Map<String, dynamic>?) ?? const {};
+    return (widgets['mySections'] as List<dynamic>? ?? const [])
         .whereType<Map<String, dynamic>>()
         .map(TeacherSection.fromJson)
         .toList();
   }
 
+  /// FR-TCH-018 — the assignments set for one class.
+  ///
+  /// `submission_roster` on the server, not `assignment:read`: the counts on
+  /// each row are cohort figures, and a student must not reach them.
   Future<List<TeacherAssignment>> getAssignmentQueue(
       {required String sectionSubjectId}) async {
-    final result = await _api.get<Map<String, dynamic>>(
-      '/marking/assignments?sectionSubjectId=$sectionSubjectId',
+    final result = await _api.get<List<dynamic>>(
+      '/section-subjects/$sectionSubjectId/assignments',
     );
-    return (result['assignments'] as List<dynamic>? ?? const [])
+    return result
         .whereType<Map<String, dynamic>>()
         .map(TeacherAssignment.fromJson)
         .toList();
   }
 
+  /// FR-TCH-018 — the quizzes set for one class, drafts included.
   Future<List<TeacherQuiz>> getQuizQueue(
       {required String sectionSubjectId}) async {
-    final result = await _api.get<Map<String, dynamic>>(
-      '/marking/quizzes?sectionSubjectId=$sectionSubjectId',
+    final result = await _api.get<List<dynamic>>(
+      '/section-subjects/$sectionSubjectId/quizzes',
     );
-    return (result['quizzes'] as List<dynamic>? ?? const [])
+    return result
         .whereType<Map<String, dynamic>>()
         .map(TeacherQuiz.fromJson)
         .toList();
