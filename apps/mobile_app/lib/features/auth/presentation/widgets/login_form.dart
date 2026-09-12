@@ -9,6 +9,7 @@ import '../../../admission/application/application_page.dart';
 import '../../../admission/application/track_application_page.dart';
 import '../forgot_password_page.dart';
 import 'auth_brand_panel.dart';
+import '../../../public_page/presentation/showcase_page.dart';
 
 /// The sign-in card — ported from the web's LoginPage. The screen is the
 /// product's first impression: brand panel on top (collapsed on phones,
@@ -251,6 +252,20 @@ class _LoginFormState extends State<LoginForm> {
             },
             child: const Text('Track your application'),
           ),
+          // The Institute's own front page. Somebody who has installed the app
+          // without an account was shown a password box and a form, and
+          // nothing at all about the place they were applying to.
+          if (widget.api != null)
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => ShowcasePage(api: widget.api!),
+                  ),
+                );
+              },
+              child: const Text('About the Institute'),
+            ),
         ],
       ),
     );
