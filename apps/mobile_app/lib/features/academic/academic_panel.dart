@@ -101,7 +101,7 @@ class AcademicPanel extends StatelessWidget {
         subtitle: 'Review assignments, grade submissions and mark quizzes',
         builder: (context) => RepositoryProvider(
           create: (_) => MarkingRepository(api),
-          child: const MarkingQueuePage(),
+          child: MarkingQueuePage(api: api),
         ),
         staffOnly: true,
       ),
