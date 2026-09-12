@@ -8,7 +8,9 @@ import '../../auth/data/models/auth_session.dart';
 import '../cubit/course_detail_cubit.dart';
 import '../data/courses_repository.dart';
 import '../data/models/course_lectures.dart';
+import '../../../core/network/api_exception.dart';
 import '../presentation/widgets/class_room_widget.dart';
+import '../presentation/widgets/lecture_source_panel.dart';
 import '../presentation/widgets/lecture_card.dart';
 import 'watch_page.dart';
 
@@ -158,7 +160,7 @@ class _CourseDetailView extends StatelessWidget {
   }
 }
 
-class _LectureList extends StatelessWidget {
+class _LectureList extends StatefulWidget {
   const _LectureList({
     required this.data,
     required this.state,
@@ -174,10 +176,42 @@ class _LectureList extends StatelessWidget {
   final ApiClient api;
 
   @override
+  State<_LectureList> createState() => _LectureListState();
+}
+
+class _LectureListState extends State<_LectureList> {
+  /// Recording ids whose publication is in flight, so only that card shows a
+  /// spinner rather than the whole list going quiet.
+  final _publishing = <String>{};
+
+  Future<void> _setPublication(String lectureId, bool publish) async {
+    setState(() => _publishing.add(lectureId));
+    try {
+      await CoursesRepository(api: widget.api).setLecturePublication(
+        lectureId: lectureId,
+        published: publish,
+      );
+      if (!mounted) return;
+      await context.read<CourseDetailCubit>().load();
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message)),
+      );
+    } finally {
+      if (mounted) setState(() => _publishing.remove(lectureId));
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final data = widget.data;
+    final api = widget.api;
+    final user = widget.user;
+    final sectionSubjectId = widget.sectionSubjectId;
     final dark = Theme.of(context).brightness == Brightness.dark;
     final muted = dark ? AppColorsDark.muted : AppColors.muted;
-    final playable = state.playable;
+    final playable = widget.state.playable;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
@@ -206,6 +240,16 @@ class _LectureList extends StatelessWidget {
           onSaved: () => context.read<CourseDetailCubit>().load(),
         ),
 
+        // Staff only. A student is not sent the folder reference at all, so
+        // there is nothing here for them to see.
+        if (data.canManage)
+          LectureSourcePanel(
+            repository: CoursesRepository(api: api),
+            sectionSubjectId: sectionSubjectId,
+            folderRef: data.lectureFolderRef,
+            onChanged: () => context.read<CourseDetailCubit>().load(),
+          ),
+
         if (data.lectures.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 24),
@@ -228,6 +272,10 @@ class _LectureList extends StatelessWidget {
             child: LectureCard(
               lecture: data.lectures[i],
               index: i + 1,
+              publishBusy: _publishing.contains(data.lectures[i].id),
+              onTogglePublication: data.canManage
+                  ? (publish) => _setPublication(data.lectures[i].id, publish)
+                  : null,
               onTap: data.lectures[i].isAvailable
                   ? () => Navigator.of(context).push(
                         MaterialPageRoute<void>(
