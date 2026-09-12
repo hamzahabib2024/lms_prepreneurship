@@ -10,6 +10,7 @@ import '../../auth/data/models/auth_session.dart';
 import '../cubit/issuance_cubit.dart';
 import '../data/certificates_repository.dart';
 import '../data/models/certificate_candidate.dart';
+import 'certificate_register_page.dart';
 
 /// The admin certificate issuance page — FR-CRT-006.
 ///
@@ -102,6 +103,17 @@ class _IssuanceViewState extends State<_IssuanceView> {
         title: const Text('Issue Certificates'),
         backgroundColor: Theme.of(context).colorScheme.surface,
         surfaceTintColor: Colors.transparent,
+        actions: [
+          IconButton(
+            tooltip: 'The register',
+            icon: const Icon(Icons.list_alt_outlined),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => CertificateRegisterPage(api: widget.api),
+              ),
+            ),
+          ),
+        ],
       ),
       body: SafeArea(
         child: Column(
