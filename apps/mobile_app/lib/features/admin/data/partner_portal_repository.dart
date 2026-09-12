@@ -1,4 +1,5 @@
 import '../../../core/network/api_client.dart';
+import 'models/partner_invoice.dart';
 
 class PartnerMe {
   const PartnerMe({
@@ -196,5 +197,22 @@ class PartnerPortalRepository {
   Future<PartnerStudentDetail> getStudentDetail(String id) async {
     final data = await api.get<Map<String, dynamic>>('/partner/students/$id');
     return PartnerStudentDetail.fromJson(data);
+  }
+
+  /// The partner's own invoices. Draft invoices are never returned — an
+  /// invoice nobody has issued is not a claim against them yet.
+  Future<List<PartnerInvoice>> getInvoices() async {
+    final data = await api.get<List<dynamic>>('/partner/invoices');
+    return data
+        .whereType<Map<String, dynamic>>()
+        .map(PartnerInvoice.fromJson)
+        .toList();
+  }
+
+  /// One invoice with its lines — what a partner opens to check a figure
+  /// against their own records.
+  Future<PartnerInvoiceDetail> getInvoice(String id) async {
+    final data = await api.get<Map<String, dynamic>>('/partner/invoices/$id');
+    return PartnerInvoiceDetail.fromJson(data);
   }
 }
