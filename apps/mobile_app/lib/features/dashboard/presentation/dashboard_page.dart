@@ -9,6 +9,7 @@ import '../../auth/data/models/auth_session.dart';
 import '../../auth/presentation/change_password_page.dart';
 import '../bloc/dashboard_bloc.dart';
 import '../data/dashboard_repository.dart';
+import '../../teaching/live_class/presentation/start_class_card.dart';
 import 'widgets/dashboard_widgets.dart';
 
 /// The dashboard — SRS §5.18.
@@ -55,7 +56,7 @@ class DashboardScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 _Header(user: user, state: state),
-                Expanded(child: _DashboardBody(state: state)),
+                Expanded(child: _DashboardBody(state: state, api: api)),
               ],
             );
           },
@@ -298,9 +299,10 @@ class _ProfileSheet extends StatelessWidget {
 }
 
 class _DashboardBody extends StatelessWidget {
-  const _DashboardBody({required this.state});
+  const _DashboardBody({required this.state, required this.api});
 
   final DashboardState state;
+  final ApiClient api;
 
   @override
   Widget build(BuildContext context) {
@@ -335,6 +337,9 @@ class _DashboardBody extends StatelessWidget {
         return ListView(
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
           children: [
+            // Renders as nothing for anybody with no teaching assignments,
+            // which is most people — so it costs them no space.
+            StartClassCard(api: api),
             for (final entry in data.widgets.entries)
               Padding(
                 padding: const EdgeInsets.only(bottom: 12),
