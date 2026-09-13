@@ -42,6 +42,25 @@ export class EmailLogService {
    * already failed) by the time this is called; a logging table that is full,
    * locked or missing must not turn a delivered message into an error. A
    * warning in the console is the correct worst case.
+   *
+   * THE `.catch()` ALONE DID NOT DELIVER THAT PROMISE, and the gap cost real
+   * mail. `asSystem` is not an async function — it returns
+   * `runUnscoped(() => fn(this))`, and `runUnscoped` calls straight through to
+   * `storage.run(...)` — so anything the callback throws SYNCHRONOUSLY comes
+   * back out of this method rather than arriving as a rejected promise the
+   * `.catch()` could see. `db.emailLog.create` is exactly that case whenever
+   * the Prisma client was generated before this model was added to the schema:
+   * `db.emailLog` is `undefined`, reading `.create` throws a TypeError on the
+   * spot, and the promise chain is never built.
+   *
+   * What that did downstream is the point. EmailChannel records a SENT message
+   * from inside its own `try`, after nodemailer has already handed the message
+   * to the mail server — so the TypeError landed in its `catch`, and an email
+   * the provider had accepted was reported to the applicant as one that could
+   * not be sent. A stale client turned a working mail path into a broken one.
+   *
+   * Hence the try/catch as well as the `.catch()`: one for a synchronous fault
+   * in building the query, one for an asynchronous fault in running it.
    */
   record(entry: {
     toAddress: string;
@@ -50,26 +69,33 @@ export class EmailLogService {
     status: "SENT" | "FAILED" | "SUPPRESSED";
     detail?: string | null;
   }): void {
-    void this.prisma
-      .asSystem((db) =>
-        db.emailLog.create({
-          data: {
-            toAddress: entry.toAddress.slice(0, 320),
-            kind: entry.kind.slice(0, 80),
-            subject: entry.subject.slice(0, 300),
-            status: entry.status,
-            // Only on a refusal. A success detail is the provider's message id
-            // and says nothing anybody reads.
-            ...(entry.status === "SENT" ? {} : { detail: entry.detail ?? null }),
-          },
-        }),
-      )
-      .catch((err: unknown) =>
-        this.logger.warn(
-          `Could not record an email attempt: ` +
-            (err instanceof Error ? err.message : "unknown error"),
-        ),
+    try {
+      void this.prisma
+        .asSystem((db) =>
+          db.emailLog.create({
+            data: {
+              toAddress: entry.toAddress.slice(0, 320),
+              kind: entry.kind.slice(0, 80),
+              subject: entry.subject.slice(0, 300),
+              status: entry.status,
+              // Only on a refusal. A success detail is the provider's message
+              // id and says nothing anybody reads.
+              ...(entry.status === "SENT" ? {} : { detail: entry.detail ?? null }),
+            },
+          }),
+        )
+        .catch((err: unknown) =>
+          this.logger.warn(
+            `Could not record an email attempt: ` +
+              (err instanceof Error ? err.message : "unknown error"),
+          ),
+        );
+    } catch (err: unknown) {
+      this.logger.warn(
+        `Could not record an email attempt: ` +
+          (err instanceof Error ? err.message : "unknown error"),
       );
+    }
   }
 
   /**

@@ -223,12 +223,29 @@ export class EmailChannel implements NotificationChannelAdapter {
       });
       // THE ONE THAT ACTUALLY SPENDS THE ALLOWANCE, which is why recording
       // only failures answered the wrong question entirely.
-      this.log.record({
-        toAddress: recipient.email,
-        kind: message.kind,
-        subject: message.title,
-        status: "SENT",
-      });
+      //
+      // GUARDED SEPARATELY FROM THE SEND. Once sendMail has returned, the mail
+      // server has the message and this send SUCCEEDED — nothing that happens
+      // afterwards can make that untrue. Leaving the call bare inside this
+      // `try` meant a fault in the logging path fell into the `catch` below
+      // and was reported to the applicant as "we could not email you", for a
+      // message the provider had already accepted. EmailLogService.record is
+      // contracted never to throw and now honours it; this is the second lock
+      // on the same door, because the cost of it being wrong is a person told
+      // their application was not acknowledged when it was.
+      try {
+        this.log.record({
+          toAddress: recipient.email,
+          kind: message.kind,
+          subject: message.title,
+          status: "SENT",
+        });
+      } catch (logErr) {
+        this.logger.warn(
+          `Sent, but could not record it: ` +
+            (logErr instanceof Error ? logErr.message : "unknown error"),
+        );
+      }
       // The provider's id, so a delivery can be traced in the mail logs later.
       return { status: "SENT", detail: `Accepted by the mail server (${info.messageId}).` };
     } catch (err) {
